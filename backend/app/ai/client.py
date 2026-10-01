@@ -9,7 +9,7 @@ import json
 import os
 from typing import Protocol
 
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEFAULT_TIMEOUT_SECONDS = 60
 MAX_RETRIES = 2

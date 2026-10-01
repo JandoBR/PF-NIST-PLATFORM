@@ -71,7 +71,7 @@ class Source(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     assessment_id: Mapped[str] = mapped_column(ForeignKey("assessments.id"))
-    tipo: Mapped[str] = mapped_column(String)  # 'terraform' | 'documents'
+    tipo: Mapped[str] = mapped_column(String)  # 'terraform' | 'ansible' | 'documents'
     ruta: Mapped[str] = mapped_column(String)
     sha256: Mapped[str] = mapped_column(String)
 
