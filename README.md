@@ -41,7 +41,7 @@
 - **Análisis:** parsers HCL (`python-hcl2`), parsing YAML de Ansible (`PyYAML`), validación con Pydantic.
 - **IA:** API de DeepSeek (compatible con SDK de OpenAI), salida JSON validada.
 - **Despliegue:** Docker + docker-compose (ver [docs/04 §11](docs/04-arquitectura-backend.md)).
-- **Frontend:** React (fuera del foco inicial; la API se diseña para soportarlo después).
+- **Frontend:** React + Vite + TypeScript + Tailwind, consumiendo la API REST directamente.
 
 ## Estado
 
@@ -51,13 +51,19 @@ persistencia (`run`/`reevaluate`/`compare`/`plans`), el motor operativo (eventos
 disparadores, incidentes y planes — docs 06/08), una API REST (FastAPI) sobre todo lo anterior y
 el despliegue con Docker Compose (Postgres + Redis reales) ya están implementados y probados —
 detalle completo en
-[docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). Pendiente como
-evolución futura, no como corte planeado: workers reales consumiendo colas de Redis (hoy todo
-corre síncrono, dentro de la API o de la CLI — ver doc 09 §14-§15).
+[docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). El frontend
+(`frontend/`) es un punto de partida real pero incompleto: los tres paneles principales (madurez,
+recomendaciones, simulación de amenazas) ya llaman a la API de verdad, con datos de ejemplo
+servidos como archivos estáticos o subida de archivos propios — falta pulir UX, cubrir
+`reevaluate`/`compare`, y el nginx/dominio real previsto para despliegue (ver doc 09 §15).
+Pendiente como evolución futura, no como corte planeado: workers reales consumiendo colas de
+Redis (hoy todo corre síncrono, dentro de la API o de la CLI — ver doc 09 §14, §16).
 
 Para probarlo sin levantar nada: `cd backend && uv run python -m app.main run --terraform
 tests/fixtures/terraform/gaps --org "Empresa Demo"`, `uv run uvicorn app.api.app:app --reload`
-para la API HTTP, o `docker compose -f deploy/docker-compose.yml up` para todo el stack.
+para la API HTTP, o `docker compose -f deploy/docker-compose.yml up` para todo el stack. Para el
+frontend: `cd frontend && cp .env.example .env && npm install && npm run dev` (con la API
+corriendo por separado).
 
 ## Referencias externas
 

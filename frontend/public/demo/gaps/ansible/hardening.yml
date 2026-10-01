@@ -1,0 +1,16 @@
+- hosts: servidores_legacy
+  tasks:
+    - name: Permitir login de root por SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin yes'
+
+    - name: Reiniciar servicio a mano
+      command: systemctl restart sshd
+
+    - name: Detener firewall local
+      service:
+        name: ufw
+        state: stopped
+        enabled: false

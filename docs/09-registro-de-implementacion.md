@@ -337,7 +337,7 @@ completo, para no tener que releer cada sección arriba:
 | `log.window` no persistido (se recalcula desde `Event`) | Motor operativo (§10) | Mismo patrón que `score_aggregates`/`tier_estimates`/`findings` |
 | Sin `POST /assessments/{id}/sources`, `/run` ni `/jobs/{id}` | API (§12) | Fusionados en un solo `POST /assessments` síncrono; separarlos exige una cola de trabajos real (doc 04 §11) |
 | `app/api/app.py` en vez de `app/main.py` (doc 04 §7 asumía este último) | API (§12) | `app/main.py` ya es la CLI; no se desplaza |
-| Sin `worker-core`/`worker-logs`; Redis levantado pero no consumido | Docker (§14) | Requiere `app/workers/` real consumiendo colas; ver §15 |
+| Sin `worker-core`/`worker-logs`; Redis levantado pero no consumido | Docker (§14) | Requiere `app/workers/` real consumiendo colas; ver §16 |
 | Pipeline sigue síncrono incluso en Docker | Docker (§14) | Mismo "respaldo sin Redis" de doc 04 §10/doc 07 §5, ahora reproducible con Postgres real |
 
 ## 12. API REST (FastAPI)
@@ -456,11 +456,60 @@ cambió esa decisión, solo la hizo reproducible con Postgres real en vez de SQL
   reporta vacío) y el assessment anterior sigue ahí — el volumen de Postgres persiste como debe.
 - `docker compose down -v` al final para no dejar nada corriendo ni volúmenes de prueba sueltos.
 
-## 15. Qué sigue
+## 15. Frontend: integración real con la API
 
-Nada pendiente de los 10 cortes planeados. Lo que sigue, si se retoma este proyecto, es evolución
-real: `app/workers/` consumiendo colas de Redis (`log_ingest`, `log_aggregate`, `ops_evaluate`,
-los tipos de `job` ya definidos en docs/04 §5) para que `POST /assessments/{id}/run` deje de ser
-síncrono — y recién ahí tendría sentido reintroducir `worker-core`/`worker-logs` al compose. El
-resto de las simplificaciones del §11 (criticidad de activo, tabla `ai_adjustments`, cooldown real
-del motor operativo, etc.) son ampliaciones independientes, ninguna bloquea a otra.
+**Qué se construyó:** el scaffold de `frontend/` (Vite + React + TypeScript + Tailwind,
+generado en una sesión aparte, con la herramienta vendorizada `.penpot-ai-kit/` — ver el commit
+que lo unificó al repo) quedó conectado de verdad a la API en vez de usar los datos simulados con
+los que llegó (`src/data/mockData.ts`, ya eliminado). Piezas nuevas:
+
+- `src/lib/types.ts` — espejo en TypeScript de los esquemas Pydantic reales (`CriterionResult`,
+  `Aggregate`, `TierEstimate`, `Finding`, `Plan`, `IncidentOut`, etc. de docs/04 §6).
+- `src/lib/api.ts` — cliente fetch fino para los endpoints de §12. Lee la URL base de
+  `import.meta.env.VITE_API_BASE_URL` (ver `frontend/.env.example`): una URL completa para
+  desarrollo con puertos separados, o algo como `/api` para un despliegue same-origin detrás de
+  nginx más adelante — cambiar de uno a otro no toca código, solo el `.env`.
+- `src/data/demo.ts` + `frontend/public/demo/` — los mismos fixtures que usan los tests del
+  backend (`backend/tests/fixtures/{terraform,ansible,documents,scenarios}`), copiados como
+  archivos estáticos servibles por Vite. La UI los ofrece como "datos de ejemplo" para no
+  obligar a quien prueba la demo a tener sus propios Terraform/Ansible/eventos a mano — pero son
+  los archivos reales, no texto inventado.
+- Los tres paneles (`MaturityDashboard`, `RecommendationEngine`, `ThreatSimulation`) y el modal de
+  creación (`ContextSelector`) se reescribieron para consumir la API: crear evaluación
+  (`POST /assessments`, multipart con archivos reales), ver agregados/Tier/criterios reales,
+  generar y ver planes (`POST`/`GET /assessments/{id}/plans`), e ingerir eventos y ver incidentes
+  reales con su línea de tiempo y plan de incidente (`POST /orgs/{id}/events`,
+  `GET /orgs/{id}/incidents`, `GET /incidents/{id}/plans`).
+- `app/api/app.py` ganó `CORSMiddleware`: sin esto, el dev server de Vite (puerto 5173) no puede
+  llamar a la API (puerto 8000) desde el navegador. Orígenes permitidos vienen de `CORS_ORIGINS`
+  (env, lista separada por comas) — mismo mecanismo en `backend/.env.example`,
+  `deploy/.env.example` y `deploy/docker-compose.yml`, pensado para cuando haya un dominio real
+  con nginx por delante.
+
+**Simplificaciones de alcance, explícitas:** el modal de creación ya no finge comparar una
+recomendación "base" contra una "de IA" con dos textos fijos por categoría de empresa — ese
+comparativo nunca existió en la API real (solo hay un plan final, con `generado_por` indicando si
+fue IA o plantilla). Tampoco se construyó UI para `reevaluate`/`compare` (§6, §12): quedan
+disponibles en `src/lib/api.ts` pero sin pantalla propia, para no inflar el alcance de este corte.
+
+**Verificado de verdad:** `npm run typecheck`, `npm run lint` y `npm run build` limpios: con
+`uv run uvicorn app.api.app:app` real corriendo, se repitió contra la API real (vía `curl`,
+replicando exactamente las llamadas que hace `src/lib/api.ts`) el flujo completo: crear
+evaluación con el bundle "gaps" (score/cobertura/Tier reales, hallazgos derivados, plan por
+plantilla), crear evaluación con el bundle "good" (score alto, sin hallazgos), el guard de IA
+real devolviendo 409 sin confirmar (sin gastar nada), e ingesta de eventos disparando los 3
+incidentes esperados (D1/D3/D4) con el log "con incidentes" y cero incidentes con el log "flujo
+correcto". Preflight CORS verificado contra el origen de Vite. El dev server de Vite se levantó
+y sirvió tanto la app como los fixtures estáticos de `/demo/`.
+
+## 16. Qué sigue
+
+Nada pendiente de los 10 cortes planeados ni del frontend conectado a la API real (§15). Lo que
+sigue, si se retoma este proyecto, es evolución real: `app/workers/` consumiendo colas de Redis
+(`log_ingest`, `log_aggregate`, `ops_evaluate`, los tipos de `job` ya definidos en docs/04 §5)
+para que `POST /assessments/{id}/run` deje de ser síncrono — y recién ahí tendría sentido
+reintroducir `worker-core`/`worker-logs` al compose. En el frontend: pantallas para
+`reevaluate`/`compare`, y nginx + dominio real (momento en el que `VITE_API_BASE_URL` y
+`CORS_ORIGINS` ya están pensados para ese cambio). El resto de las simplificaciones del §11
+(criticidad de activo, tabla `ai_adjustments`, cooldown real del motor operativo, etc.) son
+ampliaciones independientes, ninguna bloquea a otra.

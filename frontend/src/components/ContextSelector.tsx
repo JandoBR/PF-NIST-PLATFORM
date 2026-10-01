@@ -1,100 +1,119 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   X,
-  Cloud,
-  ShoppingBag,
-  HeartPulse,
-  FileText,
-  Cpu,
-  CheckCircle2,
+  FolderCog,
+  FileCode2,
+  UploadCloud,
   Loader2,
   Sparkles,
   ArrowRight,
+  AlertTriangle,
+  Brain,
 } from 'lucide-react';
-import { ARCHITECTURES, type Architecture } from '@/data/mockData';
+import { DEMO_BUNDLES, fetchAsFile } from '@/data/demo';
+import { ApiError, createAssessment } from '@/lib/api';
+import type { AssessmentDetail } from '@/lib/types';
 
 interface ContextSelectorProps {
   open: boolean;
   onClose: () => void;
-  onAnalyze: (arch: Architecture) => void;
+  onCreated: (assessment: AssessmentDetail) => void;
 }
 
-const ARCH_ICONS: Record<string, React.ReactNode> = {
-  fintech: <Cloud className="h-5 w-5" />,
-  ecommerce: <ShoppingBag className="h-5 w-5" />,
-  healthcare: <HeartPulse className="h-5 w-5" />,
-};
+type Mode = 'demo' | 'custom';
 
-const PIPELINE = [
-  { id: 'rules', label: 'Evaluación de Reglas', desc: 'Mapeando 32 subcategorías CSF 2.0 con la evidencia de controles' },
-  { id: 'ai', label: 'Enriquecimiento Contextual por IA', desc: 'Adaptando recomendaciones al contexto de la arquitectura' },
-];
+export function ContextSelector({ open, onClose, onCreated }: ContextSelectorProps) {
+  const [mode, setMode] = useState<Mode>('demo');
+  const [bundleId, setBundleId] = useState(DEMO_BUNDLES[0].id);
+  const [orgName, setOrgName] = useState('Organización Demo');
+  const [aiAdjust, setAiAdjust] = useState(false);
+  const [useAiForDocuments, setUseAiForDocuments] = useState(false);
+  const [terraformFiles, setTerraformFiles] = useState<File[]>([]);
+  const [ansibleFiles, setAnsibleFiles] = useState<File[]>([]);
+  const [documentFiles, setDocumentFiles] = useState<File[]>([]);
 
-export function ContextSelector({ open, onClose, onAnalyze }: ContextSelectorProps) {
-  const [selectedId, setSelectedId] = useState<string | null>('fintech');
-  const [customText, setCustomText] = useState('');
-  const [mode, setMode] = useState<'preset' | 'custom'>('preset');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [step, setStep] = useState(0);
-
-  const handleAnalyze = useCallback(() => {
-    const arch =
-      mode === 'custom'
-        ? {
-            ...ARCHITECTURES[0],
-            id: 'custom',
-            name: 'Arquitectura Personalizada',
-            summary: 'Descripción del entorno proporcionada por el usuario',
-            context: customText.trim() || 'No se proporcionó contexto.',
-          }
-        : ARCHITECTURES.find((a) => a.id === selectedId) ?? ARCHITECTURES[0];
-
-    setAnalyzing(true);
-    setStep(0);
-    const t1 = window.setTimeout(() => setStep(1), 1100);
-    const t2 = window.setTimeout(() => {
-      setAnalyzing(false);
-      setStep(0);
-      onAnalyze(arch);
-    }, 2400);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
-  }, [mode, selectedId, customText, onAnalyze]);
-
-  useEffect(() => {
-    if (!open) {
-      setAnalyzing(false);
-      setStep(0);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && !analyzing && onClose();
-    if (open) window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, analyzing, onClose]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [confirmLiveAi, setConfirmLiveAi] = useState(false);
 
   if (!open) return null;
+
+  const hasCustomFiles = terraformFiles.length + ansibleFiles.length + documentFiles.length > 0;
+  const canSubmit = orgName.trim().length > 0 && (mode === 'demo' || hasCustomFiles);
+
+  async function handleSubmit() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      let input;
+      if (mode === 'demo') {
+        const bundle = DEMO_BUNDLES.find((b) => b.id === bundleId) ?? DEMO_BUNDLES[0];
+        const [tf, ans, docs] = await Promise.all([
+          Promise.all((bundle.terraform ?? []).map(fetchAsFile)),
+          Promise.all((bundle.ansible ?? []).map(fetchAsFile)),
+          Promise.all((bundle.documents ?? []).map(fetchAsFile)),
+        ]);
+        input = {
+          orgName: orgName.trim(),
+          aiAdjust,
+          useAiForDocuments: useAiForDocuments && docs.length > 0,
+          confirmLiveAi,
+          terraformFiles: tf,
+          ansibleFiles: ans,
+          documentFiles: docs,
+        };
+      } else {
+        input = {
+          orgName: orgName.trim(),
+          aiAdjust,
+          useAiForDocuments: useAiForDocuments && documentFiles.length > 0,
+          confirmLiveAi,
+          terraformFiles,
+          ansibleFiles,
+          documentFiles,
+        };
+      }
+
+      const assessment = await createAssessment(input);
+      resetAndClose();
+      onCreated(assessment);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setNeedsConfirm(true);
+        setError(err.detail);
+      } else {
+        setError(err instanceof Error ? err.message : 'Error desconocido.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function resetAndClose() {
+    setError(null);
+    setNeedsConfirm(false);
+    setConfirmLiveAi(false);
+    onClose();
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-ink-950/70 backdrop-blur-sm animate-fade-in"
-        onClick={() => !analyzing && onClose()}
+        onClick={() => !submitting && resetAndClose()}
       />
       <div className="relative z-10 w-full max-w-2xl animate-scale-in">
-        <div className="card overflow-hidden shadow-2xl shadow-black/50">
+        <div className="card max-h-[90vh] overflow-y-auto shadow-2xl shadow-black/50">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-4">
             <div className="flex items-center gap-2.5">
-              <Cpu className="h-5 w-5 text-cyan-400" />
-              <h2 className="text-base font-semibold text-white">Contexto de la Arquitectura</h2>
+              <FolderCog className="h-5 w-5 text-cyan-400" />
+              <h2 className="text-base font-semibold text-white">Nueva Evaluación</h2>
             </div>
             <button
-              onClick={onClose}
-              disabled={analyzing}
+              onClick={resetAndClose}
+              disabled={submitting}
               className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-40"
             >
               <X className="h-5 w-5" />
@@ -103,131 +122,202 @@ export function ContextSelector({ open, onClose, onAnalyze }: ContextSelectorPro
 
           {/* Mode tabs */}
           <div className="flex gap-1 px-6 pt-4">
-            <TabBtn active={mode === 'preset'} onClick={() => setMode('preset')}>
-              Arquitecturas de Ejemplo
+            <TabBtn active={mode === 'demo'} onClick={() => setMode('demo')}>
+              Datos de Ejemplo
             </TabBtn>
             <TabBtn active={mode === 'custom'} onClick={() => setMode('custom')}>
-              Pegar Descripción
+              Subir mis Archivos
             </TabBtn>
           </div>
 
-          {/* Body */}
           <div className="px-6 py-5">
-            {mode === 'preset' ? (
-              <div className="grid gap-3 sm:grid-cols-3">
-                {ARCHITECTURES.map((a) => (
+            <label className="mb-2 block text-xs font-medium text-slate-400">
+              Nombre de la organización
+            </label>
+            <input
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              placeholder="Ej. Empresa Demo"
+              className="input mb-5"
+            />
+
+            {mode === 'demo' ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {DEMO_BUNDLES.map((b) => (
                   <button
-                    key={a.id}
-                    onClick={() => setSelectedId(a.id)}
+                    key={b.id}
+                    onClick={() => setBundleId(b.id)}
                     className={`group rounded-xl border p-4 text-left transition-all duration-200 ${
-                      selectedId === a.id
+                      bundleId === b.id
                         ? 'border-cyan-500/50 bg-cyan-500/[0.07] glow-cyan'
                         : 'border-white/[0.06] bg-ink-900/40 hover:border-white/15 hover:bg-ink-900/70'
                     }`}
                   >
                     <div
                       className={`mb-2.5 flex h-10 w-10 items-center justify-center rounded-lg transition-colors ${
-                        selectedId === a.id
+                        bundleId === b.id
                           ? 'bg-cyan-500/15 text-cyan-300'
                           : 'bg-white/[0.04] text-slate-400 group-hover:text-slate-200'
                       }`}
                     >
-                      {ARCH_ICONS[a.id]}
+                      <FileCode2 className="h-5 w-5" />
                     </div>
-                    <h3 className="text-sm font-semibold text-slate-100">{a.name}</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-500">{a.summary}</p>
+                    <h3 className="text-sm font-semibold text-slate-100">{b.label}</h3>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-500">{b.description}</p>
                   </button>
                 ))}
               </div>
             ) : (
-              <div>
-                <label className="mb-2 block text-xs font-medium text-slate-400">
-                  Pega la descripción de tu entorno, políticas o notas de arquitectura
-                </label>
-                <textarea
-                  value={customText}
-                  onChange={(e) => setCustomText(e.target.value)}
-                  rows={6}
-                  placeholder="Ej. Operamos una plataforma Kubernetes multirregión en AWS con federación IAM, registros CloudTrail a un SIEM central y escaneos trimestrales de vulnerabilidades. Actualmente no contamos con un programa formal de riesgo en la cadena de suministro..."
-                  className="input resize-none font-mono text-xs leading-relaxed"
+              <div className="space-y-4">
+                <FilePicker
+                  label="Terraform (.tf)"
+                  accept=".tf"
+                  files={terraformFiles}
+                  onChange={setTerraformFiles}
                 />
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-                  <FileText className="h-3.5 w-3.5" />
-                  {customText.trim().split(/\s+/).filter(Boolean).length} palabras
-                </div>
+                <FilePicker
+                  label="Ansible (.yml / .yaml)"
+                  accept=".yml,.yaml"
+                  files={ansibleFiles}
+                  onChange={setAnsibleFiles}
+                />
+                <FilePicker
+                  label="Documentos de política (.md / .pdf)"
+                  accept=".md,.pdf"
+                  files={documentFiles}
+                  onChange={setDocumentFiles}
+                />
+                {!hasCustomFiles && (
+                  <p className="text-xs text-slate-500">
+                    Se requiere al menos un archivo de alguno de los tres tipos.
+                  </p>
+                )}
               </div>
             )}
 
-            {/* Selected context preview */}
-            {mode === 'preset' && selectedId && (
-              <div className="mt-4 rounded-lg border border-white/[0.06] bg-ink-900/40 p-3.5">
-                <p className="line-clamp-3 text-xs leading-relaxed text-slate-400">
-                  {ARCHITECTURES.find((a) => a.id === selectedId)?.context}
-                </p>
+            {/* Opciones de IA */}
+            <div className="mt-5 space-y-2 rounded-lg border border-white/[0.06] bg-ink-900/40 p-3.5">
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
+                <Brain className="h-3.5 w-3.5 text-cyan-400" />
+                Capa de IA (opcional)
+              </div>
+              <Checkbox
+                checked={aiAdjust}
+                onChange={setAiAdjust}
+                label="Ajustar puntajes con contexto adicional (U2)"
+              />
+              <Checkbox
+                checked={useAiForDocuments}
+                onChange={setUseAiForDocuments}
+                label="Usar IA para extraer afirmaciones de los documentos (U1)"
+              />
+              <p className="pl-6 text-xs text-slate-600">
+                Sin una DEEPSEEK_API_KEY configurada en el backend, esto no tiene costo ni efecto:
+                el resultado queda igual al puntaje base.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3.5 text-xs text-amber-200">
+                <div className="mb-1 flex items-center gap-2 font-medium">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {needsConfirm ? 'Confirmación requerida' : 'No se pudo crear la evaluación'}
+                </div>
+                <p className="whitespace-pre-line leading-relaxed">{error}</p>
+                {needsConfirm && (
+                  <label className="mt-2 flex items-center gap-2 text-amber-100">
+                    <input
+                      type="checkbox"
+                      checked={confirmLiveAi}
+                      onChange={(e) => setConfirmLiveAi(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-amber-500/40 bg-transparent"
+                    />
+                    Confirmo que quiero hacer llamadas reales (y pagadas) a la API de IA.
+                  </label>
+                )}
               </div>
             )}
           </div>
 
-          {/* Pipeline / footer */}
+          {/* Footer */}
           <div className="border-t border-white/[0.06] px-6 py-4">
-            {analyzing ? (
-              <div className="space-y-3">
-                {PIPELINE.map((p, i) => {
-                  const done = i < step;
-                  const active = i === step;
-                  return (
-                    <div key={p.id} className="flex items-center gap-3">
-                      <div className="flex-shrink-0">
-                        {done ? (
-                          <CheckCircle2 className="h-5 w-5 text-emerald-400" />
-                        ) : active ? (
-                          <Loader2 className="h-5 w-5 animate-spin text-cyan-400" />
-                        ) : (
-                          <div className="h-5 w-5 rounded-full border-2 border-white/10" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <p
-                          className={`text-sm font-medium ${
-                            done || active ? 'text-slate-200' : 'text-slate-600'
-                          }`}
-                        >
-                          {p.label}
-                        </p>
-                        <p
-                          className={`text-xs ${
-                            done || active ? 'text-slate-500' : 'text-slate-700'
-                          }`}
-                        >
-                          {p.desc}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-xs text-slate-500">
-                  {mode === 'preset'
-                    ? 'El análisis mapea 32 subcategorías CSF 2.0 y genera una hoja de ruta priorizada.'
-                    : 'El contexto personalizado se evaluará frente al conjunto completo de controles CSF 2.0.'}
-                </p>
-                <button
-                  onClick={handleAnalyze}
-                  disabled={mode === 'custom' && customText.trim().length < 10}
-                  className="btn-primary"
-                >
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-xs text-slate-500">
+                El motor de reglas evalúa 32 subcategorías CSF 2.0 de forma determinista.
+              </p>
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit || submitting || (needsConfirm && !confirmLiveAi)}
+                className="btn-primary flex-shrink-0"
+              >
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
                   <Sparkles className="h-4 w-4" />
-                  Analizar Arquitectura
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            )}
+                )}
+                {submitting ? 'Evaluando…' : needsConfirm ? 'Reintentar' : 'Analizar'}
+                {!submitting && <ArrowRight className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function FilePicker({
+  label,
+  accept,
+  files,
+  onChange,
+}: {
+  label: string;
+  accept: string;
+  files: File[];
+  onChange: (files: File[]) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium text-slate-400">{label}</label>
+      <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-dashed border-white/15 bg-ink-900/40 px-3.5 py-3 text-xs text-slate-500 transition-colors hover:border-cyan-500/40 hover:text-slate-300">
+        <UploadCloud className="h-4 w-4 flex-shrink-0" />
+        {files.length > 0 ? (
+          <span className="truncate text-slate-300">{files.map((f) => f.name).join(', ')}</span>
+        ) : (
+          <span>Elegir archivo(s)…</span>
+        )}
+        <input
+          type="file"
+          accept={accept}
+          multiple
+          className="hidden"
+          onChange={(e) => onChange(Array.from(e.target.files ?? []))}
+        />
+      </label>
+    </div>
+  );
+}
+
+function Checkbox({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-xs text-slate-300">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-3.5 w-3.5 rounded border-white/20 bg-transparent"
+      />
+      {label}
+    </label>
   );
 }
 
@@ -244,9 +334,7 @@ function TabBtn({
     <button
       onClick={onClick}
       className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
-        active
-          ? 'bg-white/[0.06] text-white'
-          : 'text-slate-500 hover:text-slate-300'
+        active ? 'bg-white/[0.06] text-white' : 'text-slate-500 hover:text-slate-300'
       }`}
     >
       {children}

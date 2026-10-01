@@ -1,69 +1,61 @@
 import { useMemo, useState } from 'react';
-import {
-  Gauge,
-  Target,
-  TrendingDown,
-  Filter,
-  Search,
-  ChevronRight,
-} from 'lucide-react';
-import {
-  FUNCTIONS,
-  SUBCATEGORIES,
-  TIER_LABELS,
-  type Architecture,
-  type Subcategory,
-  type Status,
-} from '@/data/mockData';
-import { STATUS_META } from '@/lib/ui';
+import { Gauge, Target, ShieldQuestion, Filter, Search, ChevronRight, Info } from 'lucide-react';
+import type { AssessmentDetail, CriterionResult, Estado } from '@/lib/types';
+import { FUNCTION_NAMES, FUNCTION_ORDER, TIER_LABELS } from '@/lib/types';
+import { ESTADO_META } from '@/lib/ui';
+
+const FUNCTION_ACCENTS: Record<string, string> = {
+  GV: '#a78bfa',
+  ID: '#60a5fa',
+  PR: '#34d399',
+  DE: '#fbbf24',
+  RS: '#fb7185',
+  RC: '#2dd4bf',
+};
 
 interface DashboardProps {
-  arch: Architecture;
+  assessment: AssessmentDetail;
+  criteria: CriterionResult[];
 }
 
-const FILTERS: { key: Status | 'all'; label: string }[] = [
+const FILTERS: { key: Estado | 'all'; label: string }[] = [
   { key: 'all', label: 'Todos' },
-  { key: 'compliant', label: 'Conforme' },
-  { key: 'partial', label: 'Brecha Parcial' },
-  { key: 'critical', label: 'Brecha Crítica' },
+  { key: 'evaluado', label: 'Evaluado' },
+  { key: 'no_implementado', label: 'No implementado' },
+  { key: 'evidencia_insuficiente', label: 'Evidencia insuficiente' },
+  { key: 'no_aplicable', label: 'No aplicable' },
+  { key: 'error', label: 'Error' },
 ];
 
-export function MaturityDashboard({ arch }: DashboardProps) {
-  const [statusFilter, setStatusFilter] = useState<Status | 'all'>('all');
+export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
+  const [estadoFilter, setEstadoFilter] = useState<Estado | 'all'>('all');
   const [funcFilter, setFuncFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
 
   const functionScores = useMemo(() => {
-    const map = new Map<string, { total: number; count: number }>();
-    for (const s of SUBCATEGORIES) {
-      const cur = map.get(s.function) ?? { total: 0, count: 0 };
-      cur.total += s.score;
-      cur.count += 1;
-      map.set(s.function, cur);
-    }
-    return FUNCTIONS.map((f) => ({
-      ...f,
-      score: Math.round((map.get(f.key)?.total ?? 0) / (map.get(f.key)?.count ?? 1)),
+    const byRef = new Map(assessment.agregados_funcion.map((a) => [a.ref, a]));
+    return FUNCTION_ORDER.filter((key) => byRef.has(key)).map((key) => ({
+      key,
+      name: FUNCTION_NAMES[key] ?? key,
+      accent: FUNCTION_ACCENTS[key] ?? '#94a3b8',
+      aggregate: byRef.get(key)!,
     }));
-  }, []);
-
-  const overallScore = Math.round(
-    functionScores.reduce((a, f) => a + f.score, 0) / functionScores.length
-  );
-  const gapScore = 100 - overallScore;
+  }, [assessment.agregados_funcion]);
 
   const filtered = useMemo(() => {
-    return SUBCATEGORIES.filter((s) => {
-      if (statusFilter !== 'all' && s.status !== statusFilter) return false;
-      if (funcFilter !== 'all' && s.function !== funcFilter) return false;
+    return criteria.filter((c) => {
+      if (estadoFilter !== 'all' && c.estado !== estadoFilter) return false;
+      if (funcFilter !== 'all' && !c.criterion_id.includes(`-${funcFilter}-`)) return false;
       if (query) {
         const q = query.toLowerCase();
-        if (!s.id.toLowerCase().includes(q) && !s.label.toLowerCase().includes(q))
+        if (!c.criterion_id.toLowerCase().includes(q) && !c.explanation.toLowerCase().includes(q))
           return false;
       }
       return true;
     });
-  }, [statusFilter, funcFilter, query]);
+  }, [criteria, estadoFilter, funcFilter, query]);
+
+  const tier = assessment.tier;
 
   return (
     <div className="space-y-6">
@@ -72,30 +64,34 @@ export function MaturityDashboard({ arch }: DashboardProps) {
         <SummaryCard
           icon={<Gauge className="h-5 w-5" />}
           accent="cyan"
-          label="Nivel Actual"
-          value={`Nivel ${arch.currentTier}`}
-          sub={TIER_LABELS[arch.currentTier - 1]}
+          label="Score Global"
+          value={assessment.score_global != null ? `${Math.round(assessment.score_global)}` : '—'}
+          sub="Promedio ponderado por criterio"
         />
         <SummaryCard
           icon={<Target className="h-5 w-5" />}
           accent="indigo"
-          label="Nivel Objetivo"
-          value={`Nivel ${arch.targetTier}`}
-          sub={TIER_LABELS[arch.targetTier - 1]}
+          label="Cobertura Global"
+          value={
+            assessment.cobertura_global != null
+              ? `${Math.round(assessment.cobertura_global * 100)}%`
+              : '—'
+          }
+          sub="Criterios con evidencia suficiente"
         />
         <SummaryCard
-          icon={<TrendingDown className="h-5 w-5" />}
-          accent="amber"
-          label="Puntaje Total de Brecha"
-          value={`${gapScore}`}
-          sub={`${overallScore}/100 actual`}
-        />
-        <SummaryCard
-          icon={<Gauge className="h-5 w-5" />}
+          icon={<ShieldQuestion className="h-5 w-5" />}
           accent="emerald"
-          label="Madurez General"
-          value={`${overallScore}%`}
-          sub="En 6 funciones"
+          label="Tier Estimado"
+          value={tier.tier != null ? `Nivel ${tier.tier}` : 'No estimable'}
+          sub={tier.tier != null ? TIER_LABELS[tier.tier - 1] : tier.justificacion}
+        />
+        <SummaryCard
+          icon={<Info className="h-5 w-5" />}
+          accent="amber"
+          label="Confiabilidad del Tier"
+          value={tier.provisional ? 'Provisional' : tier.estimable ? 'Confirmado' : 'N/D'}
+          sub={tier.faltantes.length > 0 ? `Falta: ${tier.faltantes.join(', ')}` : tier.justificacion}
         />
       </div>
 
@@ -104,81 +100,88 @@ export function MaturityDashboard({ arch }: DashboardProps) {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-white">Matriz de Madurez NIST CSF 2.0</h3>
-            <p className="text-xs text-slate-500">Postura a nivel de función a lo largo del marco de trabajo</p>
+            <p className="text-xs text-slate-500">Puntaje y cobertura por función del marco de trabajo</p>
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          {functionScores.map((f) => (
-            <div
-              key={f.key}
-              className="rounded-xl border border-white/[0.06] bg-ink-900/40 p-4 transition-colors hover:border-white/15"
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <span
-                  className="rounded-md px-2 py-0.5 text-xs font-bold"
-                  style={{ backgroundColor: `${f.accent}1a`, color: f.accent }}
-                >
-                  {f.key}
-                </span>
-                <span className="text-lg font-bold text-white">{f.score}</span>
+          {functionScores.map((f) => {
+            const score = f.aggregate.score;
+            return (
+              <div
+                key={f.key}
+                className="rounded-xl border border-white/[0.06] bg-ink-900/40 p-4 transition-colors hover:border-white/15"
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <span
+                    className="rounded-md px-2 py-0.5 text-xs font-bold"
+                    style={{ backgroundColor: `${f.accent}1a`, color: f.accent }}
+                  >
+                    {f.key}
+                  </span>
+                  <span className="text-lg font-bold text-white">
+                    {score != null ? Math.round(score) : '—'}
+                  </span>
+                </div>
+                <p className="mb-2.5 text-xs font-medium text-slate-300">{f.name}</p>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${score ?? 0}%`, backgroundColor: f.accent }}
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-slate-600">
+                  Cobertura {f.aggregate.cobertura != null ? `${Math.round(f.aggregate.cobertura * 100)}%` : '—'}
+                </p>
               </div>
-              <p className="mb-2.5 text-xs font-medium text-slate-300">{f.name}</p>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${f.score}%`, backgroundColor: f.accent }}
-                />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {/* Tabla de subcategorías */}
+      {/* Tabla de criterios */}
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-white/[0.06] p-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-slate-500" />
-              <h3 className="text-sm font-semibold text-white">Subcategorías Evaluadas</h3>
+              <h3 className="text-sm font-semibold text-white">Criterios Evaluados</h3>
             </div>
-            <span className="text-xs text-slate-500">{filtered.length} de {SUBCATEGORIES.length}</span>
+            <span className="text-xs text-slate-500">
+              {filtered.length} de {criteria.length}
+            </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {/* Filtro por función */}
             <div className="flex flex-wrap gap-1.5">
               <Chip active={funcFilter === 'all'} onClick={() => setFuncFilter('all')}>
                 Todas las Funciones
               </Chip>
-              {FUNCTIONS.map((f) => (
+              {FUNCTION_ORDER.map((key) => (
                 <Chip
-                  key={f.key}
-                  active={funcFilter === f.key}
-                  onClick={() => setFuncFilter(f.key)}
-                  accent={f.accent}
+                  key={key}
+                  active={funcFilter === key}
+                  onClick={() => setFuncFilter(key)}
+                  accent={FUNCTION_ACCENTS[key]}
                 >
-                  {f.key}
+                  {key}
                 </Chip>
               ))}
             </div>
 
-            {/* Filtro por estado */}
             <div className="flex flex-wrap gap-1.5">
               {FILTERS.map((f) => (
-                <Chip key={f.key} active={statusFilter === f.key} onClick={() => setStatusFilter(f.key)}>
+                <Chip key={f.key} active={estadoFilter === f.key} onClick={() => setEstadoFilter(f.key)}>
                   {f.label}
                 </Chip>
               ))}
             </div>
 
-            {/* Búsqueda */}
             <div className="relative ml-auto">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-600" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar subcategoría..."
+                placeholder="Buscar criterio..."
                 className="w-44 rounded-lg border border-white/10 bg-ink-900/60 py-1.5 pl-8 pr-3 text-xs text-slate-200 placeholder-slate-600 outline-none focus:border-cyan-500/50 sm:w-56"
               />
             </div>
@@ -188,10 +191,10 @@ export function MaturityDashboard({ arch }: DashboardProps) {
         <div className="divide-y divide-white/[0.04]">
           {filtered.length === 0 ? (
             <div className="px-5 py-12 text-center text-sm text-slate-500">
-              No hay subcategorías que coincidan con los filtros actuales.
+              No hay criterios que coincidan con los filtros actuales.
             </div>
           ) : (
-            filtered.map((s) => <SubcategoryRow key={s.id} sub={s} />)
+            filtered.map((c) => <CriterionRow key={c.criterion_id} criterion={c} />)
           )}
         </div>
       </div>
@@ -220,13 +223,15 @@ function SummaryCard({
   };
   return (
     <div className="card card-hover p-5">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-xs font-medium text-slate-500">{label}</p>
           <p className="mt-1.5 text-2xl font-bold tracking-tight text-white">{value}</p>
-          <p className="mt-0.5 text-xs text-slate-500">{sub}</p>
+          <p className="mt-0.5 truncate text-xs text-slate-500" title={sub}>
+            {sub}
+          </p>
         </div>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ring-1 ${colors[accent]}`}>
+        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ring-1 ${colors[accent]}`}>
           {icon}
         </div>
       </div>
@@ -250,11 +255,7 @@ function Chip({
       onClick={onClick}
       style={active && accent ? { color: accent, backgroundColor: `${accent}1a` } : undefined}
       className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-        active
-          ? accent
-            ? ''
-            : 'bg-white/[0.08] text-white'
-          : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'
+        active ? (accent ? '' : 'bg-white/[0.08] text-white') : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'
       }`}
     >
       {children}
@@ -262,9 +263,10 @@ function Chip({
   );
 }
 
-function SubcategoryRow({ sub }: { sub: Subcategory }) {
-  const meta = STATUS_META[sub.status];
+function CriterionRow({ criterion }: { criterion: CriterionResult }) {
+  const meta = ESTADO_META[criterion.estado];
   const [open, setOpen] = useState(false);
+  const score = criterion.final_score;
 
   return (
     <div>
@@ -274,21 +276,28 @@ function SubcategoryRow({ sub }: { sub: Subcategory }) {
       >
         <span className={`h-2 w-2 flex-shrink-0 rounded-full ${meta.dot}`} />
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="flex-shrink-0 font-mono text-xs font-semibold text-slate-300">{sub.id}</span>
-          <span className="truncate text-sm text-slate-400">{sub.label}</span>
+          <span className="flex-shrink-0 font-mono text-xs font-semibold text-slate-300">
+            {criterion.criterion_id}
+          </span>
+          <span className="truncate text-sm text-slate-400">{criterion.explanation}</span>
         </div>
         <div className="hidden w-32 sm:block">
           <div className="flex items-center gap-2">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
               <div
                 className={`h-full rounded-full ${meta.bar} transition-all duration-500`}
-                style={{ width: `${sub.score}%` }}
+                style={{ width: `${score ?? 0}%` }}
               />
             </div>
-            <span className="w-8 text-right text-xs font-semibold text-slate-400">{sub.score}</span>
+            <span className="w-8 text-right text-xs font-semibold text-slate-400">
+              {score != null ? Math.round(score) : '—'}
+            </span>
           </div>
         </div>
         <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
+        {criterion.degradado && (
+          <span className="chip border border-amber-500/30 bg-amber-500/10 text-amber-300">IA degradada</span>
+        )}
         <ChevronRight
           className={`h-4 w-4 flex-shrink-0 text-slate-600 transition-transform ${open ? 'rotate-90' : ''}`}
         />
@@ -296,17 +305,14 @@ function SubcategoryRow({ sub }: { sub: Subcategory }) {
       {open && (
         <div className="animate-fade-in border-t border-white/[0.04] bg-ink-900/30 px-5 py-3 pl-11">
           <p className="text-xs text-slate-500">
-            <span className="font-semibold text-slate-400">Función:</span> {sub.function} &nbsp;·&nbsp;
-            <span className="font-semibold text-slate-400">Puntaje:</span> {sub.score}/100 &nbsp;·&nbsp;
-            <span className="font-semibold text-slate-400">Estado:</span> {meta.label}
+            <span className="font-semibold text-slate-400">Score base:</span>{' '}
+            {criterion.base_score != null ? Math.round(criterion.base_score) : '—'} &nbsp;·&nbsp;
+            <span className="font-semibold text-slate-400">Score final:</span>{' '}
+            {score != null ? Math.round(score) : '—'} &nbsp;·&nbsp;
+            <span className="font-semibold text-slate-400">Evidencias:</span>{' '}
+            {criterion.evidence_ids.length}
           </p>
-          <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-            {sub.status === 'compliant'
-              ? 'La evidencia del control se mantiene y valida constantemente. Continúe con la revisión periódica para mantener la postura.'
-              : sub.status === 'partial'
-              ? 'El control está implementado parcialmente. Existen brechas de evidencia; priorice la remediación para cerrarlas.'
-              : 'El control está ausente o es ineficaz. Se requiere remediación inmediata para reducir el riesgo organizacional.'}
-          </p>
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{criterion.explanation}</p>
         </div>
       )}
     </div>
