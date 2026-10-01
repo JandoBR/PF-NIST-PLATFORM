@@ -47,14 +47,15 @@
 
 Especificación completa. El núcleo determinista, los tres adaptadores (Terraform, Ansible,
 documentos), las tres integraciones de IA (extracción U1, ajuste U2, planes U3), la
-persistencia (`run`/`reevaluate`/`compare`/`plans`) y el motor operativo (eventos, patrones,
-disparadores, incidentes y planes — docs 06/08) ya están implementados y probados en
-`backend/` — detalle completo en
-[docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). Pendiente: API
-REST y el stack de Docker/Redis (deliberadamente al final).
+persistencia (`run`/`reevaluate`/`compare`/`plans`), el motor operativo (eventos, patrones,
+disparadores, incidentes y planes — docs 06/08) y una API REST (FastAPI) sobre todo lo anterior
+ya están implementados y probados en `backend/` — detalle completo en
+[docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). Pendiente: el
+stack de Docker/Redis (deliberadamente al final).
 
 Para probarlo sin levantar nada: `cd backend && uv run python -m app.main run --terraform
-tests/fixtures/terraform/gaps --org "Empresa Demo"`.
+tests/fixtures/terraform/gaps --org "Empresa Demo"`, o `uv run uvicorn app.api.app:app --reload`
+para la API HTTP.
 
 ## Referencias externas
 
