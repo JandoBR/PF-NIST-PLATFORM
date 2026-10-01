@@ -48,14 +48,16 @@
 Especificación completa. El núcleo determinista, los tres adaptadores (Terraform, Ansible,
 documentos), las tres integraciones de IA (extracción U1, ajuste U2, planes U3), la
 persistencia (`run`/`reevaluate`/`compare`/`plans`), el motor operativo (eventos, patrones,
-disparadores, incidentes y planes — docs 06/08) y una API REST (FastAPI) sobre todo lo anterior
-ya están implementados y probados en `backend/` — detalle completo en
-[docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). Pendiente: el
-stack de Docker/Redis (deliberadamente al final).
+disparadores, incidentes y planes — docs 06/08), una API REST (FastAPI) sobre todo lo anterior y
+el despliegue con Docker Compose (Postgres + Redis reales) ya están implementados y probados —
+detalle completo en
+[docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). Pendiente como
+evolución futura, no como corte planeado: workers reales consumiendo colas de Redis (hoy todo
+corre síncrono, dentro de la API o de la CLI — ver doc 09 §14-§15).
 
 Para probarlo sin levantar nada: `cd backend && uv run python -m app.main run --terraform
-tests/fixtures/terraform/gaps --org "Empresa Demo"`, o `uv run uvicorn app.api.app:app --reload`
-para la API HTTP.
+tests/fixtures/terraform/gaps --org "Empresa Demo"`, `uv run uvicorn app.api.app:app --reload`
+para la API HTTP, o `docker compose -f deploy/docker-compose.yml up` para todo el stack.
 
 ## Referencias externas
 

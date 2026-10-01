@@ -1,0 +1,9 @@
+backend/.venv/
+backend/.data/
+backend/.cache/
+backend/__pycache__/
+**/__pycache__/
+**/*.pyc
+.git/
+docs/
+*.md

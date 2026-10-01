@@ -29,7 +29,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
 | Pruebas | 183 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API | Hecho |
 | API REST (doc 04 §6) | FastAPI sobre el mismo `assessment_service`; crear+subir+ejecutar fusionados (sin cola) | Hecho |
-| Docker/Redis (doc 04 §11) | — | Pendiente (deliberadamente al final) |
+| Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api reales; sin `worker-core`/`worker-logs` todavía | Hecho |
 
 Comando de referencia para ver todo esto funcionando:
 
@@ -47,6 +47,9 @@ uv run python -m app.main incidents "Empresa Demo" --plans
 uv run uvicorn app.api.app:app --reload
 curl -X POST http://127.0.0.1:8000/assessments \
   -F "org_name=Empresa Demo" -F "terraform_files=@tests/fixtures/terraform/gaps/main.tf"
+
+# Todo el stack con Docker (Postgres + Redis reales, sin instalar nada localmente):
+docker compose -f deploy/docker-compose.yml up
 ```
 
 ## 2. Entorno y estructura
@@ -334,7 +337,8 @@ completo, para no tener que releer cada sección arriba:
 | `log.window` no persistido (se recalcula desde `Event`) | Motor operativo (§10) | Mismo patrón que `score_aggregates`/`tier_estimates`/`findings` |
 | Sin `POST /assessments/{id}/sources`, `/run` ni `/jobs/{id}` | API (§12) | Fusionados en un solo `POST /assessments` síncrono; separarlos exige una cola de trabajos real (doc 04 §11) |
 | `app/api/app.py` en vez de `app/main.py` (doc 04 §7 asumía este último) | API (§12) | `app/main.py` ya es la CLI; no se desplaza |
-| Sin Docker/Redis | — | Deliberadamente al final (doc 04 §11) |
+| Sin `worker-core`/`worker-logs`; Redis levantado pero no consumido | Docker (§14) | Requiere `app/workers/` real consumiendo colas; ver §15 |
+| Pipeline sigue síncrono incluso en Docker | Docker (§14) | Mismo "respaldo sin Redis" de doc 04 §10/doc 07 §5, ahora reproducible con Postgres real |
 
 ## 12. API REST (FastAPI)
 
@@ -417,7 +421,46 @@ de la CLI (`app/main.py`, más allá del guard compartido), `test_methodology_lo
 casos pese a que el loader promete fallar rápido) e ingesta con solape parcial (eventos nuevos +
 repetidos en el mismo lote).
 
-## 14. Qué sigue
+## 14. Docker Compose + Redis real
 
-Docker Compose + Redis real (doc 04 §11) es lo único que queda — reemplazando la ejecución
-síncrona actual con workers reales recién ahora, al final, como estaba planeado desde el principio.
+**Qué se construyó:** `deploy/docker-compose.yml` (Postgres 16, Redis 7, `migrate` como job de
+una sola corrida, `api` sirviendo FastAPI — los 4 servicios ya levantan, se saludan via
+healthcheck, y `api` depende de que `migrate` termine bien antes de arrancar), reescritura de
+`backend/docker/Dockerfile.api` para usar `uv sync` en vez de `pip install -e` (el proyecto nunca
+tuvo `[build-system]`: es una app plana, no un paquete instalable — `pip install -e` nunca
+funcionó, solo nadie lo había probado hasta ahora), `.dockerignore` en la raíz.
+
+**Decisión de alcance, la última de esta lista:** `deploy/docker-compose.yml` ya traía escrito
+`worker-core`/`worker-logs` apuntando a `python -m app.workers.core`/`app.workers.logs` — módulos
+que nunca se construyeron, porque todo el pipeline (evaluación, extracción, ingesta de eventos,
+motor operativo) corre síncrono dentro de `api` o de la CLI desde el primer corte (§3) y nunca
+dejó de ser así. Mantener esos dos servicios en el compose los habría dejado crasheando al
+arrancar (`ModuleNotFoundError`), que es peor que no tenerlos. Se quitaron del compose. Redis
+igual se levanta, sano, para no tener que tocar esto de nuevo el día que exista un consumidor
+real — pero `api` todavía no lo usa para nada.
+
+Dicho de otro modo: el contenedor final todavía corre exactamente la misma "ejecución síncrona
+de respaldo" que docs/04 §10 y docs/07 §5 ya daban por aceptable sin Redis — ponerlo en Docker no
+cambió esa decisión, solo la hizo reproducible con Postgres real en vez de SQLite.
+
+**Verificado de verdad, no solo "docker build" sin correr nada:**
+
+- `docker compose build` — ambas imágenes (`api`, `migrate`) construyen limpio.
+- `docker compose up` — las 4 migraciones de Alembic corren contra Postgres real (antes solo se
+  habían probado contra SQLite efímero, tests incluidos); las 10 tablas esperadas existen
+  (`\dt` directo contra el contenedor de `db`).
+- Un `POST /assessments` real contra la API en Docker, apuntando a Postgres real, con los datos
+  confirmados `select`eando la tabla `assessments` dentro del contenedor — no solo "la API
+  respondió 200", sino "el dato está en la base de datos real".
+- `docker compose down` + `up` de nuevo: Alembic no vuelve a aplicar nada (ya está en head, lo
+  reporta vacío) y el assessment anterior sigue ahí — el volumen de Postgres persiste como debe.
+- `docker compose down -v` al final para no dejar nada corriendo ni volúmenes de prueba sueltos.
+
+## 15. Qué sigue
+
+Nada pendiente de los 10 cortes planeados. Lo que sigue, si se retoma este proyecto, es evolución
+real: `app/workers/` consumiendo colas de Redis (`log_ingest`, `log_aggregate`, `ops_evaluate`,
+los tipos de `job` ya definidos en docs/04 §5) para que `POST /assessments/{id}/run` deje de ser
+síncrono — y recién ahí tendría sentido reintroducir `worker-core`/`worker-logs` al compose. El
+resto de las simplificaciones del §11 (criticidad de activo, tabla `ai_adjustments`, cooldown real
+del motor operativo, etc.) son ampliaciones independientes, ninguna bloquea a otra.
