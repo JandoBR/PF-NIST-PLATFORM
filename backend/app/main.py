@@ -1,11 +1,14 @@
 """CLI de demo del nucleo determinista: Terraform/documentos -> evidencia -> criterios ->
-agregados -> Tier.
+agregados -> Tier -> persistencia -> reevaluacion -> comparacion.
 
-No es la API (doc 04 §6, deliberadamente pospuesta). Permite mostrar el motor de evaluacion
-funcionando de punta a punta sin base de datos ni Redis:
+No es la API (doc 04 §6, deliberadamente pospuesta). Cada evaluacion se guarda en SQLite por
+defecto (ver app/core/db.py) para poder reevaluar y comparar sin levantar Postgres/Redis:
 
-    uv run python -m app.main --terraform tests/fixtures/terraform/good \
-        --documents tests/fixtures/documents
+    uv run python -m app.main run --terraform tests/fixtures/terraform/good \
+        --documents tests/fixtures/documents --org "Empresa Demo"
+    uv run python -m app.main list
+    uv run python -m app.main reevaluate <assessment_id>
+    uv run python -m app.main compare <assessment_id_a> <assessment_id_b>
 
 Sin `DEEPSEEK_API_KEY` configurada (shell o backend/.env), la extraccion documental se omite
 y el sistema sigue funcionando con los criterios tecnicos (doc 05 §7, principio de degradacion).
@@ -19,20 +22,22 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
 
-from app.adapters.documents.adapter import DocumentAdapter
-from app.adapters.terraform.adapter import TerraformAdapter
 from app.ai.client import build_default_client
-from app.evaluation import aggregation, engine, tier
+from app.core import assessment_service as svc
+from app.core.db import build_engine, build_session_factory, create_all
+from app.evaluation import aggregation, tier
+from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology, load_methodology
-from app.schemas.evidence import EvidenceInstance
+from app.models.tables import Assessment, Source
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(REPO_ROOT / ".env")
 
 
 def check_live_ai_guard(
-    documents_path: Path | None, api_key: str | None, confirmed: bool
+    documents_requested: bool, api_key: str | None, confirmed: bool
 ) -> str | None:
     """Bloqueo explicito antes de gastar dinero real.
 
@@ -41,60 +46,29 @@ def check_live_ai_guard(
     Retorna un mensaje de error si hay que abortar, o None si se puede seguir.
     """
 
-    if documents_path is None or not api_key or confirmed:
+    if not documents_requested or not api_key or confirmed:
         return None
     return (
         "Hay una DEEPSEEK_API_KEY real configurada (shell o backend/.env).\n"
-        "Analizar --documents hara llamadas reales y pagadas a la API de DeepSeek\n"
+        "Esta operacion hara llamadas reales y pagadas a la API de DeepSeek\n"
         "(los chunks ya cacheados en backend/.cache/ no se repiten).\n"
         "Pasa --confirm-live-ai si de verdad quieres continuar, o quita la key"
         " para una corrida sin costo."
     )
 
 
-def _tipos_afirmacion_solicitados(methodology: Methodology) -> list[str]:
-    tipos: set[str] = set()
-    for criterio in methodology.criterios.values():
-        tipos.update(criterio.regla.get("tipos_afirmacion", []))
-    return sorted(tipos)
+def _abort(message: str) -> None:
+    print(f"ATENCION: {message}", file=sys.stderr)
+    raise SystemExit(1)
 
 
-def _collect_evidence(
-    methodology: Methodology, terraform_path: Path | None, documents_path: Path | None, scope: str
-) -> list[EvidenceInstance]:
-    evidence: list[EvidenceInstance] = []
-
-    if terraform_path is not None:
-        adapter = TerraformAdapter(source_id=f"cli:{terraform_path}", scope=scope)
-        tf_evidence = adapter.parse_path(terraform_path)
-        evidence.extend(tf_evidence)
-        print(f"Terraform: {len(tf_evidence)} instancias de evidencia.")
-
-    if documents_path is not None:
-        client = build_default_client()
-        ia_activa = type(client).__name__ != "NullAIClient"
-        print(f"IA: {'activa (DeepSeek)' if ia_activa else 'no configurada, extraccion omitida'}.")
-
-        adapter = DocumentAdapter(
-            client, methodology, source_id=f"cli:{documents_path}", scope=scope
-        )
-        doc_evidence = adapter.parse_path(
-            documents_path, tipos_solicitados=_tipos_afirmacion_solicitados(methodology)
-        )
-        evidence.extend(doc_evidence)
-        print(f"Documentos: {len(doc_evidence)} instancias de evidencia.")
-        if adapter.chunks_omitidos:
-            print(f"  ({adapter.chunks_omitidos} chunk(s) omitidos por limite de costo)")
-
-    return evidence
+def _open_session() -> Session:
+    engine = build_engine()
+    create_all(engine)
+    return build_session_factory(engine)()
 
 
-def run(terraform_path: Path | None, documents_path: Path | None, scope: str) -> None:
-    methodology = load_methodology(REPO_ROOT / "methodology")
-    evidence = _collect_evidence(methodology, terraform_path, documents_path, scope)
-    print(f"\nTotal evidencia: {len(evidence)} instancias ({methodology.methodology_version})\n")
-
-    results = engine.evaluate_all(methodology, evidence)
+def _print_report(methodology: Methodology, results: list[CriterionResult]) -> None:
     print("Resultados por criterio:")
     for result in sorted(results, key=lambda r: r.criterion_id):
         titulo = methodology.criterios[result.criterion_id].titulo
@@ -124,31 +98,140 @@ def run(terraform_path: Path | None, documents_path: Path | None, scope: str) ->
         print("  Falta para el siguiente nivel: " + "; ".join(tier_estimate.faltantes))
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--terraform", type=Path, default=None, help="Archivo o directorio .tf")
-    parser.add_argument(
-        "--documents", type=Path, default=None, help="Archivo o directorio de documentos"
-    )
-    parser.add_argument("--scope", default="entorno:produccion")
-    parser.add_argument(
-        "--confirm-live-ai",
-        action="store_true",
-        help="Confirma llamadas reales y pagadas a DeepSeek cuando hay una API key configurada",
-    )
-    args = parser.parse_args()
+def _build_ai_client_if_needed(documents_requested: bool):
+    if not documents_requested:
+        return None
+    client = build_default_client()
+    ia_activa = type(client).__name__ != "NullAIClient"
+    print(f"IA: {'activa (DeepSeek)' if ia_activa else 'no configurada, extraccion omitida'}.")
+    return client
 
-    if args.terraform is None and args.documents is None:
-        parser.error("se requiere --terraform y/o --documents")
+
+def cmd_run(args: argparse.Namespace) -> None:
+    methodology = load_methodology(REPO_ROOT / "methodology")
 
     guard_error = check_live_ai_guard(
-        args.documents, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
+        args.documents is not None, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
     )
     if guard_error:
-        print(f"ATENCION: {guard_error}", file=sys.stderr)
-        raise SystemExit(1)
+        _abort(guard_error)
 
-    run(args.terraform, args.documents, args.scope)
+    client = _build_ai_client_if_needed(args.documents is not None)
+    session = _open_session()
+    assessment = svc.run_assessment(
+        session,
+        methodology,
+        org_name=args.org,
+        scope=args.scope,
+        terraform_path=args.terraform,
+        documents_path=args.documents,
+        ai_client=client,
+    )
+    results = svc.load_criterion_results(session, assessment.id)
+    print(f"\nAssessment guardado: {assessment.id} (org={args.org})\n")
+    _print_report(methodology, results)
+
+
+def cmd_list(_args: argparse.Namespace) -> None:
+    session = _open_session()
+    assessments = session.query(Assessment).order_by(Assessment.creado_en.desc()).all()
+    if not assessments:
+        print("Sin evaluaciones guardadas todavia. Usa 'run' primero.")
+        return
+    for a in assessments:
+        print(
+            f"{a.id}  {a.creado_en:%Y-%m-%d %H:%M}  "
+            f"{a.organization.nombre:20s}  {a.estado:12s}  {a.methodology_version}"
+        )
+
+
+def cmd_reevaluate(args: argparse.Namespace) -> None:
+    methodology = load_methodology(REPO_ROOT / "methodology")
+    session = _open_session()
+
+    tiene_documentos = (
+        session.query(Source)
+        .filter_by(assessment_id=args.assessment_id, tipo="documents")
+        .first()
+        is not None
+    )
+    guard_error = check_live_ai_guard(
+        tiene_documentos, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
+    )
+    if guard_error:
+        _abort(guard_error)
+
+    client = _build_ai_client_if_needed(tiene_documentos)
+    try:
+        assessment = svc.reevaluate(session, methodology, args.assessment_id, ai_client=client)
+    except svc.AssessmentNotFoundError:
+        _abort(f"No existe un assessment con id {args.assessment_id!r}.")
+        return
+
+    results = svc.load_criterion_results(session, assessment.id)
+    print(f"\nNuevo assessment: {assessment.id} (reevaluacion de {args.assessment_id})\n")
+    _print_report(methodology, results)
+
+
+def cmd_compare(args: argparse.Namespace) -> None:
+    methodology = load_methodology(REPO_ROOT / "methodology")
+    session = _open_session()
+
+    try:
+        report = svc.compare(session, methodology, args.assessment_a, args.assessment_b)
+    except svc.AssessmentNotFoundError as exc:
+        _abort(f"No existe un assessment con id {exc!s}.")
+        return
+
+    print(f"Comparando {args.assessment_a} -> {args.assessment_b}\n")
+    for diff in report.diffs:
+        marca = "->" if diff.cambio else "  "
+        antes = f"{diff.estado_antes} {diff.score_antes}"
+        despues = f"{diff.estado_despues} {diff.score_despues}"
+        print(f"  {marca} {diff.criterion_id} [{antes}] -> [{despues}]  {diff.titulo}")
+
+    if report.cambios:
+        print(f"\n{len(report.cambios)} criterio(s) cambiaron.")
+    else:
+        print("\nSin cambios en ningun criterio.")
+    print(f"Global: {report.global_antes} -> {report.global_despues}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    run_parser = subparsers.add_parser("run", help="Ejecuta y persiste una evaluacion")
+    run_parser.add_argument("--terraform", type=Path, default=None, help="Archivo o directorio .tf")
+    run_parser.add_argument(
+        "--documents", type=Path, default=None, help="Archivo o directorio de documentos"
+    )
+    run_parser.add_argument("--org", default="Organizacion Demo")
+    run_parser.add_argument("--scope", default="entorno:produccion")
+    run_parser.add_argument("--confirm-live-ai", action="store_true")
+    run_parser.set_defaults(func=cmd_run)
+
+    list_parser = subparsers.add_parser("list", help="Lista evaluaciones guardadas")
+    list_parser.set_defaults(func=cmd_list)
+
+    reeval_parser = subparsers.add_parser(
+        "reevaluate", help="Nueva evaluacion heredando las fuentes de una anterior"
+    )
+    reeval_parser.add_argument("assessment_id")
+    reeval_parser.add_argument("--confirm-live-ai", action="store_true")
+    reeval_parser.set_defaults(func=cmd_reevaluate)
+
+    compare_parser = subparsers.add_parser("compare", help="Diferencia entre dos evaluaciones")
+    compare_parser.add_argument("assessment_a")
+    compare_parser.add_argument("assessment_b")
+    compare_parser.set_defaults(func=cmd_compare)
+
+    args = parser.parse_args()
+
+    if args.command == "run" and args.terraform is None and args.documents is None:
+        parser.error("run requiere --terraform y/o --documents")
+
+    args.func(args)
 
 
 if __name__ == "__main__":

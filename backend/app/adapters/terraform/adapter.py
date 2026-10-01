@@ -59,13 +59,16 @@ class TerraformAdapter:
         self.created_by = created_by
         self._observed_at = datetime.now(UTC)
 
-    def parse_path(self, path: Path) -> list[EvidenceInstance]:
-        """Parsea un archivo `.tf` o todos los `.tf` de un directorio."""
+    @staticmethod
+    def list_files(path: Path) -> list[Path]:
+        """Archivo `.tf` unico, o todos los `.tf` de un directorio."""
 
         path = Path(path)
-        files = sorted(path.glob("*.tf")) if path.is_dir() else [path]
+        return sorted(path.glob("*.tf")) if path.is_dir() else [path]
+
+    def parse_path(self, path: Path) -> list[EvidenceInstance]:
         evidence: list[EvidenceInstance] = []
-        for file_path in files:
+        for file_path in self.list_files(path):
             evidence.extend(self._parse_file(file_path))
         return evidence
 

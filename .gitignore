@@ -27,6 +27,9 @@ redisdata/
 # Cache local de extraccion IA (docs/05 §7); se migra a Redis mas adelante
 backend/.cache/
 
+# SQLite local de desarrollo (docs/04 §2: Postgres via DATABASE_URL en el stack real)
+backend/.data/
+
 # Editor / sistema
 .idea/
 .vscode/

@@ -37,6 +37,14 @@ class Methodology:
             f"settings={self.settings.version}"
         )
 
+    def tipos_afirmacion_requeridos(self) -> list[str]:
+        """Union de `regla.tipos_afirmacion` de todos los criterios (para U1, docs/05 §2)."""
+
+        tipos: set[str] = set()
+        for criterio in self.criterios.values():
+            tipos.update(criterio.regla.get("tipos_afirmacion", []))
+        return sorted(tipos)
+
 
 def _read_yaml(path: Path) -> dict:
     try:

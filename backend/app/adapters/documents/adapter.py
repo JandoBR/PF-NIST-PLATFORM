@@ -34,18 +34,20 @@ class DocumentAdapter:
         self._max_chunks_per_document = max_chunks_per_document
         self.chunks_omitidos = 0
 
-    def parse_path(self, path: Path, tipos_solicitados: list[str]) -> list[EvidenceInstance]:
-        """Procesa un documento o todos los documentos soportados de un directorio."""
+    _SUPPORTED_SUFFIXES = (".pdf", ".md", ".markdown", ".txt")
+
+    @classmethod
+    def list_files(cls, path: Path) -> list[Path]:
+        """Un documento soportado, o todos los que haya en un directorio."""
 
         path = Path(path)
-        supported = (".pdf", ".md", ".markdown", ".txt")
-        files = (
-            sorted(f for f in path.iterdir() if f.suffix.lower() in supported)
-            if path.is_dir()
-            else [path]
-        )
+        if path.is_dir():
+            return sorted(f for f in path.iterdir() if f.suffix.lower() in cls._SUPPORTED_SUFFIXES)
+        return [path]
+
+    def parse_path(self, path: Path, tipos_solicitados: list[str]) -> list[EvidenceInstance]:
         evidence: list[EvidenceInstance] = []
-        for file_path in files:
+        for file_path in self.list_files(path):
             evidence.extend(self._parse_file(file_path, tipos_solicitados))
         return evidence
 
