@@ -32,6 +32,7 @@
 | [docs/06-vigilancia-y-eventos.md](docs/06-vigilancia-y-eventos.md) | Pipeline de eventos, escenarios y su conversión en evidencia evaluable. |
 | [docs/07-plan-de-desarrollo.md](docs/07-plan-de-desarrollo.md) | Plan de 5 semanas, validación, riesgos y guion de demo. |
 | [docs/08-motor-operativo.md](docs/08-motor-operativo.md) | Incidentes en vivo, disparadores determinísticos y planes de respuesta/recovery. |
+| [docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md) | Qué existe en `backend/` hoy, en qué orden se construyó y qué se simplificó respecto a los docs 00–08. |
 
 ## Stack previsto
 
@@ -44,8 +45,15 @@
 
 ## Estado
 
-Especificación completa. Sin código implementado todavía. Los artefactos de despliegue en
-`deploy/` y `backend/docker/` son el objetivo a completar cuando exista el código de la aplicación.
+Especificación completa. El núcleo determinista, los tres adaptadores (Terraform, Ansible,
+documentos), las tres integraciones de IA (extracción U1, ajuste U2, planes U3) y la
+persistencia (`run`/`reevaluate`/`compare`/`plans`) ya están implementados y probados en
+`backend/` — detalle completo en
+[docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). Pendiente: motor
+operativo (docs 06/08), API REST y el stack de Docker/Redis (deliberadamente al final).
+
+Para probarlo sin levantar nada: `cd backend && uv run python -m app.main run --terraform
+tests/fixtures/terraform/gaps --org "Empresa Demo"`.
 
 ## Referencias externas
 
