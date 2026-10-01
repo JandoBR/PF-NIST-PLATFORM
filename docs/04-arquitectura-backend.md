@@ -50,6 +50,7 @@ De ese mismo stream cuelgan dos consumidores: **madurez** (evidencia por ventana
 | Lenguaje | Python 3.12 | Equipo con experiencia. |
 | API | FastAPI + Pydantic v2 | Validación de entrada/salida y OpenAPI gratis. |
 | ORM | SQLAlchemy 2.x | Con migraciones Alembic. |
+| Migraciones | Alembic | Job `migrate` en docker-compose antes de API/workers (§11). |
 | BD | PostgreSQL | JSONB para `value`, `locator`, metadatos. |
 | Cola / stream | Redis (Streams + cola de trabajos) | `log_ingest`, `log_aggregate`, `ops_evaluate` y trabajos del core. |
 | Trabajos | Workers propios leyendo de Redis | Sin Celery; un worker por tipo de trabajo. |
@@ -138,7 +139,7 @@ porque toca el modelo de evidencias.
 | `plans` | `id`, `org_id`, `incident_id?`, `assessment_id?`, `origen` (`criterio`\|`evento`), `titulo`, `prioridad`, `pasos jsonb`, `verificacion`, `estado`, `generado_por` |
 | `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id` |
 | `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `evidence_id` |
-| `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `pattern_ids[]`, `criterios[]`, `timeline jsonb` |
+| `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `pattern_ids[]`, `criterios[]`, `timeline jsonb`, `creado_en`, `actualizado_en` |
 | `jobs` | `id`, `assessment_id?`, `org_id?`, `tipo`, `estado`, `progreso`, `error`, `creado_en`, `tomado_en` |
 
 ### Reglas de integridad
@@ -276,7 +277,9 @@ criterios:
       estados: { all_enabled: 100, any_disabled: 25, any_unknown: insuficiente }
 ```
 
-`methodology/settings.yml`:
+`methodology/settings.yml` — **fuente canónica** de los umbrales de Tier (α, D y umbrales de confianza
+incluidos). Las tablas de `01-modelo-de-evaluacion.md §8.2` y `03-matriz-de-criterios.md §9` son copias
+ilustrativas de este archivo para lectura humana; en caso de discrepancia, manda el YAML:
 
 ```yaml
 version: 1

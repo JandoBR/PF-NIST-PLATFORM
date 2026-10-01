@@ -197,6 +197,9 @@ Cobertura de evidencia (por evaluación):
 
 ### 8.2 Indicadores por Tier (inicial)
 
+> La fuente canónica de estos umbrales es `methodology/settings.yml` (ver `04-arquitectura-backend.md §8`).
+> La tabla siguiente es una copia ilustrativa para lectura humana; en caso de discrepancia, manda el YAML.
+
 | Tier | Nombre | Requisitos mínimos (criterios y umbrales) |
 |---|---|---|
 | 1 | Partial | Base: sin requisitos. Se asigna si no se alcanza Tier 2. |

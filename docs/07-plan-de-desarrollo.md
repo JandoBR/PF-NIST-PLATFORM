@@ -14,17 +14,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 6. Una corrección de brechas produce una nueva evaluación comparable que muestra la mejora.
 7. El flujo completo es reproducible con fixtures y tests, y levanta con `docker compose up`.
 
-## 2. Cronograma de 5 Semanas
-
-| Semana | Objetivo | Entregables | Criterio de salida |
-|---|---|---|---|
-| **1** | Cimientos | Catálogo YAML (`criteria.yml`, `evidence_types.yml`, `settings.yml`), modelo de datos + migraciones, API básica (`POST/GET assessments`), ingesta de fuentes con checksum, Redis y esqueleto Docker (`deploy/`, `backend/docker/`). | `docker compose up` levanta API, workers, Postgres y Redis; un caso sintético mínimo produce una evaluación vacía persistida y consultable. |
-| **2** | Adquisición | Adaptador Terraform (RDS, S3, SG, CloudTrail), adaptador Ansible (SSH, logs, permisos), extracción documental con IA + validación, evidencias `doc.claim` con citas. | Las cuatro fuentes generan evidencias bajo el mismo contrato, sin IA en el camino crítico de Terraform/Ansible. |
-| **3** | Evaluación | Motor de criterios, rúbricas, agregación jerárquica, cobertura, Tier estimado, ajuste IA acotado, endpoints de scores/criteria. | La API devuelve score único por criterio con desglose coherente, cobertura y versiones registradas. |
-| **4** | Eventos, motor operativo y planes | Pipeline Redis Streams + patrones, entidad `incident` y disparadores determinísticos, criterios de DE/RS/RC alimentados por logs, planes (mejora y recovery) con IA y plantillas, compare entre evaluaciones. | Un escenario E1–E3 actualiza los criterios pertinentes; un escenario de fallo abre incidente y genera plan; corregir brechas mejora el score en la evaluación nueva. |
-| **5** | Validación y cierre | Tests golden, evaluación de la IA (extracción y ajuste), manejo de fallos, documentación final, guion de demo, datos de demo estables. | Demo completa extremo a extremo; límites documentados; suite de tests repetible. |
-
-## 3. Backlog Priorizado
+## 2. Backlog Priorizado
 
 ### MVP obligatorio (semanas 1–4)
 
@@ -59,7 +49,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 - Ejecución de remediaciones.
 - Multiusuario, OIDC, multi-tenant.
 
-## 4. Estrategia de Validación
+## 3. Estrategia de Validación
 
 | Nivel | Qué se prueba | Herramienta | Evidencia de éxito |
 |---|---|---|---|
@@ -74,7 +64,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 | E2E | Flujo completo | test de integración | Evaluación inicial → corrección → mejora demostrada |
 | Demo | Estabilidad del guion | ejecución repetida | Resultados idénticos entre corridas |
 
-## 5. Riesgos y Mitigaciones
+## 4. Riesgos y Mitigaciones
 
 | Riesgo | Prob. | Impacto | Mitigación |
 |---|---|---|---|
@@ -88,7 +78,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 | Dependencia del proveedor IA | Media | Medio | Interfaz interna `ai/client`; el sistema funciona con `S = B` |
 | Subcategorías NIST mal citadas | Baja | Medio | Catálogo verificado contra fuente; nota de interpretación propia |
 
-## 6. Guion de Demo (10–12 min)
+## 5. Guion de Demo (10–12 min)
 
 1. **Contexto (1 min):** empresa ficticia, sistema pequeño, perfil objetivo.
 2. **Carga inicial (1 min):** Terraform + Ansible + políticas + escenario de logs.
@@ -99,7 +89,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 7. **Re-evaluación y comparación (2 min):** nueva evaluación, diff de puntajes, mejora demostrada.
 8. **Eventos y motor operativo (1–2 min):** cargar E3-b; disparador D4 abre un incidente y genera un plan de recovery; mostrar los hechos operativos alimentando los criterios; aclarar que nada se ejecuta.
 
-## 7. Definición de Terminado
+## 6. Definición de Terminado
 
 - Código con tests pasando (`pytest`) y lint configurado.
 - Cada criterio implementado tiene al menos un test golden.
@@ -108,7 +98,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 - Documentación de límites actualizada (qué no cubre el prototipo).
 - El guion de demo corre de punta a punta sin intervención manual sobre la base de datos.
 
-## 8. Trabajo Futuro
+## 7. Trabajo Futuro
 
 - Cobertura completa de CSF 2.0 y ampliación del cruce con Privacy Framework.
 - Evidencia observada en vivo (consultas de solo lectura a AWS) junto a la declarada.

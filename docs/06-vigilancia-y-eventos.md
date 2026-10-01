@@ -148,19 +148,8 @@ Cargar eventos (event_time en orden)
 ## 7. Recomendaciones Generadas por Eventos
 
 El motor operativo (doc 08) convierte patrones anómalos o fallos en un **plan de asesoría por
-incidente** (nunca ejecución). Vista rápida de disparador → plan:
-
-| Disparador | Plan generado |
-|---|---|
-| `auth_failures_burst` sin `alert_raised` | Revisar y probar reglas de detección; definir umbrales. |
-| `incident_declared` sin `escalation_done` | Revisar ruta de escalamiento y plazos; ensayar. |
-| `restore_exercise_run` = fail | Diagnóstico de backup; verificación de integridad; plan de recuperación alterno. |
-| `restore_exercise_run` ok sin `restore_verified` | Definir verificación obligatoria post-restauración. |
-| `restore_verified` sin `recovery_communicated` | Definir comunicación de recuperación. |
-
-El plan incluye diagnóstico observable, hipótesis, comprobaciones seguras, pasos, condición de
-cierre y la advertencia de que **ninguna acción se ejecuta automáticamente**. El contrato completo,
-la entidad `incident` y las reglas anti-ruido están en `08-motor-operativo.md`.
+incidente** (nunca ejecución). La tabla de disparadores (D1–D5), el esquema del plan, la entidad
+`incident` y las reglas anti-ruido están en `08-motor-operativo.md §5–§7`; no se repiten aquí.
 
 ## 8. Simulador y Fixtures
 

@@ -50,12 +50,8 @@ org / entorno
 assessments consumen ventanas de events/log_patterns para derivar evidencia.
 ```
 
-| Tabla | Campos clave |
-|---|---|
-| `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id` |
-| `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `evidence_id` |
-| `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `pattern_ids[]`, `criterios[]`, `timeline jsonb`, `creado_en`, `actualizado_en` |
-| `plans` | `id`, `org_id`, `incident_id?`, `assessment_id?`, `origen`, `titulo`, `prioridad`, `pasos jsonb`, `verificacion`, `estado`, `generado_por` |
+Esquema completo de `events`, `log_patterns`, `incidents` y `plans` en `04-arquitectura-backend.md §4`
+(fuente canónica).
 
 ## 4. Entidad `incident`
 

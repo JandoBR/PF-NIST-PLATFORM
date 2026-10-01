@@ -344,14 +344,9 @@ No evalúa minimización, retención, finalidades ni derechos de los titulares.
 
 ## 9. Indicadores de Tier
 
-| Tier | Criterios que lo respaldan |
-|---|---|
-| T2 Risk Informed | CRI-GV-01 ≥ 50, CRI-GV-02 ≥ 50, CRI-ID-03 ≥ 50 |
-| T3 Repeatable | T2 + CRI-GV-01 ≥ 75, CRI-GV-03 ≥ 75, CRI-GV-04 ≥ 75, CRI-DE-01 ≥ 75, CRI-RS-01 ≥ 75, CRI-RC-01 ≥ 75, CRI-RC-02 ≥ 75 |
-| T4 Adaptive | T3 + CRI-GV-04 = 100, CRI-RS-02 ≥ 75, CRI-RC-03 ≥ 75, CRI-ID-04 ≥ 75 |
-
-> Los umbrales y criterios indicadores son parámetros de metodología versionada; se ajustan con
-> evidencia de uso, no con opiniones.
+Indicadores y umbrales por Tier: ver `01-modelo-de-evaluacion.md §8.2` (tabla de lectura humana) y
+`methodology/settings.yml` (fuente canónica, `04-arquitectura-backend.md §8`). No se repiten aquí para
+evitar que la matriz de criterios y la metodología se desincronicen.
 
 ## 10. Trazabilidad de Referencias NIST
 
