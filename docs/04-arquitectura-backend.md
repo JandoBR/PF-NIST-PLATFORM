@@ -1,0 +1,427 @@
+# 04 — Arquitectura del Backend
+
+## 1. Vista General
+
+Monolito modular en Python, desplegable en contenedores. Los análisis largos y el pipeline de eventos
+corren como trabajos en segundo plano; la cola/stream y la caché usan Redis, y el estado persistente
+vive en PostgreSQL.
+
+```text
+                    ┌──────────────────────────────────────────────────┐
+ Fuentes            │                    BACKEND                       │
+ ┌───────────┐      │  ┌────────────┐   ┌───────────────────────────┐  │
+ │ Terraform │──────┼─►│ Ingesta    │──►│ Adaptadores               │  │
+ ├───────────┤      │  └────────────┘   │  tf / ansible / docs / logs│  │
+ │ Ansible   │──────┼──────────────────►└─────────────┬─────────────┘  │
+ ├───────────┤      │                                │                │
+ │ Documentos│──────┼──► Extracción IA ──────────────┤                │
+ ├───────────┤      │                                ▼                │
+ │ Logs      │──────┼──► Vigilancia ──────────► Evidencias            │
+ └───────────┘      │                            normalizadas         │
+                    │                                │                │
+                    │                                ▼                │
+                    │                   ┌────────────────────────┐    │
+                    │                   │ Motor de evaluación    │    │
+                    │                   │ (criterios + rúbrica)  │    │
+                    │                   └───────────┬────────────┘    │
+                    │                               │                 │
+                    │                   ┌───────────▼────────────┐    │
+                    │                   │ Ajuste contextual IA   │    │
+                    │                   │ (acotado y auditado)   │    │
+                    │                   └───────────┬────────────┘    │
+                    │                               │                 │
+                    │        ┌──────────────────────┼──────────────┐  │
+                    │        ▼                      ▼              ▼  │
+                    │  Agregados/cobertura    Tier estimado   Planes  │
+                    │        └──────────────────────┴──────────────┘  │
+                    │                       API REST                  │
+                    └──────────────────────────────────────────────────┘
+```
+
+La ingesta de logs corre por su propio pipeline con colas dedicadas (`log_ingest`, `log_aggregate`) y
+una frontera extraíble a contenedor independiente — ver [§3.1](#31-frontera-del-pipeline-de-logs-extraíble).
+De ese mismo stream cuelgan dos consumidores: **madurez** (evidencia por ventana) y **operativo**
+(incidentes y planes en vivo, módulo `ops`); ver `08-motor-operativo.md`.
+
+## 2. Stack
+
+| Componente | Elección | Nota |
+|---|---|---|
+| Lenguaje | Python 3.12 | Equipo con experiencia. |
+| API | FastAPI + Pydantic v2 | Validación de entrada/salida y OpenAPI gratis. |
+| ORM | SQLAlchemy 2.x | Con migraciones Alembic. |
+| BD | PostgreSQL | JSONB para `value`, `locator`, metadatos. |
+| Cola / stream | Redis (Streams + cola de trabajos) | `log_ingest`, `log_aggregate`, `ops_evaluate` y trabajos del core. |
+| Trabajos | Workers propios leyendo de Redis | Sin Celery; un worker por tipo de trabajo. |
+| Caché | Redis | Caché de extracción por `sha256` y de catálogo NIST. |
+| Contenedores | Docker + docker-compose | API, workers, Postgres y Redis; ver §11. |
+| Parsing TF | `python-hcl2` | Solo bloques y valores; expresiones → unknown. |
+| Parsing Ansible | `PyYAML` + inspección de estructura | Sin ejecutar nada. |
+| PDF/texto | `pypdf` + `markdown` | Solo documentos con capa de texto. |
+| IA | SDK `openai` apuntando a DeepSeek | Ver doc 05. |
+| Tests | pytest + fixtures/golden | Ver doc 07. |
+
+## 3. Módulos
+
+| Módulo | Responsabilidad | Depende de |
+|---|---|---|
+| `methodology` | Cargar y versionar criterios, evidencias, pesos, umbrales, prompts. Inmutable por versión. | — |
+| `ingestion` | Recibir y registrar fuentes (archivos/eventos), checksum, deduplicación. | BD |
+| `adapters.terraform` | HCL → evidencias `tf.*`. | methodology, ingestion |
+| `adapters.ansible` | YAML → evidencias `an.*`. | methodology, ingestion |
+| `adapters.documents` | Chunks de documentos → IA → evidencias `doc.*` validadas. | ai.extraction |
+| `adapters.logs` | Eventos → patrones → evidencias `log.*`. Consume mensajes del pipeline. | surveillance |
+| `evaluation` | Evaluar criterios, aplicar rúbricas, agregar, calcular cobertura y Tier. | methodology, evidencias |
+| `ai` | Cliente, extracción, ajuste contextual, generación de planes, prompts. | methodology |
+| `recommendations` | Hallazgos → planes priorizados con plantillas + IA. | evaluation, ai |
+| `surveillance` | Pipeline de logs **extraíble**: filtro/dedup, ventanas, patrones operativos. Stateless e idempotente. | ingestion (colas) |
+| `ops` | Motor operativo: disparadores determinísticos, incidentes y planes en vivo (consumidor B). | surveillance, ai, recommendations |
+| `api` | Endpoints REST, validación, serialización. | todos |
+| `workers` | Ejecutar pipelines por trabajo. | todos |
+
+Regla de dependencias: `adapters` **no** conocen criterios; producen solo evidencias.
+`evaluation` **no** conoce fuentes; consume solo evidencias.
+
+### 3.1 Frontera del Pipeline de Logs (extraíble)
+
+El pipeline de logs se diseña como una **frontera explícita** dentro del monolito, de modo que
+extraerlo a un contenedor independiente sea un cambio de despliegue y no una reescritura.
+
+```text
+logs crudos ──► ingesta ──► normalización ──► filtro/dedup
+   (stateless)                                    │
+                    ┌──────────────────────────────┴───────────────────────────┐
+                    ▼ [A] madurez                                              ▼ [B] operativo
+        agregación a patrones (ventanas)                     disparadores determinísticos
+                    │                                                  │
+                    ▼                                                  ▼
+        log.pattern / log.window                              incidents + planes
+                    │                                                  │
+                    ▼                                                  ▼
+        core: persiste evidencia                      hechos operativos → stream
+        y re-evalúa criterios                         (vuelven a [A] como evidencia)
+        (la IA nunca recibe logs crudos, solo patrones)
+```
+
+Reglas de diseño:
+
+| # | Regla |
+|---|---|
+| P1 | El pipeline es **stateless e idempotente**: se puede reiniciar sin perder evidencia. |
+| P2 | Tiene **colas propias** sobre Redis Streams con consumer groups (`log_ingest`, `log_aggregate`), escalables con independencia de la API. |
+| P3 | La comunicación con el core usa un **contrato de mensaje versionado** (`log.pattern@1`, `log.window@1`) con `desde`, `hasta`, `conteo`, `scope` y `schema_version`. |
+| P4 | El **core es el único escritor de `evidence`**; el pipeline publica, el core persiste y evalúa. |
+| P5 | Solo patrones y anomalías llegan a la IA; el volumen crudo se filtra con reglas determinísticas. |
+| P6 | Un fallo del pipeline no bloquea la evaluación: se registra y las ventanas incompletas producen `evidencia_insuficiente`, nunca `no_implementado`. |
+| P7 | En producción, el mismo contrato puede moverse a un stream mayor (Kafka) y a un contenedor independiente con autoscaling por profundidad de cola. |
+| P8 | El flujo operativo (B) es un consumidor separado (`ops`): disparadores determinísticos → incidentes → planes. Detalle en `08-motor-operativo.md`. |
+
+Candidatos a seguir por la misma frontera si el volumen crece: ingesta de logs por lotes y
+preclasificación determinística. La lógica de criterios y agregación **permanece en el core**,
+porque toca el modelo de evidencias.
+
+## 4. Modelo de Datos (tablas principales)
+
+| Tabla | Campos clave |
+|---|---|
+| `organizations` | `id`, `nombre`, `contexto jsonb` |
+| `assessments` | `id`, `org_id`, `estado`, `methodology_version`, `creado_en`, `contexto jsonb` |
+| `sources` | `id`, `assessment_id`, `tipo`, `nombre`, `sha256`, `contenido_ref`, `subido_en` |
+| `evidence_definitions` | `id`, `version`, `descripcion`, `schema jsonb`, `estado`, `publicado_en` (catálogo, no por evaluación) |
+| `evidence` | `id`, `assessment_id`, `type_id`, `type_version`, `subject_type`, `subject_ref`, `scope`, `value jsonb`, `source_id`, `locator jsonb`, `observed_at`, `modality`, `limitations`, `created_by` |
+| `criteria_catalog` | `id`, `version`, `titulo`, `tipo`, `funcion`, `categorias[]`, `subcategorias[]`, `peso`, `ai_adjustable`, `regla jsonb`, `recomendacion`, `estado` |
+| `criterion_results` | `id`, `assessment_id`, `criterion_id`, `criterion_version`, `estado`, `base_score`, `final_score`, `explanation`, `evidence_ids[]`, `computed_en` |
+| `ai_adjustments` | `id`, `assessment_id`, `criterion_id`, `modelo`, `prompt_version`, `propuesta`, `justificacion`, `evidence_refs[]`, `clamped`, `aplicado bool`, `degradado bool`, `creado_en` |
+| `score_aggregates` | `id`, `assessment_id`, `nivel` (`subcategoria`\|`categoria`\|`funcion`\|`global`), `ref`, `score`, `base_score`, `cobertura`, `conteo_estados jsonb` |
+| `tier_estimates` | `id`, `assessment_id`, `tier`, `provisional bool`, `justificacion`, `faltantes jsonb` |
+| `findings` | `id`, `assessment_id`, `criterion_id`, `tipo` (`brecha`\|`contradiccion`\|`limitacion`), `titulo`, `detalle`, `severidad`, `evidence_ids[]` |
+| `plans` | `id`, `org_id`, `incident_id?`, `assessment_id?`, `origen` (`criterio`\|`evento`), `titulo`, `prioridad`, `pasos jsonb`, `verificacion`, `estado`, `generado_por` |
+| `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id` |
+| `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `evidence_id` |
+| `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `pattern_ids[]`, `criterios[]`, `timeline jsonb` |
+| `jobs` | `id`, `assessment_id?`, `org_id?`, `tipo`, `estado`, `progreso`, `error`, `creado_en`, `tomado_en` |
+
+### Reglas de integridad
+
+- `evidence` es **append-only** (sin UPDATE/DELETE salvo borrado en cascada de la evaluación).
+- `criterion_results` referencia la versión exacta del criterio usada.
+- Los catálogos (`evidence_definitions`, `criteria_catalog`) se cargan desde YAML versionado.
+- `events`, `log_patterns` e `incidents` tienen alcance **organización/entorno** (`org_id` + `scope`), no evaluación; una evaluación consume ventanas de ellos.
+
+## 5. Ciclo de Vida de una Evaluación
+
+```text
+creada ──► ingestando ──► analizando ──► evaluando ──► ajustando_ia ──► completada
+                                              │
+                                              └──► fallida (parcial o total, con detalle)
+```
+
+- Cada transición corresponde a un `job`.
+- Una evaluación completada es **inmutable**; “reevaluar” crea una evaluación nueva que hereda fuentes.
+- Si el ajuste de IA falla, la evaluación igual completa con `base_score = final_score` y marca `degradado`.
+
+Estados de `job`: `pendiente`, `en_progreso`, `completado`, `fallido`, con `progreso` (0–100) y `error`.
+
+Tipos de `job`:
+
+| Tipo | Pertenece a | Descripción |
+|---|---|---|
+| `assess` | core | Pipeline de evaluación completo. |
+| `reevaluate` | core | Nueva instantánea heredando fuentes. |
+| `compare` | core | Diff entre dos evaluaciones. |
+| `log_ingest` | pipeline de logs | Normalizar y filtrar eventos recibidos. |
+| `log_aggregate` | pipeline de logs | Construir ventanas y patrones por `scope`. |
+| `ops_evaluate` | motor operativo | Evaluar disparadores y crear/actualizar incidentes. |
+| `plan_generate` | motor operativo | Generar o actualizar el plan de un incidente. |
+
+Las colas y el stream se implementan sobre Redis; el core consume sus mensajes para persistir
+evidencia y recalcular solo los criterios afectados.
+
+## 6. API REST (borrador)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/assessments` | Crea evaluación (contexto de la organización). |
+| `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
+| `POST` | `/assessments/{id}/sources` | Sube archivos (multipart, tipo declarado). |
+| `POST` | `/assessments/{id}/run` | Encola el pipeline completo. Devuelve `job_id`. |
+| `GET` | `/assessments/{id}/jobs/{job_id}` | Estado y progreso. |
+| `GET` | `/assessments/{id}/scores` | Desglose función → categoría → subcategoría. |
+| `GET` | `/assessments/{id}/criteria` | Resultados por criterio con explicación y evidencias. |
+| `GET` | `/assessments/{id}/evidence` | Evidencias con procedencia y limitaciones (filtrable). |
+| `GET` | `/assessments/{id}/findings` | Brechas, contradicciones y limitaciones. |
+| `GET` | `/assessments/{id}/plans` | Planes con pasos, prioridad y verificación. |
+| `POST` | `/orgs/{org_id}/events` | Carga eventos al stream de la organización (JSONL); encola `log_ingest`. |
+| `POST` | `/assessments/{id}/events` | Atajo de demo: carga eventos al stream de la organización de la evaluación. |
+| `GET` | `/orgs/{org_id}/incidents` | Lista incidentes operativos (filtrable por estado/severidad). |
+| `GET` | `/incidents/{id}` | Detalle, timeline y hechos del incidente. |
+| `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |
+| `POST` | `/assessments/{id}/reevaluate` | Crea nueva evaluación heredando fuentes. |
+| `GET` | `/assessments/{id}/compare/{other_id}` | Diferencias de puntajes, cobertura y hallazgos. |
+| `GET` | `/methodology` | Catálogo de criterios y tipos de evidencia vigentes. |
+| `GET` | `/health` | Liveness/readiness. |
+
+Convenciones:
+
+- Respuestas siempre incluyen `puntaje` **y** `cobertura` juntos.
+- Los errores usan `application/problem+json` con `type`, `title`, `detail`, `instance`.
+- Paginación por cursor en listados grandes.
+- Toda respuesta incluye `methodology_version` para trazabilidad.
+
+## 7. Estructura de Carpetas Propuesta
+
+```text
+backend/
+├── app/
+│   ├── main.py
+│   ├── config.py
+│   ├── api/
+│   │   ├── assessments.py
+│   │   ├── scores.py
+│   │   ├── evidence.py
+│   │   └── methodology.py
+│   ├── core/            # db, sesión, errores, logging
+│   ├── models/          # SQLAlchemy
+│   ├── schemas/         # Pydantic
+│   ├── methodology/     # loader + validación de YAML
+│   ├── ingestion/
+│   ├── adapters/
+│   │   ├── terraform/
+│   │   ├── ansible/
+│   │   ├── documents/
+│   │   └── logs/
+│   ├── evaluation/      # engine, aggregation, coverage, tier
+│   ├── ai/              # client, extraction, adjustment, plans, prompts/
+│   ├── recommendations/
+│   ├── surveillance/    # pipeline de logs extraíble (ver §3.1)
+│   ├── ops/             # motor operativo: incidentes y disparadores (doc 08)
+│   └── workers/         # consumers de Redis (core, logs, ops)
+├── methodology/          # catálogos versionados en YAML
+│   ├── evidence_types.yml
+│   ├── criteria.yml
+│   ├── tiers.yml
+│   └── settings.yml      # α, D, umbrales, pesos de función
+├── tests/
+│   ├── fixtures/         # Terraform, Ansible, documentos y logs de ejemplo
+│   └── golden/           # resultados esperados
+├── alembic/
+├── pyproject.toml
+└── docker/
+    ├── Dockerfile.api
+    └── Dockerfile.worker
+```
+
+En la raíz del proyecto: `deploy/docker-compose.yml` y `deploy/.env.example` (ver §11).
+
+## 8. Metodología Versionada en YAML
+
+`methodology/criteria.yml` (extracto):
+
+```yaml
+version: 1
+criterios:
+  - id: CRI-PR-01
+    version: 1
+    titulo: "Cifrado de datos en reposo"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.DS]
+    subcategorias: [PR.DS-01]
+    peso: 5
+    ai_adjustable: true
+    evidencias: [tf.encryption.config@1, doc.claim@1]
+    recomendacion: "Habilitar cifrado gestionado por KMS en RDS y S3."
+    regla:
+      tipo: umbral_por_recurso
+      estados: { all_enabled: 100, any_disabled: 25, any_unknown: insuficiente }
+```
+
+`methodology/settings.yml`:
+
+```yaml
+version: 1
+ia:
+  alpha: 0.25
+  divergencia_maxima: 20
+  umbral_confianza_documental: 0.6
+tier:
+  t2: { CRI-GV-01: 50, CRI-GV-02: 50, CRI-ID-03: 50 }
+  t3: { CRI-GV-01: 75, CRI-GV-03: 75, CRI-GV-04: 75, CRI-DE-01: 75,
+        CRI-RS-01: 75, CRI-RC-01: 75, CRI-RC-02: 75 }
+  t4: { CRI-GV-04: 100, CRI-RS-02: 75, CRI-RC-03: 75, CRI-ID-04: 75 }
+funciones: { GV: 1, ID: 1, PR: 1, DE: 1, RS: 1, RC: 1 }
+```
+
+Reglas:
+
+- El cargador valida el YAML contra esquema Pydantic al arrancar; un error impide iniciar (fallo rápido).
+- Cambiar cualquier valor en `methodology/` genera `methodology_version` nueva.
+- Las evaluaciones guardan la versión; nunca se recalculan con la versión actual.
+
+## 9. Manejo de Archivos y Datos No Confiables
+
+| Riesgo | Medida |
+|---|---|
+| Playbooks maliciosos | **Nunca** se ejecutan; solo se parsean como datos. |
+| HCL/YAML con payloads | Parsers en modo datos; sin eval, sin templates, sin include remoto. |
+| PDFs con macros/contenido activo | Solo extracción de texto; sin renderizado. |
+| Prompt injection en documentos | El contenido va delimitado y etiquetado como datos; ver doc 05 §7. |
+| Secretos en archivos | Detección básica de patrones (claves, tokens) y redacción antes de enviar a IA. |
+| Tamaño de archivos | Límites por fuente y por evaluación; rechazo explícito con error. |
+| Traversal / archivos comprimidos | Lista blanca de extensiones; sin descompresión recursiva. |
+
+## 10. Decisiones Diferidas
+
+| Tema | Decisión para el prototipo |
+|---|---|
+| Cola dedicada | Sí, Redis para stream/cola y caché; sin Celery (workers propios). |
+| Orquestación | Docker + docker-compose; sin Kubernetes en el prototipo. |
+| Motor operativo (incidentes/planes) | Sí, mínimo: consumidor `ops` con disparadores determinísticos (doc 08). |
+| Base vectorial | No; recuperación por IDs y búsqueda textual sobre el catálogo NIST. |
+| Microservicios | No; monolito modular. |
+| Pipeline de logs como servicio independiente | No en el prototipo: módulo extraíble con cola propia (§3.1). Evolución: stream + contenedor con autoscaling por profundidad de cola. |
+| AI gateway centralizado | No; el módulo `ai` aplica límites y caché. Se evalúa extraerlo si el costo/volumen lo justifica. |
+| Autenticación | API key simple para demo; OIDC fuera de alcance. |
+| Multi-tenant | No; una organización por despliegue. |
+| Frontend | React después; la API ya expone todo lo necesario. |
+
+## 11. Despliegue en Docker
+
+Todo el prototipo debe ser desplegable con `docker compose up`. Redis entra como dependencia del
+prototipo (stream, cola y caché) sin añadir complejidad de orquestación.
+
+### 11.1 Servicios
+
+| Servicio | Imagen / build | Rol | Depende de |
+|---|---|---|---|
+| `db` | `postgres:16` | Estado persistente. | — |
+| `redis` | `redis:7` | Streams, colas de trabajos y caché. | — |
+| `api` | `docker/Dockerfile.api` | FastAPI; encola trabajos y sirve lecturas. | db, redis |
+| `worker-core` | `docker/Dockerfile.worker` | Evaluación, adaptadores, IA. | db, redis |
+| `worker-logs` | `docker/Dockerfile.worker` | Pipeline de logs (`log_ingest`, `log_aggregate`) y `ops`. | db, redis |
+| `migrate` | `docker/Dockerfile.api` | Job de una sola ejecución: `alembic upgrade head`. | db |
+| `frontend` *(opcional)* | `node` | React; fuera del foco inicial. | api |
+
+Notas:
+
+- `worker-logs` es el contenedor que se extrae/escala primero si el volumen crece (§3.1, P7).
+- Sin autoscaling en el prototipo: se puede escalar a mano con `--scale worker-logs=N`.
+- Persistencia con volúmenes nombrados para `db` y `redis`; healthchecks y `depends_on` con condición.
+
+### 11.2 `deploy/docker-compose.yml` (referencia)
+
+```yaml
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pf}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pf}
+      POSTGRES_DB: ${POSTGRES_DB:-pf}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: ["redisdata:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: { context: .., dockerfile: backend/docker/Dockerfile.api }
+    command: ["alembic", "upgrade", "head"]
+    environment: { DATABASE_URL: "postgresql+psycopg://pf:pf@db:5432/pf" }
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    build: { context: .., dockerfile: backend/docker/Dockerfile.api }
+    environment:
+      DATABASE_URL: "postgresql+psycopg://pf:pf@db:5432/pf"
+      REDIS_URL: "redis://redis:6379/0"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"
+    ports: ["8000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  worker-core:
+    build: { context: .., dockerfile: backend/docker/Dockerfile.worker }
+    command: ["python", "-m", "app.workers.core"]
+    environment: &worker_env
+      DATABASE_URL: "postgresql+psycopg://pf:pf@db:5432/pf"
+      REDIS_URL: "redis://redis:6379/0"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker-logs:
+    build: { context: .., dockerfile: backend/docker/Dockerfile.worker }
+    command: ["python", "-m", "app.workers.logs"]
+    environment: *worker_env
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  redisdata:
+```
+
+### 11.3 Reglas de despliegue
+
+| # | Regla |
+|---|---|
+| C1 | Sin secretos en la imagen: todo por variables de entorno (`deploy/.env`, fuera de git). |
+| C2 | Migraciones como job separado (`migrate`) antes de arrancar API y workers. |
+| C3 | Workers idempotentes: reiniciar un contenedor no duplica evidencia ni planes. |
+| C4 | La API no depende de la IA para responder; si Redis o el proveedor IA caen, degrada sin tumbar lecturas. |
+| C5 | Un solo `docker-compose.yml` para demo; la extracción a servicios independientes no cambia el contrato. |
