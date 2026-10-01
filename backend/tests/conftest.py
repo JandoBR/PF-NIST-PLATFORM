@@ -1,13 +1,25 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.auth import hash_password
 from app.core.db import build_engine, build_session_factory, create_all
 from app.methodology.loader import load_methodology
+from app.models.tables import Organization, User
 
 METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
+
+#: Los tests no deben sembrar cuentas en la base real (el lifespan de la app correria el seed).
+os.environ["SEED_DEMO_USERS"] = "0"
+
+#: Organizacion del usuario de prueba: la usan los tests de API que asumen una organizacion fija
+#: (a proposito coincide con el nombre que mandaban antes de la autenticacion, doc 10).
+TEST_ORG_NAME = "Empresa API Assessments"
+TEST_USERNAME = "tester"
+TEST_PASSWORD = "test123"
 
 
 @pytest.fixture
@@ -27,6 +39,28 @@ def db_session(tmp_path):
 @pytest.fixture(scope="session")
 def methodology():
     return load_methodology(METHODOLOGY_DIR)
+
+
+@pytest.fixture
+def auth_user(db_session) -> User:
+    """Usuario de la organizacion `TEST_ORG_NAME`, sobre la sesion de prueba."""
+
+    org = db_session.query(Organization).filter_by(nombre=TEST_ORG_NAME).one_or_none()
+    if org is None:
+        org = Organization(nombre=TEST_ORG_NAME)
+        db_session.add(org)
+        db_session.flush()
+    salt, digest = hash_password(TEST_PASSWORD)
+    user = User(
+        org_id=org.id,
+        username=TEST_USERNAME,
+        password_salt=salt,
+        password_hash=digest,
+        role="client",
+    )
+    db_session.add(user)
+    db_session.commit()
+    return user
 
 
 class FakeRedis:
@@ -80,24 +114,37 @@ def run_pending_jobs(db_session, methodology, fake_redis: FakeRedis) -> None:
         worker_logs.process_message(db_session, methodology, message)
 
 
-@pytest.fixture
-def api_client(db_session, fake_redis):
-    """TestClient con `get_session`/`get_redis` sobreescritos: la misma BD efimera de
-    `db_session` y un Redis falso en memoria, para que la suite no dependa de servicios
-    externos. Un test que necesite simular que el worker ya proceso un job debe drenar
-    `fake_redis` (via `fake_redis.drain(QUEUE_CORE)`/`QUEUE_LOGS`) y llamar
-    `app.workers.core.process_message`/`app.workers.logs.process_message` el mismo."""
+def _client(db_session, fake_redis, *, authenticated: bool, auth_user: User | None = None):
+    """Factory del `TestClient`: sobreescribe sesion/Redis, y opcionalmente `get_current_user`
+    (los tests de auth dejan la dependencia real para ejercitar el token de verdad)."""
 
     from app.api.app import app
-    from app.api.deps import get_redis, get_session
+    from app.api.deps import get_current_user, get_redis, get_session
 
     def _override_get_session():
         yield db_session
 
     app.dependency_overrides[get_session] = _override_get_session
     app.dependency_overrides[get_redis] = lambda: fake_redis
+    if authenticated:
+        assert auth_user is not None
+        app.dependency_overrides[get_current_user] = lambda: auth_user
     try:
         with TestClient(app) as client:
             yield client
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def api_client(db_session, fake_redis, auth_user):
+    """Cliente autenticado como `auth_user` (la mayoria de los tests de API)."""
+
+    yield from _client(db_session, fake_redis, authenticated=True, auth_user=auth_user)
+
+
+@pytest.fixture
+def anon_client(db_session, fake_redis):
+    """Cliente **sin** autenticacion sobreescrita: ejercita el flujo real de token/401."""
+
+    yield from _client(db_session, fake_redis, authenticated=False)

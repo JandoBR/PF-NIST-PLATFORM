@@ -15,10 +15,10 @@ from typing import Any
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
-from app.ai.client import build_default_client
+from app.ai.client import build_default_client, describe_client
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
-from app.core.db import build_engine, build_session_factory, create_all
+from app.core.db import build_engine, build_session_factory, ensure_schema
 from app.core.queue import QUEUE_LOGS, build_redis_client, dequeue_blocking
 from app.methodology.loader import Methodology, load_methodology
 
@@ -42,7 +42,10 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
 
     job_service.mark_taken(session, job)
     try:
-        ai_client = build_default_client() if message.get("ai_requested") else None
+        ai_requested = bool(message.get("ai_requested"))
+        ai_client = build_default_client() if ai_requested else None
+        if ai_requested:
+            logger.info("Job %s: IA %s", job.id, describe_client(ai_client))
         svc.ingest_events(
             session,
             methodology,
@@ -58,7 +61,7 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
 
 def main() -> None:
     engine = build_engine()
-    create_all(engine)
+    ensure_schema(engine)
     session_factory = build_session_factory(engine)
     methodology = load_methodology(REPO_ROOT / "methodology")
     redis_client = build_redis_client()

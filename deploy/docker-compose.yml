@@ -21,6 +21,12 @@
 # Y sin el reaper de `JOB_STALE_TIMEOUT_SECONDS` (ver backend/.env.example) -- las dos cosas
 # juntas son las que realmente cierran el gap: el contenedor vuelve a arrancar solo, y el job
 # huerfano que dejo se marca fallido en vez de quedar colgado.
+#
+# Config de la app: `DEEPSEEK_*`, `CORS_ORIGINS` y `JOB_STALE_TIMEOUT_SECONDS` salen de
+# `deploy/.env` via `env_file`, que NO lo pisa el shell. Antes iban como `${VAR}` en
+# `environment:` y una variable exportada en el shell (p. ej. la key que usa opencode) ganaba
+# sobre el .env -- ver docs/09 §17. `DATABASE_URL`/`REDIS_URL` siguen en `environment` porque
+# apuntan a los nombres de servicio de la red de compose, no a un .env de host.
 
 services:
   db:
@@ -66,14 +72,16 @@ services:
       context: ..
       dockerfile: backend/docker/Dockerfile.api
     restart: unless-stopped
+    # deploy/.env es la fuente autoritativa de la config de la app (incluida DEEPSEEK_API_KEY):
+    # `env_file` se lee al crear el contenedor y NO lo pisa una variable del shell, a diferencia
+    # de `${VAR}` dentro de `environment:` (donde el entorno del shell gana sobre el .env). Por
+    # eso la key que usa opencode en el shell puede seguir exportada sin afectar al stack.
+    env_file:
+      - path: .env
+        required: false
     environment: &backend_env
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pf}:${POSTGRES_PASSWORD:-pf}@db:5432/${POSTGRES_DB:-pf}
       REDIS_URL: redis://redis:6379/0
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
-      JOB_STALE_TIMEOUT_SECONDS: ${JOB_STALE_TIMEOUT_SECONDS:-600}
     volumes:
       - backend_data:/app/backend/.data
     ports:
@@ -92,6 +100,9 @@ services:
       dockerfile: backend/docker/Dockerfile.worker
     command: ["python", "-m", "app.workers.core"]
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     environment: *backend_env
     volumes:
       - backend_data:/app/backend/.data
@@ -109,6 +120,9 @@ services:
       dockerfile: backend/docker/Dockerfile.worker
     command: ["python", "-m", "app.workers.logs"]
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     environment: *backend_env
     volumes:
       - backend_data:/app/backend/.data

@@ -9,5 +9,11 @@ docs/
 *.md
 frontend/node_modules/
 frontend/dist/
-frontend/.env
 frontend/.penpot-ai-kit/
+
+# Secretos: ningun .env debe quedar horneado en la imagen. La config de los contenedores
+# entra por `env_file` desde deploy/.env (ver deploy/docker-compose.yml y docs/09 §17);
+# los procesos locales siguen leyendo backend/.env con load_dotenv.
+.env
+**/.env
+**/*.env

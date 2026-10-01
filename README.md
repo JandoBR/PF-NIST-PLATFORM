@@ -33,6 +33,7 @@
 | [docs/07-plan-de-desarrollo.md](docs/07-plan-de-desarrollo.md) | Plan de 5 semanas, validación, riesgos y guion de demo. |
 | [docs/08-motor-operativo.md](docs/08-motor-operativo.md) | Incidentes en vivo, disparadores determinísticos y planes de respuesta/recovery. |
 | [docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md) | Qué existe en `backend/` hoy, en qué orden se construyó y qué se simplificó respecto a los docs 00–08. |
+| [docs/10-multitenancy-y-autenticacion.md](docs/10-multitenancy-y-autenticacion.md) | Multitenancy, login con token y aislamiento de datos por organización. |
 
 ## Stack previsto
 

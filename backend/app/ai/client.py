@@ -6,8 +6,11 @@ funcionando con `S = B` y extraccion documental deshabilitada (D9, principio ope
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Protocol
+
+logger = logging.getLogger("app.ai.client")
 
 DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com"
@@ -61,6 +64,19 @@ class DeepSeekClient:
             except Exception:  # error transitorio: reintentar, nunca propagar (docs/05 §5)
                 continue
 
+            # docs/09: la API devuelve `usage` en cada respuesta; sin loguearlo, el consumo real
+            # (tokens) es invisible desde el proceso -- solo se veria en la plataforma de DeepSeek,
+            # y alli depende de que key/cuenta sea la que realmente se uso.
+            usage = getattr(response, "usage", None)
+            if usage is not None:
+                logger.info(
+                    "DeepSeek %s tokens: prompt=%s completion=%s total=%s",
+                    self.model,
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                    usage.total_tokens,
+                )
+
             content = response.choices[0].message.content
             if not content:
                 continue
@@ -103,3 +119,15 @@ def build_default_client() -> AIClient:
     from app.ai.cache import CachingAIClient  # evita import circular a nivel de modulo
 
     return CachingAIClient(DeepSeekClient(api_key=api_key))
+
+
+def describe_client(client: AIClient) -> str:
+    """Texto para logs: distingue "IA real" de "sin key, degradando en silencio" (docs/09 §18).
+
+    Un worker que recibe `ai_requested=True` pero no ve la API key cae en `NullAIClient` y no
+    hace ninguna llamada de red -- sin este log, eso es indistinguible de "todo funciono pero
+    salio de cache"."""
+
+    if isinstance(client, NullAIClient):
+        return "no configurada (sin DEEPSEEK_API_KEY; degrada a S=B, sin llamadas ni costo)"
+    return "activa (DeepSeek)"

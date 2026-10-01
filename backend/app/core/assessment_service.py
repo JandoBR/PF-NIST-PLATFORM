@@ -522,8 +522,13 @@ def get_assessment(session: Session, assessment_id: str) -> Assessment | None:
     return session.get(Assessment, assessment_id)
 
 
-def list_assessments(session: Session) -> list[Assessment]:
-    return session.query(Assessment).order_by(Assessment.creado_en.desc()).all()
+def list_assessments(session: Session, *, org_id: str | None = None) -> list[Assessment]:
+    """Si se pasa `org_id`, filtra por organizacion (doc 10 §4: cada usuario ve solo la suya)."""
+
+    query = session.query(Assessment)
+    if org_id is not None:
+        query = query.filter_by(org_id=org_id)
+    return query.order_by(Assessment.creado_en.desc()).all()
 
 
 @dataclass

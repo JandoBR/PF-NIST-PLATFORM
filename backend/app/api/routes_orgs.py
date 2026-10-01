@@ -1,15 +1,11 @@
-"""POST/GET /orgs, POST /orgs/{org_id}/events, GET /orgs/{org_id}/incidents (docs/04 §6).
+"""GET /orgs, POST /orgs/{org_id}/events, GET /orgs/{org_id}/incidents (docs/04 §6).
 
-`org_id` es el UUID real (doc 04 modela eventos/incidentes por organizacion, no por nombre);
-`POST /orgs` es get-or-create por nombre, igual que la CLI, pero devuelve el id para direccionar
-el resto de las rutas.
+Todas exigen sesion (doc 10): el cliente ve solo su organizacion, y no puede crear organizaciones
+(eso lo hace el proveedor por seed/CLI). Un `org_id` ajeno responde 404.
 
 `POST /orgs/{org_id}/events` encola el pipeline de eventos en `worker-logs` en vez de correrlo
-en el request (docs/09 §16, mismo cambio que `routes_assessments.py` para `assessment_run`):
-guarda el `.jsonl` subido en un directorio persistente (no un tempfile autolimpiado -- el worker
-lo lee despues de que termine este request, misma leccion que `UPLOADS_DIR` en
-`routes_assessments.py`), encola un job `event_ingest` y devuelve 202 con `job_id`.
-"""
+en el request (docs/09 §16), guardando el `.jsonl` subido en un directorio persistente (el worker
+lo lee despues, en otro proceso)."""
 
 from __future__ import annotations
 
@@ -19,16 +15,16 @@ from uuid import uuid4
 
 import redis
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.ai.guard import check_live_ai_guard
-from app.api.deps import get_methodology, get_redis, get_session
+from app.api.deps import get_current_user, get_methodology, get_redis, get_session, require_same_org
 from app.api.schemas import EventsAccepted, IncidentOut, OrganizationOut
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
 from app.core.queue import QUEUE_LOGS, enqueue
 from app.methodology.loader import Methodology
+from app.models.tables import User
 
 router = APIRouter(tags=["orgs"])
 
@@ -37,25 +33,15 @@ router = APIRouter(tags=["orgs"])
 EVENTS_UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / ".data" / "events"
 
 
-class CreateOrganizationRequest(BaseModel):
-    nombre: str
-
-
-@router.post("/orgs", response_model=OrganizationOut)
-def create_organization(
-    body: CreateOrganizationRequest, session: Session = Depends(get_session)
-) -> OrganizationOut:
-    org = svc.get_or_create_organization(session, body.nombre)
-    session.commit()
-    return OrganizationOut.model_validate(org)
-
-
 @router.get("/orgs", response_model=list[OrganizationOut])
-def list_organizations(session: Session = Depends(get_session)) -> list[OrganizationOut]:
-    return [OrganizationOut.model_validate(o) for o in svc.list_organizations(session)]
+def list_organizations(user: User = Depends(get_current_user)) -> list[OrganizationOut]:
+    """El usuario solo ve su propia organizacion (doc 10 §4)."""
+
+    return [OrganizationOut.model_validate(user.organization)]
 
 
-def _require_org(session: Session, org_id: str):
+def _require_org(session: Session, org_id: str, user: User):
+    require_same_org(user, org_id)
     org = svc.get_organization(session, org_id)
     if org is None:
         raise HTTPException(status_code=404, detail=f"No existe la organizacion {org_id!r}.")
@@ -68,11 +54,12 @@ async def ingest_events(
     file: UploadFile,
     use_ai: bool = False,
     confirm_live_ai: bool = False,
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
     redis_client: redis.Redis = Depends(get_redis),
 ) -> EventsAccepted:
-    org = _require_org(session, org_id)
+    org = _require_org(session, org_id, user)
 
     guard_error = check_live_ai_guard(use_ai, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai)
     if guard_error:
@@ -101,8 +88,10 @@ async def ingest_events(
 
 @router.get("/orgs/{org_id}/incidents", response_model=list[IncidentOut])
 def list_org_incidents(
-    org_id: str, session: Session = Depends(get_session)
+    org_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> list[IncidentOut]:
-    org = _require_org(session, org_id)
+    org = _require_org(session, org_id, user)
     incidents = svc.list_incidents(session, org.nombre)
     return [IncidentOut.model_validate(i) for i in incidents]

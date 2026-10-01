@@ -126,6 +126,7 @@ porque toca el modelo de evidencias.
 | Tabla | Campos clave |
 |---|---|
 | `organizations` | `id`, `nombre`, `contexto jsonb` |
+| `users` | `id`, `org_id`, `username`, `password_salt`, `password_hash`, `role`, `creado_en` (doc 10) |
 | `assessments` | `id`, `org_id`, `estado`, `methodology_version`, `creado_en`, `contexto jsonb` |
 | `sources` | `id`, `assessment_id`, `tipo`, `nombre`, `sha256`, `contenido_ref`, `subido_en` |
 | `evidence_definitions` | `id`, `version`, `descripcion`, `schema jsonb`, `estado`, `publicado_en` (catálogo, no por evaluación) |
@@ -182,7 +183,9 @@ evidencia y recalcular solo los criterios afectados.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/assessments` | Crea evaluación (contexto de la organización). |
+| `POST` | `/auth/login` | Login (usuario/contraseña) → token + usuario. Público. |
+| `GET` | `/auth/me` | Usuario de la sesión actual. |
+| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario). |
 | `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
 | `POST` | `/assessments/{id}/sources` | Sube archivos (multipart, tipo declarado). |
 | `POST` | `/assessments/{id}/run` | Encola el pipeline completo. Devuelve `job_id`. |
@@ -204,6 +207,8 @@ evidencia y recalcular solo los criterios afectados.
 
 Convenciones:
 
+- Autenticación por token (doc 10): todas las rutas de datos exigen
+  `Authorization: Bearer <token>`; un recurso de otra organización responde **404**, no 403.
 - Respuestas siempre incluyen `puntaje` **y** `cobertura` juntos.
 - Los errores usan `application/problem+json` con `type`, `title`, `detail`, `instance`.
 - Paginación por cursor en listados grandes.
@@ -324,8 +329,8 @@ Reglas:
 | Microservicios | No; monolito modular. |
 | Pipeline de logs como servicio independiente | No en el prototipo: módulo extraíble con cola propia (§3.1). Evolución: stream + contenedor con autoscaling por profundidad de cola. |
 | AI gateway centralizado | No; el módulo `ai` aplica límites y caché. Se evalúa extraerlo si el costo/volumen lo justifica. |
-| Autenticación | API key simple para demo; OIDC fuera de alcance. |
-| Multi-tenant | No; una organización por despliegue. |
+| Autenticación | Login usuario/contraseña con token firmado (doc 10); OAuth/SSO fuera de alcance. |
+| Multi-tenant | Sí: varias organizaciones por despliegue, aisladas por usuario (doc 10); el registro lo hace el proveedor por seed/CLI. |
 | Frontend | React después; la API ya expone todo lo necesario. |
 
 ## 11. Despliegue en Docker
@@ -424,7 +429,7 @@ volumes:
 | # | Regla |
 |---|---|
 | C1 | Sin secretos en la imagen: todo por variables de entorno (`deploy/.env`, fuera de git). |
-| C2 | Migraciones como job separado (`migrate`) antes de arrancar API y workers. |
+| C2 | Migraciones como job separado (`migrate`) antes de arrancar API y workers. En Postgres, Alembic es la **única** fuente de verdad del esquema: `create_all` solo corre en SQLite (dev/CLI/tests) — ver `ensure_schema` en `app/core/db.py` y docs/09 §22. |
 | C3 | Workers idempotentes: reiniciar un contenedor no duplica evidencia ni planes. |
 | C4 | La API no depende de la IA para responder; si Redis o el proveedor IA caen, degrada sin tumbar lecturas. |
 | C5 | Un solo `docker-compose.yml` para demo; la extracción a servicios independientes no cambia el contrato. |

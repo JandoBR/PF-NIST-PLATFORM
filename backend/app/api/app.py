@@ -7,7 +7,9 @@ seguir literalmente el bosquejo de carpetas de doc 04. Arrancar con:
 
 from __future__ import annotations
 
+import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,19 +18,42 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     routes_assessments,
+    routes_auth,
     routes_incidents,
     routes_jobs,
     routes_methodology,
     routes_orgs,
 )
 from app.api.errors import register_exception_handlers
+from app.core.db import build_engine, build_session_factory, ensure_schema
+from app.core.seed import ensure_seed_users
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(REPO_ROOT / ".env")
 
+logger = logging.getLogger("app.api")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Crea el esquema si falta y siembra las cuentas precreadas (doc 10 §5)."""
+
+    engine = build_engine()
+    ensure_schema(engine)
+    session = build_session_factory(engine)()
+    try:
+        created = ensure_seed_users(session)
+        if created:
+            logger.info("Seed: %s cuenta(s) de demo creadas.", created)
+    finally:
+        session.close()
+    yield
+
+
 app = FastAPI(
     title="Plataforma de Evaluacion de Madurez de Ciberseguridad",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 #: Origenes permitidos para el frontend (dev server de Vite por defecto). `CORS_ORIGINS` es una
@@ -51,6 +76,7 @@ app.add_middleware(
 
 register_exception_handlers(app)
 
+app.include_router(routes_auth.router)
 app.include_router(routes_methodology.router)
 app.include_router(routes_orgs.router)
 app.include_router(routes_incidents.router)

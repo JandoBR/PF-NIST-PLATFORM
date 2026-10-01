@@ -36,10 +36,18 @@ def build_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 def create_all(engine: Engine) -> None:
-    """Crea el esquema directamente desde los modelos.
-
-    Para Postgres en el stack real, `alembic upgrade head` es la via oficial (docs/04 §11,
-    regla C2); esto es el atajo que usan la CLI local y los tests contra SQLite.
-    """
+    """Crea el esquema directamente desde los modelos (SQLite de dev, CLI, tests)."""
 
     Base.metadata.create_all(engine)
+
+
+def ensure_schema(engine: Engine) -> None:
+    """Crea el esquema desde los modelos **solo en SQLite** (dev/CLI/tests).
+
+    En Postgres el esquema lo administra Alembic (`alembic upgrade head`, docs/04 §11 regla C2).
+    Correr `create_all` ahi crea una tabla que Alembic todavia no registro en `alembic_version`,
+    y la proxima migracion falla con `DuplicateTable` -- incidente real al agregar `users`
+    (docs/09 §22). Con esto, Postgres y Alembic son la unica fuente de verdad del esquema."""
+
+    if engine.dialect.name == "sqlite":
+        create_all(engine)

@@ -33,6 +33,26 @@ class Organization(Base):
     assessments: Mapped[list[Assessment]] = relationship(back_populates="organization")
     events: Mapped[list[Event]] = relationship(back_populates="organization")
     incidents: Mapped[list[Incident]] = relationship(back_populates="organization")
+    users: Mapped[list[User]] = relationship(back_populates="organization")
+
+
+class User(Base):
+    """Cuenta con login (doc 10). Pertenece a una organizacion; el aislamiento de datos se hace
+    por `org_id` en toda la API."""
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"))
+    username: Mapped[str] = mapped_column(String, unique=True)
+    password_salt: Mapped[str] = mapped_column(String)
+    password_hash: Mapped[str] = mapped_column(String)
+    role: Mapped[str] = mapped_column(String, default="client")
+    creado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    organization: Mapped[Organization] = relationship(back_populates="users")
 
 
 class Assessment(Base):

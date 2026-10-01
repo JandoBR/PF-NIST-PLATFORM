@@ -61,6 +61,54 @@ def test_reap_stale_jobs_leaves_recent_en_progreso_alone(db_session):
     assert job.estado == "en_progreso"
 
 
+def test_reap_stale_jobs_marks_old_pendiente_as_fallido(db_session):
+    """Un job que nunca fue tomado (no hay worker consumiendo la cola) no puede quedar pendiente
+    para siempre: se falla pasado el timeout de pendientes (docs/09 §20)."""
+
+    job = job_service.create_job(db_session, "assessment_run", assessment_id="p1")
+    job.creado_en = datetime.now(UTC) - timedelta(seconds=300)
+    db_session.commit()
+
+    reaped = job_service.reap_stale_jobs(
+        db_session, "assessment_run", timeout_seconds=600, pending_timeout_seconds=120
+    )
+
+    assert [j.id for j in reaped] == [job.id]
+    assert job.estado == "fallido"
+    assert "no fue tomado" in job.error
+
+
+def test_reap_stale_jobs_leaves_recent_pendiente_alone(db_session):
+    job = job_service.create_job(db_session, "assessment_run", assessment_id="p2")
+
+    reaped = job_service.reap_stale_jobs(
+        db_session, "assessment_run", timeout_seconds=600, pending_timeout_seconds=120
+    )
+
+    assert reaped == []
+    assert job.estado == "pendiente"
+
+
+def test_fail_if_stale_marks_a_single_stale_pending_job(db_session):
+    job = job_service.create_job(db_session, "assessment_run", assessment_id="p3")
+    job.creado_en = datetime.now(UTC) - timedelta(seconds=300)
+    db_session.commit()
+
+    changed = job_service.fail_if_stale(db_session, job, pending_timeout_seconds=120)
+
+    assert changed is True
+    assert job.estado == "fallido"
+
+
+def test_fail_if_stale_leaves_terminal_states_alone(db_session):
+    job = job_service.create_job(db_session, "assessment_run", assessment_id="p4")
+    job_service.mark_taken(db_session, job)
+    job_service.mark_done(db_session, job)
+
+    assert job_service.fail_if_stale(db_session, job, pending_timeout_seconds=0) is False
+    assert job.estado == "completado"
+
+
 def test_reap_stale_jobs_ignores_other_tipos_and_terminal_states(db_session):
     other_tipo = job_service.create_job(db_session, "event_ingest", org_id="o2")
     job_service.mark_taken(db_session, other_tipo)

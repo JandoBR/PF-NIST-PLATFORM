@@ -37,6 +37,7 @@ Una plataforma que:
 | Logs simulados reproducibles | Vigilancia de sistemas reales en tiempo real |
 | Motor operativo mínimo (incidentes y planes por escenario) | Detección continua, correlación avanzada, SIEM |
 | Desplegable con Docker + Redis | Orquestación con Kubernetes, alta disponibilidad |
+| Multitenancy con login (varias organizaciones por despliegue) | Registro por el cliente, panel de administración, OAuth/SSO |
 
 **El sistema no certifica.** Emite una estimación metodológica propia, con evidencia trazable y límites declarados.
 
@@ -58,6 +59,7 @@ Una plataforma que:
 | D12 | Nodo operativo de primera clase sobre el mismo stream de eventos | Separa asesoría en vivo (incidentes/planes) de la evaluación de madurez. |
 | D13 | Redis para stream, cola de trabajos y caché | Simplifica el desacoplamiento sin añadir mucha complejidad. |
 | D14 | Despliegue con Docker + docker-compose | Todo el prototipo es reproducible con `docker compose up`. |
+| D15 | Multitenancy con login: varias organizaciones por despliegue, aisladas por usuario | El cliente ve solo su organización; las cuentas las crea el proveedor (seed). Ver doc 10. |
 
 ### Sobre los Tiers
 
@@ -125,3 +127,6 @@ CSF 2.0 (principal)                  Privacy Framework 1.0 (secundario)
 | **Incidente** | Entidad operativa que agrupa eventos correlacionados y dispara un plan. |
 | **Motor operativo** | Consumidor continuo del stream que genera incidentes y planes (flujo B). |
 | **Flujo A / B** | A: madurez (evidencia por ventana). B: operativo (incidentes y planes). |
+| **Organización (tenant)** | Cliente del servicio; agrupa sus evaluaciones, eventos e incidentes. |
+| **Usuario** | Cuenta con login, pertenece a una organización; ve solo la suya. |
+| **Sesión / token** | Token firmado que el usuario presenta en `Authorization` para autenticarse. |

@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from app.ai.client import build_default_client
 from app.ai.guard import check_live_ai_guard
 from app.core import assessment_service as svc
-from app.core.db import build_engine, build_session_factory, create_all
+from app.core.db import build_engine, build_session_factory, ensure_schema
 from app.evaluation import aggregation, tier
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology, load_methodology
@@ -49,7 +49,7 @@ def _abort(message: str) -> None:
 
 def _open_session() -> Session:
     engine = build_engine()
-    create_all(engine)
+    ensure_schema(engine)
     return build_session_factory(engine)()
 
 

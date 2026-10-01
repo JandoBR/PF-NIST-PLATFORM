@@ -5,6 +5,9 @@
 estado `pendiente`, encolan un job `assessment_run` y devuelven 202 con `job_id`. El cliente
 sondea `GET /jobs/{job_id}` y, cuando `estado == "completado"`, pide `GET /assessments/{id}`
 para el detalle real -- el `Job` nunca carga el resultado, solo estado/progreso/error.
+
+Todas las rutas exigen sesion (doc 10) y la organizacion sale del usuario: `org_name` del
+formulario se ignora, y un assessment de otra organizacion responde 404.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.client import build_default_client
 from app.ai.guard import check_live_ai_guard
-from app.api.deps import get_methodology, get_redis, get_session
+from app.api.deps import get_current_user, get_methodology, get_redis, get_session
 from app.api.schemas import (
     AssessmentAccepted,
     AssessmentDetail,
@@ -33,7 +36,7 @@ from app.core.queue import QUEUE_CORE, enqueue
 from app.evaluation import aggregation, tier
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
-from app.models.tables import Assessment
+from app.models.tables import Assessment, User
 from app.recommendations.findings import Finding, derive_findings
 from app.recommendations.plans import Plan
 from app.schemas.evidence import EvidenceInstance
@@ -47,9 +50,9 @@ router = APIRouter(tags=["assessments"])
 UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / ".data" / "uploads"
 
 
-def _require_assessment(session: Session, assessment_id: str) -> Assessment:
+def _require_assessment(session: Session, assessment_id: str, user: User) -> Assessment:
     assessment = svc.get_assessment(session, assessment_id)
-    if assessment is None:
+    if assessment is None or assessment.org_id != user.org_id:
         raise HTTPException(status_code=404, detail=f"No existe el assessment {assessment_id!r}.")
     return assessment
 
@@ -94,7 +97,6 @@ async def _save_uploads(files: list[UploadFile] | None, tipo: str) -> Path | Non
 
 @router.post("/assessments", response_model=AssessmentAccepted, status_code=202)
 async def create_assessment(
-    org_name: str = Form(...),
     scope: str = Form("entorno:produccion"),
     ai_adjust: bool = Form(False),
     use_ai_for_documents: bool = Form(False),
@@ -103,6 +105,7 @@ async def create_assessment(
     terraform_files: list[UploadFile] | None = File(None),
     ansible_files: list[UploadFile] | None = File(None),
     document_files: list[UploadFile] | None = File(None),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
     redis_client: redis.Redis = Depends(get_redis),
@@ -127,8 +130,9 @@ async def create_assessment(
     ansible_path = await _save_uploads(ansible_files, "ansible")
     documents_path = await _save_uploads(document_files, "documents")
 
+    # La organizacion sale de la sesion, nunca del formulario (doc 10 §4).
     assessment = svc.create_pending_assessment(
-        session, methodology, org_name=org_name, scope=scope
+        session, methodology, org_name=user.organization.nombre, scope=scope
     )
     job = job_service.create_job(session, "assessment_run", assessment_id=assessment.id)
     enqueue(
@@ -156,53 +160,66 @@ async def create_assessment(
 
 @router.get("/assessments", response_model=list[AssessmentDetail])
 def list_assessments(
-    session: Session = Depends(get_session), methodology: Methodology = Depends(get_methodology)
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    methodology: Methodology = Depends(get_methodology),
 ) -> list[AssessmentDetail]:
     return [
-        _assessment_detail(session, methodology, a) for a in svc.list_assessments(session)
+        _assessment_detail(session, methodology, a)
+        for a in svc.list_assessments(session, org_id=user.org_id)
     ]
 
 
 @router.get("/assessments/{assessment_id}", response_model=AssessmentDetail)
 def get_assessment(
     assessment_id: str,
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
 ) -> AssessmentDetail:
-    assessment = _require_assessment(session, assessment_id)
+    assessment = _require_assessment(session, assessment_id, user)
     return _assessment_detail(session, methodology, assessment)
 
 
 @router.get("/assessments/{assessment_id}/criteria", response_model=list[CriterionResult])
 def get_criteria(
-    assessment_id: str, session: Session = Depends(get_session)
+    assessment_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> list[CriterionResult]:
-    _require_assessment(session, assessment_id)
+    _require_assessment(session, assessment_id, user)
     return svc.load_criterion_results(session, assessment_id)
 
 
 @router.get("/assessments/{assessment_id}/evidence", response_model=list[EvidenceInstance])
 def get_evidence(
-    assessment_id: str, session: Session = Depends(get_session)
+    assessment_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> list[EvidenceInstance]:
-    _require_assessment(session, assessment_id)
+    _require_assessment(session, assessment_id, user)
     return svc.load_evidence(session, assessment_id)
 
 
 @router.get("/assessments/{assessment_id}/findings", response_model=list[Finding])
 def get_findings(
     assessment_id: str,
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
 ) -> list[Finding]:
-    _require_assessment(session, assessment_id)
+    _require_assessment(session, assessment_id, user)
     results = svc.load_criterion_results(session, assessment_id)
     return derive_findings(methodology, results)
 
 
 @router.get("/assessments/{assessment_id}/plans", response_model=list[Plan])
-def get_plans(assessment_id: str, session: Session = Depends(get_session)) -> list[Plan]:
-    _require_assessment(session, assessment_id)
+def get_plans(
+    assessment_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[Plan]:
+    _require_assessment(session, assessment_id, user)
     return svc.load_plans(session, assessment_id)
 
 
@@ -211,9 +228,11 @@ def create_plans(
     assessment_id: str,
     use_ai: bool = False,
     confirm_live_ai: bool = False,
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
 ) -> list[Plan]:
+    _require_assessment(session, assessment_id, user)
     guard_error = check_live_ai_guard(use_ai, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai)
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
@@ -231,10 +250,12 @@ def reevaluate_assessment(
     ai_adjust: bool = False,
     context: str = "{}",
     confirm_live_ai: bool = False,
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
     redis_client: redis.Redis = Depends(get_redis),
 ) -> AssessmentAccepted:
+    _require_assessment(session, assessment_id, user)
     guard_error = check_live_ai_guard(
         ai_adjust, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai
     )
@@ -270,9 +291,12 @@ def reevaluate_assessment(
 def compare_assessments(
     assessment_id: str,
     other_id: str,
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
 ) -> ComparisonOut:
+    _require_assessment(session, assessment_id, user)
+    _require_assessment(session, other_id, user)
     report = svc.compare(session, methodology, assessment_id, other_id)
     return ComparisonOut(
         assessment_id_a=report.assessment_id_a,

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from tests.conftest import run_pending_jobs
+from tests.conftest import TEST_ORG_NAME, run_pending_jobs
 
 SCENARIOS = Path(__file__).resolve().parent / "fixtures" / "scenarios"
 
@@ -21,23 +21,14 @@ def test_methodology_lists_catalog(api_client):
     assert "log.pattern@1" in body["tipos_evidencia"]
 
 
-def test_create_organization_is_get_or_create(api_client):
-    first = api_client.post("/orgs", json={"nombre": "Empresa API"})
-    second = api_client.post("/orgs", json={"nombre": "Empresa API"})
-
-    assert first.status_code == 200
-    assert first.json()["id"] == second.json()["id"]
-
-
-def test_list_organizations(api_client):
-    api_client.post("/orgs", json={"nombre": "Empresa Lista"})
+def test_list_organizations_returns_only_my_org(api_client, auth_user):
     response = api_client.get("/orgs")
-
     assert response.status_code == 200
-    assert any(o["nombre"] == "Empresa Lista" for o in response.json())
+    assert [o["id"] for o in response.json()] == [auth_user.org_id]
+    assert response.json()[0]["nombre"] == TEST_ORG_NAME
 
 
-def test_events_on_unknown_org_is_404(api_client):
+def test_events_on_another_org_is_404(api_client):
     with (SCENARIOS / "e1_flujo_correcto.jsonl").open("rb") as fh:
         response = api_client.post(
             "/orgs/no-existe/events", files={"file": ("e1.jsonl", fh, "application/jsonl")}
@@ -45,12 +36,13 @@ def test_events_on_unknown_org_is_404(api_client):
     assert response.status_code == 404
 
 
-def test_ingesting_e1b_opens_an_incident(api_client, db_session, methodology, fake_redis):
-    org = api_client.post("/orgs", json={"nombre": "Empresa Eventos"}).json()
-
+def test_ingesting_e1b_opens_an_incident(
+    api_client, db_session, methodology, fake_redis, auth_user
+):
     with (SCENARIOS / "e1b_fallos_sin_alerta.jsonl").open("rb") as fh:
         response = api_client.post(
-            f"/orgs/{org['id']}/events", files={"file": ("e1b.jsonl", fh, "application/jsonl")}
+            f"/orgs/{auth_user.org_id}/events",
+            files={"file": ("e1b.jsonl", fh, "application/jsonl")},
         )
 
     assert response.status_code == 202
@@ -59,33 +51,34 @@ def test_ingesting_e1b_opens_an_incident(api_client, db_session, methodology, fa
     run_pending_jobs(db_session, methodology, fake_redis)
     assert api_client.get(f"/jobs/{job_id}").json()["estado"] == "completado"
 
-    incidents = api_client.get(f"/orgs/{org['id']}/incidents").json()
+    incidents = api_client.get(f"/orgs/{auth_user.org_id}/incidents").json()
     assert len(incidents) == 1
     assert incidents[0]["severidad"] == "media"
 
 
-def test_flujo_correcto_opens_no_incident(api_client, db_session, methodology, fake_redis):
-    org = api_client.post("/orgs", json={"nombre": "Empresa Correcta"}).json()
-
+def test_flujo_correcto_opens_no_incident(
+    api_client, db_session, methodology, fake_redis, auth_user
+):
     with (SCENARIOS / "e1_flujo_correcto.jsonl").open("rb") as fh:
         response = api_client.post(
-            f"/orgs/{org['id']}/events", files={"file": ("e1.jsonl", fh, "application/jsonl")}
+            f"/orgs/{auth_user.org_id}/events",
+            files={"file": ("e1.jsonl", fh, "application/jsonl")},
         )
     assert response.status_code == 202
 
     run_pending_jobs(db_session, methodology, fake_redis)
-    assert api_client.get(f"/orgs/{org['id']}/incidents").json() == []
+    assert api_client.get(f"/orgs/{auth_user.org_id}/incidents").json() == []
 
 
-def test_get_incident_and_its_plans(api_client, db_session, methodology, fake_redis):
-    org = api_client.post("/orgs", json={"nombre": "Empresa Incidente"}).json()
+def test_get_incident_and_its_plans(api_client, db_session, methodology, fake_redis, auth_user):
     with (SCENARIOS / "e1b_fallos_sin_alerta.jsonl").open("rb") as fh:
         api_client.post(
-            f"/orgs/{org['id']}/events", files={"file": ("e1b.jsonl", fh, "application/jsonl")}
+            f"/orgs/{auth_user.org_id}/events",
+            files={"file": ("e1b.jsonl", fh, "application/jsonl")},
         )
     run_pending_jobs(db_session, methodology, fake_redis)
 
-    incident_id = api_client.get(f"/orgs/{org['id']}/incidents").json()[0]["id"]
+    incident_id = api_client.get(f"/orgs/{auth_user.org_id}/incidents").json()[0]["id"]
 
     detail = api_client.get(f"/incidents/{incident_id}")
     assert detail.status_code == 200

@@ -588,6 +588,45 @@ docs/08 §3 describe); el frontend en `http://localhost:5173` sirviendo el bundl
 reaplica nada y la evaluación anterior sigue ahí; `docker compose down -v` al final, sin dejar
 nada corriendo.
 
+## 17. Bug real: el shell pisaba la key de `deploy/.env`; y `backend/.env` horneado en la imagen
+
+Encontrado persiguiendo un síntoma simple: "corro una evaluación con IA desde el frontend y no veo
+consumo en la plataforma de DeepSeek". Las llamadas **sí** ocurrían (2 POST `200 OK` en
+`worker-core` para los criterios U2 `CRI-PR-01/02`), pero estaban facturándose en una cuenta
+distinta a la que el usuario miraba.
+
+**Causa 1 — precedencia de variables en Compose.** `deploy/docker-compose.yml` pasaba la config de
+la app como `${DEEPSEEK_API_KEY:-}` dentro de `environment:`. Docker Compose interpola `${VAR}`
+desde el **entorno del shell primero** y solo cae al `.env` del proyecto si la variable no está
+definida. El usuario tenía `DEEPSEEK_API_KEY` exportada (para opencode), así que el contenedor usaba
+esa key y no la de `deploy/.env` — imposible de ver sin comparar el `sha256` de la key que ve el
+contenedor con la del archivo.
+
+**Fix:** la config de la app (`DEEPSEEK_*`, `CORS_ORIGINS`, `JOB_STALE_TIMEOUT_SECONDS`) ahora entra
+por `env_file` (`deploy/.env`), que se lee al crear el contenedor y **no lo pisa el shell**. Se
+quitaron esas claves de `environment:` — `DATABASE_URL`/`REDIS_URL` siguen ahí porque apuntan a los
+nombres de servicio de la red de Compose, no a un `.env` de host. Verificado comparando `sha256`:
+`api`/`worker-core`/`worker-logs` coinciden con `deploy/.env` y **no** con el shell. `env_file` usa
+`required: false` para no romper un clon sin `deploy/.env`.
+
+**Causa 2 — secreto horneado.** `.dockerignore` excluía `frontend/.env` pero no `backend/.env`, así
+que `COPY backend/ backend/` metía el `.env` local (con su API key real) dentro de las imágenes
+`api`/`worker-core`/`worker-logs`. No cambiaba la precedencia (Compose gana en `Config.Env`), pero es
+una filtración de secreto en las capas de la imagen. **Fix:** `.dockerignore` ahora excluye `.env`,
+`**/.env` y `**/*.env`; verificado que `test -f .env` dentro del contenedor da `NO` tras reconstruir.
+En Docker el `.env` local ya no hace falta ni se lee (`load_dotenv` es no-op si el archivo no existe);
+en local sigue usándose como siempre.
+
+**Nota operativa:** como `env_file` se lee **al crear el contenedor**, cambiar `deploy/.env` requiere
+recrear (`up -d --force-recreate api worker-core worker-logs`). Para saber qué key usa de verdad el
+stack sin imprimirla:
+```bash
+docker compose -f deploy/docker-compose.yml exec -T worker-core \
+  sh -c 'printf %s "$DEEPSEEK_API_KEY" | sha256sum'
+```
+Si el consumo no aparece en la plataforma de DeepSeek, lo primero es comparar ese hash con el de la
+key de `deploy/.env` y con el de la cuenta que se está mirando.
+
 ## 18. Bug real: IA silenciosa sin `load_dotenv` en los workers; restart policy; jobs huérfanos
 
 Pedido explícito tras usar la app de verdad: "¿seguro que está llamando a la API? no veo cambios
@@ -670,3 +709,120 @@ pensados para ese cambio — es ajustar esos dos valores, no tocar código. El r
 simplificaciones del §11 (criticidad de activo, tabla `ai_adjustments`, cooldown real del motor
 operativo, etc.) son
 ampliaciones independientes, ninguna bloquea a otra.
+
+## 20. Bugs de UI reportados: modal colgado y runs "perdidos" al recargar
+
+Reportados desde uso real del frontend. Dos síntomas, dos causas distintas.
+
+**Síntoma 1 — "arranco una evaluación y el modal se queda en 'Evaluando…', nunca veo resultados".**
+Tres causas combinadas:
+
+- `pollJob` (`frontend/src/lib/api.ts`) era `while (true)` **sin timeout ni cancelación**.
+- `ContextSelector` bloqueaba el cierre mientras `submitting` (X deshabilitada, click en el fondo
+  ignorado): la UI quedaba rehén del sondeo.
+- En backend, `reap_stale_jobs` solo miraba jobs `en_progreso`; un job **`pendiente` nunca tomado**
+  (el stack sin `worker-core`, o el worker caído) quedaba `pendiente` para siempre y el cliente
+  sondeaba sin fin. El reaper solo se ejecutaba *dentro* de un worker: si no había worker, nadie
+  barría.
+
+**Fix:**
+
+- `app/core/jobs.py`: `reap_stale_jobs` cubre ahora `pendiente` (timeout propio,
+  `JOB_PENDING_TIMEOUT_SECONDS`, default 120 s desde `creado_en`) además de `en_progreso`
+  (600 s desde `tomado_en`); nueva `fail_if_stale(session, job)` para un solo job.
+- `app/api/routes_jobs.py`: `GET /jobs/{id}` **reaprea perezosamente** y, si el job tenía
+  `Assessment` ligada en `pendiente`/`en_progreso`, la marca `fallida`. Así el sondeo siempre
+  termina en un estado terminal aunque no haya worker haciendo el barrido.
+- `frontend/src/lib/api.ts`: `pollJob` con `timeoutMs` (default 180 s) y `AbortSignal`; lanza
+  `JobTimeoutError` con mensaje accionable ("revisa que worker-core esté corriendo").
+- `frontend/src/components/ContextSelector.tsx`: el modal se puede cerrar aunque esté sondeando
+  (aborta con `AbortController`); el job sigue en el backend y el dashboard lo recupera por el
+  historial. El timeout se muestra como error, no se traga.
+
+**Síntoma 2 — "corro una evaluación y al recargar se pierde".** No se perdía: estaba en Postgres.
+`App.tsx` nunca llamaba a `GET /assessments`, así que al recargar el estado de React quedaba vacío
+aunque los datos siguieran en la base.
+
+**Fix:** al montar se carga `listAssessments()`, se restaura la evaluación activa desde
+`localStorage` (o la última `completada`), y se agrega un **selector de historial** + botón de
+refrescar. `ContextSelector.onAccepted` refresca el historial apenas la API acepta el job (202),
+así una evaluación encolada aparece aunque el modal se cierre antes de que termine.
+
+**Verificación:** backend en **205 tests** (`pytest`) + `ruff`; frontend `typecheck`/`lint`/`build`
+limpios; y contra el stack real en Docker (dentro del contenedor `api`, porque el sandbox no expone
+el puerto al host): `POST /assessments` → 202 con `job_id` → `GET /jobs/{id}` hasta `completado` →
+`GET /assessments/{id}` `completada` (score 20.59) → aparece en `GET /assessments`.
+
+**Pendientes relacionados (no arreglados aquí):** no hay `GET /jobs` (listado de jobs) ni UI de
+historial de *jobs*; `Job.progreso` sigue siendo 0→100 (no incremental); el botón "Reevaluar" del
+dashboard no expone el toggle de IA; y la ingesta de eventos ya no reporta "nuevos vs actualizados".
+
+## 21. Multitenancy con login (doc 10)
+
+Antes, un despliegue mezclaba organizaciones: `get_or_create_organization` por nombre libre y
+`GET /assessments` sin filtrar. Se implementó el diseño de doc 10.
+
+**Qué se construyó (backend):**
+
+- Tabla `users` (`app/models/tables.py`) + migración `0d33cddaac8d`; `organizations` gana la
+  relación `users`.
+- `app/core/auth.py`: PBKDF2-HMAC-SHA256 para contraseñas y token **stateless** firmado con HMAC
+  (`base64url(payload).firma`, payload `{sub, org, exp}`), con `SECRET_KEY`/`AUTH_TOKEN_TTL_HOURS`
+  por env. Sin dependencias nuevas (stdlib).
+- `app/api/routes_auth.py`: `POST /auth/login` (público) y `GET /auth/me`.
+- `app/api/deps.py`: `get_current_user` (lee `Authorization: Bearer`) y `require_same_org`.
+- `app/core/seed.py`: cuentas precreadas idempotentes al arrancar (`demo/demo123`,
+  `smoke/smoke123`); `SEED_DEMO_USERS=0` lo apaga (los tests).
+- **Scoping**: `POST/GET /assessments` usan la organización del usuario (se ignora cualquier
+  `org_name`); assessment/incidente/job de otra organización → **404** (no 403, para no revelar
+  existencia); `POST /orgs` se eliminó y `GET /orgs` devuelve solo la organización del usuario.
+  `/methodology` y `/health` siguen públicos.
+
+**Qué se construyó (frontend):**
+
+- `components/Login.tsx` y estado de sesión en `App.tsx`: `GET /auth/me` al montar, y ante cualquier
+  **401** el cliente borra el token y vuelve al login (evento `pf:unauthorized`).
+- `lib/api.ts`: token en `localStorage`, `Authorization` en cada request, `login`/`getMe`/`logout`;
+  se quitó `createOrganization`/`listOrganizations`.
+- `ContextSelector`: se eliminó el campo libre de organización (sale de la sesión).
+- `Header`: muestra organización + usuario y botón de cerrar sesión.
+
+**Decisiones y límites:** token stateless para no acoplar a Redis ni a una tabla de sesiones;
+token en `localStorage` (vulnerable a XSS; aceptable para el prototipo, la evolución es cookie
+`HttpOnly`); `SECRET_KEY` tiene un default inseguro de demo. Fuera de alcance: registro, panel de
+administración, roles, refresh tokens y rate limiting de login (doc 10 §1, §8).
+
+**Verificación:** backend en **212 tests** (`pytest`) + `ruff` limpio (incluye `test_api_auth.py`:
+401 sin token, login válido/ inválido, `/auth/me`; y scoping de assessments/incidentes/jobs por
+organización). Frontend `typecheck`/`lint`/`build` limpios. Contra el stack real en Docker, dentro
+del contenedor `api`: sin token → **401**; `demo/demo123` → 8 evaluaciones, todas de "Organización
+Demo"; `smoke/smoke123` → 1, de "Smoke E2E"; contraseña incorrecta → 401.
+
+## 22. Bug real: la migración de `users` fallaba en `docker compose up --build`
+
+**Síntoma:** `migrate` salía con `sqlalchemy.exc.ProgrammingError: (psycopg.errors.DuplicateTable)
+relation "users" already exists`, y `alembic_version` se quedaba en `0b4ecfb6901a`.
+
+**Causa (doble administración del esquema):** además de Alembic, la API y los workers llamaban
+`create_all(engine)` (en el `lifespan` de `app/api/app.py`, en `deps._session_factory`, y en el
+`main()` de `app/workers/core.py`/`logs.py`). `create_all` crea las tablas que faltan desde los
+modelos. Al agregar `User` al modelo, `create_all` creó `users` en Postgres **sin** actualizar
+`alembic_version`; en la siguiente corrida, la migración `0d33cddaac8d` intentó `CREATE TABLE users`
+y chocó con la tabla ya creada. Era una bomba de tiempo: cualquier tabla nueva en los modelos podía
+crear esta misma inconsistencia.
+
+**Fix (código):** nueva `ensure_schema(engine)` en `app/core/db.py` que corre `create_all` **solo
+en SQLite** (dev/CLI/tests); en Postgres, Alembic es la única fuente de verdad del esquema. Se
+reemplazó `create_all` por `ensure_schema` en el `lifespan` de la API, en `deps._session_factory`,
+en el `main()` de ambos workers y en la CLI (`app/main.py`).
+
+**Reconciliación del volumen existente:** la tabla `users` huérfana (solo contenía las cuentas
+seed) se dropeó; `docker compose up --build` volvió a correr `migrate`, que aplicó
+`0b4ecfb6901a → 0d33cddaac8d` y re-sembró las cuentas. Un despliegue nuevo no necesita esto: con
+Postgres, `create_all` ya no corre.
+
+**Verificación:** `migrate` aplica la migración y `alembic_version = 0d33cddaac8d`; login `demo`
+→ 8 evaluaciones; **212 tests** + `ruff` limpios.
+
+**Lección operativa:** en Postgres, nunca correr `create_all` junto a Alembic. El atajo de `create_all`
+es cómodo para el SQLite local y los tests, no para el stack real (docs/04 §11, regla C2).
