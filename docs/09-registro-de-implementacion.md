@@ -536,7 +536,7 @@ colas de Redis de verdad, no un "pendiente" en la lista:
   en §15.
 - `deploy/docker-compose.yml` gana `worker-core`, `worker-logs` (reales, no el comentario que
   había en §14) y `frontend` (nuevo `frontend/Dockerfile`: build de Vite + `serve` del estático,
-  sin nginx a propósito — ver §17). `VITE_API_BASE_URL` es un build-arg, no una env var de
+  sin nginx a propósito — ver §19). `VITE_API_BASE_URL` es un build-arg, no una env var de
   runtime (Vite la incrusta en el bundle): tiene que ser una URL alcanzable desde el navegador
   (`http://localhost:8000`), nunca el nombre del servicio en la red interna de compose
   (`http://api:8000`, que el navegador no puede resolver).
@@ -588,12 +588,85 @@ docs/08 §3 describe); el frontend en `http://localhost:5173` sirviendo el bundl
 reaplica nada y la evaluación anterior sigue ahí; `docker compose down -v` al final, sin dejar
 nada corriendo.
 
-## 17. Qué sigue
+## 18. Bug real: IA silenciosa sin `load_dotenv` en los workers; restart policy; jobs huérfanos
 
-Nada pendiente de los 10 cortes planeados, del frontend conectado a la API real (§15), ni de los
-workers/jobs asíncronos (§16). Lo único que falta, y deliberadamente fuera de este corte: nginx
-+ dominio real. `VITE_API_BASE_URL` (build-arg del frontend) y `CORS_ORIGINS` (env var de la
-API) ya están pensados para ese cambio — es ajustar esos dos valores, no tocar código. El resto
-de las simplificaciones del §11 (criticidad de activo, tabla `ai_adjustments`, cooldown real del
-motor operativo, etc.) son
+Pedido explícito tras usar la app de verdad: "¿seguro que está llamando a la API? no veo cambios
+en el balance ni llamadas registradas". La pregunta tenía razón — había un bug real.
+
+**El bug (encontrado y confirmado, no solo sospechado):** `app/api/app.py` y `app/main.py`
+llaman `load_dotenv(REPO_ROOT / ".env")` al arrancar; `app/workers/core.py` y
+`app/workers/logs.py` no lo hacían. Un worker corrido como proceso local
+(`uv run python -m app.workers.core`, fuera de docker-compose, donde las env vars se inyectan
+directo al contenedor y esto nunca hacía falta) nunca veía la `DEEPSEEK_API_KEY` real de
+`backend/.env` — solo lo que ya estuviera exportado en la shell, que es exactamente lo que
+`load_dotenv` existe para evitar tener que hacer. `build_default_client()` (`app/ai/client.py`)
+solo mira `os.environ`; sin la key ahí, devuelve `NullAIClient()` en silencio, que no hace
+ninguna llamada de red (`complete_json` devuelve `None` sin tocar la red). El job se encolaba con
+`ai_requested=True` tras pasar el guard (que sí veía la key real, porque corre en `api`, que sí
+hace `load_dotenv`), pero el worker que lo procesaba de verdad degradaba a `S = B` sin avisar:
+cero llamadas, cero costo, cero resultado real — exactamente "no veo cambios en el balance".
+
+Reproducido antes de arreglarlo (proceso aislado, sin nada exportado en la shell):
+```
+$ env -i PATH="$PATH" uv run python -c "...build_default_client()..."
+Client built by a bare worker process: NullAIClient
+```
+y confirmado despues del fix (mismo proceso aislado, ahora importando `app.workers.core`):
+```
+Client a bare worker process builds now: CachingAIClient
+  -> wraps: DeepSeekClient
+```
+Verificación sin gastar nada: construir el cliente no hace ninguna llamada de red (el SDK de
+`openai` solo abre un objeto cliente en `__init__`); la llamada real pasa por
+`CachingAIClient.complete_json` → `DeepSeekClient.complete_json`, que no se ejercitó aquí a
+propósito (mismo principio de minimizar costo de pruebas de docs/09 §5).
+
+**Fix:** `load_dotenv(REPO_ROOT / ".env")` agregado a ambos workers, mismo patrón que `api`/CLI.
+Inocuo bajo docker-compose (las env vars ya están puestas; `load_dotenv` no pisa una variable
+ya seteada).
+
+**Restart policy:** `restart: unless-stopped` en todo lo de larga duración del compose (`db`,
+`redis`, `api`, `worker-core`, `worker-logs`, `frontend`; no en `migrate`, que debe terminar, no
+reiniciarse en loop). Verificado que la directiva queda bien puesta (`docker inspect` →
+`HostConfig.RestartPolicy = {unless-stopped 0}`), pero el reinicio real tras un `docker kill` no
+se pudo confirmar end-to-end en el entorno donde se corrió esta sesión: un contenedor Alpine
+trivial sin relación con este proyecto, con la misma política, tampoco se reinició solo tras
+matarlo — apunta a una limitación del daemon de Docker en ese entorno (probablemente
+sandboxeado), no a un error en `docker-compose.yml`. Si se prueba en una máquina con Docker
+normal (la del usuario, por ejemplo) y no reinicia, ahí sí habría que investigar más.
+
+**Jobs huérfanos (el otro lado de "el worker se murió"):** si un worker muere a mitad de un job
+(antes de llegar a `mark_done`/`mark_failed`), ese job se queda `en_progreso` para siempre — sin
+heartbeat real, nada lo nota. `app/core/jobs.py` gana `reap_stale_jobs(session, tipo,
+timeout_seconds)`: busca jobs `en_progreso` cuyo `tomado_en` es más viejo que
+`JOB_STALE_TIMEOUT_SECONDS` (default 600s, env var) y los marca `fallido`. Cada worker lo llama
+en cada vuelta de su loop (cada ~5s, el mismo ciclo del `BLPOP`), no en un thread separado.
+`app/workers/core.py` además envuelve esto en `reap_stale_jobs` (su propia función, no la de
+`jobs.py`) para también marcar `fallida` la `Assessment` ligada — sin eso, el job se vería
+fallido pero `GET /assessments/{id}` seguiría mostrando `en_progreso` para siempre, porque nadie
+más la toca. `worker-logs` no tiene una entidad equivalente que marcar: solo el job.
+
+No hay reintento automático -- un job huérfano queda marcado `fallido` con un mensaje claro;
+quien lo ve (CLI, API, frontend) decide si reintentar. Esto es deliberadamente simple (una
+inspección por vuelta de loop, no un sistema de heartbeat/lease real) — suficiente para que
+nada quede colgado para siempre, no para garantizar exactly-once ante fallos concurrentes.
+
+**Verificado de verdad:** 5 tests nuevos (`test_jobs.py`: `reap_stale_jobs` marca lo viejo,
+deja lo reciente, ignora otros tipos/estados terminales; `test_workers_core.py`: la version de
+`app/workers/core.py` también falla la `Assessment` ligada, y deja en paz una ya completada) —
+suite completa en 198 (antes 193) + 2 de Redis real. Contra el stack real: se insertó a mano un
+job `en_progreso` con `tomado_en` de 20 minutos atrás (simulando un worker muerto, sin pasar por
+la cola real) y, en el siguiente ciclo de `worker-core` (~8 segundos después), tanto el job como
+su `Assessment` ligada aparecieron `fallido`/`fallida` con el mensaje esperado en
+`GET /jobs/{id}`/`GET /assessments/{id}` — sin reiniciar nada a mano.
+
+## 19. Qué sigue
+
+Nada pendiente de los 10 cortes planeados, del frontend conectado a la API real (§15), de los
+workers/jobs asíncronos (§16), ni de los bugs de IA-silenciosa/restart/jobs-huérfanos (§18). Lo
+único que falta, y deliberadamente fuera de este corte: nginx + dominio real.
+`VITE_API_BASE_URL` (build-arg del frontend) y `CORS_ORIGINS` (env var de la API) ya están
+pensados para ese cambio — es ajustar esos dos valores, no tocar código. El resto de las
+simplificaciones del §11 (criticidad de activo, tabla `ai_adjustments`, cooldown real del motor
+operativo, etc.) son
 ampliaciones independientes, ninguna bloquea a otra.

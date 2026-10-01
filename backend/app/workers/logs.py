@@ -8,9 +8,11 @@ Arrancar con: `uv run python -m app.workers.logs` (o el servicio `worker-logs` d
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
 from app.ai.client import build_default_client
@@ -22,8 +24,14 @@ from app.methodology.loader import Methodology, load_methodology
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
+#: Ver el mismo comentario en app/workers/core.py: sin esto, un worker corrido como proceso
+#: local nunca ve la DEEPSEEK_API_KEY real de backend/.env y degrada en silencio a NullAIClient.
+load_dotenv(REPO_ROOT / ".env")
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 logger = logging.getLogger("worker.logs")
+
+JOB_STALE_TIMEOUT_SECONDS = int(os.environ.get("JOB_STALE_TIMEOUT_SECONDS", "600"))
 
 
 def process_message(session: Session, methodology: Methodology, message: dict[str, Any]) -> None:
@@ -58,11 +66,11 @@ def main() -> None:
     logger.info("worker-logs escuchando %s", QUEUE_LOGS)
     while True:
         message = dequeue_blocking(redis_client, QUEUE_LOGS, timeout=5)
-        if message is None:
-            continue
         session = session_factory()
         try:
-            process_message(session, methodology, message)
+            if message is not None:
+                process_message(session, methodology, message)
+            job_service.reap_stale_jobs(session, "event_ingest", JOB_STALE_TIMEOUT_SECONDS)
         finally:
             session.close()
 

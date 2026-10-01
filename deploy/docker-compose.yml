@@ -13,10 +13,19 @@
 # el mismo volumen, asi que `backend_data` esta montado en los tres (`api`, `worker-core`,
 # `worker-logs`). Sin esto, el job se encola bien pero el worker no encuentra el archivo
 # (se detecto real: el primer `docker compose up` de este cambio fallo exactamente asi).
+#
+# `restart: unless-stopped` en todo lo de larga duracion (no en `migrate`, que es un job de una
+# sola corrida y debe terminar, no reiniciarse en loop): sin esto, si `api`/un worker/`frontend`
+# se cae (bug, OOM, lo que sea), se queda caido hasta que alguien lo note y lo levante a mano.
+# Si un worker se cae a mitad de un job, ese job se queda "en_progreso" para siempre sin esto
+# Y sin el reaper de `JOB_STALE_TIMEOUT_SECONDS` (ver backend/.env.example) -- las dos cosas
+# juntas son las que realmente cierran el gap: el contenedor vuelve a arrancar solo, y el job
+# huerfano que dejo se marca fallido en vez de quedar colgado.
 
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pf}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pf}
@@ -31,6 +40,7 @@ services:
 
   redis:
     image: redis:7
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
@@ -55,6 +65,7 @@ services:
     build:
       context: ..
       dockerfile: backend/docker/Dockerfile.api
+    restart: unless-stopped
     environment: &backend_env
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pf}:${POSTGRES_PASSWORD:-pf}@db:5432/${POSTGRES_DB:-pf}
       REDIS_URL: redis://redis:6379/0
@@ -62,6 +73,7 @@ services:
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      JOB_STALE_TIMEOUT_SECONDS: ${JOB_STALE_TIMEOUT_SECONDS:-600}
     volumes:
       - backend_data:/app/backend/.data
     ports:
@@ -79,6 +91,7 @@ services:
       context: ..
       dockerfile: backend/docker/Dockerfile.worker
     command: ["python", "-m", "app.workers.core"]
+    restart: unless-stopped
     environment: *backend_env
     volumes:
       - backend_data:/app/backend/.data
@@ -95,6 +108,7 @@ services:
       context: ..
       dockerfile: backend/docker/Dockerfile.worker
     command: ["python", "-m", "app.workers.logs"]
+    restart: unless-stopped
     environment: *backend_env
     volumes:
       - backend_data:/app/backend/.data
@@ -114,6 +128,7 @@ services:
         # Alcanzable desde el NAVEGADOR del usuario, no desde la red interna de docker-compose
         # -- por eso "localhost:8000" (el puerto publicado de `api`), nunca "http://api:8000".
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    restart: unless-stopped
     ports:
       - "5173:5173"
     depends_on:

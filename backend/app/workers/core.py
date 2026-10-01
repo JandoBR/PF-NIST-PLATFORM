@@ -8,9 +8,11 @@ Arrancar con: `uv run python -m app.workers.core` (o el servicio `worker-core` d
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
 from app.ai.client import build_default_client
@@ -22,8 +24,23 @@ from app.methodology.loader import Methodology, load_methodology
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
+#: Sin esto, un worker corrido como proceso local (`uv run python -m app.workers.core`, fuera
+#: de docker-compose) nunca ve la DEEPSEEK_API_KEY real de `backend/.env` -- `build_default_client`
+#: solo mira `os.environ`, y nada mas en este modulo cargaba el `.env` (bug real: el job se
+#: encolaba con `ai_requested=True`, pero el worker construia un `NullAIClient` en silencio,
+#: cero llamadas de red, cero costo... y cero resultado real tambien). `app/api/app.py` y
+#: `app/main.py` ya hacian esto; faltaba aqui. docker-compose no lo necesita (inyecta las env
+#: vars directo al contenedor), pero `load_dotenv` no pisa una env var ya seteada, asi que es
+#: inocuo ahi.
+load_dotenv(REPO_ROOT / ".env")
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 logger = logging.getLogger("worker.core")
+
+#: Si un job se queda `en_progreso` mas de esto (el worker que lo tomo probablemente crasheo
+#: antes de llamar a `mark_done`/`mark_failed` -- sin heartbeat real), se marca `fallido` para
+#: que no quede colgado para siempre. Configurable por si un pipeline legitimo tarda mas.
+JOB_STALE_TIMEOUT_SECONDS = int(os.environ.get("JOB_STALE_TIMEOUT_SECONDS", "600"))
 
 
 def process_message(session: Session, methodology: Methodology, message: dict[str, Any]) -> None:
@@ -62,6 +79,22 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
         job_service.mark_failed(session, job, str(exc))
 
 
+def reap_stale_jobs(session: Session, timeout_seconds: int = JOB_STALE_TIMEOUT_SECONDS) -> None:
+    """Ademas de marcar el `Job` fallido (`job_service.reap_stale_jobs`), si tenia un
+    `Assessment` ligado que se quedo en `en_progreso`, lo marca `fallida` tambien -- sin esto,
+    el job se veria fallido pero `GET /assessments/{id}` seguiria mostrando `en_progreso` para
+    siempre (el worker que murio nunca llego a la rama `except` que lo marca)."""
+
+    for job in job_service.reap_stale_jobs(session, "assessment_run", timeout_seconds):
+        if not job.assessment_id:
+            continue
+        assessment = svc.get_assessment(session, job.assessment_id)
+        if assessment is not None and assessment.estado == "en_progreso":
+            assessment.estado = "fallida"
+            assessment.error = job.error
+            session.commit()
+
+
 def main() -> None:
     engine = build_engine()
     create_all(engine)
@@ -72,11 +105,11 @@ def main() -> None:
     logger.info("worker-core escuchando %s", QUEUE_CORE)
     while True:
         message = dequeue_blocking(redis_client, QUEUE_CORE, timeout=5)
-        if message is None:
-            continue
         session = session_factory()
         try:
-            process_message(session, methodology, message)
+            if message is not None:
+                process_message(session, methodology, message)
+            reap_stale_jobs(session)
         finally:
             session.close()
 

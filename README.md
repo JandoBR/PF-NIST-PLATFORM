@@ -59,7 +59,7 @@ recomendaciones, simulación de amenazas, comparar evaluaciones) ya llaman a la 
 asíncrona, con sondeo de jobs en vivo —, con datos de ejemplo servidos como archivos estáticos o
 subida de archivos propios. Falta pulir UX y, deliberadamente fuera de este corte, nginx +
 dominio real (`VITE_API_BASE_URL`/`CORS_ORIGINS` ya están pensados para ese cambio — ver doc 09
-§17).
+§19).
 
 Para probarlo sin levantar nada: `cd backend && uv run python -m app.main run --terraform
 tests/fixtures/terraform/gaps --org "Empresa Demo"`, `uv run uvicorn app.api.app:app --reload`
