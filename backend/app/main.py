@@ -14,6 +14,8 @@ y el sistema sigue funcionando con los criterios tecnicos (doc 05 §7, principio
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -27,6 +29,27 @@ from app.schemas.evidence import EvidenceInstance
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(REPO_ROOT / ".env")
+
+
+def check_live_ai_guard(
+    documents_path: Path | None, api_key: str | None, confirmed: bool
+) -> str | None:
+    """Bloqueo explicito antes de gastar dinero real.
+
+    Pedido tras un incidente real: una corrida de prueba disparo 3 llamadas pagadas porque
+    `backend/.env` ya tenia una API key real y nadie la noto hasta despues.
+    Retorna un mensaje de error si hay que abortar, o None si se puede seguir.
+    """
+
+    if documents_path is None or not api_key or confirmed:
+        return None
+    return (
+        "Hay una DEEPSEEK_API_KEY real configurada (shell o backend/.env).\n"
+        "Analizar --documents hara llamadas reales y pagadas a la API de DeepSeek\n"
+        "(los chunks ya cacheados en backend/.cache/ no se repiten).\n"
+        "Pasa --confirm-live-ai si de verdad quieres continuar, o quita la key"
+        " para una corrida sin costo."
+    )
 
 
 def _tipos_afirmacion_solicitados(methodology: Methodology) -> list[str]:
@@ -108,10 +131,22 @@ def main() -> None:
         "--documents", type=Path, default=None, help="Archivo o directorio de documentos"
     )
     parser.add_argument("--scope", default="entorno:produccion")
+    parser.add_argument(
+        "--confirm-live-ai",
+        action="store_true",
+        help="Confirma llamadas reales y pagadas a DeepSeek cuando hay una API key configurada",
+    )
     args = parser.parse_args()
 
     if args.terraform is None and args.documents is None:
         parser.error("se requiere --terraform y/o --documents")
+
+    guard_error = check_live_ai_guard(
+        args.documents, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
+    )
+    if guard_error:
+        print(f"ATENCION: {guard_error}", file=sys.stderr)
+        raise SystemExit(1)
 
     run(args.terraform, args.documents, args.scope)
 
