@@ -1,0 +1,171 @@
+# Tipos de evidencia (docs/02-catalogo-de-evidencias.md). Una version publicada no se modifica jamas.
+version: 1
+tipos:
+  - id: tf.resource.present
+    version: 1
+    descripcion: >
+      Inventario y existencia de un recurso de Terraform soportado por el adaptador.
+    valor_schema:
+      type: object
+      required: [tipo, nombre]
+      properties:
+        tipo: { type: string }
+        nombre: { type: string }
+        entorno: { type: [string, "null"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: tf.encryption.config
+    version: 1
+    descripcion: >
+      Configuracion de cifrado en reposo declarada para un recurso de almacenamiento o base de datos.
+    valor_schema:
+      type: object
+      required: [estado]
+      properties:
+        estado: { enum: [enabled, disabled, unknown] }
+        mecanismo: { type: [string, "null"] }
+        llave: { type: [string, "null"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+    notas: >
+      `unknown` nunca equivale a `disabled` ni a `enabled`; alimenta evidencia_insuficiente.
+
+  - id: tf.public_access.config
+    version: 1
+    descripcion: >
+      Bloqueo de acceso publico declarado para un bucket de almacenamiento (4 modos de S3).
+    valor_schema:
+      type: object
+      required: [bloqueo_publico]
+      properties:
+        bloqueo_publico: { enum: [true, false, "unknown"] }
+        nivel: { type: [string, "null"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: tf.backup.config
+    version: 1
+    descripcion: >
+      Retencion de backups declarada para una base de datos administrada.
+    valor_schema:
+      type: object
+      properties:
+        retencion_dias: { type: [integer, "null"] }
+        habilitado: { type: [boolean, "null"] }
+        ventana: { type: [string, "null"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: tf.logging.config
+    version: 1
+    descripcion: >
+      Configuracion de CloudTrail declarada (habilitado, multi-region, destino).
+    valor_schema:
+      type: object
+      properties:
+        habilitado: { enum: [true, false, "unknown"] }
+        multi_region: { type: [boolean, "null"] }
+        destino: { type: [string, "null"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: tf.security_group.rules
+    version: 1
+    descripcion: >
+      Reglas de ingress/egress declaradas en un security group, normalizadas por protocolo,
+      rango de puertos y CIDR de origen/destino.
+    valor_schema:
+      type: array
+      items:
+        type: object
+        required: [direccion, protocolo, puerto_desde, puerto_hasta, cidr]
+        properties:
+          direccion: { enum: [ingress, egress] }
+          protocolo: { type: string }
+          puerto_desde: { type: [integer, "null"] }
+          puerto_hasta: { type: [integer, "null"] }
+          cidr: { type: string }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+    notas: >
+      Una regla permisiva NO demuestra accesibilidad efectiva; solo afirma intencion de configuracion.
+
+  - id: tf.versioning.config
+    version: 1
+    descripcion: >
+      Versionado de almacenamiento declarado para un bucket.
+    valor_schema:
+      type: object
+      required: [habilitado]
+      properties:
+        habilitado: { enum: [true, false, "unknown"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: doc.claim
+    version: 1
+    descripcion: >
+      Afirmacion estructurada extraida por IA de un documento, con cita obligatoria (docs/02 §3.3).
+      No la produce ningun adaptador todavia; se declara aqui porque varios criterios ya la referencian.
+    valor_schema:
+      type: object
+      required: [tipo_afirmacion, encontrado, confianza]
+      properties:
+        tipo_afirmacion: { type: string }
+        contenido: { type: object }
+        encontrado: { type: boolean }
+        confianza: { type: number }
+    modalidad_permitida: [documental]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: an.task.config
+    version: 1
+    descripcion: >
+      Tarea declarativa de Ansible interpretada (docs/02 §3.2). No la produce ningun adaptador
+      todavia; se declara aqui porque varios criterios ya la referencian.
+    valor_schema:
+      type: object
+      required: [modulo, tarea, archivo]
+      properties:
+        modulo: { type: string }
+        parametros: { type: object }
+        tarea: { type: string }
+        archivo: { type: string }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: tf.expression.unresolved
+    version: 1
+    descripcion: >
+      Limitacion explicita del parser: expresion que no se pudo resolver de forma determinista.
+    valor_schema:
+      type: object
+      required: [recurso, atributo, expresion, motivo]
+      properties:
+        recurso: { type: string }
+        atributo: { type: string }
+        expresion: { type: string }
+        motivo: { type: string }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"

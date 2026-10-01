@@ -1,0 +1,19 @@
+# Parametros de metodologia versionada (docs/04 §8). Fuente canonica de los umbrales de Tier;
+# las tablas en docs/01 §8.2 y docs/03 §9 son copias ilustrativas de este archivo.
+version: 1
+ia:
+  alpha: 0.25
+  divergencia_maxima: 20
+  umbral_confianza_documental: 0.6
+tier:
+  t2: { CRI-GV-01: 50, CRI-GV-02: 50, CRI-ID-03: 50 }
+  t3:
+    CRI-GV-01: 75
+    CRI-GV-03: 75
+    CRI-GV-04: 75
+    CRI-DE-01: 75
+    CRI-RS-01: 75
+    CRI-RC-01: 75
+    CRI-RC-02: 75
+  t4: { CRI-GV-04: 100, CRI-RS-02: 75, CRI-RC-03: 75, CRI-ID-04: 75 }
+funciones: { GV: 1, ID: 1, PR: 1, DE: 1, RS: 1, RC: 1 }

@@ -1,0 +1,77 @@
+# Catalogo de criterios (docs/03-matriz-de-criterios.md). Subconjunto inicial: los 5 criterios
+# PROTECT que el adaptador de Terraform puede evaluar por si solo, sin documentos ni Ansible.
+# Ampliar este archivo y agregar su modulo en app/evaluation/rules van siempre juntos (D5).
+version: 1
+criterios:
+  - id: CRI-PR-01
+    version: 1
+    titulo: "Cifrado de datos en reposo"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.DS]
+    subcategorias: [PR.DS-01]
+    peso: 5
+    ai_adjustable: true
+    evidencias: [tf.encryption.config@1, doc.claim@1]
+    recomendacion: "Habilitar cifrado gestionado por KMS en RDS y S3; verificar mecanismo y llave."
+    regla:
+      tipo: umbral_por_recurso
+      estados: { all_enabled: 100, any_disabled: 25, any_unknown: insuficiente }
+
+  - id: CRI-PR-02
+    version: 1
+    titulo: "Backups configurados y protegidos"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.DS]
+    subcategorias: [PR.DS-11]
+    peso: 5
+    ai_adjustable: true
+    evidencias: [tf.backup.config@1, doc.claim@1]
+    recomendacion: "Alinear retencion de backups con la politica y asegurar su cifrado."
+    regla:
+      tipo: umbral_retencion
+      umbrales: { retencion_minima_dias: 7 }
+
+  - id: CRI-PR-03
+    version: 1
+    titulo: "Acceso administrativo restringido"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.AA, PR.IR]
+    subcategorias: [PR.AA-05, PR.IR-01]
+    peso: 4
+    ai_adjustable: false
+    evidencias: [tf.security_group.rules@1, an.task.config@1]
+    recomendacion: "Restringir puertos administrativos a rangos corporativos/VPN y eliminar reglas 0.0.0.0/0."
+    regla:
+      tipo: exposicion_puertos
+      puertos_administrativos: [22, 3389]
+
+  - id: CRI-PR-05
+    version: 1
+    titulo: "Almacenamiento protegido contra acceso publico"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.DS]
+    subcategorias: [PR.DS-01]
+    peso: 3
+    ai_adjustable: false
+    evidencias: [tf.public_access.config@1, tf.versioning.config@1]
+    recomendacion: "Habilitar aws_s3_bucket_public_access_block completo."
+    regla:
+      tipo: bloqueo_publico_4_modos
+
+  - id: CRI-PR-06
+    version: 1
+    titulo: "Generacion de logs para monitoreo"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.PS]
+    subcategorias: [PR.PS-04]
+    peso: 4
+    ai_adjustable: false
+    evidencias: [tf.logging.config@1, an.task.config@1]
+    recomendacion: "Habilitar CloudTrail multirregion y logging de sistema con retencion definida."
+    regla:
+      tipo: cloudtrail_multiregion
