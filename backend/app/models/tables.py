@@ -56,6 +56,9 @@ class Assessment(Base):
     criterion_results: Mapped[list[CriterionResultRow]] = relationship(
         back_populates="assessment", cascade="all, delete-orphan"
     )
+    plans: Mapped[list[PlanRow]] = relationship(
+        back_populates="assessment", cascade="all, delete-orphan"
+    )
 
 
 class Source(Base):
@@ -109,3 +112,28 @@ class CriterionResultRow(Base):
     degradado: Mapped[bool] = mapped_column(default=False)
 
     assessment: Mapped[Assessment] = relationship(back_populates="criterion_results")
+
+
+class PlanRow(Base):
+    """Un plan por hallazgo (docs/05 §4). `origen` e `incident_id` anticipan el motor
+    operativo (docs/08): por ahora todo plan nace de un criterio, nunca de un incidente."""
+
+    __tablename__ = "plans"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    assessment_id: Mapped[str] = mapped_column(ForeignKey("assessments.id"))
+    criterion_id: Mapped[str] = mapped_column(String)
+    origen: Mapped[str] = mapped_column(String, default="criterio")
+    titulo: Mapped[str] = mapped_column(String)
+    prioridad: Mapped[str] = mapped_column(String)
+    objetivo: Mapped[str] = mapped_column(Text)
+    pasos: Mapped[list[str]] = mapped_column(JSON, default=list)
+    verificacion: Mapped[str] = mapped_column(Text)
+    dependencias: Mapped[list[str]] = mapped_column(JSON, default=list)
+    generado_por: Mapped[str] = mapped_column(String)
+    estado: Mapped[str] = mapped_column(String, default="abierto")
+    creado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    assessment: Mapped[Assessment] = relationship(back_populates="plans")

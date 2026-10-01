@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.evidence import Modality
 
@@ -54,11 +54,17 @@ class TierSettings(BaseModel):
     t4: dict[str, float]
 
 
+class PlanesSettings(BaseModel):
+    #: Un criterio con `final_score` por debajo de esto genera un hallazgo/plan (docs/05 §4).
+    umbral_brecha: float = 75.0
+
+
 class MethodologySettings(BaseModel):
     version: int
     ia: IASettings
     tier: TierSettings
     funciones: dict[str, float]
+    planes: PlanesSettings = Field(default_factory=PlanesSettings)
 
 
 class EvidenceTypesCatalog(BaseModel):

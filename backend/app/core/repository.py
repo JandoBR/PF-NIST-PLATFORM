@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from app.evaluation.schemas import CriterionResult, Estado
-from app.models.tables import CriterionResultRow, EvidenceRow
+from app.models.tables import CriterionResultRow, EvidenceRow, PlanRow
+from app.recommendations.plans import Plan
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
 
 
@@ -68,4 +69,31 @@ def row_to_result(row: CriterionResultRow) -> CriterionResult:
         explanation=row.explanation,
         evidence_ids=row.evidence_ids,
         degradado=row.degradado,
+    )
+
+
+def plan_to_row(assessment_id: str, plan: Plan) -> PlanRow:
+    return PlanRow(
+        assessment_id=assessment_id,
+        criterion_id=plan.criterion_id,
+        titulo=plan.titulo,
+        prioridad=plan.prioridad,
+        objetivo=plan.objetivo,
+        pasos=plan.pasos,
+        verificacion=plan.verificacion,
+        dependencias=plan.dependencias,
+        generado_por=plan.generado_por,
+    )
+
+
+def row_to_plan(row: PlanRow) -> Plan:
+    return Plan(
+        criterion_id=row.criterion_id,
+        titulo=row.titulo,
+        prioridad=row.prioridad,
+        objetivo=row.objetivo,
+        pasos=row.pasos,
+        verificacion=row.verificacion,
+        dependencias=row.dependencias,
+        generado_por=row.generado_por,
     )

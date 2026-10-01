@@ -23,11 +23,19 @@ from app.adapters.ansible.adapter import AnsibleAdapter
 from app.adapters.documents.adapter import DocumentAdapter
 from app.adapters.terraform.adapter import TerraformAdapter
 from app.ai.client import AIClient, NullAIClient
-from app.core.repository import evidence_to_row, result_to_row, row_to_result
+from app.core.repository import (
+    evidence_to_row,
+    plan_to_row,
+    result_to_row,
+    row_to_plan,
+    row_to_result,
+)
 from app.evaluation import aggregation, engine
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
-from app.models.tables import Assessment, CriterionResultRow, Organization, Source
+from app.models.tables import Assessment, CriterionResultRow, Organization, PlanRow, Source
+from app.recommendations import plans as recommendations_plans
+from app.recommendations.plans import Plan
 from app.schemas.evidence import EvidenceInstance
 
 
@@ -187,6 +195,32 @@ def reevaluate(
 def load_criterion_results(session: Session, assessment_id: str) -> list[CriterionResult]:
     rows = session.query(CriterionResultRow).filter_by(assessment_id=assessment_id).all()
     return [row_to_result(row) for row in rows]
+
+
+def generate_plans(
+    session: Session,
+    methodology: Methodology,
+    assessment_id: str,
+    ai_client: AIClient | None = None,
+) -> list[PlanRow]:
+    """Genera los planes de un assessment (docs/05 §4). Idempotente: reemplaza los anteriores."""
+
+    if session.get(Assessment, assessment_id) is None:
+        raise AssessmentNotFoundError(assessment_id)
+
+    results = load_criterion_results(session, assessment_id)
+    plans = recommendations_plans.generate_plans(methodology, results, client=ai_client)
+
+    session.query(PlanRow).filter_by(assessment_id=assessment_id).delete()
+    rows = [plan_to_row(assessment_id, plan) for plan in plans]
+    session.add_all(rows)
+    session.commit()
+    return rows
+
+
+def load_plans(session: Session, assessment_id: str) -> list[Plan]:
+    rows = session.query(PlanRow).filter_by(assessment_id=assessment_id).all()
+    return [row_to_plan(row) for row in rows]
 
 
 @dataclass

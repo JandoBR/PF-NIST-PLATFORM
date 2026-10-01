@@ -195,3 +195,44 @@ def test_compare_reports_per_criterion_and_global_change(db_session, methodology
 def test_compare_unknown_assessment_raises(db_session, methodology):
     with pytest.raises(svc.AssessmentNotFoundError):
         svc.compare(db_session, methodology, "a", "b")
+
+
+def test_generate_plans_persists_one_plan_per_finding(db_session, methodology):
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Planes",
+        scope="s",
+        terraform_path=FIXTURES / "gaps",
+    )
+
+    rows = svc.generate_plans(db_session, methodology, assessment.id)
+
+    assert {r.criterion_id for r in rows} == {
+        r.criterion_id
+        for r in svc.load_criterion_results(db_session, assessment.id)
+        if r.final_score is not None and r.final_score < 75
+    }
+    plans = svc.load_plans(db_session, assessment.id)
+    assert all(p.generado_por == "plantilla" for p in plans)  # sin ai_client: degrada a plantilla
+
+
+def test_generate_plans_is_idempotent(db_session, methodology):
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Planes 2",
+        scope="s",
+        terraform_path=FIXTURES / "gaps",
+    )
+
+    first = svc.generate_plans(db_session, methodology, assessment.id)
+    second = svc.generate_plans(db_session, methodology, assessment.id)
+
+    assert len(first) == len(second)
+    assert len(svc.load_plans(db_session, assessment.id)) == len(second)  # no se duplican
+
+
+def test_generate_plans_unknown_assessment_raises(db_session, methodology):
+    with pytest.raises(svc.AssessmentNotFoundError):
+        svc.generate_plans(db_session, methodology, "no-existe")

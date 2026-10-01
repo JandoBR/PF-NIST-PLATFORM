@@ -1,4 +1,4 @@
-"""Contratos de salida de IA (docs/05 §2.2 U1, §3.1 U2), validados estrictamente."""
+"""Contratos de salida de IA (docs/05 §2.2 U1, §3.1 U2, §4.1 U3), validados estrictamente."""
 
 from __future__ import annotations
 
@@ -32,3 +32,17 @@ class AdjustmentResponse(BaseModel):
     justificacion: str
     evidencias_referenciadas: list[str] = Field(default_factory=list)
     confianza: float = 0.0
+
+
+class PlanContentResponse(BaseModel):
+    """U3 — contenido narrativo de un plan (docs/05 §4.1).
+
+    La prioridad NO viene de aqui: la decide `app/recommendations/plans.py` a partir de la
+    severidad del hallazgo (determinismo primero); la IA solo redacta objetivo/pasos/verificacion.
+    """
+
+    titulo: str
+    objetivo: str
+    pasos: list[str] = Field(default_factory=list)
+    verificacion: str
+    dependencias: list[str] = Field(default_factory=list)

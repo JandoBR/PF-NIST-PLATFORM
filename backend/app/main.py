@@ -9,6 +9,7 @@ defecto (ver app/core/db.py) para poder reevaluar y comparar sin levantar Postgr
     uv run python -m app.main list
     uv run python -m app.main reevaluate <assessment_id>
     uv run python -m app.main compare <assessment_id_a> <assessment_id_b>
+    uv run python -m app.main plans <assessment_id>
 
 Sin `DEEPSEEK_API_KEY` configurada (shell o backend/.env), la extraccion documental se omite
 y el sistema sigue funcionando con los criterios tecnicos (doc 05 §7, principio de degradacion).
@@ -185,6 +186,41 @@ def cmd_reevaluate(args: argparse.Namespace) -> None:
     _print_report(methodology, results)
 
 
+def cmd_plans(args: argparse.Namespace) -> None:
+    methodology = load_methodology(REPO_ROOT / "methodology")
+    session = _open_session()
+
+    ai_requested = args.ai
+    guard_error = check_live_ai_guard(
+        ai_requested, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
+    )
+    if guard_error:
+        _abort(guard_error)
+
+    client = _build_ai_client_if_needed(ai_requested)
+    try:
+        svc.generate_plans(session, methodology, args.assessment_id, ai_client=client)
+    except svc.AssessmentNotFoundError:
+        _abort(f"No existe un assessment con id {args.assessment_id!r}.")
+        return
+
+    plans = svc.load_plans(session, args.assessment_id)
+    if not plans:
+        print("Sin hallazgos por debajo del umbral de brecha: no se genero ningun plan.")
+        return
+
+    orden = {"alta": 0, "media": 1, "baja": 2}
+    for plan in sorted(plans, key=lambda p: orden[p.prioridad]):
+        print(f"[{plan.prioridad:5s}] {plan.criterion_id} — {plan.titulo} ({plan.generado_por})")
+        print(f"  Objetivo: {plan.objetivo}")
+        for i, paso in enumerate(plan.pasos, start=1):
+            print(f"  {i}. {paso}")
+        print(f"  Verificacion: {plan.verificacion}")
+        if plan.dependencias:
+            print(f"  Dependencias: {', '.join(plan.dependencias)}")
+        print()
+
+
 def cmd_compare(args: argparse.Namespace) -> None:
     methodology = load_methodology(REPO_ROOT / "methodology")
     session = _open_session()
@@ -245,6 +281,16 @@ def main() -> None:
     reeval_parser.add_argument("--context", default="{}", help="Contexto para U2 como JSON")
     reeval_parser.add_argument("--confirm-live-ai", action="store_true")
     reeval_parser.set_defaults(func=cmd_reevaluate)
+
+    plans_parser = subparsers.add_parser(
+        "plans", help="Genera planes de mejora para los hallazgos de una evaluacion"
+    )
+    plans_parser.add_argument("assessment_id")
+    plans_parser.add_argument(
+        "--ai", action="store_true", help="Redacta el contenido con IA (si no, usa la plantilla)"
+    )
+    plans_parser.add_argument("--confirm-live-ai", action="store_true")
+    plans_parser.set_defaults(func=cmd_plans)
 
     compare_parser = subparsers.add_parser("compare", help="Diferencia entre dos evaluaciones")
     compare_parser.add_argument("assessment_a")
