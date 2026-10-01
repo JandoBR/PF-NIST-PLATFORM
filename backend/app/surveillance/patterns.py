@@ -36,6 +36,8 @@ class PatternMatch:
     hasta: datetime
     conteo: int
     event_ids: list[str]
+    #: Recurso compartido por los eventos que forman el patron (para correlacionar incidentes).
+    recurso: str | None = None
 
 
 def _auth_failures_burst(
@@ -63,6 +65,7 @@ def _auth_failures_burst(
             hasta=hasta,
             conteo=len(grupo),
             event_ids=[e.event_id for e in grupo],
+            recurso=grupo[0].recurso,
         )
     return None
 
@@ -79,6 +82,7 @@ def _existence_pattern(events: list[RawEvent], tipo: str) -> PatternMatch | None
         hasta=coincidencias[-1].event_time,
         conteo=len(coincidencias),
         event_ids=[e.event_id for e in coincidencias],
+        recurso=coincidencias[-1].recurso,
     )
 
 

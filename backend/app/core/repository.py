@@ -72,10 +72,16 @@ def row_to_result(row: CriterionResultRow) -> CriterionResult:
     )
 
 
-def plan_to_row(assessment_id: str, plan: Plan) -> PlanRow:
+def plan_to_row(
+    plan: Plan, *, assessment_id: str | None = None, incident_id: str | None = None
+) -> PlanRow:
+    """`assessment_id` XOR `incident_id`, segun `plan.origen` ("criterio" vs "evento")."""
+
     return PlanRow(
         assessment_id=assessment_id,
+        incident_id=incident_id,
         criterion_id=plan.criterion_id,
+        origen=plan.origen,
         titulo=plan.titulo,
         prioridad=plan.prioridad,
         objetivo=plan.objetivo,
@@ -83,12 +89,17 @@ def plan_to_row(assessment_id: str, plan: Plan) -> PlanRow:
         verificacion=plan.verificacion,
         dependencias=plan.dependencias,
         generado_por=plan.generado_por,
+        diagnostico_observable=plan.diagnostico_observable,
+        hipotesis=plan.hipotesis,
+        comprobaciones_seguras=plan.comprobaciones_seguras,
+        advertencia=plan.advertencia,
     )
 
 
 def row_to_plan(row: PlanRow) -> Plan:
     return Plan(
         criterion_id=row.criterion_id,
+        origen=row.origen,
         titulo=row.titulo,
         prioridad=row.prioridad,
         objetivo=row.objetivo,
@@ -96,4 +107,8 @@ def row_to_plan(row: PlanRow) -> Plan:
         verificacion=row.verificacion,
         dependencias=row.dependencias,
         generado_por=row.generado_por,
+        diagnostico_observable=row.diagnostico_observable,
+        hipotesis=row.hipotesis,
+        comprobaciones_seguras=row.comprobaciones_seguras,
+        advertencia=row.advertencia,
     )

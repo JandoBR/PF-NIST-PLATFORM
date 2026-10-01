@@ -31,6 +31,8 @@ class Organization(Base):
     contexto: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     assessments: Mapped[list[Assessment]] = relationship(back_populates="organization")
+    events: Mapped[list[Event]] = relationship(back_populates="organization")
+    incidents: Mapped[list[Incident]] = relationship(back_populates="organization")
 
 
 class Assessment(Base):
@@ -115,13 +117,17 @@ class CriterionResultRow(Base):
 
 
 class PlanRow(Base):
-    """Un plan por hallazgo (docs/05 §4). `origen` e `incident_id` anticipan el motor
-    operativo (docs/08): por ahora todo plan nace de un criterio, nunca de un incidente."""
+    """Un plan por hallazgo (origen="criterio", docs/05 §4) o por incidente (origen="evento",
+    docs/08 §7) — nunca ambos. `assessment_id`/`incident_id` son mutuamente excluyentes segun
+    `origen`; no se impone a nivel de esquema porque SQLite no valida CHECK entre columnas
+    nulas de forma portable con el resto del stack, pero `app/core`/`app/ops` nunca llenan los
+    dos a la vez."""
 
     __tablename__ = "plans"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
-    assessment_id: Mapped[str] = mapped_column(ForeignKey("assessments.id"))
+    assessment_id: Mapped[str | None] = mapped_column(ForeignKey("assessments.id"), nullable=True)
+    incident_id: Mapped[str | None] = mapped_column(ForeignKey("incidents.id"), nullable=True)
     criterion_id: Mapped[str] = mapped_column(String)
     origen: Mapped[str] = mapped_column(String, default="criterio")
     titulo: Mapped[str] = mapped_column(String)
@@ -132,8 +138,84 @@ class PlanRow(Base):
     dependencias: Mapped[list[str]] = mapped_column(JSON, default=list)
     generado_por: Mapped[str] = mapped_column(String)
     estado: Mapped[str] = mapped_column(String, default="abierto")
+    diagnostico_observable: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hipotesis: Mapped[list[str]] = mapped_column(JSON, default=list)
+    comprobaciones_seguras: Mapped[list[str]] = mapped_column(JSON, default=list)
+    advertencia: Mapped[str | None] = mapped_column(Text, nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
 
-    assessment: Mapped[Assessment] = relationship(back_populates="plans")
+    assessment: Mapped[Assessment | None] = relationship(back_populates="plans")
+    incident: Mapped[Incident | None] = relationship(back_populates="plans")
+
+
+class Event(Base):
+    """Evento operativo, append-only, a nivel organizacion/entorno (docs/06 §2, docs/08 §3) —
+    no pertenece a una evaluacion."""
+
+    __tablename__ = "events"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"))
+    scope: Mapped[str] = mapped_column(String)
+    event_id: Mapped[str] = mapped_column(String)
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    tipo: Mapped[str] = mapped_column(String)
+    recurso: Mapped[str] = mapped_column(String)
+    actor: Mapped[str | None] = mapped_column(String, nullable=True)
+    detalle: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    source_id: Mapped[str] = mapped_column(String)
+    creado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    organization: Mapped[Organization] = relationship(back_populates="events")
+
+
+class LogPatternRow(Base):
+    """Patron detectado, a nivel organizacion/entorno (docs/06 §3, docs/08 §3). Una evaluacion
+    lee estas filas para convertirlas en evidencia `log.pattern` (docs/01 §1)."""
+
+    __tablename__ = "log_patterns"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"))
+    scope: Mapped[str] = mapped_column(String)
+    patron: Mapped[str] = mapped_column(String)
+    resultado: Mapped[str] = mapped_column(String)
+    desde: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    hasta: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    conteo: Mapped[int] = mapped_column()
+    creado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+class Incident(Base):
+    """Ciclo de vida: open -> triaged -> contained -> recovering -> closed (docs/08 §4). Se
+    crea por un disparador y se actualiza por hechos posteriores; el motor nunca los fabrica."""
+
+    __tablename__ = "incidents"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"))
+    scope: Mapped[str] = mapped_column(String)
+    correlation_key: Mapped[str] = mapped_column(String, unique=True)
+    titulo: Mapped[str] = mapped_column(String)
+    estado: Mapped[str] = mapped_column(String, default="open")
+    severidad: Mapped[str] = mapped_column(String)
+    first_event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    event_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    criterios: Mapped[list[str]] = mapped_column(JSON, default=list)
+    timeline: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    creado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    actualizado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    organization: Mapped[Organization] = relationship(back_populates="incidents")
+    plans: Mapped[list[PlanRow]] = relationship(back_populates="incident")

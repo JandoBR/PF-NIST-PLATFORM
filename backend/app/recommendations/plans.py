@@ -9,7 +9,7 @@ prioridad, solo redacta objetivo/pasos/verificacion (U3, docs/05 §4.1).
 
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.ai.client import AIClient, NullAIClient
 from app.ai.plan_generation import generate_plan_content
@@ -27,6 +27,12 @@ class Plan(BaseModel):
     verificacion: str
     dependencias: list[str]
     generado_por: str
+    #: Solo presentes en planes de incidente (docs/08 §7); vacios/None en planes de criterio.
+    origen: str = "criterio"
+    diagnostico_observable: str | None = None
+    hipotesis: list[str] = Field(default_factory=list)
+    comprobaciones_seguras: list[str] = Field(default_factory=list)
+    advertencia: str | None = None
 
 
 def _build_plan(methodology: Methodology, client: AIClient, finding: Finding) -> Plan:

@@ -10,6 +10,9 @@ defecto (ver app/core/db.py) para poder reevaluar y comparar sin levantar Postgr
     uv run python -m app.main reevaluate <assessment_id>
     uv run python -m app.main compare <assessment_id_a> <assessment_id_b>
     uv run python -m app.main plans <assessment_id>
+    uv run python -m app.main events "Empresa Demo" \
+        tests/fixtures/scenarios/e1b_fallos_sin_alerta.jsonl
+    uv run python -m app.main incidents "Empresa Demo" --plans
 
 Sin `DEEPSEEK_API_KEY` configurada (shell o backend/.env), la extraccion documental se omite
 y el sistema sigue funcionando con los criterios tecnicos (doc 05 §7, principio de degradacion).
@@ -221,6 +224,61 @@ def cmd_plans(args: argparse.Namespace) -> None:
         print()
 
 
+def cmd_events(args: argparse.Namespace) -> None:
+    methodology = load_methodology(REPO_ROOT / "methodology")
+    session = _open_session()
+
+    guard_error = check_live_ai_guard(
+        args.ai, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
+    )
+    if guard_error:
+        _abort(guard_error)
+
+    client = _build_ai_client_if_needed(args.ai)
+    result = svc.ingest_events(session, methodology, args.org, args.jsonl, ai_client=client)
+
+    print(f"Eventos leidos: {result.eventos_ingeridos}")
+    if not result.nuevos_incidentes and not result.incidentes_actualizados:
+        print("Sin disparadores: ningun incidente nuevo ni actualizado.")
+        return
+
+    for incident in result.nuevos_incidentes:
+        print(f"\nIncidente NUEVO [{incident.severidad}] {incident.id}: {incident.titulo}")
+        _print_incident_plans(session, incident.id)
+    for incident in result.incidentes_actualizados:
+        print(f"\nIncidente ACTUALIZADO [{incident.severidad}] {incident.id}: {incident.titulo}")
+        _print_incident_plans(session, incident.id)
+
+
+def _print_incident_plans(session: Session, incident_id: str) -> None:
+    for plan in svc.load_incident_plans(session, incident_id):
+        print(f"  Plan: {plan.titulo} ({plan.generado_por})")
+        print(f"    Diagnostico: {plan.diagnostico_observable}")
+        print(f"    Hipotesis: {'; '.join(plan.hipotesis)}")
+        print(f"    Comprobaciones seguras: {'; '.join(plan.comprobaciones_seguras)}")
+        print(f"    Objetivo: {plan.objetivo}")
+        for i, paso in enumerate(plan.pasos, start=1):
+            print(f"    {i}. {paso}")
+        print(f"    Verificacion: {plan.verificacion}")
+        print(f"    {plan.advertencia}")
+
+
+def cmd_incidents(args: argparse.Namespace) -> None:
+    session = _open_session()
+    incidents = svc.list_incidents(session, args.org)
+    if not incidents:
+        print(f"Sin incidentes para {args.org!r}. Usa 'events' primero.")
+        return
+
+    for incident in incidents:
+        print(
+            f"{incident.id}  [{incident.severidad:5s}] {incident.estado:10s}  "
+            f"{incident.actualizado_en:%Y-%m-%d %H:%M}  {incident.titulo}"
+        )
+        if args.plans:
+            _print_incident_plans(session, incident.id)
+
+
 def cmd_compare(args: argparse.Namespace) -> None:
     methodology = load_methodology(REPO_ROOT / "methodology")
     session = _open_session()
@@ -291,6 +349,26 @@ def main() -> None:
     )
     plans_parser.add_argument("--confirm-live-ai", action="store_true")
     plans_parser.set_defaults(func=cmd_plans)
+
+    events_parser = subparsers.add_parser(
+        "events", help="Ingiere eventos JSONL: patrones, disparadores, incidentes y planes"
+    )
+    events_parser.add_argument("org", help="Nombre de la organizacion")
+    events_parser.add_argument("jsonl", type=Path, help="Archivo JSONL de eventos")
+    events_parser.add_argument(
+        "--ai", action="store_true", help="Redacta los planes con IA (si no, usa la plantilla)"
+    )
+    events_parser.add_argument("--confirm-live-ai", action="store_true")
+    events_parser.set_defaults(func=cmd_events)
+
+    incidents_parser = subparsers.add_parser(
+        "incidents", help="Lista incidentes de una organizacion"
+    )
+    incidents_parser.add_argument("org", help="Nombre de la organizacion")
+    incidents_parser.add_argument(
+        "--plans", action="store_true", help="Mostrar tambien sus planes"
+    )
+    incidents_parser.set_defaults(func=cmd_incidents)
 
     compare_parser = subparsers.add_parser("compare", help="Diferencia entre dos evaluaciones")
     compare_parser.add_argument("assessment_a")

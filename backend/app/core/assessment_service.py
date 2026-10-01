@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,14 +34,34 @@ from app.core.repository import (
 from app.evaluation import aggregation, engine
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
-from app.models.tables import Assessment, CriterionResultRow, Organization, PlanRow, Source
+from app.models.tables import (
+    Assessment,
+    CriterionResultRow,
+    Event,
+    Incident,
+    LogPatternRow,
+    Organization,
+    PlanRow,
+    Source,
+)
+from app.ops.incidents import upsert_incident
+from app.ops.plans import generate_incident_plan
+from app.ops.triggers import evaluate_triggers
 from app.recommendations import plans as recommendations_plans
 from app.recommendations.plans import Plan
-from app.schemas.evidence import EvidenceInstance
+from app.schemas.evidence import EvidenceInstance, Locator, Modality
+from app.surveillance.events import load_events_jsonl
+from app.surveillance.patterns import detect_patterns
 
 
 class AssessmentNotFoundError(Exception):
     pass
+
+
+def _naive(moment: datetime) -> datetime:
+    """SQLite descarta tzinfo al guardar `DateTime(timezone=True)`; normalizar antes de comparar."""
+
+    return moment.replace(tzinfo=None)
 
 
 def _hash_files(files: list[Path]) -> str:
@@ -60,15 +81,71 @@ def _get_or_create_organization(session: Session, nombre: str) -> Organization:
     return org
 
 
+def _collect_surveillance_evidence(
+    session: Session, org_id: str, scope: str
+) -> list[EvidenceInstance]:
+    """Evidencia `log.window`/`log.pattern` desde lo ya ingerido para este org/scope (docs/08 §3:
+    "assessments consumen ventanas de events/log_patterns"). Nunca requiere una ruta de archivo:
+    es implicito, no un adaptador que haya que invocar explicitamente.
+    """
+
+    events = session.query(Event).filter_by(org_id=org_id, scope=scope).all()
+    if not events:
+        return []
+
+    desde = min(e.event_time for e in events)
+    hasta = max(e.event_time for e in events)
+    window = EvidenceInstance(
+        type_id="log.window",
+        type_version=1,
+        subject_type="scope",
+        subject_ref=scope,
+        scope=scope,
+        value={"desde": desde.isoformat(), "hasta": hasta.isoformat(), "completo": True},
+        source_id="surveillance:org",
+        locator=Locator(event_id=f"{desde.isoformat()}..{hasta.isoformat()}"),
+        observed_at=hasta,
+        modality=Modality.OPERATIVA,
+        created_by="surveillance",
+    )
+
+    patterns = session.query(LogPatternRow).filter_by(org_id=org_id, scope=scope).all()
+    pattern_evidence = [
+        EvidenceInstance(
+            type_id="log.pattern",
+            type_version=1,
+            subject_type="scope",
+            subject_ref=scope,
+            scope=scope,
+            value={
+                "patron": p.patron,
+                "resultado": p.resultado,
+                "desde": p.desde.isoformat(),
+                "hasta": p.hasta.isoformat(),
+                "conteo": p.conteo,
+            },
+            source_id="surveillance:org",
+            locator=Locator(event_id=p.id),
+            observed_at=p.hasta,
+            modality=Modality.OPERATIVA,
+            created_by="surveillance",
+        )
+        for p in patterns
+    ]
+    return [window, *pattern_evidence]
+
+
 def _collect_evidence_and_sources(
+    session: Session,
     methodology: Methodology,
+    org_id: str,
     terraform_path: Path | None,
     ansible_path: Path | None,
     documents_path: Path | None,
     scope: str,
     ai_client: AIClient | None,
 ) -> tuple[list[EvidenceInstance], list[Source]]:
-    evidence: list[EvidenceInstance] = []
+    evidence: list[EvidenceInstance] = list(_collect_surveillance_evidence(session, org_id, scope))
     sources: list[Source] = []
 
     if terraform_path is not None:
@@ -124,7 +201,14 @@ def run_assessment(
 
     try:
         evidence, sources = _collect_evidence_and_sources(
-            methodology, terraform_path, ansible_path, documents_path, scope, ai_client
+            session,
+            methodology,
+            org.id,
+            terraform_path,
+            ansible_path,
+            documents_path,
+            scope,
+            ai_client,
         )
         results = engine.evaluate_all(methodology, evidence)
 
@@ -212,7 +296,7 @@ def generate_plans(
     plans = recommendations_plans.generate_plans(methodology, results, client=ai_client)
 
     session.query(PlanRow).filter_by(assessment_id=assessment_id).delete()
-    rows = [plan_to_row(assessment_id, plan) for plan in plans]
+    rows = [plan_to_row(plan, assessment_id=assessment_id) for plan in plans]
     session.add_all(rows)
     session.commit()
     return rows
@@ -220,6 +304,121 @@ def generate_plans(
 
 def load_plans(session: Session, assessment_id: str) -> list[Plan]:
     rows = session.query(PlanRow).filter_by(assessment_id=assessment_id).all()
+    return [row_to_plan(row) for row in rows]
+
+
+@dataclass
+class IngestResult:
+    org_id: str
+    eventos_ingeridos: int
+    nuevos_incidentes: list[Incident]
+    incidentes_actualizados: list[Incident]
+
+
+def ingest_events(
+    session: Session,
+    methodology: Methodology,
+    org_name: str,
+    jsonl_path: Path,
+    ai_client: AIClient | None = None,
+) -> IngestResult:
+    """Flujo B completo (docs/08 §1): eventos -> patrones -> disparadores -> incidentes -> planes.
+
+    El flujo A (evidencia de madurez) no se recalcula aqui: la proxima vez que se corra
+    `run_assessment` para este org/scope, `_collect_surveillance_evidence` ya vera los
+    `log_patterns` persistidos ahora (docs/06 §6: "recalcular SOLO los criterios afectados" se
+    logra simplemente evaluando una nueva assessment, nunca mutando una anterior).
+    """
+
+    org = _get_or_create_organization(session, org_name)
+    raw_events = load_events_jsonl(jsonl_path)
+
+    por_scope: dict[str, list] = {}
+    for evento in raw_events:
+        por_scope.setdefault(evento.scope, []).append(evento)
+
+    nuevos: list[Incident] = []
+    actualizados: list[Incident] = []
+
+    for scope, eventos in por_scope.items():
+        ya_ingeridos = {
+            row.event_id
+            for row in session.query(Event.event_id).filter_by(org_id=org.id, scope=scope).all()
+        }
+        for evento in eventos:
+            if evento.event_id in ya_ingeridos:
+                continue  # mismo archivo reingerido: no duplicar filas append-only
+            session.add(
+                Event(
+                    org_id=org.id,
+                    scope=scope,
+                    event_id=evento.event_id,
+                    event_time=evento.event_time,
+                    tipo=evento.tipo,
+                    recurso=evento.recurso,
+                    actor=evento.actor,
+                    detalle=evento.detalle,
+                    source_id=f"events:{jsonl_path}",
+                )
+            )
+        session.flush()
+
+        matches = detect_patterns(eventos, methodology.settings.vigilancia)
+        # SQLite no conserva tzinfo en DateTime(timezone=True): se compara en naive UTC para
+        # que el dedup no falle silenciosamente por un desajuste de tipo, no de valor.
+        patrones_existentes = {
+            (row.patron, _naive(row.desde), _naive(row.hasta), row.conteo)
+            for row in session.query(LogPatternRow).filter_by(org_id=org.id, scope=scope).all()
+        }
+        for match in matches:
+            clave = (match.patron, _naive(match.desde), _naive(match.hasta), match.conteo)
+            if clave in patrones_existentes:
+                continue  # mismo archivo reingerido: no duplicar el patron ya detectado
+            session.add(
+                LogPatternRow(
+                    org_id=org.id,
+                    scope=scope,
+                    patron=match.patron,
+                    resultado=match.resultado,
+                    desde=match.desde,
+                    hasta=match.hasta,
+                    conteo=match.conteo,
+                )
+            )
+        session.flush()
+
+        triggers = evaluate_triggers(matches, methodology.settings.vigilancia, scope)
+        for trigger in triggers:
+            incident, es_nuevo = upsert_incident(session, org.id, scope, trigger)
+            (nuevos if es_nuevo else actualizados).append(incident)
+
+            plan = generate_incident_plan(methodology, trigger, client=ai_client)
+            session.query(PlanRow).filter_by(incident_id=incident.id).delete()
+            session.add(plan_to_row(plan, incident_id=incident.id))
+
+    session.commit()
+    return IngestResult(
+        org_id=org.id,
+        eventos_ingeridos=len(raw_events),
+        nuevos_incidentes=nuevos,
+        incidentes_actualizados=actualizados,
+    )
+
+
+def list_incidents(session: Session, org_name: str) -> list[Incident]:
+    org = session.query(Organization).filter_by(nombre=org_name).one_or_none()
+    if org is None:
+        return []
+    return (
+        session.query(Incident)
+        .filter_by(org_id=org.id)
+        .order_by(Incident.actualizado_en.desc())
+        .all()
+    )
+
+
+def load_incident_plans(session: Session, incident_id: str) -> list[Plan]:
+    rows = session.query(PlanRow).filter_by(incident_id=incident_id).all()
     return [row_to_plan(row) for row in rows]
 
 
