@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    ".penpot-ai-kit/AGENTS.md",
+    ".penpot-ai-kit/skills/penpot-router/SKILL.md"
+  ],
+  "skills": {
+    "paths": [".penpot-ai-kit/skills"]
+  },
+  "references": {
+    "penpot-kit": {
+      "path": ".penpot-ai-kit",
+      "description": "Penpot AI Kit doctrine and skills (tokens, components, screens, audits)"
+    }
+  }
+}
