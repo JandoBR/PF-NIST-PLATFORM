@@ -26,7 +26,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Adaptador Ansible | Parser YAML, CRI-PR-04, CRI-PR-06 ahora Mixto de verdad | Hecho |
 | Ajuste de IA (U2) | Fórmula B/A/D/α → S acotada, con todas las reglas J1–J7/R3–R6 | Hecho |
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
-| Motor operativo (docs 06/08) | Eventos, incidentes, disparadores | Pendiente |
+| Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
 | API REST (doc 04 §6) | — | Pendiente (deliberadamente al final) |
 | Docker/Redis (doc 04 §11) | — | Pendiente (deliberadamente al final) |
 
@@ -39,6 +39,8 @@ uv run python -m app.main list
 uv run python -m app.main plans <assessment_id>
 uv run python -m app.main reevaluate <assessment_id>   # tras corregir el fixture
 uv run python -m app.main compare <id_antes> <id_despues>
+uv run python -m app.main events "Empresa Demo" tests/fixtures/scenarios/e1b_fallos_sin_alerta.jsonl
+uv run python -m app.main incidents "Empresa Demo" --plans
 ```
 
 ## 2. Entorno y estructura
@@ -243,7 +245,70 @@ primero.
   `"abierto"`) pensando en el motor operativo (doc 08): cuando existan incidentes, sus planes
   deberían caber en la misma tabla sin otra migración.
 
-## 10. Simplificaciones activas (consolidado)
+## 10. Motor operativo: vigilancia (flujo A) y disparadores/incidentes (flujo B)
+
+**Qué se construyó:** `app/surveillance/` (`events.py`: parseo/validación de JSONL, falla rápido
+con `archivo:línea`; `patterns.py`: `detect_patterns()` sobre 7 patrones; `evidence.py`: patrones
+→ `EvidenceInstance`), 4 criterios nuevos (`CRI-DE-02`, `CRI-RS-01`, `CRI-RC-02`, `CRI-RC-03`)
+que aplican la "regla de justicia" (docs 06 §5) literalmente, `app/ops/` (`triggers.py`: D1/D3/D4/D5;
+`incidents.py`: upsert idempotente por `correlation_key`; `plans.py`: planes de incidente),
+tablas `Event`/`LogPatternRow`/`Incident` (a nivel org/scope, no de evaluación — doc 08 §3),
+`assessment_service.ingest_events()` (orquesta todo el flujo B) y el hecho de que `run_assessment`
+ahora lee automáticamente lo que `ingest_events` dejó persistido para ese org/scope (flujo A
+consumiendo flujo B, sin acoplarlos directamente).
+
+**Decisión de alcance, otra vez explícita:** de los 6 escenarios de aceptación de doc 08 §9
+(E1/E1-b/E2/E2-b/E3/E3-b), ninguno ejercita el disparador D2 (`alert_raised` sin
+`incident_triaged`). Se implementaron D1/D3/D4/D5 — los cuatro que la tabla de aceptación
+realmente prueba — y D2 quedó fuera, documentado como corte deliberado, no como omisión.
+
+**Otras decisiones:**
+
+- **Una ventana = un lote ingerido.** Cada llamada a `events <org> <archivo>` se trata como una
+  ventana completa y autocontenida (`log.window.completo = True` siempre). Un stream continuo
+  real con ventanas deslizantes e ingesta parcial es evolución futura (doc 08 §11); el contrato
+  de evidencia ya distingue completo/incompleto para cuando eso exista.
+- `recovery_communicated` se agregó como un séptimo patrón aunque doc 06 §3 no lo lista entre los
+  "patrones iniciales": sin él, ni `CRI-RC-03` ni el disparador D5 tendrían señal operativa que
+  leer. Se decidió agregar el patrón que falta en vez de dejar esa mitad del flujo sin probar.
+- **Lectura cuidadosa, no aplicación uniforme de un tope:** los otros tres criterios nuevos
+  (`CRI-DE-02`, `RS-01`, `RC-02`) tapan en 75 sin `doc.claim` (mismo patrón que `CRI-PR-02`,
+  porque su regla textual exige documento **y** evidencia operativa para el 100). `CRI-RC-03` en
+  cambio sí llega a 100 con evidencia puramente operativa, porque su regla dice comunicación
+  "definida**/**evidenciada" — un *o*, no un *y* — así que `recovery_communicated` solo ya
+  satisface esa rama. Aplicar el mismo tope a los cuatro sin leer cada regla por separado habría
+  sido un error.
+- **No se persiste una ventana por separado.** `log.window` se reconstruye en el momento desde la
+  tabla `Event` (mínimo/máximo `event_time` del org+scope) en vez de guardarse como su propia fila
+  — igual que `score_aggregates`/`tier_estimates`/`findings`, es barato de recalcular y evita un
+  tercer lugar donde la completitud de la ventana pueda desincronizarse.
+- **Ingesta repetida del mismo archivo es un no-op, no un duplicado.** `Event` se deduplica por
+  `(org_id, scope, event_id)` y `LogPatternRow` por `(patron, desde, hasta, conteo)` antes de
+  insertar. Esto expuso un bug real: comparar un `datetime` recién parseado (consciente de
+  zona horaria) contra uno recuperado de SQLite (que descarta `tzinfo` al guardar
+  `DateTime(timezone=True)`) fallaba en silencio — el `in` de un set nunca encontraba coincidencia
+  porque el *hash* difería, sin lanzar excepción. Se corrigió normalizando ambos lados a naive
+  antes de comparar (`_naive()` en `assessment_service.py`).
+- **Cooldown real (O4) no implementado.** La idempotencia por `correlation_key` cubre "no
+  duplicar el mismo incidente al reingerir", pero un cooldown por tiempo o un rate-limit por
+  organización/criterio (p. ej. "no más de un incidente por hora para el mismo disparador") queda
+  fuera de este corte — ninguno de los escenarios de aceptación lo necesita.
+- Un plan nace de un criterio (`origen="criterio"`, ligado a `assessment_id`) o de un incidente
+  (`origen="evento"`, ligado a `incident_id`), nunca ambos. `PlanRow.assessment_id` se volvió
+  nullable en esta migración (requirió `render_as_batch=True` en `alembic/env.py`: SQLite no
+  soporta `ALTER TABLE ... DROP NOT NULL` directo, solo reconstrucción de tabla).
+- El diagnóstico de un plan de incidente es una plantilla determinista por disparador (`D1`→
+  "regla de detección ausente...", etc., tomadas de la tabla disparador→plan de docs 06 §7/08 §7),
+  no texto generado por IA: solo objetivo/pasos/verificación vienen de `generate_plan_content`
+  (U3), reutilizado tal cual en vez de duplicado.
+- Probado end-to-end manualmente: `events` sobre el fixture E1-b abrió un incidente cuyo plan de
+  plantilla coincide casi palabra por palabra con el ejemplo trabajado de doc 08 §7; una corrida
+  de `run` completamente separada para el mismo org/scope calificó `CRI-DE-02 = 0` a partir de esa
+  misma evidencia persistida, sin ningún acoplamiento directo entre los dos comandos; y el
+  fixture de flujo correcto (E1) confirmó cero incidentes abiertos, probando la regla anti-ruido
+  en código real, no solo en un test.
+
+## 11. Simplificaciones activas (consolidado)
 
 Lista única de lo que la especificación describe pero el código todavía no implementa por
 completo, para no tener que releer cada sección arriba:
@@ -257,11 +322,13 @@ completo, para no tener que releer cada sección arriba:
 | Solo hallazgos tipo `brecha` | Planes (§9) | `contradiccion` (doc 02 §5) y `limitacion` quedan para una ampliación |
 | `CRI-PR-03` no usa evidencia de Ansible | Ansible (§7) | Decisión deliberada, no pendiente — ver §7 |
 | Un `Source` por adaptador, no por archivo | Persistencia (§6) | Solo si se necesita trazabilidad por archivo individual |
-| Sin motor operativo | — | Próximo corte grande: docs 06/08 completos |
+| Disparador D2 no implementado | Motor operativo (§10) | Ningún escenario de aceptación (doc 08 §9) lo ejercita; agregar su patron `incident_triaged` cuando haga falta |
+| Sin cooldown/rate-limit real (O4) | Motor operativo (§10) | Solo idempotencia por `correlation_key`; falta ventana de tiempo / límite por org-criterio |
+| Una ventana = un lote ingerido, sin ventanas deslizantes | Motor operativo (§10) | Stream continuo real es evolución futura (doc 08 §11) |
+| `log.window` no persistido (se recalcula desde `Event`) | Motor operativo (§10) | Mismo patrón que `score_aggregates`/`tier_estimates`/`findings` |
 | Sin API REST ni Docker/Redis | — | Deliberadamente al final (doc 04 §10, §11) |
 
-## 11. Qué sigue
+## 12. Qué sigue
 
-Motor operativo (eventos → incidentes → planes en vivo, docs 06/08) es el siguiente corte
-grande. Luego API REST (doc 04 §6) y por último Docker Compose + Redis real (doc 04 §11),
-en ese orden — reemplazando la ejecución síncrona actual recién al final, no antes.
+API REST (doc 04 §6) y por último Docker Compose + Redis real (doc 04 §11), en ese orden —
+reemplazando la ejecución síncrona actual recién al final, no antes.
