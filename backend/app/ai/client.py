@@ -10,6 +10,7 @@ import os
 from typing import Protocol
 
 DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEFAULT_TIMEOUT_SECONDS = 60
 MAX_RETRIES = 2
 
@@ -30,7 +31,8 @@ class DeepSeekClient:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = DEFAULT_MODEL,
+        model: str | None = None,
+        base_url: str | None = None,
         timeout: int = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
@@ -39,8 +41,9 @@ class DeepSeekClient:
 
         from openai import OpenAI  # import diferido: no requerido si no hay API key
 
-        self._client = OpenAI(base_url="https://api.deepseek.com", api_key=api_key, timeout=timeout)
-        self.model = model
+        base_url = base_url or os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
+        self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
+        self.model = model or os.environ.get("DEEPSEEK_MODEL", DEFAULT_MODEL)
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
         for _ in range(MAX_RETRIES + 1):

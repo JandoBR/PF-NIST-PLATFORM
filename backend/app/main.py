@@ -7,14 +7,16 @@ funcionando de punta a punta sin base de datos ni Redis:
     uv run python -m app.main --terraform tests/fixtures/terraform/good \
         --documents tests/fixtures/documents
 
-Sin `DEEPSEEK_API_KEY` en el entorno, la extraccion documental se omite y el sistema sigue
-funcionando con los criterios tecnicos (doc 05 §7, principio de degradacion).
+Sin `DEEPSEEK_API_KEY` configurada (shell o backend/.env), la extraccion documental se omite
+y el sistema sigue funcionando con los criterios tecnicos (doc 05 §7, principio de degradacion).
 """
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 from app.adapters.documents.adapter import DocumentAdapter
 from app.adapters.terraform.adapter import TerraformAdapter
@@ -24,6 +26,7 @@ from app.methodology.loader import Methodology, load_methodology
 from app.schemas.evidence import EvidenceInstance
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(REPO_ROOT / ".env")
 
 
 def _tipos_afirmacion_solicitados(methodology: Methodology) -> list[str]:
