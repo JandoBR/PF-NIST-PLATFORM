@@ -66,3 +66,22 @@ def test_document_without_matching_keywords_produces_no_evidence():
     )
 
     assert evidence == []
+
+
+def test_chunks_beyond_the_cap_are_skipped_not_sent(tmp_path):
+    doc = tmp_path / "largo.md"
+    doc.write_text("\n".join(f"# Seccion {i}\ncontenido {i}" for i in range(5)))
+
+    methodology = load_methodology(METHODOLOGY_DIR)
+    client = FakeAIClient(_FAKE_RESPONSES)  # ninguna palabra clave coincide: siempre None
+    adapter = DocumentAdapter(
+        client,
+        methodology,
+        source_id="test:largo",
+        scope="entorno:produccion",
+        max_chunks_per_document=2,
+    )
+
+    adapter.parse_path(doc, tipos_solicitados=["policy_exists"])
+
+    assert adapter.chunks_omitidos == 3  # 5 secciones - tope de 2

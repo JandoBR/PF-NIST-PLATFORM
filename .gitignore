@@ -24,6 +24,9 @@ build/
 pgdata/
 redisdata/
 
+# Cache local de extraccion IA (docs/05 §7); se migra a Redis mas adelante
+backend/.cache/
+
 # Editor / sistema
 .idea/
 .vscode/

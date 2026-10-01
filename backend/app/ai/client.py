@@ -94,9 +94,12 @@ class NullAIClient:
 
 
 def build_default_client() -> AIClient:
-    """Fabrica usada por la CLI/orquestacion: real si hay API key, degradado si no."""
+    """Fabrica usada por la CLI/orquestacion: real (con cache) si hay API key, degradado si no."""
 
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
         return NullAIClient()
-    return DeepSeekClient(api_key=api_key)
+
+    from app.ai.cache import CachingAIClient  # evita import circular a nivel de modulo
+
+    return CachingAIClient(DeepSeekClient(api_key=api_key))

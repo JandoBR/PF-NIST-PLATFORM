@@ -10,17 +10,29 @@ from app.ai.extraction import extract_claims
 from app.methodology.loader import Methodology
 from app.schemas.evidence import EvidenceInstance
 
+#: Limite de chunks por documento (docs/05 §7: control de costo). Un documento con mas
+#: secciones/paginas que esto simplemente deja de analizarse a partir de ese punto; no es
+#: un error, pero vale la pena hacerlo visible en el reporte de la CLI.
+DEFAULT_MAX_CHUNKS_PER_DOCUMENT = 20
+
 
 class DocumentAdapter:
     """Convierte uno o mas documentos en evidencia `doc.claim`, via el cliente de IA inyectado."""
 
     def __init__(
-        self, client: AIClient, methodology: Methodology, source_id: str, scope: str
+        self,
+        client: AIClient,
+        methodology: Methodology,
+        source_id: str,
+        scope: str,
+        max_chunks_per_document: int = DEFAULT_MAX_CHUNKS_PER_DOCUMENT,
     ) -> None:
         self._client = client
         self._confianza_minima = methodology.settings.ia.umbral_confianza_documental
         self.source_id = source_id
         self.scope = scope
+        self._max_chunks_per_document = max_chunks_per_document
+        self.chunks_omitidos = 0
 
     def parse_path(self, path: Path, tipos_solicitados: list[str]) -> list[EvidenceInstance]:
         """Procesa un documento o todos los documentos soportados de un directorio."""
@@ -39,7 +51,12 @@ class DocumentAdapter:
 
     def _parse_file(self, file_path: Path, tipos_solicitados: list[str]) -> list[EvidenceInstance]:
         evidence: list[EvidenceInstance] = []
-        for chunk in chunk_document(file_path):
+        chunks = chunk_document(file_path)
+        if len(chunks) > self._max_chunks_per_document:
+            self.chunks_omitidos += len(chunks) - self._max_chunks_per_document
+            chunks = chunks[: self._max_chunks_per_document]
+
+        for chunk in chunks:
             evidence.extend(
                 extract_claims(
                     self._client,

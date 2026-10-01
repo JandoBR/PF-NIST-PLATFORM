@@ -49,7 +49,7 @@ def _collect_evidence(
 
     if documents_path is not None:
         client = build_default_client()
-        ia_activa = type(client).__name__ == "DeepSeekClient"
+        ia_activa = type(client).__name__ != "NullAIClient"
         print(f"IA: {'activa (DeepSeek)' if ia_activa else 'no configurada, extraccion omitida'}.")
 
         adapter = DocumentAdapter(
@@ -60,6 +60,8 @@ def _collect_evidence(
         )
         evidence.extend(doc_evidence)
         print(f"Documentos: {len(doc_evidence)} instancias de evidencia.")
+        if adapter.chunks_omitidos:
+            print(f"  ({adapter.chunks_omitidos} chunk(s) omitidos por limite de costo)")
 
     return evidence
 
