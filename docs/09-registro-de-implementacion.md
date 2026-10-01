@@ -27,6 +27,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Ajuste de IA (U2) | Fórmula B/A/D/α → S acotada, con todas las reglas J1–J7/R3–R6 | Hecho |
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
+| Pruebas | 163 tests (`pytest`) + `ruff` limpio; E2E de documentos y guarda de migraciones | Hecho |
 | API REST (doc 04 §6) | — | Pendiente (deliberadamente al final) |
 | Docker/Redis (doc 04 §11) | — | Pendiente (deliberadamente al final) |
 
@@ -328,7 +329,27 @@ completo, para no tener que releer cada sección arriba:
 | `log.window` no persistido (se recalcula desde `Event`) | Motor operativo (§10) | Mismo patrón que `score_aggregates`/`tier_estimates`/`findings` |
 | Sin API REST ni Docker/Redis | — | Deliberadamente al final (doc 04 §10, §11) |
 
-## 12. Qué sigue
+## 12. Pruebas: gaps cerrados
+
+Revisión de la suite (159 casos en ese momento) hecha antes de seguir con la API. Los dos huecos
+de mayor riesgo no eran bugs sino cobertura, y ya están cerrados:
+
+- **E2E de documentos** (`tests/test_assessment_service_documents.py`): `run_assessment` con
+  `documents_path` + `FakeAIClient` recorre extracción U1 → evidencia `doc.claim` persistida
+  (con `locator.file`) → `CRI-GV-01 = 100`; y con `NullAIClient` degrada a
+  `evidencia_insuficiente` sin fallar. Antes solo se probaban `extract_claims` y la regla por
+  separado, nunca el cableado.
+- **Guarda de migraciones** (`tests/test_migrations.py`): corre `alembic upgrade head` sobre una
+  BD SQLite efímera y verifica las tablas del esquema y que `plans.assessment_id` es nullable con
+  `incident_id` presente. El resto de los tests usan `create_all`, así que un error de migración
+  no se detectaba en CI — fue justo el caso de `render_as_batch` (§10).
+
+Suite actual: **163 tests**, `ruff` limpio. Queda como cobertura opcional, sin urgencia: handlers
+de la CLI (`app/main.py`, más allá de `check_live_ai_guard`), `test_methodology_loader` (solo 2
+casos pese a que el loader promete fallar rápido) e ingesta con solape parcial (eventos nuevos +
+repetidos en el mismo lote).
+
+## 13. Qué sigue
 
 API REST (doc 04 §6) y por último Docker Compose + Redis real (doc 04 §11), en ese orden —
 reemplazando la ejecución síncrona actual recién al final, no antes.
