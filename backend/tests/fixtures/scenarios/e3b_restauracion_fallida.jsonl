@@ -1,0 +1,2 @@
+{"event_id": "e3b-001", "event_time": "2026-09-20T10:00:00Z", "tipo": "restore_exercise_started", "recurso": "bd-principal", "scope": "entorno:produccion", "actor": "equipo-infra", "detalle": {"backup": "diario"}}
+{"event_id": "e3b-002", "event_time": "2026-09-20T10:25:00Z", "tipo": "restore_exercise_run", "recurso": "bd-principal", "scope": "entorno:produccion", "actor": "equipo-infra", "detalle": {"resultado": "fail", "motivo": "backup_corrupto"}}

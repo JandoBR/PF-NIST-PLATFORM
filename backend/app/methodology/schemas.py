@@ -59,12 +59,28 @@ class PlanesSettings(BaseModel):
     umbral_brecha: float = 75.0
 
 
+class AuthFailuresBurstSettings(BaseModel):
+    n: int = 5
+    ventana_minutos: int = 5
+
+
+class VigilanciaSettings(BaseModel):
+    """Umbrales de disparadores (docs/08 §5: "N, W y plazos vienen de la metodologia, no del
+    modelo"). `auth_failures_burst` alimenta D1; `plazo_escalamiento_minutos` alimenta D3."""
+
+    auth_failures_burst: AuthFailuresBurstSettings = Field(
+        default_factory=AuthFailuresBurstSettings
+    )
+    plazo_escalamiento_minutos: int = 30
+
+
 class MethodologySettings(BaseModel):
     version: int
     ia: IASettings
     tier: TierSettings
     funciones: dict[str, float]
     planes: PlanesSettings = Field(default_factory=PlanesSettings)
+    vigilancia: VigilanciaSettings = Field(default_factory=VigilanciaSettings)
 
 
 class EvidenceTypesCatalog(BaseModel):

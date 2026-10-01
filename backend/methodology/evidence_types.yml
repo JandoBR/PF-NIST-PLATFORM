@@ -215,6 +215,46 @@ tipos:
     estado: published
     publicado: "2026-09-30"
 
+  - id: log.pattern
+    version: 1
+    descripcion: >
+      Evidencia operativa agregada por ventana: un patron detectado (o su ausencia observable)
+      sobre el stream de eventos de una organizacion/entorno (docs/02 §3.4, docs/06 §3).
+    valor_schema:
+      type: object
+      required: [patron, resultado, desde, hasta, conteo]
+      properties:
+        patron: { type: string }
+        resultado: { type: string }
+        desde: { type: string }
+        hasta: { type: string }
+        conteo: { type: integer }
+    modalidad_permitida: [operativa]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+    notas: >
+      Los logs son simulados (docs/02 §7): el valor esta en demostrar el flujo evento -> patron ->
+      evidencia -> criterio, no en vigilar un sistema real.
+
+  - id: log.window
+    version: 1
+    descripcion: >
+      Completitud de la ventana de observacion usada para detectar patrones (docs/02 §3.4). Una
+      ventana incompleta es la base de la "regla de justicia": sin ventana completa, la ausencia
+      de un patron nunca se penaliza (docs/06 §5).
+    valor_schema:
+      type: object
+      required: [desde, hasta, completo]
+      properties:
+        desde: { type: string }
+        hasta: { type: string }
+        completo: { type: boolean }
+    modalidad_permitida: [operativa]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
   - id: tf.expression.unresolved
     version: 1
     descripcion: >

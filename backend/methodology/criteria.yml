@@ -1,6 +1,8 @@
 # Catalogo de criterios (docs/03-matriz-de-criterios.md): los criterios PROTECT que Terraform
 # evalua por si solo, CRI-GV-01 (puramente documental, ejercita U1) y CRI-PR-04 (puramente
-# Ansible). CRI-PR-06 combina Terraform + Ansible en un mismo criterio Mixto.
+# Ansible). CRI-PR-06 combina Terraform + Ansible en un mismo criterio Mixto. CRI-DE-02/RS-01/
+# RC-02/RC-03 son Mixto pero simplificados a solo `log.pattern` (docs/06): sin doc.claim todavia,
+# el tope sin evidencia documental es 75, igual que CRI-PR-02 sin politica.
 # Ampliar este archivo y agregar su modulo en app/evaluation/rules van siempre juntos (D5).
 version: 1
 criterios:
@@ -106,3 +108,63 @@ criterios:
     recomendacion: "Habilitar CloudTrail multirregion y logging de sistema con retencion definida."
     regla:
       tipo: cloudtrail_multiregion
+
+  - id: CRI-DE-02
+    version: 1
+    titulo: "Analisis de eventos y declaracion de incidentes"
+    tipo: mixto
+    funcion: DE
+    categorias: [DE.AE]
+    subcategorias: [DE.AE-02, DE.AE-08]
+    peso: 4
+    ai_adjustable: true
+    evidencias: [log.pattern@1, log.window@1, doc.claim@1]
+    recomendacion: "Definir criterios de declaracion de incidentes y registrar alertas con su analisis."
+    regla:
+      tipo: patron_con_justicia
+      patrones_positivos: [alert_raised, incident_declared]
+      patron_oportunidad: auth_failures_burst
+
+  - id: CRI-RS-01
+    version: 1
+    titulo: "Plan de respuesta con clasificacion y escalamiento"
+    tipo: mixto
+    funcion: RS
+    categorias: [RS.MA]
+    subcategorias: [RS.MA-01, RS.MA-02, RS.MA-03, RS.MA-04]
+    peso: 5
+    ai_adjustable: true
+    evidencias: [log.pattern@1, log.window@1, doc.claim@1]
+    recomendacion: "Documentar y ensayar el plan de respuesta incluyendo escalamiento y criterios de prioridad."
+    regla:
+      tipo: patron_con_justicia
+      patrones_positivos: [escalation_done]
+      patron_oportunidad: incident_declared
+
+  - id: CRI-RC-02
+    version: 1
+    titulo: "Verificacion de integridad de backups"
+    tipo: mixto
+    funcion: RC
+    categorias: [RC.RP]
+    subcategorias: [RC.RP-03]
+    peso: 4
+    ai_adjustable: true
+    evidencias: [log.pattern@1, log.window@1, doc.claim@1]
+    recomendacion: "Verificar integridad de backups antes de restaurar y registrar la prueba."
+    regla:
+      tipo: restauracion_verificada
+
+  - id: CRI-RC-03
+    version: 1
+    titulo: "Restauracion verificada y comunicacion de recuperacion"
+    tipo: mixto
+    funcion: RC
+    categorias: [RC.RP, RC.CO]
+    subcategorias: [RC.RP-05, RC.CO-03]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [log.pattern@1, log.window@1, doc.claim@1]
+    recomendacion: "Confirmar operacion normal tras restaurar y comunicar el estado a los interesados."
+    regla:
+      tipo: comunicacion_recuperacion

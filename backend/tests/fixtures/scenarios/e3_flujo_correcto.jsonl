@@ -1,0 +1,4 @@
+{"event_id": "e3-001", "event_time": "2026-09-20T10:00:00Z", "tipo": "restore_exercise_started", "recurso": "bd-principal", "scope": "entorno:produccion", "actor": "equipo-infra", "detalle": {"backup": "diario"}}
+{"event_id": "e3-002", "event_time": "2026-09-20T10:25:00Z", "tipo": "restore_exercise_run", "recurso": "bd-principal", "scope": "entorno:produccion", "actor": "equipo-infra", "detalle": {"resultado": "ok", "rto_minutos": 25}}
+{"event_id": "e3-003", "event_time": "2026-09-20T10:40:00Z", "tipo": "restore_verified", "recurso": "bd-principal", "scope": "entorno:produccion", "actor": "equipo-infra", "detalle": {"integridad": "ok", "servicio": "operativo"}}
+{"event_id": "e3-004", "event_time": "2026-09-20T10:45:00Z", "tipo": "recovery_communicated", "recurso": "bd-principal", "scope": "entorno:produccion", "actor": "equipo-infra", "detalle": {"destinatarios": "stakeholders_internos"}}

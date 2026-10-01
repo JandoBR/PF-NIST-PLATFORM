@@ -13,6 +13,7 @@ from typing import Any
 from app.ai.adjustment import adjust
 from app.ai.client import AIClient
 from app.evaluation.rules import (
+    de02_event_analysis,
     gv01_policy,
     pr01_encryption,
     pr02_backup,
@@ -20,6 +21,9 @@ from app.evaluation.rules import (
     pr04_ssh_hardening,
     pr05_public_access,
     pr06_logging,
+    rc02_backup_verification,
+    rc03_recovery_communication,
+    rs01_response_plan,
 )
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.loader import Methodology
@@ -35,6 +39,10 @@ _RULES: dict[str, RuleFn] = {
     pr04_ssh_hardening.CRITERION_ID: pr04_ssh_hardening.evaluate,
     pr05_public_access.CRITERION_ID: pr05_public_access.evaluate,
     pr06_logging.CRITERION_ID: pr06_logging.evaluate,
+    de02_event_analysis.CRITERION_ID: de02_event_analysis.evaluate,
+    rs01_response_plan.CRITERION_ID: rs01_response_plan.evaluate,
+    rc02_backup_verification.CRITERION_ID: rc02_backup_verification.evaluate,
+    rc03_recovery_communication.CRITERION_ID: rc03_recovery_communication.evaluate,
 }
 
 

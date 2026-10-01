@@ -18,6 +18,10 @@ def test_loads_expected_criteria():
         "CRI-PR-04",
         "CRI-PR-05",
         "CRI-PR-06",
+        "CRI-DE-02",
+        "CRI-RS-01",
+        "CRI-RC-02",
+        "CRI-RC-03",
     }
     assert methodology.settings.ia.alpha == 0.25
     assert methodology.settings.ia.divergencia_maxima == 20

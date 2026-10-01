@@ -1,0 +1,3 @@
+{"event_id": "e2-001", "event_time": "2026-09-20T03:14:00Z", "tipo": "incident_declared", "recurso": "srv-app-01", "scope": "entorno:produccion", "actor": "sistema-deteccion", "detalle": {"criterio": "accesos_fallidos_mas_exito_anomalo"}}
+{"event_id": "e2-002", "event_time": "2026-09-20T03:20:00Z", "tipo": "escalation_done", "recurso": "srv-app-01", "scope": "entorno:produccion", "actor": "responsable-seguridad", "detalle": {"nivel": "responsable_de_seguridad"}}
+{"event_id": "e2-003", "event_time": "2026-09-20T03:35:00Z", "tipo": "containment_done", "recurso": "srv-app-01", "scope": "entorno:produccion", "actor": "responsable-seguridad", "detalle": {"accion": "bloqueo_ip_y_rotacion_credenciales"}}
