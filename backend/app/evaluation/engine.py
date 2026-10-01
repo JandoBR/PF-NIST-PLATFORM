@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from app.evaluation.rules import (
+    gv01_policy,
     pr01_encryption,
     pr02_backup,
     pr03_admin_access,
@@ -23,6 +24,7 @@ from app.schemas.evidence import EvidenceInstance
 RuleFn = Callable[[list[EvidenceInstance]], CriterionResult]
 
 _RULES: dict[str, RuleFn] = {
+    gv01_policy.CRITERION_ID: gv01_policy.evaluate,
     pr01_encryption.CRITERION_ID: pr01_encryption.evaluate,
     pr02_backup.CRITERION_ID: pr02_backup.evaluate,
     pr03_admin_access.CRITERION_ID: pr03_admin_access.evaluate,

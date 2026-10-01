@@ -1,9 +1,14 @@
-"""CLI de demo del nucleo determinista: Terraform -> evidencia -> criterios -> agregados -> Tier.
+"""CLI de demo del nucleo determinista: Terraform/documentos -> evidencia -> criterios ->
+agregados -> Tier.
 
 No es la API (doc 04 §6, deliberadamente pospuesta). Permite mostrar el motor de evaluacion
-funcionando de punta a punta sin base de datos, Redis ni IA:
+funcionando de punta a punta sin base de datos ni Redis:
 
-    uv run python -m app.main tests/fixtures/terraform/good --scope entorno:produccion
+    uv run python -m app.main --terraform tests/fixtures/terraform/good \
+        --documents tests/fixtures/documents
+
+Sin `DEEPSEEK_API_KEY` en el entorno, la extraccion documental se omite y el sistema sigue
+funcionando con los criterios tecnicos (doc 05 §7, principio de degradacion).
 """
 
 from __future__ import annotations
@@ -11,22 +16,55 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from app.adapters.documents.adapter import DocumentAdapter
 from app.adapters.terraform.adapter import TerraformAdapter
+from app.ai.client import build_default_client
 from app.evaluation import aggregation, engine, tier
-from app.methodology.loader import load_methodology
+from app.methodology.loader import Methodology, load_methodology
+from app.schemas.evidence import EvidenceInstance
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def run(terraform_path: Path, scope: str) -> None:
-    methodology = load_methodology(REPO_ROOT / "methodology")
+def _tipos_afirmacion_solicitados(methodology: Methodology) -> list[str]:
+    tipos: set[str] = set()
+    for criterio in methodology.criterios.values():
+        tipos.update(criterio.regla.get("tipos_afirmacion", []))
+    return sorted(tipos)
 
-    adapter = TerraformAdapter(source_id=f"cli:{terraform_path}", scope=scope)
-    evidence = adapter.parse_path(terraform_path)
-    print(
-        f"Evidencia recolectada: {len(evidence)} instancias "
-        f"({methodology.methodology_version})\n"
-    )
+
+def _collect_evidence(
+    methodology: Methodology, terraform_path: Path | None, documents_path: Path | None, scope: str
+) -> list[EvidenceInstance]:
+    evidence: list[EvidenceInstance] = []
+
+    if terraform_path is not None:
+        adapter = TerraformAdapter(source_id=f"cli:{terraform_path}", scope=scope)
+        tf_evidence = adapter.parse_path(terraform_path)
+        evidence.extend(tf_evidence)
+        print(f"Terraform: {len(tf_evidence)} instancias de evidencia.")
+
+    if documents_path is not None:
+        client = build_default_client()
+        ia_activa = type(client).__name__ == "DeepSeekClient"
+        print(f"IA: {'activa (DeepSeek)' if ia_activa else 'no configurada, extraccion omitida'}.")
+
+        adapter = DocumentAdapter(
+            client, methodology, source_id=f"cli:{documents_path}", scope=scope
+        )
+        doc_evidence = adapter.parse_path(
+            documents_path, tipos_solicitados=_tipos_afirmacion_solicitados(methodology)
+        )
+        evidence.extend(doc_evidence)
+        print(f"Documentos: {len(doc_evidence)} instancias de evidencia.")
+
+    return evidence
+
+
+def run(terraform_path: Path | None, documents_path: Path | None, scope: str) -> None:
+    methodology = load_methodology(REPO_ROOT / "methodology")
+    evidence = _collect_evidence(methodology, terraform_path, documents_path, scope)
+    print(f"\nTotal evidencia: {len(evidence)} instancias ({methodology.methodology_version})\n")
 
     results = engine.evaluate_all(methodology, evidence)
     print("Resultados por criterio:")
@@ -60,10 +98,17 @@ def run(terraform_path: Path, scope: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("terraform_path", type=Path, help="Archivo o directorio .tf a analizar")
+    parser.add_argument("--terraform", type=Path, default=None, help="Archivo o directorio .tf")
+    parser.add_argument(
+        "--documents", type=Path, default=None, help="Archivo o directorio de documentos"
+    )
     parser.add_argument("--scope", default="entorno:produccion")
     args = parser.parse_args()
-    run(args.terraform_path, args.scope)
+
+    if args.terraform is None and args.documents is None:
+        parser.error("se requiere --terraform y/o --documents")
+
+    run(args.terraform, args.documents, args.scope)
 
 
 if __name__ == "__main__":

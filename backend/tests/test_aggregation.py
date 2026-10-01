@@ -95,6 +95,17 @@ def test_tier_is_not_estimable_without_t2_indicator_criteria(methodology):
     assert estimate.tier is None
 
 
+def test_tier_is_partial_when_only_one_of_three_t2_indicators_exists(methodology):
+    # CRI-GV-01 ya esta en el catalogo; CRI-GV-02 y CRI-ID-03 todavia no tienen adaptador.
+    results = [_result("CRI-GV-01", Estado.EVALUADO, 100)]
+    estimate = tier.estimate_tier(methodology.settings.tier, results)
+
+    assert estimate.estimable is True
+    assert estimate.tier == 1
+    assert any("CRI-GV-02" in f for f in estimate.faltantes)
+    assert any("CRI-ID-03" in f for f in estimate.faltantes)
+
+
 def test_tier_2_met_with_minimum_indicators():
     from app.methodology.schemas import TierSettings
 

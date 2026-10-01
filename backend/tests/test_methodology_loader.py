@@ -11,6 +11,7 @@ def test_loads_expected_criteria():
     methodology = load_methodology(METHODOLOGY_DIR)
 
     assert set(methodology.criterios) == {
+        "CRI-GV-01",
         "CRI-PR-01",
         "CRI-PR-02",
         "CRI-PR-03",

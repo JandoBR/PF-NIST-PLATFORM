@@ -1,8 +1,24 @@
 # Catalogo de criterios (docs/03-matriz-de-criterios.md). Subconjunto inicial: los 5 criterios
-# PROTECT que el adaptador de Terraform puede evaluar por si solo, sin documentos ni Ansible.
+# PROTECT que el adaptador de Terraform puede evaluar por si solo, mas CRI-GV-01, el primer
+# criterio puramente documental (ejercita U1 - extraccion con IA, docs/05 §2).
 # Ampliar este archivo y agregar su modulo en app/evaluation/rules van siempre juntos (D5).
 version: 1
 criterios:
+  - id: CRI-GV-01
+    version: 1
+    titulo: "Politica de ciberseguridad establecida y revisada"
+    tipo: proceso
+    funcion: GV
+    categorias: [GV.PO]
+    subcategorias: [GV.PO-01, GV.PO-02]
+    peso: 5
+    ai_adjustable: true
+    evidencias: [doc.claim@1]
+    recomendacion: "Formalizar/aprobar la politica; definir ciclo de revision y registrar la ultima revision."
+    regla:
+      tipo: politica_documental
+      tipos_afirmacion: [policy_exists, policy_review]
+
   - id: CRI-PR-01
     version: 1
     titulo: "Cifrado de datos en reposo"
