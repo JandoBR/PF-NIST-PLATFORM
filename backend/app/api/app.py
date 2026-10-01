@@ -14,7 +14,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import routes_assessments, routes_incidents, routes_methodology, routes_orgs
+from app.api import (
+    routes_assessments,
+    routes_incidents,
+    routes_jobs,
+    routes_methodology,
+    routes_orgs,
+)
 from app.api.errors import register_exception_handlers
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -49,3 +55,4 @@ app.include_router(routes_methodology.router)
 app.include_router(routes_orgs.router)
 app.include_router(routes_incidents.router)
 app.include_router(routes_assessments.router)
+app.include_router(routes_jobs.router)

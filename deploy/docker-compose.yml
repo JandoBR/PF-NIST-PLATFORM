@@ -1,13 +1,18 @@
 # Despliegue del prototipo: docker compose -f deploy/docker-compose.yml up
-# Los Dockerfiles viven en backend/docker/ y asumen el contexto de build en la raiz del repo.
-# Copia deploy/.env.example a deploy/.env antes de usar.
+# Los Dockerfiles viven en backend/docker/ (y frontend/Dockerfile) y asumen el contexto de
+# build en la raiz del repo. Copia deploy/.env.example a deploy/.env antes de usar.
 #
-# Sin `worker-core`/`worker-logs` todavia (ver docs/09 §15): no existe un `app.workers.*` que
-# consuma colas de Redis -- ese modulo nunca se construyo porque todo el pipeline (evaluacion,
-# extraccion, ingesta de eventos, motor operativo) corre sincronico dentro de `api` o de la CLI,
-# que es exactamente la contingencia que docs/04 §10 y docs/07 §5 ya daban por aceptable sin
-# Redis. Redis igual se levanta aqui (sano, con healthcheck) para no reescribir esto cuando
-# existan consumidores reales; `api` no lo usa todavia.
+# `worker-core`/`worker-logs` son reales (docs/09 §16): consumen las colas de Redis
+# (`pf:jobs:core`/`pf:jobs:logs`) que `api` llena al crear/reevaluar un assessment o ingerir
+# eventos -- esos tres endpoints ya no corren el pipeline dentro del request, devuelven
+# `job_id` y el cliente sondea `GET /jobs/{job_id}`.
+#
+# `api` guarda los archivos subidos en `/app/backend/.data/uploads` (y eventos en
+# `.data/events`) para que `reevaluate`/el worker los puedan releer despues (ver UPLOADS_DIR en
+# app/api/routes_assessments.py) -- eso solo funciona entre contenedores DISTINTOS si comparten
+# el mismo volumen, asi que `backend_data` esta montado en los tres (`api`, `worker-core`,
+# `worker-logs`). Sin esto, el job se encola bien pero el worker no encuentra el archivo
+# (se detecto real: el primer `docker compose up` de este cambio fallo exactamente asi).
 
 services:
   db:
@@ -50,13 +55,15 @@ services:
     build:
       context: ..
       dockerfile: backend/docker/Dockerfile.api
-    environment:
+    environment: &backend_env
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pf}:${POSTGRES_PASSWORD:-pf}@db:5432/${POSTGRES_DB:-pf}
       REDIS_URL: redis://redis:6379/0
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+    volumes:
+      - backend_data:/app/backend/.data
     ports:
       - "8000:8000"
     depends_on:
@@ -67,12 +74,52 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  # frontend (opcional, fuera del foco inicial)
-  # frontend:
-  #   build: { context: ../frontend }
-  #   ports: ["5173:5173"]
-  #   depends_on: [api]
+  worker-core:
+    build:
+      context: ..
+      dockerfile: backend/docker/Dockerfile.worker
+    command: ["python", "-m", "app.workers.core"]
+    environment: *backend_env
+    volumes:
+      - backend_data:/app/backend/.data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker-logs:
+    build:
+      context: ..
+      dockerfile: backend/docker/Dockerfile.worker
+    command: ["python", "-m", "app.workers.logs"]
+    environment: *backend_env
+    volumes:
+      - backend_data:/app/backend/.data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        # Alcanzable desde el NAVEGADOR del usuario, no desde la red interna de docker-compose
+        # -- por eso "localhost:8000" (el puerto publicado de `api`), nunca "http://api:8000".
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
 
 volumes:
   pgdata:
   redisdata:
+  backend_data:

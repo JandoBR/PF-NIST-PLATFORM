@@ -1,11 +1,13 @@
 import type {
+  AssessmentAccepted,
   AssessmentDetail,
   ComparisonOut,
   CriterionResult,
+  EventsAccepted,
   EvidenceInstance,
   Finding,
   IncidentOut,
-  IngestEventsResponse,
+  JobOut,
   MethodologyCatalog,
   OrganizationOut,
   Plan,
@@ -86,7 +88,7 @@ export const ingestEvents = (
   if (opts.useAi) params.set('use_ai', 'true');
   if (opts.confirmLiveAi) params.set('confirm_live_ai', 'true');
   const qs = params.toString() ? `?${params.toString()}` : '';
-  return request<IngestEventsResponse>(`/orgs/${orgId}/events${qs}`, {
+  return request<EventsAccepted>(`/orgs/${orgId}/events${qs}`, {
     method: 'POST',
     body: form,
   });
@@ -123,7 +125,7 @@ export const createAssessment = (input: CreateAssessmentInput) => {
   for (const f of input.terraformFiles ?? []) form.append('terraform_files', f);
   for (const f of input.ansibleFiles ?? []) form.append('ansible_files', f);
   for (const f of input.documentFiles ?? []) form.append('document_files', f);
-  return request<AssessmentDetail>('/assessments', { method: 'POST', body: form });
+  return request<AssessmentAccepted>('/assessments', { method: 'POST', body: form });
 };
 
 export const listAssessments = () => request<AssessmentDetail[]>('/assessments');
@@ -157,8 +159,30 @@ export const reevaluateAssessment = (
   if (opts.confirmLiveAi) params.set('confirm_live_ai', 'true');
   if (opts.context) params.set('context', JSON.stringify(opts.context));
   const qs = params.toString() ? `?${params.toString()}` : '';
-  return request<AssessmentDetail>(`/assessments/${id}/reevaluate${qs}`, { method: 'POST' });
+  return request<AssessmentAccepted>(`/assessments/${id}/reevaluate${qs}`, { method: 'POST' });
 };
 
 export const compareAssessments = (idA: string, idB: string) =>
   request<ComparisonOut>(`/assessments/${idA}/compare/${idB}`);
+
+// --- Jobs (POST /assessments, /assessments/{id}/reevaluate y /orgs/{id}/events son
+// asincronicos: devuelven un job_id que hay que sondear -- ver docs/09 §16) -------------------
+
+export const getJob = (jobId: string) => request<JobOut>(`/jobs/${jobId}`);
+
+const TERMINAL_JOB_STATES: JobOut['estado'][] = ['completado', 'fallido'];
+
+/** Sondea `GET /jobs/{id}` hasta que el job termine (completado o fallido). `onTick` se llama
+ * en cada lectura, incluida la final, para que la UI pueda mostrar progreso en vivo. */
+export async function pollJob(
+  jobId: string,
+  opts: { intervalMs?: number; onTick?: (job: JobOut) => void } = {}
+): Promise<JobOut> {
+  const intervalMs = opts.intervalMs ?? 800;
+  while (true) {
+    const job = await getJob(jobId);
+    opts.onTick?.(job);
+    if (TERMINAL_JOB_STATES.includes(job.estado)) return job;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}

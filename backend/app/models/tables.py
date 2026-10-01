@@ -219,3 +219,31 @@ class Incident(Base):
 
     organization: Mapped[Organization] = relationship(back_populates="incidents")
     plans: Mapped[list[PlanRow]] = relationship(back_populates="incident")
+
+
+class Job(Base):
+    """Trabajo en cola (docs/04 §4, columnas `id, assessment_id?, org_id?, tipo, estado,
+    progreso, error, creado_en, tomado_en`). `tipo` es `assessment_run` (pipeline completo de
+    evaluacion, consumido por `app/workers/core.py`) o `event_ingest` (pipeline de eventos,
+    consumido por `app/workers/logs.py`). El mensaje en Redis solo lleva el `id`; este registro
+    es la fuente de verdad del estado, para que `GET /jobs/{id}` no dependa de que el mensaje
+    siga en la cola."""
+
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    tipo: Mapped[str] = mapped_column(String)
+    estado: Mapped[str] = mapped_column(String, default="pendiente")
+    progreso: Mapped[int] = mapped_column(default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assessment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("assessments.id"), nullable=True
+    )
+    org_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    creado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    tomado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    actualizado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )

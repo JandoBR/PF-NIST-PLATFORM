@@ -1,6 +1,10 @@
-"""POST/GET /assessments y sub-recursos (docs/04 §6), fusionando crear+subir+ejecutar en un
-solo endpoint sincronico — ver docs/09 §13 para la decision (sin Redis, no hay job_id real que
-devolver todavia).
+"""POST/GET /assessments y sub-recursos (docs/04 §6).
+
+`POST /assessments` y `POST /assessments/{id}/reevaluate` encolan el pipeline pesado en
+`worker-core` en vez de correrlo dentro del request (docs/09 §16): crean el `Assessment` en
+estado `pendiente`, encolan un job `assessment_run` y devuelven 202 con `job_id`. El cliente
+sondea `GET /jobs/{job_id}` y, cuando `estado == "completado"`, pide `GET /assessments/{id}`
+para el detalle real -- el `Job` nunca carga el resultado, solo estado/progreso/error.
 """
 
 from __future__ import annotations
@@ -10,14 +14,22 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
+import redis
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.ai.client import build_default_client
 from app.ai.guard import check_live_ai_guard
-from app.api.deps import get_methodology, get_session
-from app.api.schemas import AssessmentDetail, ComparisonDiffOut, ComparisonOut
+from app.api.deps import get_methodology, get_redis, get_session
+from app.api.schemas import (
+    AssessmentAccepted,
+    AssessmentDetail,
+    ComparisonDiffOut,
+    ComparisonOut,
+)
 from app.core import assessment_service as svc
+from app.core import jobs as job_service
+from app.core.queue import QUEUE_CORE, enqueue
 from app.evaluation import aggregation, tier
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
@@ -80,7 +92,7 @@ async def _save_uploads(files: list[UploadFile] | None, tipo: str) -> Path | Non
     return upload_dir
 
 
-@router.post("/assessments", response_model=AssessmentDetail)
+@router.post("/assessments", response_model=AssessmentAccepted, status_code=202)
 async def create_assessment(
     org_name: str = Form(...),
     scope: str = Form("entorno:produccion"),
@@ -93,7 +105,8 @@ async def create_assessment(
     document_files: list[UploadFile] | None = File(None),
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
-) -> AssessmentDetail:
+    redis_client: redis.Redis = Depends(get_redis),
+) -> AssessmentAccepted:
     if not (terraform_files or ansible_files or document_files):
         raise HTTPException(
             status_code=422,
@@ -109,26 +122,36 @@ async def create_assessment(
     )
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
-    client = build_default_client() if ai_requested else None
 
     terraform_path = await _save_uploads(terraform_files, "terraform")
     ansible_path = await _save_uploads(ansible_files, "ansible")
     documents_path = await _save_uploads(document_files, "documents")
 
-    assessment = svc.run_assessment(
-        session,
-        methodology,
-        org_name=org_name,
-        scope=scope,
-        terraform_path=terraform_path,
-        ansible_path=ansible_path,
-        documents_path=documents_path,
-        ai_client=client,
-        apply_ai_adjustment=ai_adjust,
-        context=json.loads(context),
+    assessment = svc.create_pending_assessment(
+        session, methodology, org_name=org_name, scope=scope
+    )
+    job = job_service.create_job(session, "assessment_run", assessment_id=assessment.id)
+    enqueue(
+        redis_client,
+        QUEUE_CORE,
+        {
+            "job_id": job.id,
+            "assessment_id": assessment.id,
+            "terraform_path": str(terraform_path) if terraform_path else None,
+            "ansible_path": str(ansible_path) if ansible_path else None,
+            "documents_path": str(documents_path) if documents_path else None,
+            "ai_requested": ai_requested,
+            "apply_ai_adjustment": ai_adjust,
+            "context": json.loads(context),
+        },
     )
 
-    return _assessment_detail(session, methodology, assessment)
+    return AssessmentAccepted(
+        assessment_id=assessment.id,
+        org_id=assessment.org_id,
+        org_nombre=assessment.organization.nombre,
+        job_id=job.id,
+    )
 
 
 @router.get("/assessments", response_model=list[AssessmentDetail])
@@ -200,7 +223,9 @@ def create_plans(
     return svc.load_plans(session, assessment_id)
 
 
-@router.post("/assessments/{assessment_id}/reevaluate", response_model=AssessmentDetail)
+@router.post(
+    "/assessments/{assessment_id}/reevaluate", response_model=AssessmentAccepted, status_code=202
+)
 def reevaluate_assessment(
     assessment_id: str,
     ai_adjust: bool = False,
@@ -208,23 +233,37 @@ def reevaluate_assessment(
     confirm_live_ai: bool = False,
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
-) -> AssessmentDetail:
+    redis_client: redis.Redis = Depends(get_redis),
+) -> AssessmentAccepted:
     guard_error = check_live_ai_guard(
         ai_adjust, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai
     )
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
-    client = build_default_client() if ai_adjust else None
 
-    new_assessment = svc.reevaluate(
-        session,
-        methodology,
-        assessment_id,
-        ai_client=client,
-        apply_ai_adjustment=ai_adjust,
-        context=json.loads(context),
+    new_assessment, paths = svc.create_pending_reevaluation(session, methodology, assessment_id)
+    job = job_service.create_job(session, "assessment_run", assessment_id=new_assessment.id)
+    enqueue(
+        redis_client,
+        QUEUE_CORE,
+        {
+            "job_id": job.id,
+            "assessment_id": new_assessment.id,
+            "terraform_path": str(paths["terraform_path"]) if paths["terraform_path"] else None,
+            "ansible_path": str(paths["ansible_path"]) if paths["ansible_path"] else None,
+            "documents_path": str(paths["documents_path"]) if paths["documents_path"] else None,
+            "ai_requested": ai_adjust,
+            "apply_ai_adjustment": ai_adjust,
+            "context": json.loads(context),
+        },
     )
-    return _assessment_detail(session, methodology, new_assessment)
+
+    return AssessmentAccepted(
+        assessment_id=new_assessment.id,
+        org_id=new_assessment.org_id,
+        org_nombre=new_assessment.organization.nombre,
+        job_id=job.id,
+    )
 
 
 @router.get("/assessments/{assessment_id}/compare/{other_id}", response_model=ComparisonOut)

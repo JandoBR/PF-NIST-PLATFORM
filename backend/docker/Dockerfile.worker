@@ -1,22 +1,27 @@
-# Imagen de los workers (objetivo). El comando se define en el compose:
-#   worker-core -> python -m app.workers.core
-#   worker-logs -> python -m app.workers.logs
-# Construir desde la raíz del proyecto:
-#   docker build -f backend/docker/Dockerfile.worker -t pf-worker .
+# Imagen de los workers (worker-core, worker-logs). Construir desde la raiz del proyecto:
+#   docker build -f backend/docker/Dockerfile.worker -t pf-worker ..
+#
+# Misma imagen base que Dockerfile.api (mismo `uv sync`, sin [build-system]): lo unico que
+# cambia entre worker-core y worker-logs es el `command:` de cada servicio en docker-compose.yml,
+# asi que un solo Dockerfile basta para ambos.
 
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
-WORKDIR /app
-
-COPY backend/pyproject.toml backend/pyproject.toml
-COPY backend/ backend/
-
-RUN pip install --no-cache-dir -e backend
+RUN pip install --no-cache-dir uv
 
 WORKDIR /app/backend
 
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY backend/ .
+
+ENV PATH="/app/backend/.venv/bin:${PATH}"
+
+# Overridden per-service por docker-compose.yml (`app.workers.core` o `app.workers.logs`).
 CMD ["python", "-m", "app.workers.core"]

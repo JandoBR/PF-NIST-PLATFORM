@@ -1,5 +1,15 @@
 import { useMemo, useState } from 'react';
-import { Gauge, Target, ShieldQuestion, Filter, Search, ChevronRight, Info } from 'lucide-react';
+import {
+  Gauge,
+  Target,
+  ShieldQuestion,
+  Filter,
+  Search,
+  ChevronRight,
+  Info,
+  RefreshCw,
+  Loader2,
+} from 'lucide-react';
 import type { AssessmentDetail, CriterionResult, Estado } from '@/lib/types';
 import { FUNCTION_NAMES, FUNCTION_ORDER, TIER_LABELS } from '@/lib/types';
 import { ESTADO_META } from '@/lib/ui';
@@ -16,6 +26,8 @@ const FUNCTION_ACCENTS: Record<string, string> = {
 interface DashboardProps {
   assessment: AssessmentDetail;
   criteria: CriterionResult[];
+  onReevaluate: () => void;
+  reevaluating: boolean;
 }
 
 const FILTERS: { key: Estado | 'all'; label: string }[] = [
@@ -27,7 +39,12 @@ const FILTERS: { key: Estado | 'all'; label: string }[] = [
   { key: 'error', label: 'Error' },
 ];
 
-export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
+export function MaturityDashboard({
+  assessment,
+  criteria,
+  onReevaluate,
+  reevaluating,
+}: DashboardProps) {
   const [estadoFilter, setEstadoFilter] = useState<Estado | 'all'>('all');
   const [funcFilter, setFuncFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
@@ -59,6 +76,27 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-500">
+          {assessment.estado === 'en_progreso' || assessment.estado === 'pendiente'
+            ? 'Evaluación en curso…'
+            : `Evaluación ${assessment.estado}`}
+        </p>
+        <button
+          onClick={onReevaluate}
+          disabled={reevaluating || assessment.estado !== 'completada'}
+          className="btn-ghost border border-white/[0.06] text-xs"
+          title="Vuelve a correr el pipeline sobre las mismas fuentes subidas, para reflejar correcciones"
+        >
+          {reevaluating ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
+          Reevaluar
+        </button>
+      </div>
+
       {/* Tarjetas de resumen */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard

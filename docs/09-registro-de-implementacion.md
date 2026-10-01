@@ -335,10 +335,9 @@ completo, para no tener que releer cada sección arriba:
 | Sin cooldown/rate-limit real (O4) | Motor operativo (§10) | Solo idempotencia por `correlation_key`; falta ventana de tiempo / límite por org-criterio |
 | Una ventana = un lote ingerido, sin ventanas deslizantes | Motor operativo (§10) | Stream continuo real es evolución futura (doc 08 §11) |
 | `log.window` no persistido (se recalcula desde `Event`) | Motor operativo (§10) | Mismo patrón que `score_aggregates`/`tier_estimates`/`findings` |
-| Sin `POST /assessments/{id}/sources`, `/run` ni `/jobs/{id}` | API (§12) | Fusionados en un solo `POST /assessments` síncrono; separarlos exige una cola de trabajos real (doc 04 §11) |
+| Sin `POST /assessments/{id}/sources` ni `/run` separados | API (§12), Workers (§16) | `GET /jobs/{id}` ya existe y es real (§16); lo que falta es solo subir evidencia y lanzar la corrida como dos pasos en vez de uno |
 | `app/api/app.py` en vez de `app/main.py` (doc 04 §7 asumía este último) | API (§12) | `app/main.py` ya es la CLI; no se desplaza |
-| Sin `worker-core`/`worker-logs`; Redis levantado pero no consumido | Docker (§14) | Requiere `app/workers/` real consumiendo colas; ver §16 |
-| Pipeline sigue síncrono incluso en Docker | Docker (§14) | Mismo "respaldo sin Redis" de doc 04 §10/doc 07 §5, ahora reproducible con Postgres real |
+| Sin consumidores de `log_ingest`/`log_aggregate` separados (una sola cola/job `event_ingest`) | Motor operativo (§10), Workers (§16) | Simplificación deliberada: el pipeline de eventos ya corre completo (patrones→disparadores→incidentes) en un solo job porque así ya estaba escrito en `assessment_service.ingest_events`; partirlo en dos jobs es evolución, no un gap funcional |
 
 ## 12. API REST (FastAPI)
 
@@ -502,14 +501,99 @@ incidentes esperados (D1/D3/D4) con el log "con incidentes" y cero incidentes co
 correcto". Preflight CORS verificado contra el origen de Vite. El dev server de Vite se levantó
 y sirvió tanto la app como los fixtures estáticos de `/demo/`.
 
-## 16. Qué sigue
+## 16. Workers reales, jobs asíncronos, compose completo, frontend containerizado
 
-Nada pendiente de los 10 cortes planeados ni del frontend conectado a la API real (§15). Lo que
-sigue, si se retoma este proyecto, es evolución real: `app/workers/` consumiendo colas de Redis
-(`log_ingest`, `log_aggregate`, `ops_evaluate`, los tipos de `job` ya definidos en docs/04 §5)
-para que `POST /assessments/{id}/run` deje de ser síncrono — y recién ahí tendría sentido
-reintroducir `worker-core`/`worker-logs` al compose. En el frontend: pantallas para
-`reevaluate`/`compare`, y nginx + dominio real (momento en el que `VITE_API_BASE_URL` y
-`CORS_ORIGINS` ya están pensados para ese cambio). El resto de las simplificaciones del §11
-(criticidad de activo, tabla `ai_adjustments`, cooldown real del motor operativo, etc.) son
+**Qué se construyó:** lo que §15 había dejado como evolución futura — `app/workers/` consumiendo
+colas de Redis de verdad, no un "pendiente" en la lista:
+
+- `app/core/queue.py`: `enqueue`/`dequeue_blocking` sobre una lista de Redis (`RPUSH`/`BLPOP`),
+  no Streams con consumer groups (docs/04 habla de eso para P2/P7 — autoscaling, que no es el
+  alcance de este prototipo de un solo worker por cola; nada en el contrato de `Job` depende de
+  como viaja el mensaje, así que subir a Streams después no rompe nada).
+- Tabla `jobs` (modelo `Job`, migración `0b4ecfb6901a`) con exactamente las columnas de docs/04
+  §4 (`id, assessment_id?, org_id?, tipo, estado, progreso, error, creado_en, tomado_en`, más
+  `actualizado_en`). `app/core/jobs.py` es su CRUD, sin saber nada de Redis.
+- `app/workers/core.py` (cola `pf:jobs:core`, job `assessment_run`) y `app/workers/logs.py`
+  (cola `pf:jobs:logs`, job `event_ingest`). Cada uno separa `process_message` (logica pura:
+  sesión + metodología + mensaje → resultado) de `main` (el loop real).
+- `app/core/assessment_service.py` se partió en `create_pending_assessment` +
+  `run_pending_assessment` (y `create_pending_reevaluation` para el caso de reevaluar): crear el
+  registro ya no implica correrlo. `run_assessment`/`reevaluate` (CLI, tests) siguen siendo el
+  atajo síncrono de siempre, implementado en términos de las mismas funciones nuevas — cero
+  cambio de comportamiento ahí.
+- `POST /assessments`, `POST /assessments/{id}/reevaluate` y `POST /orgs/{id}/events` ya no
+  corren el pipeline en el request: crean el `Assessment`/leen el org, encolan un job y
+  devuelven **202** con `job_id` (`AssessmentAccepted`/`EventsAccepted`). Nuevo
+  `GET /jobs/{job_id}` para sondear. El cliente, al ver `estado == "completado"`, pide
+  `GET /assessments/{id}` (o `GET /orgs/{id}/incidents`) para el resultado real — el `Job` nunca
+  carga el resultado, solo estado/progreso/error.
+- Frontend: `lib/api.ts` gana `getJob`/`pollJob`; `ContextSelector` (crear evaluación) y
+  `ThreatSimulation` (ingesta de eventos) sondean el job real en vez de esperar una respuesta
+  síncrona, mostrando "En cola…"/"Evaluando…" en vivo. Nuevo botón "Reevaluar" en el dashboard
+  (encola, sondea, reemplaza la evaluación activa) y una pestaña "Comparar"
+  (`CompareAssessments.tsx`: elige dos evaluaciones completadas de la misma organización y
+  muestra el diff de `GET /assessments/{a}/compare/{b}`) — los dos huecos que quedaban abiertos
+  en §15.
+- `deploy/docker-compose.yml` gana `worker-core`, `worker-logs` (reales, no el comentario que
+  había en §14) y `frontend` (nuevo `frontend/Dockerfile`: build de Vite + `serve` del estático,
+  sin nginx a propósito — ver §17). `VITE_API_BASE_URL` es un build-arg, no una env var de
+  runtime (Vite la incrusta en el bundle): tiene que ser una URL alcanzable desde el navegador
+  (`http://localhost:8000`), nunca el nombre del servicio en la red interna de compose
+  (`http://api:8000`, que el navegador no puede resolver).
+
+**Decisión de alcance:** `POST /assessments/{id}/plans` (generar planes) se queda síncrono a
+propósito. Es una sola pasada de redacción (plantilla o un prompt corto por hallazgo), no el
+pipeline de adaptadores+evaluación; meterlo en la cola solo para ser consistente no pagaba su
+complejidad en este corte.
+
+**Dos bugs reales encontrados al verificar contra Docker de verdad (no contra los tests, que
+usan un `FakeRedis` en memoria — ver más abajo):**
+
+1. `BLPOP` contra el Redis real del compose lanzaba `redis.exceptions.TimeoutError` en vez de
+   devolver `None` al agotar el timeout (el socket del cliente expira una fracción de segundo
+   antes de que llegue el nil del servidor — una red con latencia no nula, a diferencia de
+   `localhost` sin Docker de por medio, lo hace visible). Tumbaba `worker-core`/`worker-logs` al
+   primer ciclo vacío. Para el worker, "nada llegó en este ciclo" significa lo mismo venga como
+   `None` o como esta excepción, así que `dequeue_blocking` ahora atrapa el `TimeoutError` y lo
+   trata igual.
+2. Los archivos subidos (`backend/.data/uploads`, `.data/events`) vivían en el filesystem del
+   contenedor `api` — invisibles para `worker-core`/`worker-logs`, que son contenedores
+   *distintos*. Funcionaba por accidente mientras todo corría en un solo proceso síncrono (§14);
+   al volverse async con contenedores separados, el primer `assessment_run` real falló con
+   `FileNotFoundError`. Se agregó un volumen compartido (`backend_data`) montado en los tres
+   servicios.
+
+**Tests, sin depender de un Redis real para la suite por defecto:** `tests/conftest.py` agrega
+un `FakeRedis` (listas en memoria, solo `rpush`/`blpop`) que sobreescribe la dependencia
+`get_redis` de FastAPI — los tests de la API nunca necesitan un Redis corriendo; para simular
+"el worker ya procesó el job" simplemente drenan la cola falsa y llaman `process_message`
+directamente (`tests/conftest.py::run_pending_jobs`). `test_workers_core.py`/`test_workers_logs.py`
+prueban esa misma función sin pasar por la API. `test_queue.py` es la excepción: un round-trip
+contra un Redis *real*, que se salta limpiamente (`pytest.skip`) si no hay ninguno alcanzable —
+así la promesa de "la suite no depende de servicios externos" se mantiene intacta y, cuando sí
+hay un Redis (dev local con `redis-server`, o CI con un contenedor), se ejercita el camino real
+también. `flake.nix` ahora incluye `pkgs.redis` y `pkgs.nodejs_22` para dev local.
+
+**Verificado de verdad:** suite completa (`uv run pytest`, 193 tests + 2 de Redis real cuando
+hay uno disponible) y `ruff check` limpios. Y el verdadero criterio — `docker compose build` +
+`up` con los 7 servicios (`db`, `redis`, `migrate`, `api`, `worker-core`, `worker-logs`,
+`frontend`) reales: `POST /assessments` con el bundle "gaps" → `GET /jobs/{id}` pasando por
+`pendiente`→`en_progreso`→`completado` → `GET /assessments/{id}` con el resultado real;
+`POST /orgs/{id}/events` con el log "con incidentes" → job completado → 3 incidentes reales
+(D1/D3/D4); `POST /assessments/{id}/reevaluate` → nueva evaluación → `compare` mostrando el
+delta real (subió de 21.25 a 24.06 porque ya había eventos/patrones de la organización
+disponibles como evidencia de vigilancia, no por casualidad — exactamente el comportamiento que
+docs/08 §3 describe); el frontend en `http://localhost:5173` sirviendo el bundle con
+`localhost:8000` ya incrustado. `docker compose down` (sin `-v`) + `up` de nuevo: Alembic no
+reaplica nada y la evaluación anterior sigue ahí; `docker compose down -v` al final, sin dejar
+nada corriendo.
+
+## 17. Qué sigue
+
+Nada pendiente de los 10 cortes planeados, del frontend conectado a la API real (§15), ni de los
+workers/jobs asíncronos (§16). Lo único que falta, y deliberadamente fuera de este corte: nginx
++ dominio real. `VITE_API_BASE_URL` (build-arg del frontend) y `CORS_ORIGINS` (env var de la
+API) ya están pensados para ese cambio — es ajustar esos dos valores, no tocar código. El resto
+de las simplificaciones del §11 (criticidad de activo, tabla `ai_adjustments`, cooldown real del
+motor operativo, etc.) son
 ampliaciones independientes, ninguna bloquea a otra.

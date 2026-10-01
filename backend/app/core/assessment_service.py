@@ -1,13 +1,15 @@
 """Orquesta una evaluacion: adaptadores + motor + persistencia (docs/04 §5-§6).
 
-Sin cola de trabajos todavia: cada evaluacion corre sincronicamente en un solo proceso
-(docs/04 §10, "ejecucion sincrona de respaldo" sin Redis). `estado` solo distingue
-`completada` de `fallida`; los estados intermedios del ciclo de vida completo llegan
-cuando exista el worker.
+`create_pending_assessment`/`run_pending_assessment` separan "crear el registro" de "correr el
+pipeline pesado" (docs/09 §16): la API encola lo segundo en `app/workers/core.py` via Redis en
+vez de correrlo dentro del request. `run_assessment` sigue siendo el atajo sincronico que usan
+la CLI y los tests -- hace ambas cosas en un solo paso, sin tocar la cola. `estado` ahora pasa
+por `pendiente` -> `en_progreso` -> `completada`/`fallida`; antes solo distinguia las dos
+ultimas porque todo corria en un solo paso sincronico.
 
-`reevaluate` implementa "nueva evaluacion heredando fuentes" (docs/01 §10, docs/04 §5)
-re-leyendo las mismas rutas registradas en la evaluacion anterior, por lo que una
-correccion aplicada a esos mismos archivos se refleja en la siguiente evaluacion.
+`reevaluate`/`create_pending_reevaluation` implementan "nueva evaluacion heredando fuentes"
+(docs/01 §10, docs/04 §5) re-leyendo las mismas rutas registradas en la evaluacion anterior, por
+lo que una correccion aplicada a esos mismos archivos se refleja en la siguiente evaluacion.
 """
 
 from __future__ import annotations
@@ -178,12 +180,30 @@ def _collect_evidence_and_sources(
     return evidence, sources
 
 
-def run_assessment(
+def create_pending_assessment(
+    session: Session, methodology: Methodology, *, org_name: str, scope: str
+) -> Assessment:
+    """Crea el registro de `Assessment` sin ejecutar el pipeline todavia (docs/09 §16: la API
+    ahora encola la ejecucion pesada en vez de correrla en el request). Se usa tanto para una
+    evaluacion nueva como, con `create_pending_reevaluation`, para una reevaluacion."""
+
+    org = get_or_create_organization(session, org_name)
+    assessment = Assessment(
+        org_id=org.id,
+        estado="pendiente",
+        methodology_version=methodology.methodology_version,
+        scope=scope,
+    )
+    session.add(assessment)
+    session.commit()
+    return assessment
+
+
+def run_pending_assessment(
     session: Session,
     methodology: Methodology,
+    assessment_id: str,
     *,
-    org_name: str,
-    scope: str,
     terraform_path: Path | None = None,
     ansible_path: Path | None = None,
     documents_path: Path | None = None,
@@ -191,25 +211,27 @@ def run_assessment(
     apply_ai_adjustment: bool = False,
     context: dict[str, Any] | None = None,
 ) -> Assessment:
-    org = get_or_create_organization(session, org_name)
-    assessment = Assessment(
-        org_id=org.id,
-        estado="creada",
-        methodology_version=methodology.methodology_version,
-        scope=scope,
-    )
-    session.add(assessment)
-    session.flush()
+    """Ejecuta el pipeline (adaptadores + motor + persistencia) contra un `Assessment` ya
+    creado por `create_pending_assessment`. Esto es lo que corre `app/workers/core.py` por cada
+    job `assessment_run`; `run_assessment` (abajo) sigue siendo el atajo sincronico que usa la
+    CLI, implementado en terminos de esta misma funcion para no duplicar el pipeline."""
+
+    assessment = session.get(Assessment, assessment_id)
+    if assessment is None:
+        raise AssessmentNotFoundError(assessment_id)
+
+    assessment.estado = "en_progreso"
+    session.commit()
 
     try:
         evidence, sources = _collect_evidence_and_sources(
             session,
             methodology,
-            org.id,
+            assessment.org_id,
             terraform_path,
             ansible_path,
             documents_path,
-            scope,
+            assessment.scope,
             ai_client,
         )
         results = engine.evaluate_all(methodology, evidence)
@@ -238,21 +260,36 @@ def run_assessment(
     return assessment
 
 
-def reevaluate(
+def run_assessment(
     session: Session,
     methodology: Methodology,
-    previous_assessment_id: str,
     *,
+    org_name: str,
+    scope: str,
+    terraform_path: Path | None = None,
+    ansible_path: Path | None = None,
+    documents_path: Path | None = None,
     ai_client: AIClient | None = None,
     apply_ai_adjustment: bool = False,
     context: dict[str, Any] | None = None,
 ) -> Assessment:
-    """Crea una nueva evaluacion re-leyendo las mismas rutas que la anterior."""
+    """Atajo sincronico (CLI, tests): crea y ejecuta en un solo paso, sin pasar por la cola."""
 
-    previous = session.get(Assessment, previous_assessment_id)
-    if previous is None:
-        raise AssessmentNotFoundError(previous_assessment_id)
+    assessment = create_pending_assessment(session, methodology, org_name=org_name, scope=scope)
+    return run_pending_assessment(
+        session,
+        methodology,
+        assessment.id,
+        terraform_path=terraform_path,
+        ansible_path=ansible_path,
+        documents_path=documents_path,
+        ai_client=ai_client,
+        apply_ai_adjustment=apply_ai_adjustment,
+        context=context,
+    )
 
+
+def _resolve_previous_sources(previous: Assessment) -> dict[str, Path | None]:
     terraform_path: Path | None = None
     ansible_path: Path | None = None
     documents_path: Path | None = None
@@ -263,18 +300,58 @@ def reevaluate(
             ansible_path = Path(source.ruta)
         elif source.tipo == "documents":
             documents_path = Path(source.ruta)
+    return {
+        "terraform_path": terraform_path,
+        "ansible_path": ansible_path,
+        "documents_path": documents_path,
+    }
 
+
+def create_pending_reevaluation(
+    session: Session, methodology: Methodology, previous_assessment_id: str
+) -> tuple[Assessment, dict[str, Path | None]]:
+    """Version encolable de `reevaluate`: crea el nuevo `Assessment` (misma organizacion/scope
+    que el anterior) y devuelve las rutas resueltas de sus fuentes, para que la ruta de la API
+    pueda encolar un job `assessment_run` sin que el worker tenga que volver a mirar la
+    evaluacion anterior."""
+
+    previous = session.get(Assessment, previous_assessment_id)
+    if previous is None:
+        raise AssessmentNotFoundError(previous_assessment_id)
+
+    paths = _resolve_previous_sources(previous)
+    assessment = create_pending_assessment(
+        session, methodology, org_name=previous.organization.nombre, scope=previous.scope
+    )
+    return assessment, paths
+
+
+def reevaluate(
+    session: Session,
+    methodology: Methodology,
+    previous_assessment_id: str,
+    *,
+    ai_client: AIClient | None = None,
+    apply_ai_adjustment: bool = False,
+    context: dict[str, Any] | None = None,
+) -> Assessment:
+    """Atajo sincronico (CLI, tests): crea una nueva evaluacion re-leyendo las mismas rutas que
+    la anterior, sin pasar por la cola."""
+
+    previous = session.get(Assessment, previous_assessment_id)
+    if previous is None:
+        raise AssessmentNotFoundError(previous_assessment_id)
+
+    paths = _resolve_previous_sources(previous)
     return run_assessment(
         session,
         methodology,
         org_name=previous.organization.nombre,
         scope=previous.scope,
-        terraform_path=terraform_path,
-        ansible_path=ansible_path,
-        documents_path=documents_path,
         ai_client=ai_client,
         apply_ai_adjustment=apply_ai_adjustment,
         context=context,
+        **paths,
     )
 
 

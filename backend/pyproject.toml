@@ -14,6 +14,7 @@ dependencies = [
     "python-hcl2>=8.1.4",
     "python-multipart>=0.0.32",
     "pyyaml>=6.0.3",
+    "redis>=5.2.1",
     "sqlalchemy>=2.1.1",
     "uvicorn[standard]>=0.54.0",
 ]

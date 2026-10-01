@@ -16,8 +16,8 @@ import {
   Info,
 } from 'lucide-react';
 import { DEMO_EVENT_LOGS, fetchAsFile } from '@/data/demo';
-import { ApiError, getIncidentPlans, ingestEvents, listOrgIncidents } from '@/lib/api';
-import type { IncidentOut, Plan } from '@/lib/types';
+import { ApiError, getIncidentPlans, ingestEvents, listOrgIncidents, pollJob } from '@/lib/api';
+import type { IncidentOut, JobEstado, Plan } from '@/lib/types';
 import { incidentSeverityMeta } from '@/lib/ui';
 
 interface Props {
@@ -29,17 +29,21 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
   const [incidents, setIncidents] = useState<IncidentOut[]>([]);
   const [loading, setLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
+  const [jobEstado, setJobEstado] = useState<JobEstado | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastIngest, setLastIngest] = useState<string | null>(null);
   const [selected, setSelected] = useState<IncidentOut | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!orgId) return;
+    if (!orgId) return [] as IncidentOut[];
     setLoading(true);
     try {
-      setIncidents(await listOrgIncidents(orgId));
+      const fetched = await listOrgIncidents(orgId);
+      setIncidents(fetched);
+      return fetched;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido.');
+      return [] as IncidentOut[];
     } finally {
       setLoading(false);
     }
@@ -54,12 +58,27 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
     setIngesting(true);
     setError(null);
     setLastIngest(null);
+    setJobEstado(null);
+    const before = incidents.length;
     try {
-      const result = await ingestEvents(orgId, file);
+      // POST /orgs/{id}/events encola en worker-logs y devuelve de inmediato (docs/09 §16):
+      // hay que sondear el job, y luego refrescar la lista -- ya no hay un payload sincronico
+      // con "nuevos vs actualizados", asi que se aproxima comparando el total antes/despues.
+      const accepted = await ingestEvents(orgId, file);
+      const job = await pollJob(accepted.job_id, { onTick: (j) => setJobEstado(j.estado) });
+
+      if (job.estado === 'fallido') {
+        setError(job.error ?? 'La ingesta de eventos falló en el worker, sin más detalle.');
+        return;
+      }
+
+      const after = await refresh();
+      const nuevos = Math.max(0, after.length - before);
       setLastIngest(
-        `${result.eventos_ingeridos} eventos ingeridos · ${result.nuevos_incidentes.length} incidente(s) nuevo(s) · ${result.incidentes_actualizados.length} actualizado(s)`
+        nuevos > 0
+          ? `Eventos procesados · ${nuevos} incidente(s) nuevo(s) · ${after.length} en total`
+          : `Eventos procesados · sin incidentes nuevos · ${after.length} en total`
       );
-      await refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : err instanceof Error ? err.message : 'Error desconocido.');
     } finally {
@@ -123,6 +142,12 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
             </label>
           </div>
         </div>
+        {ingesting && jobEstado && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            {jobEstado === 'pendiente' ? 'En cola…' : 'Procesando eventos…'}
+          </p>
+        )}
         {lastIngest && (
           <p className="mt-3 flex items-center gap-1.5 text-xs text-emerald-300">
             <CheckCircle2 className="h-3.5 w-3.5" /> {lastIngest}

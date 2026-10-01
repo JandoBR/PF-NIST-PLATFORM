@@ -11,8 +11,8 @@ import {
   Brain,
 } from 'lucide-react';
 import { DEMO_BUNDLES, fetchAsFile } from '@/data/demo';
-import { ApiError, createAssessment } from '@/lib/api';
-import type { AssessmentDetail } from '@/lib/types';
+import { ApiError, createAssessment, getAssessment, pollJob } from '@/lib/api';
+import type { AssessmentDetail, JobEstado } from '@/lib/types';
 
 interface ContextSelectorProps {
   open: boolean;
@@ -33,6 +33,7 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
+  const [jobEstado, setJobEstado] = useState<JobEstado | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsConfirm, setNeedsConfirm] = useState(false);
   const [confirmLiveAi, setConfirmLiveAi] = useState(false);
@@ -45,6 +46,7 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
+    setJobEstado(null);
     try {
       let input;
       if (mode === 'demo') {
@@ -75,7 +77,17 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
         };
       }
 
-      const assessment = await createAssessment(input);
+      // POST /assessments encola el pipeline en worker-core y devuelve de inmediato (docs/09
+      // §16): hay que sondear el job hasta que termine antes de tener algo que mostrar.
+      const accepted = await createAssessment(input);
+      const job = await pollJob(accepted.job_id, { onTick: (j) => setJobEstado(j.estado) });
+
+      if (job.estado === 'fallido') {
+        setError(job.error ?? 'La evaluación falló en el worker, sin más detalle.');
+        return;
+      }
+
+      const assessment = await getAssessment(accepted.assessment_id);
       resetAndClose();
       onCreated(assessment);
     } catch (err) {
@@ -87,6 +99,7 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
       }
     } finally {
       setSubmitting(false);
+      setJobEstado(null);
     }
   }
 
@@ -96,6 +109,17 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
     setConfirmLiveAi(false);
     onClose();
   }
+
+  const submitLabel =
+    jobEstado === 'pendiente'
+      ? 'En cola…'
+      : jobEstado === 'en_progreso'
+        ? 'Evaluando…'
+        : submitting
+          ? 'Enviando…'
+          : needsConfirm
+            ? 'Reintentar'
+            : 'Analizar';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -255,7 +279,7 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
-                {submitting ? 'Evaluando…' : needsConfirm ? 'Reintentar' : 'Analizar'}
+                {submitLabel}
                 {!submitting && <ArrowRight className="h-4 w-4" />}
               </button>
             </div>

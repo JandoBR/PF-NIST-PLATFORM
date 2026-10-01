@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from tests.conftest import run_pending_jobs
+
 TERRAFORM_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "terraform"
 
 
@@ -13,6 +15,15 @@ def _upload_terraform(api_client, fixture: str, **form):
         )
 
 
+def _create_and_complete(api_client, db_session, methodology, fake_redis, fixture: str, **form):
+    """Sube Terraform, confirma el 202, y corre el job encolado como lo haria `worker-core` --
+    devuelve el `AssessmentDetail` ya completo via `GET /assessments/{id}`."""
+
+    accepted = _upload_terraform(api_client, fixture, **form).json()
+    run_pending_jobs(db_session, methodology, fake_redis)
+    return api_client.get(f"/assessments/{accepted['assessment_id']}").json()
+
+
 def test_create_assessment_requires_at_least_one_file(api_client):
     response = api_client.post(
         "/assessments", data={"org_name": "Empresa Vacia", "scope": "entorno:produccion"}
@@ -20,13 +31,35 @@ def test_create_assessment_requires_at_least_one_file(api_client):
     assert response.status_code == 422
 
 
-def test_create_assessment_with_terraform_scores_criteria(api_client):
+def test_create_assessment_is_accepted_and_queued(api_client):
     response = _upload_terraform(api_client, "good")
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     body = response.json()
-    assert body["estado"] == "completada"
     assert body["org_nombre"] == "Empresa API Assessments"
+    assert body["job_id"]
+
+    job = api_client.get(f"/jobs/{body['job_id']}").json()
+    assert job["estado"] == "pendiente"
+    assert job["assessment_id"] == body["assessment_id"]
+
+    pending = api_client.get(f"/assessments/{body['assessment_id']}").json()
+    assert pending["estado"] == "pendiente"
+    assert pending["score_global"] is None
+
+
+def test_worker_completes_the_job_and_the_assessment(
+    api_client, db_session, methodology, fake_redis
+):
+    accepted = _upload_terraform(api_client, "good").json()
+
+    run_pending_jobs(db_session, methodology, fake_redis)
+
+    job = api_client.get(f"/jobs/{accepted['job_id']}").json()
+    assert job["estado"] == "completado"
+
+    body = api_client.get(f"/assessments/{accepted['assessment_id']}").json()
+    assert body["estado"] == "completada"
     assert body["score_global"] is not None
     assert any(a["ref"] == "PR" for a in body["agregados_funcion"])
     # Solo Terraform, sin documentos: CRI-GV-01 (en el catalogo) queda evidencia_insuficiente,
@@ -35,8 +68,8 @@ def test_create_assessment_with_terraform_scores_criteria(api_client):
     assert body["tier"]["provisional"] is True
 
 
-def test_get_assessment_and_sub_resources(api_client):
-    created = _upload_terraform(api_client, "gaps").json()
+def test_get_assessment_and_sub_resources(api_client, db_session, methodology, fake_redis):
+    created = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
     assessment_id = created["id"]
 
     detail = api_client.get(f"/assessments/{assessment_id}")
@@ -55,8 +88,8 @@ def test_get_assessment_and_sub_resources(api_client):
     assert any(f["criterion_id"] == "CRI-PR-01" for f in findings)
 
 
-def test_list_assessments_includes_created_ones(api_client):
-    _upload_terraform(api_client, "good")
+def test_list_assessments_includes_created_ones(api_client, db_session, methodology, fake_redis):
+    _create_and_complete(api_client, db_session, methodology, fake_redis, "good")
     response = api_client.get("/assessments")
     assert response.status_code == 200
     assert len(response.json()) >= 1
@@ -68,8 +101,8 @@ def test_get_unknown_assessment_is_404(api_client):
         assert response.status_code == 404, path
 
 
-def test_generate_and_list_plans(api_client):
-    created = _upload_terraform(api_client, "gaps").json()
+def test_generate_and_list_plans(api_client, db_session, methodology, fake_redis):
+    created = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
     assessment_id = created["id"]
 
     generated = api_client.post(f"/assessments/{assessment_id}/plans")
@@ -81,36 +114,43 @@ def test_generate_and_list_plans(api_client):
     assert len(fetched.json()) == len(generated.json())
 
 
-def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(api_client):
-    before = _upload_terraform(api_client, "gaps").json()
+def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
+    api_client, db_session, methodology, fake_redis
+):
+    before = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
     assert before["score_global"] is not None
 
     # La subida se guarda en un directorio persistente (app/api/routes_assessments.py,
-    # UPLOADS_DIR), no en uno temporal: `reevaluate` debe poder re-leerlo mas tarde.
+    # UPLOADS_DIR), no en uno temporal: el job de reevaluacion debe poder re-leerlo.
     before_criteria = api_client.get(f"/assessments/{before['id']}/criteria").json()
     pr01_before = next(c for c in before_criteria if c["criterion_id"] == "CRI-PR-01")
     assert pr01_before["final_score"] == 25  # cifrado deshabilitado en el fixture gaps
 
-    reeval = api_client.post(f"/assessments/{before['id']}/reevaluate")
-    assert reeval.status_code == 200
-    assert reeval.json()["id"] != before["id"]
-    # Sin editar el archivo subido, la reevaluacion debe dar el mismo resultado (misma fuente).
-    assert reeval.json()["score_global"] == before["score_global"]
+    reeval_accepted = api_client.post(f"/assessments/{before['id']}/reevaluate")
+    assert reeval_accepted.status_code == 202
+    assert reeval_accepted.json()["assessment_id"] != before["id"]
 
-    compare = api_client.get(f"/assessments/{before['id']}/compare/{reeval.json()['id']}")
+    run_pending_jobs(db_session, methodology, fake_redis)
+    reeval = api_client.get(f"/assessments/{reeval_accepted.json()['assessment_id']}").json()
+    # Sin editar el archivo subido, la reevaluacion debe dar el mismo resultado (misma fuente).
+    assert reeval["score_global"] == before["score_global"]
+
+    compare = api_client.get(f"/assessments/{before['id']}/compare/{reeval['id']}")
     assert compare.status_code == 200
     assert compare.json()["assessment_id_a"] == before["id"]
     assert compare.json()["diffs"]  # el mismo criterio aparece en ambos lados, sin cambio
 
 
-def test_reevaluate_after_editing_the_persisted_upload_shows_the_fix(api_client, db_session):
+def test_reevaluate_after_editing_the_persisted_upload_shows_the_fix(
+    api_client, db_session, methodology, fake_redis
+):
     """Prueba directa del bug real: un directorio temporal autolimpiado rompia esto porque el
     archivo subido ya no existia para la segunda corrida (ver UPLOADS_DIR en
     app/api/routes_assessments.py)."""
 
     from app.models.tables import Source
 
-    before = _upload_terraform(api_client, "gaps").json()
+    before = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
 
     source = db_session.query(Source).filter_by(assessment_id=before["id"]).one()
     uploaded_main_tf = Path(source.ruta) / "main.tf"
@@ -120,8 +160,9 @@ def test_reevaluate_after_editing_the_persisted_upload_shows_the_fix(api_client,
     fixed = text.replace("storage_encrypted       = false", "storage_encrypted = true")
     uploaded_main_tf.write_text(fixed)
 
-    reeval = api_client.post(f"/assessments/{before['id']}/reevaluate").json()
-    after = api_client.get(f"/assessments/{reeval['id']}/criteria").json()
+    reeval_accepted = api_client.post(f"/assessments/{before['id']}/reevaluate").json()
+    run_pending_jobs(db_session, methodology, fake_redis)
+    after = api_client.get(f"/assessments/{reeval_accepted['assessment_id']}/criteria").json()
     criteria = {c["criterion_id"]: c for c in after}
 
     assert criteria["CRI-PR-01"]["final_score"] == 100  # la correccion se refleja

@@ -37,7 +37,7 @@
 ## Stack previsto
 
 - **Backend:** Python 3.12 + FastAPI + SQLAlchemy + PostgreSQL.
-- **Mensajería / caché:** Redis (Streams + colas de trabajos).
+- **Mensajería / caché:** Redis (colas de trabajos reales vía `worker-core`/`worker-logs`; caché de extracción IA aparte, en disco).
 - **Análisis:** parsers HCL (`python-hcl2`), parsing YAML de Ansible (`PyYAML`), validación con Pydantic.
 - **IA:** API de DeepSeek (compatible con SDK de OpenAI), salida JSON validada.
 - **Despliegue:** Docker + docker-compose (ver [docs/04 §11](docs/04-arquitectura-backend.md)).
@@ -48,21 +48,24 @@
 Especificación completa. El núcleo determinista, los tres adaptadores (Terraform, Ansible,
 documentos), las tres integraciones de IA (extracción U1, ajuste U2, planes U3), la
 persistencia (`run`/`reevaluate`/`compare`/`plans`), el motor operativo (eventos, patrones,
-disparadores, incidentes y planes — docs 06/08), una API REST (FastAPI) sobre todo lo anterior y
-el despliegue con Docker Compose (Postgres + Redis reales) ya están implementados y probados —
-detalle completo en
+disparadores, incidentes y planes — docs 06/08), una API REST (FastAPI) sobre todo lo anterior,
+workers reales consumiendo colas de Redis (`worker-core`/`worker-logs`, con `POST /assessments`,
+`/reevaluate` y `POST /orgs/{id}/events` asíncronos vía `GET /jobs/{id}`) y el despliegue
+completo con Docker Compose (Postgres + Redis + los dos workers + frontend, los 7 servicios
+reales) ya están implementados y probados — detalle completo en
 [docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). El frontend
-(`frontend/`) es un punto de partida real pero incompleto: los tres paneles principales (madurez,
-recomendaciones, simulación de amenazas) ya llaman a la API de verdad, con datos de ejemplo
-servidos como archivos estáticos o subida de archivos propios — falta pulir UX, cubrir
-`reevaluate`/`compare`, y el nginx/dominio real previsto para despliegue (ver doc 09 §15).
-Pendiente como evolución futura, no como corte planeado: workers reales consumiendo colas de
-Redis (hoy todo corre síncrono, dentro de la API o de la CLI — ver doc 09 §14, §16).
+(`frontend/`) es un punto de partida real pero incompleto: los cuatro paneles (madurez,
+recomendaciones, simulación de amenazas, comparar evaluaciones) ya llaman a la API de verdad —
+asíncrona, con sondeo de jobs en vivo —, con datos de ejemplo servidos como archivos estáticos o
+subida de archivos propios. Falta pulir UX y, deliberadamente fuera de este corte, nginx +
+dominio real (`VITE_API_BASE_URL`/`CORS_ORIGINS` ya están pensados para ese cambio — ver doc 09
+§17).
 
 Para probarlo sin levantar nada: `cd backend && uv run python -m app.main run --terraform
 tests/fixtures/terraform/gaps --org "Empresa Demo"`, `uv run uvicorn app.api.app:app --reload`
-para la API HTTP, o `docker compose -f deploy/docker-compose.yml up` para todo el stack. Para el
-frontend: `cd frontend && cp .env.example .env && npm install && npm run dev` (con la API
+para la API HTTP, o `docker compose -f deploy/docker-compose.yml up` para todo el stack (API +
+workers + frontend). Para el frontend solo, sin Docker: `cd frontend && cp .env.example .env &&
+npm install && npm run dev` (con la API
 corriendo por separado).
 
 ## Referencias externas

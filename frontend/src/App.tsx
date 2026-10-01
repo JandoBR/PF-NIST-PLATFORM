@@ -1,19 +1,21 @@
 import { useState } from 'react';
-import { LayoutDashboard, Brain, Radar, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, Brain, Radar, GitCompare, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { ContextSelector } from '@/components/ContextSelector';
 import { MaturityDashboard } from '@/components/MaturityDashboard';
 import { RecommendationEngine } from '@/components/RecommendationEngine';
 import { ThreatSimulation } from '@/components/ThreatSimulation';
-import { getCriteria, getFindings, getPlans } from '@/lib/api';
+import { CompareAssessments } from '@/components/CompareAssessments';
+import { getAssessment, getCriteria, getFindings, getPlans, pollJob, reevaluateAssessment } from '@/lib/api';
 import type { AssessmentDetail, CriterionResult, Finding, Plan } from '@/lib/types';
 
-type Tab = 'dashboard' | 'recommendations' | 'threats';
+type Tab = 'dashboard' | 'recommendations' | 'threats' | 'compare';
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Resumen de Madurez', icon: <LayoutDashboard className="h-4 w-4" /> },
   { key: 'recommendations', label: 'Recomendaciones', icon: <Brain className="h-4 w-4" /> },
   { key: 'threats', label: 'Simulación de Amenazas', icon: <Radar className="h-4 w-4" /> },
+  { key: 'compare', label: 'Comparar', icon: <GitCompare className="h-4 w-4" /> },
 ];
 
 function App() {
@@ -22,17 +24,16 @@ function App() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [reevaluating, setReevaluating] = useState(false);
 
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('dashboard');
 
-  async function handleCreated(detail: AssessmentDetail) {
+  async function loadAssessmentDetails(detail: AssessmentDetail) {
     setAssessment(detail);
     setCriteria([]);
     setFindings([]);
     setPlans([]);
-    setDetailError(null);
-    setTab('dashboard');
     try {
       const [c, f, p] = await Promise.all([
         getCriteria(detail.id),
@@ -44,6 +45,31 @@ function App() {
       setPlans(p);
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : 'No se pudieron cargar los detalles.');
+    }
+  }
+
+  async function handleCreated(detail: AssessmentDetail) {
+    setDetailError(null);
+    setTab('dashboard');
+    await loadAssessmentDetails(detail);
+  }
+
+  async function handleReevaluate() {
+    if (!assessment) return;
+    setReevaluating(true);
+    setDetailError(null);
+    try {
+      const accepted = await reevaluateAssessment(assessment.id);
+      const job = await pollJob(accepted.job_id);
+      if (job.estado === 'fallido') {
+        setDetailError(job.error ?? 'La reevaluación falló en el worker, sin más detalle.');
+        return;
+      }
+      await loadAssessmentDetails(await getAssessment(accepted.assessment_id));
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : 'No se pudo reevaluar.');
+    } finally {
+      setReevaluating(false);
     }
   }
 
@@ -104,7 +130,12 @@ function App() {
             </button>
           </div>
         ) : tab === 'dashboard' ? (
-          <MaturityDashboard assessment={assessment} criteria={criteria} />
+          <MaturityDashboard
+            assessment={assessment}
+            criteria={criteria}
+            onReevaluate={handleReevaluate}
+            reevaluating={reevaluating}
+          />
         ) : tab === 'recommendations' ? (
           <RecommendationEngine
             assessmentId={assessment.id}
@@ -112,8 +143,10 @@ function App() {
             plans={plans}
             onPlansUpdated={setPlans}
           />
-        ) : (
+        ) : tab === 'threats' ? (
           <ThreatSimulation orgId={assessment.org_id} orgNombre={assessment.org_nombre} />
+        ) : (
+          <CompareAssessments orgId={assessment.org_id} currentAssessmentId={assessment.id} />
         )}
       </main>
 

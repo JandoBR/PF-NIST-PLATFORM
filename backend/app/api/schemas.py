@@ -58,13 +58,6 @@ class IncidentOut(BaseModel):
     actualizado_en: datetime
 
 
-class IngestEventsResponse(BaseModel):
-    org_id: str
-    eventos_ingeridos: int
-    nuevos_incidentes: list[IncidentOut]
-    incidentes_actualizados: list[IncidentOut]
-
-
 class ComparisonDiffOut(BaseModel):
     criterion_id: str
     titulo: str
@@ -81,3 +74,35 @@ class ComparisonOut(BaseModel):
     diffs: list[ComparisonDiffOut]
     global_antes: float | None
     global_despues: float | None
+
+
+class JobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    tipo: str
+    estado: str
+    progreso: int
+    error: str | None
+    assessment_id: str | None
+    org_id: str | None
+    creado_en: datetime
+    tomado_en: datetime | None
+    actualizado_en: datetime
+
+
+class AssessmentAccepted(BaseModel):
+    """`POST /assessments` y `POST /assessments/{id}/reevaluate` ya no corren el pipeline en el
+    request (docs/09 §16): devuelven esto con 202 y el cliente sondea `GET /jobs/{job_id}`."""
+
+    assessment_id: str
+    org_id: str
+    org_nombre: str
+    job_id: str
+
+
+class EventsAccepted(BaseModel):
+    """Igual que `AssessmentAccepted`, para `POST /orgs/{org_id}/events`."""
+
+    org_id: str
+    job_id: str

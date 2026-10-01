@@ -157,6 +157,33 @@ export interface ComparisonOut {
   global_despues: number | null;
 }
 
+export type JobEstado = 'pendiente' | 'en_progreso' | 'completado' | 'fallido';
+
+export interface JobOut {
+  id: string;
+  tipo: string;
+  estado: JobEstado;
+  progreso: number;
+  error: string | null;
+  assessment_id: string | null;
+  org_id: string | null;
+  creado_en: string;
+  tomado_en: string | null;
+  actualizado_en: string;
+}
+
+export interface AssessmentAccepted {
+  assessment_id: string;
+  org_id: string;
+  org_nombre: string;
+  job_id: string;
+}
+
+export interface EventsAccepted {
+  org_id: string;
+  job_id: string;
+}
+
 export interface CriterionDefinition {
   id: string;
   version: number;

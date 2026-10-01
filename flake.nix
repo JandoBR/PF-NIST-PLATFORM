@@ -22,11 +22,15 @@
               pkgs.uv
               pkgs.ruff
               pkgs.docker-compose
+              pkgs.redis
+              pkgs.nodejs_22
             ];
 
             shellHook = ''
               export UV_PYTHON=${pkgs.python312}/bin/python3.12
               echo "Backend: cd backend && uv sync && uv run pytest"
+              echo "Redis para dev local (workers, o tests que lo necesiten): redis-server --daemonize yes"
+              echo "Frontend: cd frontend && npm install && npm run dev"
             '';
           };
         });
