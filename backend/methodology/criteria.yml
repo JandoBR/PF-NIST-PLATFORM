@@ -1,6 +1,6 @@
-# Catalogo de criterios (docs/03-matriz-de-criterios.md). Subconjunto inicial: los 5 criterios
-# PROTECT que el adaptador de Terraform puede evaluar por si solo, mas CRI-GV-01, el primer
-# criterio puramente documental (ejercita U1 - extraccion con IA, docs/05 §2).
+# Catalogo de criterios (docs/03-matriz-de-criterios.md): los criterios PROTECT que Terraform
+# evalua por si solo, CRI-GV-01 (puramente documental, ejercita U1) y CRI-PR-04 (puramente
+# Ansible). CRI-PR-06 combina Terraform + Ansible en un mismo criterio Mixto.
 # Ampliar este archivo y agregar su modulo en app/evaluation/rules van siempre juntos (D5).
 version: 1
 criterios:
@@ -58,11 +58,26 @@ criterios:
     subcategorias: [PR.AA-05, PR.IR-01]
     peso: 4
     ai_adjustable: false
-    evidencias: [tf.security_group.rules@1, an.task.config@1]
+    evidencias: [tf.security_group.rules@1]
     recomendacion: "Restringir puertos administrativos a rangos corporativos/VPN y eliminar reglas 0.0.0.0/0."
     regla:
       tipo: exposicion_puertos
       puertos_administrativos: [22, 3389]
+
+  - id: CRI-PR-04
+    version: 1
+    titulo: "Configuracion segura del servidor (SSH)"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.PS]
+    subcategorias: [PR.PS-01]
+    peso: 3
+    ai_adjustable: false
+    evidencias: [an.task.config@1, an.file.permissions@1]
+    recomendacion: "Deshabilitar login de root y autenticacion por contrasena; usar claves."
+    regla:
+      tipo: sshd_directivas
+      directivas: [PermitRootLogin, PasswordAuthentication]
 
   - id: CRI-PR-05
     version: 1
@@ -87,7 +102,7 @@ criterios:
     subcategorias: [PR.PS-04]
     peso: 4
     ai_adjustable: false
-    evidencias: [tf.logging.config@1, an.task.config@1]
+    evidencias: [tf.logging.config@1, an.service.state@1]
     recomendacion: "Habilitar CloudTrail multirregion y logging de sistema con retencion definida."
     regla:
       tipo: cloudtrail_multiregion

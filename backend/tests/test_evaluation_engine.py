@@ -35,7 +35,7 @@ def test_good_fixture_scores(methodology):
 
     assert results["CRI-PR-03"].final_score == 100
     assert results["CRI-PR-05"].final_score == 100
-    assert results["CRI-PR-06"].final_score == 100
+    assert results["CRI-PR-06"].final_score == 75  # multirregion, sin logs de sistema (Ansible)
 
 
 def test_gaps_fixture_scores(methodology):

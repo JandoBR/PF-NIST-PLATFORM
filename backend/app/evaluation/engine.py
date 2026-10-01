@@ -14,6 +14,7 @@ from app.evaluation.rules import (
     pr01_encryption,
     pr02_backup,
     pr03_admin_access,
+    pr04_ssh_hardening,
     pr05_public_access,
     pr06_logging,
 )
@@ -28,6 +29,7 @@ _RULES: dict[str, RuleFn] = {
     pr01_encryption.CRITERION_ID: pr01_encryption.evaluate,
     pr02_backup.CRITERION_ID: pr02_backup.evaluate,
     pr03_admin_access.CRITERION_ID: pr03_admin_access.evaluate,
+    pr04_ssh_hardening.CRITERION_ID: pr04_ssh_hardening.evaluate,
     pr05_public_access.CRITERION_ID: pr05_public_access.evaluate,
     pr06_logging.CRITERION_ID: pr06_logging.evaluate,
 }

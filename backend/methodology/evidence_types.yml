@@ -121,7 +121,6 @@ tipos:
     version: 1
     descripcion: >
       Afirmacion estructurada extraida por IA de un documento, con cita obligatoria (docs/02 §3.3).
-      No la produce ningun adaptador todavia; se declara aqui porque varios criterios ya la referencian.
     valor_schema:
       type: object
       required: [tipo_afirmacion, encontrado, confianza]
@@ -138,8 +137,8 @@ tipos:
   - id: an.task.config
     version: 1
     descripcion: >
-      Tarea declarativa de Ansible interpretada (docs/02 §3.2). No la produce ningun adaptador
-      todavia; se declara aqui porque varios criterios ya la referencian.
+      Tarea declarativa de Ansible interpretada (docs/02 §3.2): lineinfile, copy, template, ufw,
+      iptables.
     valor_schema:
       type: object
       required: [modulo, tarea, archivo]
@@ -148,6 +147,69 @@ tipos:
         parametros: { type: object }
         tarea: { type: string }
         archivo: { type: string }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: an.playbook.present
+    version: 1
+    descripcion: >
+      Deteccion de un playbook existente, con sus plays y hosts declarados (docs/02 §3.2).
+    valor_schema:
+      type: object
+      required: [archivo]
+      properties:
+        archivo: { type: string }
+        plays: { type: integer }
+        hosts: { type: array, items: { type: string } }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: an.file.permissions
+    version: 1
+    descripcion: >
+      Permisos declarados sobre un archivo sensible via el modulo `file` (docs/02 §3.2).
+    valor_schema:
+      type: object
+      required: [ruta, modo]
+      properties:
+        ruta: { type: string }
+        modo: { type: string }
+        owner: { type: [string, "null"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: an.service.state
+    version: 1
+    descripcion: >
+      Estado declarado de un servicio via el modulo `service` (docs/02 §3.2).
+    valor_schema:
+      type: object
+      required: [servicio, estado]
+      properties:
+        servicio: { type: string }
+        estado: { enum: [habilitado, deshabilitado, desconocido] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-09-30"
+
+  - id: an.task.uninterpreted
+    version: 1
+    descripcion: >
+      Tarea con modulo fuera del alcance declarado (command, shell, u otro no soportado) o
+      condicional no evaluable (docs/02 §3.2). Es una limitacion, no un hallazgo de seguridad.
+    valor_schema:
+      type: object
+      required: [tarea, motivo]
+      properties:
+        tarea: { type: string }
+        motivo: { type: string }
     modalidad_permitida: [declarada]
     requiere_locator: true
     estado: published

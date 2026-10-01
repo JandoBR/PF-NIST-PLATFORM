@@ -1,8 +1,10 @@
 """CRI-PR-06 — Generacion de logs para monitoreo (docs/03 §3).
 
-MVP: solo evalua CloudTrail (`tf.logging.config`). Los logs de sistema via Ansible
-(`an.task.config`) se incorporaran cuando exista ese adaptador; hasta entonces el tope sin ellos
-sigue siendo 100 porque CloudTrail multirregion ya satisface la rama mas alta de la regla.
+Combina CloudTrail (`tf.logging.config`) con logs de sistema via Ansible (`an.service.state`
+sobre rsyslog/journald/syslog-ng): el 100 de la regla documentada exige ambas senales, no solo
+CloudTrail multirregion. Deteccion via el modulo `service` (en lugar de inspeccionar una tarea
+`an.task.config` que edite `rsyslog.conf`): un servicio corriendo es una senal mas directa que
+una tarea de configuracion, y es lo que el adaptador de Ansible puede afirmar con confianza.
 """
 
 from __future__ import annotations
@@ -13,20 +15,52 @@ from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-PR-06"
 CRITERION_VERSION = 1
+SYSLOG_SERVICES = {"rsyslog", "syslog-ng", "systemd-journald", "journald"}
+
+
+def _system_logs_declared(evidence: list[EvidenceInstance]) -> bool:
+    services = by_type(evidence, "an.service.state")
+    return any(
+        e.value["servicio"] in SYSLOG_SERVICES and e.value["estado"] == "habilitado"
+        for e in services
+    )
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     relevant = by_type(evidence, "tf.logging.config")
+    system_logs = _system_logs_declared(evidence)
+
     if not relevant:
+        if system_logs:
+            return CriterionResult(
+                criterion_id=CRITERION_ID,
+                criterion_version=CRITERION_VERSION,
+                estado=Estado.EVALUADO,
+                base_score=75,
+                final_score=75,
+                explanation="Sin CloudTrail, pero logs de sistema declarados via Ansible.",
+            )
         return CriterionResult(
             criterion_id=CRITERION_ID,
             criterion_version=CRITERION_VERSION,
             estado=Estado.EVIDENCIA_INSUFICIENTE,
-            explanation="Sin recursos de logging (CloudTrail) evaluables en el alcance.",
+            explanation="Sin recursos de logging (CloudTrail ni logs de sistema) evaluables.",
         )
 
     habilitados = [e for e in relevant if e.value["habilitado"] is True]
     if not habilitados:
+        if system_logs:
+            return CriterionResult(
+                criterion_id=CRITERION_ID,
+                criterion_version=CRITERION_VERSION,
+                estado=Estado.EVALUADO,
+                base_score=50,
+                final_score=50,
+                explanation=(
+                    "CloudTrail sin logging habilitado; alguna fuente de log (sistema) declarada."
+                ),
+                evidence_ids=[e.id for e in relevant],
+            )
         return CriterionResult(
             criterion_id=CRITERION_ID,
             criterion_version=CRITERION_VERSION,
@@ -38,12 +72,15 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     multiregion = [e for e in habilitados if e.value["multi_region"] is True]
-    if multiregion:
-        score = 100
-        detalle = "CloudTrail habilitado multirregion"
-    else:
+    if multiregion and system_logs:
+        score, detalle = 100, "CloudTrail multirregion + logs de sistema declarados"
+    elif multiregion:
+        score, detalle = 75, "CloudTrail habilitado multirregion"
+    elif system_logs:
         score = 75
-        detalle = "CloudTrail habilitado sin confirmacion de multirregion"
+        detalle = "CloudTrail habilitado (sin multirregion) con logs de sistema declarados"
+    else:
+        score, detalle = 75, "CloudTrail habilitado sin confirmacion de multirregion"
 
     return CriterionResult(
         criterion_id=CRITERION_ID,

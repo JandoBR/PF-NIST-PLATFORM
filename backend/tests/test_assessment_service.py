@@ -10,6 +10,7 @@ from app.models.tables import Assessment, Source
 
 METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "terraform"
+ANSIBLE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "ansible"
 
 
 def _fix_rds_encryption(main_tf: Path) -> None:
@@ -49,6 +50,23 @@ def test_run_assessment_reuses_organization_by_name(db_session, methodology):
     )
 
     assert first.org_id == second.org_id
+
+
+def test_run_assessment_combines_terraform_and_ansible_evidence(db_session, methodology):
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Mixta",
+        scope="entorno:produccion",
+        terraform_path=FIXTURES / "good",
+        ansible_path=ANSIBLE_FIXTURES / "good",
+    )
+
+    assert {s.tipo for s in assessment.sources} == {"terraform", "ansible"}
+
+    results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, assessment.id)}
+    assert results["CRI-PR-04"].final_score == 100  # sshd endurecido via Ansible
+    assert results["CRI-PR-06"].final_score == 100  # CloudTrail multirregion + rsyslog
 
 
 def test_run_assessment_marks_failure_without_losing_the_row(db_session, methodology):

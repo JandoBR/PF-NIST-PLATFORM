@@ -1,0 +1,85 @@
+"""CRI-PR-04 — Configuracion segura del servidor (SSH) (docs/03 §3).
+
+Solo mira tareas `lineinfile` sobre `sshd_config`. Un `PermitRootLogin yes` o
+`PasswordAuthentication yes` explicito domina sobre cualquier otro endurecimiento (igual que D7
+en los criterios de Terraform: la observacion tecnica explicita de exposicion prevalece).
+"""
+
+from __future__ import annotations
+
+import re
+
+from app.evaluation.rules._common import by_type
+from app.evaluation.schemas import CriterionResult, Estado
+from app.schemas.evidence import EvidenceInstance
+
+CRITERION_ID = "CRI-PR-04"
+CRITERION_VERSION = 1
+
+_DIRECTIVE_NO = re.compile(r"\bno\b", re.IGNORECASE)
+_DIRECTIVE_YES = re.compile(r"\byes\b", re.IGNORECASE)
+
+
+def _directive_value(tasks: list[EvidenceInstance], directive: str) -> bool | None:
+    """True=endurecido (no), False=explicito (yes), None=no se encontro la directiva."""
+
+    valor: bool | None = None
+    for task in tasks:
+        parametros = task.value["parametros"]
+        texto = f"{parametros.get('regexp', '')} {parametros.get('line', '')}"
+        if directive.lower() not in texto.lower():
+            continue
+        if _DIRECTIVE_NO.search(texto):
+            valor = True
+        elif _DIRECTIVE_YES.search(texto):
+            valor = False
+    return valor
+
+
+def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
+    lineinfile_tasks = [
+        e for e in by_type(evidence, "an.task.config") if e.value["modulo"] == "lineinfile"
+    ]
+    sshd_tasks = [
+        e for e in lineinfile_tasks if "sshd_config" in e.value["parametros"].get("path", "")
+    ]
+
+    if not sshd_tasks:
+        return CriterionResult(
+            criterion_id=CRITERION_ID,
+            criterion_version=CRITERION_VERSION,
+            estado=Estado.EVIDENCIA_INSUFICIENTE,
+            explanation="Sin tareas de Ansible sobre sshd_config evaluables.",
+        )
+
+    permit_root_login = _directive_value(sshd_tasks, "PermitRootLogin")
+    password_auth = _directive_value(sshd_tasks, "PasswordAuthentication")
+    valores = [permit_root_login, password_auth]
+
+    if False in valores:
+        score = 25
+        explanation = (
+            "Directiva insegura explicita en sshd_config "
+            "(PermitRootLogin/PasswordAuthentication yes)."
+        )
+    elif valores.count(True) == 2:
+        score = 100
+        explanation = "PermitRootLogin no y PasswordAuthentication no declarados en sshd_config."
+    elif valores.count(True) == 1:
+        score = 75
+        explanation = "Solo una de las dos directivas de endurecimiento esta declarada."
+    else:
+        score = 50
+        explanation = (
+            "sshd_config gestionado por Ansible sin opciones explicitas de endurecimiento."
+        )
+
+    return CriterionResult(
+        criterion_id=CRITERION_ID,
+        criterion_version=CRITERION_VERSION,
+        estado=Estado.EVALUADO,
+        base_score=score,
+        final_score=score,
+        explanation=explanation,
+        evidence_ids=[e.id for e in sshd_tasks],
+    )

@@ -124,6 +124,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         org_name=args.org,
         scope=args.scope,
         terraform_path=args.terraform,
+        ansible_path=args.ansible,
         documents_path=args.documents,
         ai_client=client,
     )
@@ -204,6 +205,9 @@ def main() -> None:
     run_parser = subparsers.add_parser("run", help="Ejecuta y persiste una evaluacion")
     run_parser.add_argument("--terraform", type=Path, default=None, help="Archivo o directorio .tf")
     run_parser.add_argument(
+        "--ansible", type=Path, default=None, help="Archivo o directorio de playbooks"
+    )
+    run_parser.add_argument(
         "--documents", type=Path, default=None, help="Archivo o directorio de documentos"
     )
     run_parser.add_argument("--org", default="Organizacion Demo")
@@ -228,8 +232,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "run" and args.terraform is None and args.documents is None:
-        parser.error("run requiere --terraform y/o --documents")
+    if args.command == "run" and not (args.terraform or args.ansible or args.documents):
+        parser.error("run requiere --terraform, --ansible y/o --documents")
 
     args.func(args)
 

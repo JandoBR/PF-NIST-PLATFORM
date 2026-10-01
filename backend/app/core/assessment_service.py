@@ -18,6 +18,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.adapters.ansible.adapter import AnsibleAdapter
 from app.adapters.documents.adapter import DocumentAdapter
 from app.adapters.terraform.adapter import TerraformAdapter
 from app.ai.client import AIClient, NullAIClient
@@ -53,6 +54,7 @@ def _get_or_create_organization(session: Session, nombre: str) -> Organization:
 def _collect_evidence_and_sources(
     methodology: Methodology,
     terraform_path: Path | None,
+    ansible_path: Path | None,
     documents_path: Path | None,
     scope: str,
     ai_client: AIClient | None,
@@ -66,6 +68,13 @@ def _collect_evidence_and_sources(
         sources.append(Source(tipo="terraform", ruta=str(terraform_path), sha256=sha256))
         adapter = TerraformAdapter(source_id=f"assessment:terraform:{terraform_path}", scope=scope)
         evidence.extend(adapter.parse_path(terraform_path))
+
+    if ansible_path is not None:
+        files = AnsibleAdapter.list_files(ansible_path)
+        sha256 = _hash_files(files)
+        sources.append(Source(tipo="ansible", ruta=str(ansible_path), sha256=sha256))
+        adapter = AnsibleAdapter(source_id=f"assessment:ansible:{ansible_path}", scope=scope)
+        evidence.extend(adapter.parse_path(ansible_path))
 
     if documents_path is not None:
         files = DocumentAdapter.list_files(documents_path)
@@ -88,6 +97,7 @@ def run_assessment(
     org_name: str,
     scope: str,
     terraform_path: Path | None = None,
+    ansible_path: Path | None = None,
     documents_path: Path | None = None,
     ai_client: AIClient | None = None,
 ) -> Assessment:
@@ -103,7 +113,7 @@ def run_assessment(
 
     try:
         evidence, sources = _collect_evidence_and_sources(
-            methodology, terraform_path, documents_path, scope, ai_client
+            methodology, terraform_path, ansible_path, documents_path, scope, ai_client
         )
         results = engine.evaluate_all(methodology, evidence)
 
@@ -140,10 +150,13 @@ def reevaluate(
         raise AssessmentNotFoundError(previous_assessment_id)
 
     terraform_path: Path | None = None
+    ansible_path: Path | None = None
     documents_path: Path | None = None
     for source in previous.sources:
         if source.tipo == "terraform":
             terraform_path = Path(source.ruta)
+        elif source.tipo == "ansible":
+            ansible_path = Path(source.ruta)
         elif source.tipo == "documents":
             documents_path = Path(source.ruta)
 
@@ -153,6 +166,7 @@ def reevaluate(
         org_name=previous.organization.nombre,
         scope=previous.scope,
         terraform_path=terraform_path,
+        ansible_path=ansible_path,
         documents_path=documents_path,
         ai_client=ai_client,
     )
