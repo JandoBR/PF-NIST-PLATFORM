@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Settings2, Activity } from 'lucide-react';
+import { ShieldCheck, Settings2, Activity, LogOut } from 'lucide-react';
 import { getHealth } from '@/lib/api';
+import type { AuthUser } from '@/lib/api';
 
 interface HeaderProps {
   onOpenSelector: () => void;
+  user: AuthUser | null;
+  onLogout: () => void;
 }
 
-export function Header({ onOpenSelector }: HeaderProps) {
+export function Header({ onOpenSelector, user, onLogout }: HeaderProps) {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -56,10 +59,28 @@ export function Header({ onOpenSelector }: HeaderProps) {
             />
           </div>
 
+          {user && (
+            <div className="hidden items-center gap-2 rounded-lg border border-white/[0.06] bg-ink-900/60 px-3 py-1.5 sm:flex">
+              <span className="max-w-[10rem] truncate text-xs font-medium text-slate-200">
+                {user.org_nombre}
+              </span>
+              <span className="text-xs text-slate-500">·</span>
+              <span className="text-xs text-slate-400">{user.username}</span>
+            </div>
+          )}
+
           <button onClick={onOpenSelector} className="btn-ghost border border-white/[0.06] bg-ink-900/60">
             <Settings2 className="h-4 w-4" />
             <span className="hidden sm:inline">Nueva Evaluación</span>
             <span className="sm:hidden">Evaluar</span>
+          </button>
+
+          <button
+            onClick={onLogout}
+            title="Cerrar sesión"
+            className="rounded-lg border border-white/[0.06] bg-ink-900/60 p-2 text-slate-400 transition-colors hover:text-rose-300"
+          >
+            <LogOut className="h-4 w-4" />
           </button>
         </div>
       </div>

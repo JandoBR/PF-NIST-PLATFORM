@@ -9,7 +9,6 @@ import type {
   IncidentOut,
   JobOut,
   MethodologyCatalog,
-  OrganizationOut,
   Plan,
 } from '@/lib/types';
 
@@ -18,6 +17,15 @@ import type {
 // nginx; una URL completa (http://localhost:8000) para desarrollo local con puertos separados.
 const RAW_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 const API_BASE = RAW_BASE.replace(/\/$/, '');
+
+// --- Sesión (doc 10): el token vive en localStorage y se manda en cada request ---------------
+
+const TOKEN_KEY = 'pf.token';
+
+export const getToken = (): string | null => localStorage.getItem(TOKEN_KEY);
+export const setToken = (token: string): void => localStorage.setItem(TOKEN_KEY, token);
+export const clearToken = (): void => localStorage.removeItem(TOKEN_KEY);
+export const hasToken = (): boolean => getToken() !== null;
 
 export class ApiError extends Error {
   status: number;
@@ -31,11 +39,21 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  const token = getToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, init);
+    response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch {
     throw new ApiError(0, `No se pudo contactar la API en ${API_BASE}. ¿Esta corriendo?`);
+  }
+
+  if (response.status === 401) {
+    // Sesión inválida/expirada: se limpia y se avisa a la app para volver al login.
+    clearToken();
+    window.dispatchEvent(new Event('pf:unauthorized'));
   }
 
   if (!response.ok) {
@@ -67,12 +85,32 @@ export const getHealth = () => request<{ status: string }>('/health');
 
 export const getMethodology = () => request<MethodologyCatalog>('/methodology');
 
+// --- Sesión ------------------------------------------------------------------------------
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  org_id: string;
+  org_nombre: string;
+  role: string;
+}
+
+export async function login(username: string, password: string): Promise<AuthUser> {
+  const result = await request<{ token: string; user: AuthUser }>(
+    '/auth/login',
+    json({ username, password })
+  );
+  setToken(result.token);
+  return result.user;
+}
+
+export const getMe = () => request<AuthUser>('/auth/me');
+
+export function logout(): void {
+  clearToken();
+}
+
 // --- Organizaciones ----------------------------------------------------------------------
-
-export const createOrganization = (nombre: string) =>
-  request<OrganizationOut>('/orgs', json({ nombre }));
-
-export const listOrganizations = () => request<OrganizationOut[]>('/orgs');
 
 export const listOrgIncidents = (orgId: string) =>
   request<IncidentOut[]>(`/orgs/${orgId}/incidents`);
@@ -105,7 +143,6 @@ export const getIncidentPlans = (incidentId: string) =>
 // --- Assessments ---------------------------------------------------------------------------
 
 export interface CreateAssessmentInput {
-  orgName: string;
   scope?: string;
   aiAdjust?: boolean;
   useAiForDocuments?: boolean;
@@ -116,8 +153,8 @@ export interface CreateAssessmentInput {
 }
 
 export const createAssessment = (input: CreateAssessmentInput) => {
+  // La organizacion sale de la sesion (doc 10): no se manda org_name.
   const form = new FormData();
-  form.append('org_name', input.orgName);
   form.append('scope', input.scope ?? 'entorno:produccion');
   form.append('ai_adjust', String(input.aiAdjust ?? false));
   form.append('use_ai_for_documents', String(input.useAiForDocuments ?? false));
@@ -168,21 +205,60 @@ export const compareAssessments = (idA: string, idB: string) =>
 // --- Jobs (POST /assessments, /assessments/{id}/reevaluate y /orgs/{id}/events son
 // asincronicos: devuelven un job_id que hay que sondear -- ver docs/09 §16) -------------------
 
-export const getJob = (jobId: string) => request<JobOut>(`/jobs/${jobId}`);
+export const getJob = (jobId: string, signal?: AbortSignal) =>
+  request<JobOut>(`/jobs/${jobId}`, signal ? { signal } : undefined);
 
 const TERMINAL_JOB_STATES: JobOut['estado'][] = ['completado', 'fallido'];
 
+export class JobTimeoutError extends Error {}
+
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError';
+}
+
+/** `true` si el error es un `AbortError` (p. ej. lanzado por `AbortSignal.abort()`). */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 /** Sondea `GET /jobs/{id}` hasta que el job termine (completado o fallido). `onTick` se llama
- * en cada lectura, incluida la final, para que la UI pueda mostrar progreso en vivo. */
+ * en cada lectura, incluida la final, para que la UI pueda mostrar progreso en vivo.
+ *
+ * Tiene **timeout** (por defecto 180 s) y acepta un `AbortSignal`: sin esto, un job que nunca
+ * llega a estado terminal (p. ej. el stack sin `worker-core`, que lo deja `pendiente`) colgaba al
+ * cliente para siempre. Lanza `JobTimeoutError` al agotarse el tiempo. */
 export async function pollJob(
   jobId: string,
-  opts: { intervalMs?: number; onTick?: (job: JobOut) => void } = {}
+  opts: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal; onTick?: (job: JobOut) => void } = {}
 ): Promise<JobOut> {
   const intervalMs = opts.intervalMs ?? 800;
+  const timeoutMs = opts.timeoutMs ?? 180_000;
+  const startedAt = Date.now();
   while (true) {
-    const job = await getJob(jobId);
+    if (opts.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const job = await getJob(jobId, opts.signal);
     opts.onTick?.(job);
     if (TERMINAL_JOB_STATES.includes(job.estado)) return job;
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new JobTimeoutError(
+        `El job ${jobId} sigue en "${job.estado}" tras ${Math.round(timeoutMs / 1000)}s. ` +
+          'Revisa que worker-core/worker-logs estén corriendo, o vuelve a intentarlo.'
+      );
+    }
+    await sleep(intervalMs, opts.signal);
   }
 }

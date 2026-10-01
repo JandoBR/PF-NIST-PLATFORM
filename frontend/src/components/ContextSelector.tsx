@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   X,
   FolderCog,
@@ -11,21 +11,23 @@ import {
   Brain,
 } from 'lucide-react';
 import { DEMO_BUNDLES, fetchAsFile } from '@/data/demo';
-import { ApiError, createAssessment, getAssessment, pollJob } from '@/lib/api';
-import type { AssessmentDetail, JobEstado } from '@/lib/types';
+import { ApiError, JobTimeoutError, createAssessment, getAssessment, isAbortError, pollJob } from '@/lib/api';
+import type { AssessmentAccepted, AssessmentDetail, JobEstado } from '@/lib/types';
 
 interface ContextSelectorProps {
   open: boolean;
   onClose: () => void;
   onCreated: (assessment: AssessmentDetail) => void;
+  /** Se llama apenas la API acepta el job (202), antes de que termine: permite al dashboard
+   * registrar la evaluacion en el historial aunque el modal se cierre a mitad de camino. */
+  onAccepted?: (accepted: AssessmentAccepted) => void;
 }
 
 type Mode = 'demo' | 'custom';
 
-export function ContextSelector({ open, onClose, onCreated }: ContextSelectorProps) {
+export function ContextSelector({ open, onClose, onCreated, onAccepted }: ContextSelectorProps) {
   const [mode, setMode] = useState<Mode>('demo');
   const [bundleId, setBundleId] = useState(DEMO_BUNDLES[0].id);
-  const [orgName, setOrgName] = useState('Organización Demo');
   const [aiAdjust, setAiAdjust] = useState(false);
   const [useAiForDocuments, setUseAiForDocuments] = useState(false);
   const [terraformFiles, setTerraformFiles] = useState<File[]>([]);
@@ -38,15 +40,23 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
   const [needsConfirm, setNeedsConfirm] = useState(false);
   const [confirmLiveAi, setConfirmLiveAi] = useState(false);
 
+  //: Permite abortar el sondeo del job si el usuario cierra el modal: el job sigue corriendo en
+  //: el backend, pero la UI deja de esperar y el dashboard lo recupera por el historial.
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   if (!open) return null;
 
   const hasCustomFiles = terraformFiles.length + ansibleFiles.length + documentFiles.length > 0;
-  const canSubmit = orgName.trim().length > 0 && (mode === 'demo' || hasCustomFiles);
+  const canSubmit = mode === 'demo' || hasCustomFiles;
 
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
     setJobEstado(null);
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       let input;
       if (mode === 'demo') {
@@ -57,7 +67,6 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
           Promise.all((bundle.documents ?? []).map(fetchAsFile)),
         ]);
         input = {
-          orgName: orgName.trim(),
           aiAdjust,
           useAiForDocuments: useAiForDocuments && docs.length > 0,
           confirmLiveAi,
@@ -67,7 +76,6 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
         };
       } else {
         input = {
-          orgName: orgName.trim(),
           aiAdjust,
           useAiForDocuments: useAiForDocuments && documentFiles.length > 0,
           confirmLiveAi,
@@ -80,7 +88,11 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
       // POST /assessments encola el pipeline en worker-core y devuelve de inmediato (docs/09
       // §16): hay que sondear el job hasta que termine antes de tener algo que mostrar.
       const accepted = await createAssessment(input);
-      const job = await pollJob(accepted.job_id, { onTick: (j) => setJobEstado(j.estado) });
+      onAccepted?.(accepted);
+      const job = await pollJob(accepted.job_id, {
+        signal: controller.signal,
+        onTick: (j) => setJobEstado(j.estado),
+      });
 
       if (job.estado === 'fallido') {
         setError(job.error ?? 'La evaluación falló en el worker, sin más detalle.');
@@ -91,19 +103,26 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
       resetAndClose();
       onCreated(assessment);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
+      if (isAbortError(err)) {
+        return; // el usuario cerró el modal: el job sigue en el backend, no es un error de UI
+      }
+      if (err instanceof JobTimeoutError) {
+        setError(err.message);
+      } else if (err instanceof ApiError && err.status === 409) {
         setNeedsConfirm(true);
         setError(err.detail);
       } else {
         setError(err instanceof Error ? err.message : 'Error desconocido.');
       }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setSubmitting(false);
       setJobEstado(null);
     }
   }
 
   function resetAndClose() {
+    abortRef.current?.abort();
     setError(null);
     setNeedsConfirm(false);
     setConfirmLiveAi(false);
@@ -125,7 +144,7 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-ink-950/70 backdrop-blur-sm animate-fade-in"
-        onClick={() => !submitting && resetAndClose()}
+        onClick={resetAndClose}
       />
       <div className="relative z-10 w-full max-w-2xl animate-scale-in">
         <div className="card max-h-[90vh] overflow-y-auto shadow-2xl shadow-black/50">
@@ -137,8 +156,7 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
             </div>
             <button
               onClick={resetAndClose}
-              disabled={submitting}
-              className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white disabled:opacity-40"
+              className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"
             >
               <X className="h-5 w-5" />
             </button>
@@ -155,16 +173,7 @@ export function ContextSelector({ open, onClose, onCreated }: ContextSelectorPro
           </div>
 
           <div className="px-6 py-5">
-            <label className="mb-2 block text-xs font-medium text-slate-400">
-              Nombre de la organización
-            </label>
-            <input
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              placeholder="Ej. Empresa Demo"
-              className="input mb-5"
-            />
-
+            {/* La organización sale de la sesión (doc 10): ya no se elige aquí. */}
             {mode === 'demo' ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {DEMO_BUNDLES.map((b) => (
