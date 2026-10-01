@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
 from app.ai.client import build_default_client
+from app.ai.guard import check_live_ai_guard
 from app.core import assessment_service as svc
 from app.core.db import build_engine, build_session_factory, create_all
 from app.evaluation import aggregation, tier
@@ -39,26 +40,6 @@ from app.models.tables import Assessment, Source
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(REPO_ROOT / ".env")
-
-
-def check_live_ai_guard(ai_requested: bool, api_key: str | None, confirmed: bool) -> str | None:
-    """Bloqueo explicito antes de gastar dinero real.
-
-    Pedido tras un incidente real: una corrida de prueba disparo 3 llamadas pagadas porque
-    `backend/.env` ya tenia una API key real y nadie la noto hasta despues. Cubre tanto la
-    extraccion documental (U1) como el ajuste contextual (U2): ambas llaman al mismo cliente.
-    Retorna un mensaje de error si hay que abortar, o None si se puede seguir.
-    """
-
-    if not ai_requested or not api_key or confirmed:
-        return None
-    return (
-        "Hay una DEEPSEEK_API_KEY real configurada (shell o backend/.env).\n"
-        "Esta operacion hara llamadas reales y pagadas a la API de DeepSeek\n"
-        "(los chunks ya cacheados en backend/.cache/ no se repiten).\n"
-        "Pasa --confirm-live-ai si de verdad quieres continuar, o quita la key"
-        " para una corrida sin costo."
-    )
 
 
 def _abort(message: str) -> None:

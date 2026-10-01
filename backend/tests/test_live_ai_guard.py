@@ -1,4 +1,4 @@
-from app.main import check_live_ai_guard
+from app.ai.guard import check_live_ai_guard
 
 
 def test_ai_not_requested_never_blocks():

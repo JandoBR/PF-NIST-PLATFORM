@@ -27,8 +27,8 @@ quedan las decisiones que importan para seguir construyendo.
 | Ajuste de IA (U2) | Fórmula B/A/D/α → S acotada, con todas las reglas J1–J7/R3–R6 | Hecho |
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
-| Pruebas | 163 tests (`pytest`) + `ruff` limpio; E2E de documentos y guarda de migraciones | Hecho |
-| API REST (doc 04 §6) | — | Pendiente (deliberadamente al final) |
+| Pruebas | 183 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API | Hecho |
+| API REST (doc 04 §6) | FastAPI sobre el mismo `assessment_service`; crear+subir+ejecutar fusionados (sin cola) | Hecho |
 | Docker/Redis (doc 04 §11) | — | Pendiente (deliberadamente al final) |
 
 Comando de referencia para ver todo esto funcionando:
@@ -42,6 +42,11 @@ uv run python -m app.main reevaluate <assessment_id>   # tras corregir el fixtur
 uv run python -m app.main compare <id_antes> <id_despues>
 uv run python -m app.main events "Empresa Demo" tests/fixtures/scenarios/e1b_fallos_sin_alerta.jsonl
 uv run python -m app.main incidents "Empresa Demo" --plans
+
+# API HTTP (en otra terminal):
+uv run uvicorn app.api.app:app --reload
+curl -X POST http://127.0.0.1:8000/assessments \
+  -F "org_name=Empresa Demo" -F "terraform_files=@tests/fixtures/terraform/gaps/main.tf"
 ```
 
 ## 2. Entorno y estructura
@@ -327,9 +332,70 @@ completo, para no tener que releer cada sección arriba:
 | Sin cooldown/rate-limit real (O4) | Motor operativo (§10) | Solo idempotencia por `correlation_key`; falta ventana de tiempo / límite por org-criterio |
 | Una ventana = un lote ingerido, sin ventanas deslizantes | Motor operativo (§10) | Stream continuo real es evolución futura (doc 08 §11) |
 | `log.window` no persistido (se recalcula desde `Event`) | Motor operativo (§10) | Mismo patrón que `score_aggregates`/`tier_estimates`/`findings` |
-| Sin API REST ni Docker/Redis | — | Deliberadamente al final (doc 04 §10, §11) |
+| Sin `POST /assessments/{id}/sources`, `/run` ni `/jobs/{id}` | API (§12) | Fusionados en un solo `POST /assessments` síncrono; separarlos exige una cola de trabajos real (doc 04 §11) |
+| `app/api/app.py` en vez de `app/main.py` (doc 04 §7 asumía este último) | API (§12) | `app/main.py` ya es la CLI; no se desplaza |
+| Sin Docker/Redis | — | Deliberadamente al final (doc 04 §11) |
 
-## 12. Pruebas: gaps cerrados
+## 12. API REST (FastAPI)
+
+**Qué se construyó:** `app/api/` — `app.py` (instancia de FastAPI + routers), `deps.py`
+(sesion de BD por request, metodologia cacheada con `lru_cache`), `errors.py` (handlers que
+convierten `AssessmentNotFoundError`/`SurveillanceError` a `application/problem+json`, doc 04
+§6), `schemas.py` (envoltorios Pydantic propios para lo que no ya era Pydantic: `Assessment`,
+`Incident`, comparaciones), `routes_methodology.py`, `routes_orgs.py`, `routes_incidents.py`,
+`routes_assessments.py`. Todo delega en `assessment_service` ya existente — la API es una capa
+delgada de HTTP sobre lo mismo que usa la CLI, sin logica propia de negocio.
+
+**Decision de alcance (confirmada explicitamente antes de empezar):** doc 04 §6 asume una cola de
+trabajos (`POST /assessments/{id}/run` devuelve `job_id`, se consulta en `GET /jobs/{id}`) porque
+el pipeline correria en workers de Redis. Sin Redis todavia, `POST /assessments` fusiona
+crear + subir archivos + ejecutar en un solo endpoint sincronico que devuelve el resultado
+completo de una vez — no existen `POST /assessments/{id}/sources`, `POST .../run` ni
+`GET /jobs/{id}`. Documentado como simplificacion deliberada, no como omision.
+
+**Otras decisiones:**
+
+- **`app/api/app.py`, no `app/main.py`.** `app/main.py` ya es la CLI (un entregable real,
+  probado, documentado) — doc 04 §7 lo imaginaba como el entrypoint de FastAPI porque en su
+  bosquejo no existia una CLI aparte. Se desvia la estructura de carpetas antes que renombrar o
+  mover la CLI.
+- **`check_live_ai_guard` se movio de `app/main.py` a `app/ai/guard.py`.** Dejo de ser
+  "logica de la CLI" el momento en que la API necesito el mismo chequeo antes de cualquier
+  llamada real a DeepSeek (extraccion, ajuste, o redaccion de planes de incidente) — ambas
+  entradas llaman al mismo cliente, asi que ambas pasan por el mismo guard, ahora vive donde
+  ninguna de las dos lo tiene que importar "de prestado" de la otra.
+- **Segundo bug real encontrado por un test, no en revision manual:** `_save_uploads` guardaba
+  los archivos subidos en un `tempfile.TemporaryDirectory()` que se autoborraba al terminar el
+  request. `reevaluate` vuelve a leer esa misma ruta mas tarde (docs/01 §10) — asi que **todo**
+  assessment creado por la API quedaria imposible de reevaluar en producción, no solo en tests.
+  Se encontro porque el test de reevaluate+compare fallo con `FileNotFoundError` en la primera
+  corrida, no por inspeccion de codigo. Arreglado guardando las subidas en
+  `backend/.data/uploads/<uuid>/<tipo>/`, persistente (gitignored, igual que `.data/pf.db`), y se
+  agrego un test que edita el archivo subido en esa ruta y confirma que `reevaluate` refleja el
+  cambio — prueba directa del bug, no solo de que el endpoint "no truene".
+- `POST /orgs/{org_id}/events` acepta el JSONL completo como un solo archivo multipart (no un
+  body JSON crudo): mismo contrato que `app.main events`, reusando `load_events_jsonl` sin
+  cambios — se escribe a un archivo temporal *si* se borra al terminar, porque a diferencia de
+  los uploads de evaluacion, los eventos ya quedan persistidos como filas `Event`/`LogPatternRow`
+  antes de que el archivo temporal se borre; no hay nada que releer despues desde el disco.
+- `GET /assessments/{id}` (y el listado) siempre incluyen los agregados por categoria/funcion y
+  el Tier calculados en el momento, no solo el resumen — igual que la CLI, "puntaje y cobertura
+  siempre juntos" (doc 04 §6, convenciones).
+- Los contratos de dominio que ya eran Pydantic (`CriterionResult`, `Aggregate`, `TierEstimate`,
+  `Plan`, `Finding`, `EvidenceInstance`) se devuelven directo como `response_model`, sin
+  duplicar un esquema de API paralelo — solo se definieron esquemas nuevos para lo que es
+  genuinamente de la capa HTTP (resumen de assessment, incidente, comparacion).
+- `ruff`/flake8-bugbear marca `Depends(...)`/`File(...)`/`Form(...)` en defaults como B008 (el
+  antipatron clasico de "default mutable"). Es el patron documentado y correcto de FastAPI, asi
+  que se añadio a `extend-immutable-calls` en `pyproject.toml` en vez de reescribir cada ruta.
+- Probado con `TestClient` (todas las rutas, incluido el guard de IA con una key falsa via
+  `monkeypatch`) **y** manualmente con `uvicorn` real + `curl`: subida multipart de Terraform,
+  generacion de planes, ingesta de eventos, y — la prueba que realmente importa — una evaluacion
+  de madurez completamente separada para el mismo org/scope recogiendo la evidencia de vigilancia
+  que dejo la ingesta de eventos, sobre HTTP real, no solo contra la base de datos en memoria de
+  los tests.
+
+## 13. Pruebas: gaps cerrados
 
 Revisión de la suite (159 casos en ese momento) hecha antes de seguir con la API. Los dos huecos
 de mayor riesgo no eran bugs sino cobertura, y ya están cerrados:
@@ -344,12 +410,14 @@ de mayor riesgo no eran bugs sino cobertura, y ya están cerrados:
   `incident_id` presente. El resto de los tests usan `create_all`, así que un error de migración
   no se detectaba en CI — fue justo el caso de `render_as_batch` (§10).
 
-Suite actual: **163 tests**, `ruff` limpio. Queda como cobertura opcional, sin urgencia: handlers
-de la CLI (`app/main.py`, más allá de `check_live_ai_guard`), `test_methodology_loader` (solo 2
+Suite tras agregar la API (§12): **183 tests**, `ruff` limpio — incluye 20 tests de API con
+`TestClient` (todas las rutas, errores 404/422/409, y el bug real de persistencia de uploads de
+§12 probado directamente, no solo evitado). Queda como cobertura opcional, sin urgencia: handlers
+de la CLI (`app/main.py`, más allá del guard compartido), `test_methodology_loader` (solo 2
 casos pese a que el loader promete fallar rápido) e ingesta con solape parcial (eventos nuevos +
 repetidos en el mismo lote).
 
-## 13. Qué sigue
+## 14. Qué sigue
 
-API REST (doc 04 §6) y por último Docker Compose + Redis real (doc 04 §11), en ese orden —
-reemplazando la ejecución síncrona actual recién al final, no antes.
+Docker Compose + Redis real (doc 04 §11) es lo único que queda — reemplazando la ejecución
+síncrona actual con workers reales recién ahora, al final, como estaba planeado desde el principio.

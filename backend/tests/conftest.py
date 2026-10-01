@@ -1,4 +1,5 @@
 import pytest
+from fastapi.testclient import TestClient
 
 from app.core.db import build_engine, build_session_factory, create_all
 
@@ -15,3 +16,21 @@ def db_session(tmp_path):
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture
+def api_client(db_session):
+    """TestClient con `get_session` sobreescrito para usar la misma BD efimera de `db_session`."""
+
+    from app.api.app import app
+    from app.api.deps import get_session
+
+    def _override_get_session():
+        yield db_session
+
+    app.dependency_overrides[get_session] = _override_get_session
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()

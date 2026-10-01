@@ -28,6 +28,7 @@ from app.core.repository import (
     evidence_to_row,
     plan_to_row,
     result_to_row,
+    row_to_evidence,
     row_to_plan,
     row_to_result,
 )
@@ -38,6 +39,7 @@ from app.models.tables import (
     Assessment,
     CriterionResultRow,
     Event,
+    EvidenceRow,
     Incident,
     LogPatternRow,
     Organization,
@@ -72,7 +74,7 @@ def _hash_files(files: list[Path]) -> str:
     return hasher.hexdigest()
 
 
-def _get_or_create_organization(session: Session, nombre: str) -> Organization:
+def get_or_create_organization(session: Session, nombre: str) -> Organization:
     org = session.query(Organization).filter_by(nombre=nombre).one_or_none()
     if org is None:
         org = Organization(nombre=nombre)
@@ -189,7 +191,7 @@ def run_assessment(
     apply_ai_adjustment: bool = False,
     context: dict[str, Any] | None = None,
 ) -> Assessment:
-    org = _get_or_create_organization(session, org_name)
+    org = get_or_create_organization(session, org_name)
     assessment = Assessment(
         org_id=org.id,
         estado="creada",
@@ -281,6 +283,11 @@ def load_criterion_results(session: Session, assessment_id: str) -> list[Criteri
     return [row_to_result(row) for row in rows]
 
 
+def load_evidence(session: Session, assessment_id: str) -> list[EvidenceInstance]:
+    rows = session.query(EvidenceRow).filter_by(assessment_id=assessment_id).all()
+    return [row_to_evidence(row) for row in rows]
+
+
 def generate_plans(
     session: Session,
     methodology: Methodology,
@@ -330,7 +337,7 @@ def ingest_events(
     logra simplemente evaluando una nueva assessment, nunca mutando una anterior).
     """
 
-    org = _get_or_create_organization(session, org_name)
+    org = get_or_create_organization(session, org_name)
     raw_events = load_events_jsonl(jsonl_path)
 
     por_scope: dict[str, list] = {}
@@ -420,6 +427,26 @@ def list_incidents(session: Session, org_name: str) -> list[Incident]:
 def load_incident_plans(session: Session, incident_id: str) -> list[Plan]:
     rows = session.query(PlanRow).filter_by(incident_id=incident_id).all()
     return [row_to_plan(row) for row in rows]
+
+
+def get_incident(session: Session, incident_id: str) -> Incident | None:
+    return session.get(Incident, incident_id)
+
+
+def get_organization(session: Session, org_id: str) -> Organization | None:
+    return session.get(Organization, org_id)
+
+
+def list_organizations(session: Session) -> list[Organization]:
+    return session.query(Organization).order_by(Organization.nombre).all()
+
+
+def get_assessment(session: Session, assessment_id: str) -> Assessment | None:
+    return session.get(Assessment, assessment_id)
+
+
+def list_assessments(session: Session) -> list[Assessment]:
+    return session.query(Assessment).order_by(Assessment.creado_en.desc()).all()
 
 
 @dataclass
