@@ -27,6 +27,9 @@ class CriterionResult(BaseModel):
     final_score: float | None = None
     explanation: str
     evidence_ids: list[str] = []
+    #: El ajuste de IA se intento pero no fue usable (R5/J4, docs/01 §5.3, docs/05 §3.3):
+    #: `final_score` se queda igual a `base_score`, nunca se inventa un resultado.
+    degradado: bool = False
 
 
 class Nivel(StrEnum):

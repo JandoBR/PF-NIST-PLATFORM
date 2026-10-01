@@ -8,7 +8,10 @@ juntos.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
+from app.ai.adjustment import adjust
+from app.ai.client import AIClient
 from app.evaluation.rules import (
     gv01_policy,
     pr01_encryption,
@@ -61,3 +64,28 @@ def evaluate_all(
         result.criterion_version = criterion.version
         results.append(result)
     return results
+
+
+def apply_ai_adjustments(
+    methodology: Methodology,
+    results: list[CriterionResult],
+    evidence: list[EvidenceInstance],
+    client: AIClient,
+    context: dict[str, Any],
+) -> list[CriterionResult]:
+    """U2 sobre cada resultado base (docs/05 §3). `base_score` de cada resultado nunca cambia."""
+
+    evidence_by_id = {item.id: item for item in evidence}
+    alpha = methodology.settings.ia.alpha
+    divergencia_maxima = methodology.settings.ia.divergencia_maxima
+
+    adjusted = []
+    for result in results:
+        criterion = methodology.criterios.get(result.criterion_id)
+        if criterion is None:
+            adjusted.append(result)
+            continue
+        adjusted.append(
+            adjust(client, criterion, result, evidence_by_id, context, alpha, divergencia_maxima)
+        )
+    return adjusted

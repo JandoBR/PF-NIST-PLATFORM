@@ -1,4 +1,4 @@
-"""Contrato de salida de U1 — extraccion documental (docs/05 §2.2), validado estrictamente."""
+"""Contratos de salida de IA (docs/05 §2.2 U1, §3.1 U2), validados estrictamente."""
 
 from __future__ import annotations
 
@@ -21,3 +21,14 @@ class ExtractedClaim(BaseModel):
 
 class ExtractionResponse(BaseModel):
     afirmaciones: list[ExtractedClaim] = Field(default_factory=list)
+
+
+class AdjustmentResponse(BaseModel):
+    """U2 — ajuste contextual acotado (docs/05 §3.1)."""
+
+    criterion_id: str
+    puntaje_base_recibido: float
+    puntaje_propuesto: float
+    justificacion: str
+    evidencias_referenciadas: list[str] = Field(default_factory=list)
+    confianza: float = 0.0

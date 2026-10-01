@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -100,6 +101,8 @@ def run_assessment(
     ansible_path: Path | None = None,
     documents_path: Path | None = None,
     ai_client: AIClient | None = None,
+    apply_ai_adjustment: bool = False,
+    context: dict[str, Any] | None = None,
 ) -> Assessment:
     org = _get_or_create_organization(session, org_name)
     assessment = Assessment(
@@ -116,6 +119,11 @@ def run_assessment(
             methodology, terraform_path, ansible_path, documents_path, scope, ai_client
         )
         results = engine.evaluate_all(methodology, evidence)
+
+        if apply_ai_adjustment and ai_client is not None:
+            results = engine.apply_ai_adjustments(
+                methodology, results, evidence, ai_client, context or {}
+            )
 
         for source in sources:
             source.assessment_id = assessment.id
@@ -142,6 +150,8 @@ def reevaluate(
     previous_assessment_id: str,
     *,
     ai_client: AIClient | None = None,
+    apply_ai_adjustment: bool = False,
+    context: dict[str, Any] | None = None,
 ) -> Assessment:
     """Crea una nueva evaluacion re-leyendo las mismas rutas que la anterior."""
 
@@ -169,6 +179,8 @@ def reevaluate(
         ansible_path=ansible_path,
         documents_path=documents_path,
         ai_client=ai_client,
+        apply_ai_adjustment=apply_ai_adjustment,
+        context=context,
     )
 
 

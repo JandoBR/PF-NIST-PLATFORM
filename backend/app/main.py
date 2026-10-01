@@ -17,6 +17,7 @@ y el sistema sigue funcionando con los criterios tecnicos (doc 05 §7, principio
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -36,17 +37,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(REPO_ROOT / ".env")
 
 
-def check_live_ai_guard(
-    documents_requested: bool, api_key: str | None, confirmed: bool
-) -> str | None:
+def check_live_ai_guard(ai_requested: bool, api_key: str | None, confirmed: bool) -> str | None:
     """Bloqueo explicito antes de gastar dinero real.
 
     Pedido tras un incidente real: una corrida de prueba disparo 3 llamadas pagadas porque
-    `backend/.env` ya tenia una API key real y nadie la noto hasta despues.
+    `backend/.env` ya tenia una API key real y nadie la noto hasta despues. Cubre tanto la
+    extraccion documental (U1) como el ajuste contextual (U2): ambas llaman al mismo cliente.
     Retorna un mensaje de error si hay que abortar, o None si se puede seguir.
     """
 
-    if not documents_requested or not api_key or confirmed:
+    if not ai_requested or not api_key or confirmed:
         return None
     return (
         "Hay una DEEPSEEK_API_KEY real configurada (shell o backend/.env).\n"
@@ -98,25 +98,26 @@ def _print_report(methodology: Methodology, results: list[CriterionResult]) -> N
         print("  Falta para el siguiente nivel: " + "; ".join(tier_estimate.faltantes))
 
 
-def _build_ai_client_if_needed(documents_requested: bool):
-    if not documents_requested:
+def _build_ai_client_if_needed(ai_requested: bool):
+    if not ai_requested:
         return None
     client = build_default_client()
     ia_activa = type(client).__name__ != "NullAIClient"
-    print(f"IA: {'activa (DeepSeek)' if ia_activa else 'no configurada, extraccion omitida'}.")
+    print(f"IA: {'activa (DeepSeek)' if ia_activa else 'no configurada'}.")
     return client
 
 
 def cmd_run(args: argparse.Namespace) -> None:
     methodology = load_methodology(REPO_ROOT / "methodology")
 
+    ai_requested = args.documents is not None or args.ai_adjust
     guard_error = check_live_ai_guard(
-        args.documents is not None, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
+        ai_requested, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
     )
     if guard_error:
         _abort(guard_error)
 
-    client = _build_ai_client_if_needed(args.documents is not None)
+    client = _build_ai_client_if_needed(ai_requested)
     session = _open_session()
     assessment = svc.run_assessment(
         session,
@@ -127,6 +128,8 @@ def cmd_run(args: argparse.Namespace) -> None:
         ansible_path=args.ansible,
         documents_path=args.documents,
         ai_client=client,
+        apply_ai_adjustment=args.ai_adjust,
+        context=json.loads(args.context),
     )
     results = svc.load_criterion_results(session, assessment.id)
     print(f"\nAssessment guardado: {assessment.id} (org={args.org})\n")
@@ -156,15 +159,23 @@ def cmd_reevaluate(args: argparse.Namespace) -> None:
         .first()
         is not None
     )
+    ai_requested = tiene_documentos or args.ai_adjust
     guard_error = check_live_ai_guard(
-        tiene_documentos, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
+        ai_requested, os.environ.get("DEEPSEEK_API_KEY"), args.confirm_live_ai
     )
     if guard_error:
         _abort(guard_error)
 
-    client = _build_ai_client_if_needed(tiene_documentos)
+    client = _build_ai_client_if_needed(ai_requested)
     try:
-        assessment = svc.reevaluate(session, methodology, args.assessment_id, ai_client=client)
+        assessment = svc.reevaluate(
+            session,
+            methodology,
+            args.assessment_id,
+            ai_client=client,
+            apply_ai_adjustment=args.ai_adjust,
+            context=json.loads(args.context),
+        )
     except svc.AssessmentNotFoundError:
         _abort(f"No existe un assessment con id {args.assessment_id!r}.")
         return
@@ -212,6 +223,12 @@ def main() -> None:
     )
     run_parser.add_argument("--org", default="Organizacion Demo")
     run_parser.add_argument("--scope", default="entorno:produccion")
+    run_parser.add_argument(
+        "--ai-adjust", action="store_true", help="Aplica U2 (ajuste contextual) con IA"
+    )
+    run_parser.add_argument(
+        "--context", default="{}", help='Contexto para U2 como JSON, ej. \'{"sector": "salud"}\''
+    )
     run_parser.add_argument("--confirm-live-ai", action="store_true")
     run_parser.set_defaults(func=cmd_run)
 
@@ -222,6 +239,10 @@ def main() -> None:
         "reevaluate", help="Nueva evaluacion heredando las fuentes de una anterior"
     )
     reeval_parser.add_argument("assessment_id")
+    reeval_parser.add_argument(
+        "--ai-adjust", action="store_true", help="Aplica U2 (ajuste contextual) con IA"
+    )
+    reeval_parser.add_argument("--context", default="{}", help="Contexto para U2 como JSON")
     reeval_parser.add_argument("--confirm-live-ai", action="store_true")
     reeval_parser.set_defaults(func=cmd_reevaluate)
 

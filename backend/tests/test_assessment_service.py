@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 
@@ -7,6 +8,29 @@ from app.core import assessment_service as svc
 from app.evaluation.schemas import Estado
 from app.methodology.loader import load_methodology
 from app.models.tables import Assessment, Source
+
+
+class _EchoAdjustingClient:
+    """Fake de prueba: lee los IDs de evidencia del propio prompt y los re-referencia, en vez
+    de adivinar UUIDs generados en la corrida (cada EvidenceInstance se crea con uno nuevo)."""
+
+    def __init__(self, delta: float) -> None:
+        self.delta = delta
+
+    def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
+        payload = json.loads(user_prompt)
+        evidencia_ids = [e["id"] for e in payload["evidencias"]]
+        if not evidencia_ids:
+            return None
+        base = payload["base_score"]
+        return {
+            "criterion_id": payload["criterion"]["id"],
+            "puntaje_base_recibido": base,
+            "puntaje_propuesto": base + self.delta,
+            "justificacion": f"ajuste de prueba citando {evidencia_ids[0]}",
+            "evidencias_referenciadas": evidencia_ids,
+            "confianza": 0.9,
+        }
 
 METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "terraform"
@@ -67,6 +91,41 @@ def test_run_assessment_combines_terraform_and_ansible_evidence(db_session, meth
     results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, assessment.id)}
     assert results["CRI-PR-04"].final_score == 100  # sshd endurecido via Ansible
     assert results["CRI-PR-06"].final_score == 100  # CloudTrail multirregion + rsyslog
+
+
+def test_run_assessment_applies_ai_adjustment_within_bounds(db_session, methodology):
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Ajuste",
+        scope="s",
+        terraform_path=FIXTURES / "gaps",
+        ai_client=_EchoAdjustingClient(delta=40),  # fuera del margen D=20: debe acotarse
+        apply_ai_adjustment=True,
+    )
+
+    results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, assessment.id)}
+    pr01 = results["CRI-PR-01"]
+
+    assert pr01.base_score == 25  # el ajuste nunca toca base_score
+    assert pr01.final_score == 30  # B=25, A acotado a 45 (25+20), S=0.75*25+0.25*45
+    assert pr01.degradado is False
+    assert "Ajuste contextual" in pr01.explanation
+
+
+def test_run_assessment_without_ai_adjust_flag_leaves_base_score_as_final(db_session, methodology):
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Sin Ajuste",
+        scope="s",
+        terraform_path=FIXTURES / "gaps",
+        ai_client=_EchoAdjustingClient(delta=40),
+        apply_ai_adjustment=False,  # el cliente existe pero no se usa para ajustar
+    )
+
+    results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, assessment.id)}
+    assert results["CRI-PR-01"].final_score == 25
 
 
 def test_run_assessment_marks_failure_without_losing_the_row(db_session, methodology):

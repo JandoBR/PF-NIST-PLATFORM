@@ -106,5 +106,6 @@ class CriterionResultRow(Base):
     final_score: Mapped[float | None] = mapped_column(nullable=True)
     explanation: Mapped[str] = mapped_column(Text)
     evidence_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    degradado: Mapped[bool] = mapped_column(default=False)
 
     assessment: Mapped[Assessment] = relationship(back_populates="criterion_results")

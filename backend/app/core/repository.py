@@ -54,6 +54,7 @@ def result_to_row(assessment_id: str, result: CriterionResult) -> CriterionResul
         final_score=result.final_score,
         explanation=result.explanation,
         evidence_ids=result.evidence_ids,
+        degradado=result.degradado,
     )
 
 
@@ -66,4 +67,5 @@ def row_to_result(row: CriterionResultRow) -> CriterionResult:
         final_score=row.final_score,
         explanation=row.explanation,
         evidence_ids=row.evidence_ids,
+        degradado=row.degradado,
     )
