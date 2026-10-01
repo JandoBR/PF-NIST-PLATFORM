@@ -1,0 +1,184 @@
+# 02 — Catálogo de Evidencias
+
+Contratos de evidencia del prototipo, reglas de extracción de cada adaptador y tratamiento de
+contradicciones y valores desconocidos.
+
+## 1. Familias de Evidencia
+
+| Prefijo | Familia | Origen | Modalidad |
+|---|---|---|---|
+| `tf.*` | Terraform | Adaptador HCL | `declarada` |
+| `an.*` | Ansible | Adaptador YAML | `declarada` |
+| `doc.*` | Documentos | Extracción con IA | `documental` |
+| `log.*` | Logs / eventos | Ingesta y correlación | `operativa` |
+| `ctx.*` | Contexto organizacional | Formulario / carga manual | `contexto` |
+
+## 2. Contrato Completo de un Tipo
+
+```yaml
+id: <prefijo>.<nombre>          # inmutable junto con la versión
+version: 1
+descripcion: >
+  Significado exacto de la observación.
+valor_schema: <JSON Schema>     # estructura del campo value
+modalidad_permitida: [declarada | documental | operativa | contexto]
+requiere_locator: true|false    # si exige archivo+líneas / página / id de evento
+estado: draft | published | deprecated
+publicado: <fecha>
+notas: >
+  Límites conocidos del tipo (qué NO puede afirmarse con esta evidencia).
+```
+
+Ejemplo completo:
+
+```yaml
+id: tf.security_group.rules
+version: 1
+descripcion: >
+  Reglas de ingress/egress declaradas en un security group, normalizadas por protocolo,
+  rango de puertos y CIDR de origen/destino.
+valor_schema:
+  type: array
+  items:
+    type: object
+    required: [direccion, protocolo, puerto_desde, puerto_hasta, cidr]
+    properties:
+      direccion: { enum: [ingress, egress] }
+      protocolo: { type: string }        # tcp, udp, icmp, -1
+      puerto_desde: { type: [integer, "null"] }
+      puerto_hasta: { type: [integer, "null"] }
+      cidr: { type: string }             # 0.0.0.0/0, ::/0, 10.0.0.0/16, sg-xxx
+modalidad_permitida: [declarada]
+requiere_locator: true
+estado: published
+publicado: 2026-09-30
+notas: >
+  Una regla permisiva NO demuestra accesibilidad efectiva: la conectividad depende de
+  subredes, rutas, NACLs y del recurso destino. Solo afirma intención de configuración.
+```
+
+## 3. Catálogo Inicial
+
+### 3.1 Terraform (`tf.*`)
+
+| ID | value (resumen) | Uso principal |
+|---|---|---|
+| `tf.resource.present` | `{ tipo, nombre, entorno? }` | Inventario y existencia de recursos soportados. |
+| `tf.attr.value` | `{ recurso, atributo, valor\|unknown, motivo_unknown? }` | Atributos literales o resolubles (no expresiones). |
+| `tf.encryption.config` | `{ estado, mecanismo?, llave? }` | Cifrado en reposo (RDS, S3). |
+| `tf.public_access.config` | `{ bloqueo_publico: bool\|unknown, nivel? }` | Acceso público a almacenamiento (S3). |
+| `tf.backup.config` | `{ retencion_dias?: int, habilitado?: bool, ventana? }` | Retención de backups (RDS). |
+| `tf.logging.config` | `{ habilitado: bool\|unknown, multi_region?, destino? }` | CloudTrail / logging declarado. |
+| `tf.security_group.rules` | reglas normalizadas (ver §2) | Exposición de red de grupos de seguridad. |
+| `tf.versioning.config` | `{ habilitado: bool\|unknown }` | Versionado de almacenamiento. |
+| `tf.expression.unresolved` | `{ recurso, atributo, expresion, motivo }` | Limitación explícita del parser. |
+
+Alcance del adaptador: recursos **`aws_db_instance`, `aws_s3_bucket` (+ `aws_s3_bucket_*`),
+`aws_security_group`, `aws_cloudtrail`**. Todo otro recurso produce `tf.resource.present` si se
+reconoce el bloque, o se ignora registrando la limitación.
+
+### 3.2 Ansible (`an.*`)
+
+| ID | value (resumen) | Uso principal |
+|---|---|---|
+| `an.playbook.present` | `{ archivo, plays, hosts }` | Detectar automatización existente. |
+| `an.task.config` | `{ modulo, parametros, tarea, archivo }` | Tareas declarativas interpretadas. |
+| `an.file.permissions` | `{ ruta, modo, owner? }` | Permisos sobre archivos sensibles. |
+| `an.service.state` | `{ servicio, estado }` | Servicios de seguridad habilitados. |
+| `an.task.uninterpreted` | `{ tarea, motivo }` | Tareas con `command`, `shell`, plantillas complejas o condicionales no resolubles. |
+
+Alcance inicial: módulos `lineinfile`, `copy`, `template` (solo rutas), `file`, `service`,
+`ufw`/`iptables` (parámetros básicos). **No se ejecuta ningún playbook ni comando.**
+
+### 3.3 Documentos (`doc.*`)
+
+| ID | value (resumen) | Uso principal |
+|---|---|---|
+| `doc.claim` | `{ tipo_afirmacion, contenido, encontrado, confianza }` | Afirmación estructurada extraída por IA. |
+| `doc.source.info` | `{ titulo, version_documento?, fecha?, paginas }` | Metadatos del documento analizado. |
+
+Tipos de afirmación (`tipo_afirmacion`) usados por los criterios:
+
+| tipo_afirmacion | Campos esperados en `contenido` |
+|---|---|
+| `policy_exists` | `{ nombre, aprobada_por?, fecha? }` |
+| `policy_review` | `{ frecuencia, ultima_revision? }` |
+| `role_assigned` | `{ rol, responsable, responsabilidades[] }` |
+| `risk_tolerance` | `{ descripcion }` |
+| `process_defined` | `{ proceso, pasos[], responsables[] }` |
+| `escalation_path` | `{ niveles[], criterios[] }` |
+| `notification_list` | `{ stakeholders[] }` |
+| `backup_policy` | `{ frecuencia, retencion, pruebas? }` |
+| `training_program` | `{ alcance, frecuencia }` |
+| `data_inventory` | `{ tipos_datos[], clasificacion? }` |
+
+Reglas de extracción:
+
+- Cada afirmación exige **fragmento textual y localización** (página/sección). Sin cita → se descarta.
+- `encontrado: false` es válido: significa “el documento no lo declara”, no “no existe”.
+- La confianza baja (`< umbral`) se marca como limitación y no se usa como evidencia suficiente.
+- Nunca se extraen credenciales, claves ni datos personales de los documentos; se redactan antes de enviar.
+
+### 3.4 Logs (`log.*`)
+
+| ID | value (resumen) | Uso principal |
+|---|---|---|
+| `log.event` | evento individual normalizado (ver doc 06) | Correlación y patrones. |
+| `log.pattern` | `{ patron, resultado, inicio, fin, conteo }` | Evidencia operativa agregada. |
+| `log.window` | `{ desde, hasta, completo: bool }` | Completitud de la ventana observada. |
+
+Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_declared`, `escalation_done`,
+`restore_exercise_run`, `restore_verified`.
+
+### 3.5 Contexto (`ctx.*`)
+
+| ID | value (resumen) |
+|---|---|
+| `ctx.profile` | `{ sector, tamano, activos_criticos[], tipos_datos[], nube, perfil_objetivo }` |
+| `ctx.exclusions` | `{ recurso_o_criterio, motivo, aprobado_por }` (alimenta `no_aplicable`) |
+
+## 4. Valores Desconocidos y Expresiones
+
+| Situación | Tratamiento |
+|---|---|
+| Atributo con expresión simple resoluble (variable local literal) | Se resuelve y se registra `resuelto_por: parser`. |
+| Atributo con función, `for_each`, `count`, módulo o referencia remota | `unknown` + `tf.expression.unresolved` con motivo. |
+| Ansible con `command`, `shell`, plantilla compleja, `when` no evaluable | `an.task.uninterpreted`. |
+| Atributo simplemente ausente | **No** se asume `false`; produce `unknown` con motivo `atributo_ausente`, salvo default documentado del proveedor. |
+| Default conocido del proveedor (ej. S3 cifra nuevas cargas por defecto) | Se registra como `unknown` y el criterio decide; no se asume cumplimiento automático. |
+
+> `unknown` nunca equivale a `disabled` ni a `enabled`. Alimenta `evidencia_insuficiente`.
+
+## 5. Precedencia de Fuentes y Contradicciones
+
+Regla base (D7): **una observación técnica explícita prevalece sobre una afirmación documental
+cuando ambas hablan del mismo recurso, propiedad y alcance.**
+
+| Caso | Tratamiento | Efecto |
+|---|---|---|
+| Política dice “BD no pública”; Terraform dice `publicly_accessible = true` | Prevalece Terraform. Se registra contradicción. | El criterio usa el valor técnico; se crea hallazgo de coherencia. |
+| Política dice “backups 7 días”; Terraform dice `backup_retention_period = 1` | Prevalece Terraform. | Igual que arriba. |
+| Política dice “hay responsable de incidentes”; Terraform no aporta nada | Se acepta la evidencia documental. | Sin contradicción; el criterio de proceso usa `doc.claim`. |
+| Terraform tiene expresión no resuelta | No contradice al documento; es limitación. | Criterio → `evidencia_insuficiente` para ese recurso. |
+| Fuentes de entornos o momentos distintos | No se comparan ni contradicen. | Requieren mismo `scope` y ventana compatible. |
+| Dos documentos se contradicen | Se registran ambos; el criterio decide con su regla (usualmente gana la fuente más reciente o específica). | Hallazgo de contradicción documental. |
+
+Las contradicciones se registran como **hallazgos** con ambos lados citados (evidencia + locator).
+No penalizan doble: el hallazgo referencia el criterio afectado una sola vez.
+
+## 6. Versionado e Inmutabilidad en la Práctica
+
+| Cambio | Acción |
+|---|---|
+| Mejora del parser que produce el mismo significado | Nueva versión de adaptador; tipos de evidencia iguales. |
+| Cambia el significado de una observación | Nuevo `version` del tipo de evidencia. |
+| Cambia la regla de un criterio | Nuevo `version` del criterio; nueva `methodology_version`. |
+| Error en una evaluación pasada | No se edita: se crea una evaluación nueva (la anterior queda como histórica). |
+
+## 7. Límites Declarados del Prototipo
+
+- Solo AWS y solo 4 tipos de recurso principales.
+- No resuelve módulos remotos de Terraform ni expresiones complejas.
+- No ejecuta Ansible ni Terraform; no consulta la nube.
+- No interpreta imágenes, escaneos ni PDFs sin capa de texto (se puede declarar límite si aparece).
+- Los logs son simulados; su valor está en demostrar el flujo, no en vigilar un sistema real.
