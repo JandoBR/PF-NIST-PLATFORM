@@ -9,19 +9,11 @@ import {
   Info,
   RefreshCw,
   Loader2,
+  Lock,
 } from 'lucide-react';
 import type { AssessmentDetail, CriterionResult, Estado } from '@/lib/types';
 import { FUNCTION_NAMES, FUNCTION_ORDER, TIER_LABELS } from '@/lib/types';
-import { ESTADO_META } from '@/lib/ui';
-
-const FUNCTION_ACCENTS: Record<string, string> = {
-  GV: '#a78bfa',
-  ID: '#60a5fa',
-  PR: '#34d399',
-  DE: '#fbbf24',
-  RS: '#fb7185',
-  RC: '#2dd4bf',
-};
+import { ESTADO_META, FUNCTION_ACCENTS, PRIVACY_CRITERIA, PRIVACY_SCOPE_NOTE } from '@/lib/ui';
 
 interface DashboardProps {
   assessment: AssessmentDetail;
@@ -58,6 +50,8 @@ export function MaturityDashboard({
       aggregate: byRef.get(key)!,
     }));
   }, [assessment.agregados_funcion]);
+
+  const privacy = useMemo(() => criteria.filter((c) => PRIVACY_CRITERIA.has(c.criterion_id)), [criteria]);
 
   const filtered = useMemo(() => {
     return criteria.filter((c) => {
@@ -176,6 +170,9 @@ export function MaturityDashboard({
         </div>
       </div>
 
+      {/* Privacidad relacionada con ciberseguridad (docs/03 §7) */}
+      {privacy.length > 0 && <PrivacySection criteria={privacy} />}
+
       {/* Tabla de criterios */}
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-white/[0.06] p-5">
@@ -236,6 +233,68 @@ export function MaturityDashboard({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function PrivacySection({ criteria }: { criteria: CriterionResult[] }) {
+  const evaluados = criteria.filter((c) => c.estado === 'evaluado').length;
+  const scored = criteria.filter((c) => c.final_score != null);
+  const avg = scored.length > 0 ? scored.reduce((n, c) => n + (c.final_score ?? 0), 0) / scored.length : null;
+  const cobertura = criteria.length > 0 ? evaluados / criteria.length : null;
+
+  return (
+    <div className="card p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/10 ring-1 ring-teal-500/20">
+            <Lock className="h-5 w-5 text-teal-300" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-white">Privacidad relacionada con ciberseguridad</h3>
+            <p className="text-xs text-slate-500">
+              Intersección con el Privacy Framework: eventos de ciberseguridad que afectan datos personales.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <PrivacyStat label="Score" value={avg != null ? `${Math.round(avg)}` : '—'} />
+          <PrivacyStat label="Cobertura" value={cobertura != null ? `${Math.round(cobertura * 100)}%` : '—'} />
+          <PrivacyStat label="Criterios" value={`${criteria.length}`} />
+        </div>
+      </div>
+
+      <div className="divide-y divide-white/[0.04] rounded-lg border border-white/[0.06]">
+        {criteria.map((c) => {
+          const meta = ESTADO_META[c.estado];
+          return (
+            <div key={c.criterion_id} className="flex items-center gap-3 px-4 py-2.5">
+              <span className="w-24 flex-shrink-0 font-mono text-xs text-slate-400">{c.criterion_id}</span>
+              <span className="min-w-0 flex-1 truncate text-xs text-slate-500" title={c.explanation}>
+                {c.explanation}
+              </span>
+              <span className="w-8 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
+                {c.final_score != null ? Math.round(c.final_score) : '—'}
+              </span>
+              <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 flex items-start gap-1.5 text-xs text-slate-600">
+        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+        {PRIVACY_SCOPE_NOTE}
+      </p>
+    </div>
+  );
+}
+
+function PrivacyStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-white/[0.06] bg-ink-900/40 px-3 py-1.5 text-center">
+      <p className="text-sm font-bold text-white">{value}</p>
+      <p className="text-[11px] text-slate-500">{label}</p>
     </div>
   );
 }
@@ -317,6 +376,14 @@ function CriterionRow({ criterion }: { criterion: CriterionResult }) {
           <span className="flex-shrink-0 font-mono text-xs font-semibold text-slate-300">
             {criterion.criterion_id}
           </span>
+          {PRIVACY_CRITERIA.has(criterion.criterion_id) && (
+            <span
+              className="chip flex-shrink-0 border border-teal-500/30 bg-teal-500/10 text-teal-300"
+              title="Criterio del cruce con privacidad (docs/03 §7)"
+            >
+              Privacidad
+            </span>
+          )}
           <span className="truncate text-sm text-slate-400">{criterion.explanation}</span>
         </div>
         <div className="hidden w-32 sm:block">

@@ -36,7 +36,7 @@ type Tab = 'dashboard' | 'recommendations' | 'threats' | 'compare';
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Resumen de Madurez', icon: <LayoutDashboard className="h-4 w-4" /> },
   { key: 'recommendations', label: 'Recomendaciones', icon: <Brain className="h-4 w-4" /> },
-  { key: 'threats', label: 'Simulación de Amenazas', icon: <Radar className="h-4 w-4" /> },
+  { key: 'threats', label: 'Eventos e Incidentes', icon: <Radar className="h-4 w-4" /> },
   { key: 'compare', label: 'Comparar', icon: <GitCompare className="h-4 w-4" /> },
 ];
 

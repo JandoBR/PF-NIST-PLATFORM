@@ -109,7 +109,9 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">Ingesta de Eventos · {orgNombre}</h3>
-              <p className="text-xs text-slate-500">Los disparadores deterministas (D1/D3/D4/D5) abren o actualizan incidentes.</p>
+              <p className="text-xs text-slate-500">
+                Eventos reales de los logs: los disparadores deterministas (D1/D3/D4/D5) abren o actualizan incidentes.
+              </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">

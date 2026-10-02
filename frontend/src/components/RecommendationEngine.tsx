@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   CheckCircle2,
   Link2,
+  ChevronRight,
 } from 'lucide-react';
 import { ApiError, createPlans } from '@/lib/api';
 import type { Finding, Plan } from '@/lib/types';
@@ -49,6 +50,7 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
     }
   }
 
+  const hasPlans = plans.length > 0;
   const roadmap = plans.filter((p) => priorityFilter === 'all' || p.prioridad === priorityFilter);
   const priorityOrder = ['alta', 'media', 'baja'];
 
@@ -89,26 +91,37 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
               onClick={() => handleGenerate(false)}
               disabled={generating !== null}
               className="btn-ghost border border-white/[0.06] text-xs"
+              title={
+                hasPlans
+                  ? 'Vuelve a calcular el plan desde la plantilla determinista y reemplaza el actual.'
+                  : 'Genera el plan de acción a partir de los hallazgos, sin IA.'
+              }
             >
               {generating === 'plantilla' ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Route className="h-3.5 w-3.5" />
               )}
-              {plans.length > 0 ? 'Regenerar plan (plantilla)' : 'Generar plan (plantilla)'}
+              {hasPlans ? 'Regenerar plan (plantilla)' : 'Generar plan (plantilla)'}
             </button>
             <button
               onClick={() => handleGenerate(true)}
               disabled={generating !== null}
               className="btn-ghost border border-cyan-500/20 text-xs text-cyan-300 hover:text-cyan-200"
+              title="Genera el plan con la capa de IA (requiere DEEPSEEK_API_KEY configurada)."
             >
               {generating === 'ia' ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Sparkles className="h-3.5 w-3.5" />
               )}
-              Generar plan con IA
+              {hasPlans ? 'Regenerar con IA' : 'Generar plan con IA'}
             </button>
+            {hasPlans && (
+              <span className="text-xs text-slate-600">
+                Regenerar reemplaza el plan actual por uno recalculado con los hallazgos vigentes.
+              </span>
+            )}
           </div>
         )}
 
@@ -133,7 +146,12 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
       </div>
 
       {view === 'findings' ? (
-        <FindingsList findings={findings} />
+        <FindingsList
+          findings={findings}
+          plans={plans}
+          generating={generating}
+          onGenerate={() => handleGenerate(false)}
+        />
       ) : plans.length === 0 ? (
         <div className="card px-5 py-12 text-center text-sm text-slate-500">
           Aún no hay un plan generado. Usa los botones de arriba.
@@ -172,7 +190,20 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
   );
 }
 
-function FindingsList({ findings }: { findings: Finding[] }) {
+function FindingsList({
+  findings,
+  plans,
+  generating,
+  onGenerate,
+}: {
+  findings: Finding[];
+  plans: Plan[];
+  generating: 'plantilla' | 'ia' | null;
+  onGenerate: () => void;
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const planByCriterion = new Map(plans.map((p) => [p.criterion_id, p]));
+
   if (findings.length === 0) {
     return (
       <div className="card flex flex-col items-center justify-center px-6 py-16 text-center">
@@ -190,18 +221,54 @@ function FindingsList({ findings }: { findings: Finding[] }) {
       <div className="divide-y divide-white/[0.04]">
         {findings.map((f) => {
           const meta = SEVERITY_META[f.severidad];
+          const open = expanded === f.criterion_id;
+          const plan = planByCriterion.get(f.criterion_id);
           return (
-            <div key={f.criterion_id} className="flex items-center gap-4 px-5 py-3.5">
-              <ShieldAlert className="h-4 w-4 flex-shrink-0 text-slate-500" />
-              <span className="flex-shrink-0 font-mono text-xs font-semibold text-slate-300">{f.criterion_id}</span>
-              <span className="min-w-0 flex-1 truncate text-sm text-slate-300">{f.titulo}</span>
-              <span className="flex items-center gap-1 text-xs text-slate-500">
-                <Link2 className="h-3 w-3" /> {f.evidence_ids.length}
-              </span>
-              <span className="w-10 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
-                {Math.round(f.score)}
-              </span>
-              <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
+            <div key={f.criterion_id}>
+              <button
+                onClick={() => setExpanded(open ? null : f.criterion_id)}
+                className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.02]"
+              >
+                <ShieldAlert className="h-4 w-4 flex-shrink-0 text-slate-500" />
+                <span className="flex-shrink-0 font-mono text-xs font-semibold text-slate-300">{f.criterion_id}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-300">{f.titulo}</span>
+                <span className="flex items-center gap-1 text-xs text-slate-500">
+                  <Link2 className="h-3 w-3" /> {f.evidence_ids.length}
+                </span>
+                <span className="w-10 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
+                  {Math.round(f.score)}
+                </span>
+                <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
+                <ChevronRight
+                  className={`h-4 w-4 flex-shrink-0 text-slate-600 transition-transform ${open ? 'rotate-90' : ''}`}
+                />
+              </button>
+
+              {open && (
+                <div className="animate-fade-in border-t border-white/[0.04] bg-ink-900/30 px-5 py-4">
+                  {plan ? (
+                    <PlanBody plan={plan} />
+                  ) : (
+                    <div className="flex flex-col items-start gap-3">
+                      <p className="text-xs text-slate-500">
+                        Este hallazgo todavía no tiene un plan de acción generado.
+                      </p>
+                      <button
+                        onClick={onGenerate}
+                        disabled={generating !== null}
+                        className="btn-ghost border border-white/[0.06] text-xs"
+                      >
+                        {generating === 'plantilla' ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Route className="h-3.5 w-3.5" />
+                        )}
+                        Generar planes de acción
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
@@ -210,9 +277,56 @@ function FindingsList({ findings }: { findings: Finding[] }) {
   );
 }
 
-function PlanCard({ plan, index }: { plan: Plan; index: number }) {
+/** Cuerpo de un plan, compartido por el acordeón de hallazgos y la vista de Plan de Acción. */
+function PlanBody({ plan }: { plan: Plan }) {
   const meta = SEVERITY_META[plan.prioridad as keyof typeof SEVERITY_META] ?? SEVERITY_META.media;
   const isAi = plan.generado_por.startsWith('ai:');
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
+        <span className="font-mono text-xs text-slate-600">{plan.criterion_id}</span>
+        <span
+          className={`chip border text-xs ${
+            isAi ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' : 'border-white/10 bg-white/[0.04] text-slate-400'
+          }`}
+        >
+          {isAi ? 'Generado por IA' : 'Plantilla'}
+        </span>
+      </div>
+      <h4 className="mt-2 text-sm font-semibold text-white">{plan.titulo}</h4>
+      <p className="mt-2 text-sm leading-relaxed text-slate-400">{plan.objetivo}</p>
+
+      {plan.pasos.length > 0 && (
+        <ol className="mt-3 space-y-1.5">
+          {plan.pasos.map((paso, i) => (
+            <li key={i} className="flex gap-2 text-sm text-slate-300">
+              <span className="text-slate-600">{i + 1}.</span>
+              {paso}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="mt-3 rounded-lg border border-white/[0.04] bg-ink-900/40 p-3 text-xs text-slate-500">
+        <span className="font-semibold text-slate-400">Verificación: </span>
+        {plan.verificacion}
+      </div>
+
+      {plan.dependencias.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {plan.dependencias.map((d) => (
+            <span key={d} className="chip border border-white/10 bg-white/[0.03] text-slate-500">
+              {d}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanCard({ plan, index }: { plan: Plan; index: number }) {
   return (
     <div className="card card-hover animate-slide-up p-5" style={{ animationDelay: `${index * 40}ms` }}>
       <div className="flex items-start gap-4">
@@ -220,45 +334,7 @@ function PlanCard({ plan, index }: { plan: Plan; index: number }) {
           {index}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
-            <span className="font-mono text-xs text-slate-600">{plan.criterion_id}</span>
-            <span
-              className={`chip border text-xs ${
-                isAi ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' : 'border-white/10 bg-white/[0.04] text-slate-400'
-              }`}
-            >
-              {isAi ? 'Generado por IA' : 'Plantilla'}
-            </span>
-          </div>
-          <h4 className="mt-2 text-sm font-semibold text-white">{plan.titulo}</h4>
-          <p className="mt-2 text-sm leading-relaxed text-slate-400">{plan.objetivo}</p>
-
-          {plan.pasos.length > 0 && (
-            <ol className="mt-3 space-y-1.5">
-              {plan.pasos.map((paso, i) => (
-                <li key={i} className="flex gap-2 text-sm text-slate-300">
-                  <span className="text-slate-600">{i + 1}.</span>
-                  {paso}
-                </li>
-              ))}
-            </ol>
-          )}
-
-          <div className="mt-3 rounded-lg border border-white/[0.04] bg-ink-900/40 p-3 text-xs text-slate-500">
-            <span className="font-semibold text-slate-400">Verificación: </span>
-            {plan.verificacion}
-          </div>
-
-          {plan.dependencias.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {plan.dependencias.map((d) => (
-                <span key={d} className="chip border border-white/10 bg-white/[0.03] text-slate-500">
-                  {d}
-                </span>
-              ))}
-            </div>
-          )}
+          <PlanBody plan={plan} />
         </div>
       </div>
     </div>

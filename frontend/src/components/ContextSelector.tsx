@@ -126,6 +126,9 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
     setError(null);
     setNeedsConfirm(false);
     setConfirmLiveAi(false);
+    // La capa de IA es por corrida (docs/11 UI-03): no debe sobrevivir al cierre del modal.
+    setAiAdjust(false);
+    setUseAiForDocuments(false);
     onClose();
   }
 
@@ -245,8 +248,9 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
                 label="Usar IA para extraer afirmaciones de los documentos (U1)"
               />
               <p className="pl-6 text-xs text-slate-600">
-                Sin una DEEPSEEK_API_KEY configurada en el backend, esto no tiene costo ni efecto:
-                el resultado queda igual al puntaje base.
+                Solo aplica a esta evaluación: se restablece al cerrar o enviar el modal. Sin una
+                DEEPSEEK_API_KEY configurada en el backend, esto no tiene costo ni efecto: el
+                resultado queda igual al puntaje base.
               </p>
             </div>
 

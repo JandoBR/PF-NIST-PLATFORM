@@ -84,3 +84,31 @@ const THREAT_SEVERITY_META: Record<string, { label: string; text: string; bg: st
 export function incidentSeverityMeta(severidad: string) {
   return THREAT_SEVERITY_META[severidad] ?? THREAT_SEVERITY_META.media;
 }
+
+/** Color de acento por función CSF (docs/03 §1), compartido por el dashboard y la comparación. */
+export const FUNCTION_ACCENTS: Record<string, string> = {
+  GV: '#a78bfa',
+  ID: '#60a5fa',
+  PR: '#34d399',
+  DE: '#fbbf24',
+  RS: '#fb7185',
+  RC: '#2dd4bf',
+};
+
+/** Cruce con privacidad (docs/03 §7): criterios que tocan datos personales desde ciberseguridad. */
+export const PRIVACY_CRITERIA = new Set([
+  'CRI-ID-04',
+  'CRI-PR-01',
+  'CRI-PR-03',
+  'CRI-PR-05',
+  'CRI-DE-02',
+  'CRI-RS-01',
+  'CRI-RS-03',
+  'CRI-RC-01',
+  'CRI-RC-02',
+  'CRI-RC-03',
+]);
+
+/** Aclaración de alcance obligatoria en todo reporte con la dimensión de privacidad (docs/00 §6). */
+export const PRIVACY_SCOPE_NOTE =
+  'Cubre eventos de ciberseguridad que afectan datos personales; no es una evaluación integral de privacidad.';
