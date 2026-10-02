@@ -1408,3 +1408,26 @@ dominaba). `PR-05` no cambia (la política de exposición nunca puntuaba). Los g
 **Verificación:** backend **365 tests** + `ruff` limpio (8 casos nuevos en `test_contradictions.py`:
 exclusión, política concordante que sí cuenta, evidencia técnica intacta, retención 0, dos documentos,
 repetición en un mismo documento, `evaluate_only`, sin contradicción).
+
+## 42. Tope de puntaje mientras la contradicción siga sin resolverse
+
+Consecuencia de §41: al dejar de contar la afirmación contradicha, el puntaje de un criterio puede
+**subir** por el solo hecho de que aparezca una contradicción (`PR-02`: 50 → 75). Premiaría justo lo
+que no se puede verificar. Decisión: **mientras un criterio tenga una contradicción, su `final_score`
+no puede superar el de la evaluación anterior** del mismo org+scope (docs/02 §5).
+
+- **No penaliza, solo no premia:** puede bajar, nunca subir. `base_score` queda intacto (lo que dicen
+  las reglas); el tope se aplica a `final_score` y se anota en la explicación del criterio.
+- **Dónde:** `contradictions.cap_contradicted` (puro) y `assessment_service._cap_contradicted`, que
+  carga los puntajes de la evaluación anterior y se aplica después de los ajustes de IA en
+  `run_pending_assessment`. Sin evaluación anterior o sin puntaje anterior del criterio, no hay tope.
+- **Por qué mientras persista y no solo la primera vez:** una primera versión limitaba únicamente la
+  primera evaluación en que aparecía la contradicción; bastaba esperar una evaluación más para cobrar
+  el puntaje completo con la contradicción sin resolver. El tope se levanta resolviendo la
+  contradicción (corregir la política o la infraestructura).
+- **Costo conocido:** quien mejora de verdad la infraestructura no ve el puntaje subir mientras la
+  política la contradiga; el hallazgo `contradiccion` indica qué corregir.
+
+**Verificación:** backend **370 tests** (`test_contradictions.py`: tope, bajar sí
+permitido, sin puntaje anterior / otro criterio, sin contradicción, y un E2E de cuatro evaluaciones:
+nueva → tope, persiste → tope, se resuelve → se levanta).

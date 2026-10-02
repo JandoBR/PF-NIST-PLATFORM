@@ -173,6 +173,12 @@ puntuar; el criterio se evalúa como si no existiera, y queda el hallazgo más u
 del criterio. En documento-vs-documento no cuenta ninguno de los dos (no se elige un ganador). La
 evidencia técnica nunca se excluye.
 
+**Tope de puntaje:** mientras un criterio tenga una contradicción sin resolver, su puntaje final **no
+puede subir** respecto a la evaluación anterior del mismo org+scope (puede bajar). No penaliza: solo no
+premia una mejora técnica que la documentación contradice. El tope se levanta cuando política e
+infraestructura dejan de contradecirse. Sin evaluación anterior, o sin puntaje anterior para ese
+criterio, no hay tope. El `base_score` (lo que dicen las reglas) no cambia; solo el `final_score`.
+
 Implementado en `app/recommendations/contradictions.py` (docs/09 §38, §40): backup de la política vs
 `tf.backup.config`, "BD no pública" (`doc.claim(exposure_policy)`) vs `tf.db_exposure.config`, y dos
 documentos con retención o frecuencia de revisión distintas.
