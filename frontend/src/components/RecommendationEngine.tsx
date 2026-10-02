@@ -83,27 +83,12 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
         </div>
 
         {findings.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">
-            {!hasPlans && (
-              <button
-                onClick={() => handleGenerate(false)}
-                disabled={generating !== null}
-                className="btn-ghost border border-white/[0.06] text-xs"
-                title="Genera el plan de acción a partir de los hallazgos, sin IA."
-              >
-                {generating === 'plantilla' ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Route className="h-3.5 w-3.5" />
-                )}
-                Generar plan (plantilla)
-              </button>
-            )}
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/[0.06] pt-4">
             <button
               onClick={() => handleGenerate(true)}
               disabled={generating !== null}
               className="btn-ghost border border-cyan-500/20 text-xs text-cyan-300 hover:text-cyan-200"
-              title="Genera el plan con la capa de IA (requiere DEEPSEEK_API_KEY configurada)."
+              title="Recalcula el plan con la capa de IA (requiere DEEPSEEK_API_KEY configurada)."
             >
               {generating === 'ia' ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -112,11 +97,9 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
               )}
               {hasPlans ? 'Regenerar con IA' : 'Generar plan con IA'}
             </button>
-            {hasPlans && (
-              <span className="text-xs text-slate-600">
-                Los planes ya se generaron desde la plantilla determinista; regenerar con IA puede cambiarlos.
-              </span>
-            )}
+            <span className="text-xs text-slate-600">
+              El plan se genera automáticamente desde la plantilla determinista; con IA se recalcula.
+            </span>
           </div>
         )}
 
@@ -163,28 +146,13 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
           </span>
         </div>
 
-        <FindingsList
-          findings={visibleFindings}
-          plans={plans}
-          generating={generating}
-          onGenerate={() => handleGenerate(false)}
-        />
+        <FindingsList findings={visibleFindings} plans={plans} />
       </div>
     </div>
   );
 }
 
-function FindingsList({
-  findings,
-  plans,
-  generating,
-  onGenerate,
-}: {
-  findings: Finding[];
-  plans: Plan[];
-  generating: 'plantilla' | 'ia' | null;
-  onGenerate: () => void;
-}) {
+function FindingsList({ findings, plans }: { findings: Finding[]; plans: Plan[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const planByCriterion = new Map(plans.map((p) => [p.criterion_id, p]));
 
@@ -238,23 +206,10 @@ function FindingsList({
                   {plan ? (
                     <PlanBody plan={plan} />
                   ) : (
-                    <div className="flex flex-col items-start gap-3">
-                      <p className="text-xs text-slate-500">
-                        Este hallazgo todavía no tiene un plan de acción generado.
-                      </p>
-                      <button
-                        onClick={onGenerate}
-                        disabled={generating !== null}
-                        className="btn-ghost border border-white/[0.06] text-xs"
-                      >
-                        {generating === 'plantilla' ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Route className="h-3.5 w-3.5" />
-                        )}
-                        Generar planes de acción
-                      </button>
-                    </div>
+                    <p className="text-xs text-slate-500">
+                      Este hallazgo no tiene plan: la evaluación es anterior a la generación automática.
+                      Reevalúa para generarlo.
+                    </p>
                   )}
                 </div>
               )}
