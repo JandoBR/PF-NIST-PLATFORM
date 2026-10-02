@@ -166,6 +166,10 @@ cuando ambas hablan del mismo recurso, propiedad y alcance.**
 Las contradicciones se registran como **hallazgos** con ambos lados citados (evidencia + locator).
 No penalizan doble: el hallazgo referencia el criterio afectado una sola vez.
 
+Implementado en `app/recommendations/contradictions.py` (docs/09 §38): backup de la política vs
+`tf.backup.config`, y dos documentos con retención o frecuencia de revisión distintas. Otras
+propiedades (p. ej. "BD no pública") aún no tienen una afirmación documental estructurada que comparar.
+
 ## 6. Versionado e Inmutabilidad en la Práctica
 
 | Cambio | Acción |

@@ -46,8 +46,11 @@ export interface Finding {
   titulo: string;
   tipo: string;
   severidad: 'alta' | 'media' | 'baja';
-  score: number;
+  /** Puntaje del criterio en una brecha; null en una contradicción (no puntúa). */
+  score: number | null;
   evidence_ids: string[];
+  /** Ambos lados de una contradicción (docs/02 §5). */
+  detalle?: string | null;
 }
 
 export type PlanEstado = 'pendiente' | 'en_progreso' | 'hecho';

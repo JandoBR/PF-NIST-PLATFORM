@@ -159,9 +159,10 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 
 ## D. Simplificaciones activas (docs/09 §11) — pendientes del prototipo
 
-- [~] OP-04 · (P1) **Transiciones de estado de incidente: hecho** (`PATCH /incidents/{id}`, ver docs/09
-  §24; habilita UI-06). Siguen pendientes los hallazgos `contradiccion` (docs/02 §5) y `limitacion`
-  además de `brecha`.
+- [~] OP-04 · **Transiciones de estado de incidente: hecho** (`PATCH /incidents/{id}`, docs/09 §24) y
+  **hallazgos `contradiccion`: hecho** (docs/09 §38). Queda solo `limitacion` (P2, opcional): un
+  hallazgo por recurso `unknown`/expresión sin resolver; hoy esa información ya está en la
+  explicación del criterio (CR-06).
 - [ ] OP-05 · (P2) Trigger D2 (`alert_raised` sin `incident_triaged`). Va junto con FN-08: requiere
   definir el patrón `incident_triaged`.
 - [ ] OP-11 · (P2) **Plan/incidente** (lo útil: validar transiciones y registrar motivo de cierre;
@@ -218,7 +219,8 @@ registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototi
 - [ ] TS-01 · (P1) **Golden files**: resultados esperados anotados para Terraform/Ansible (docs/07 §3).
 - [ ] TS-02 · (P1) **Golden set de IA**: documentos anotados + script de métricas (≥ 90 % de afirmaciones,
   0 invenciones, citas localizables).
-- [ ] TS-03 · (P1) **Test de contradicción** técnico-vs-documental (se cierra junto con OP-04).
+- [x] TS-03 · **Test de contradicción** técnico-vs-documental. Hecho (docs/09 §38,
+  `test_contradictions.py`, incluye un E2E con Terraform real).
 
 ## Priorización sugerida
 
@@ -227,12 +229,12 @@ demostrable.
 
 1. ~~**CR-06** y **AMP-05**~~ (hechos, docs/09 §36).
 2. ~~**OP-12** y **OP-14**~~ (hechos, docs/09 §37).
-3. **OP-04 (contradicciones) + TS-03**, **TS-01**, **TS-02** y **AMP-02**: lo más demostrable y lo
-   que respalda las afirmaciones del diseño.
+3. ~~**OP-04 (contradicciones) + TS-03**~~ (hechos, docs/09 §38); **TS-01**, **TS-02** y **AMP-02**:
+   lo más demostrable y lo que respalda las afirmaciones del diseño.
 4. Pulido barato: **FN-03**, **FN-07**, **FN-01 + API-03**, **OP-05 + FN-08**, **OP-11** (transiciones
    y motivo de cierre), **OP-15** (líneas), **OP-13** (`schema_version`), **API-04** (problem+json) y
    la decisión de **CR-07**.
 
-> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
-> incidente de OP-04. Ver docs/09 §23–§37.
+> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
+> incidente de OP-04. Ver docs/09 §23–§38.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).

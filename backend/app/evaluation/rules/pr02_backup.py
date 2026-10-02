@@ -25,7 +25,7 @@ RETENCION_MINIMA_DIAS = 7
 _DIAS_RE = re.compile(r"(\d+)")
 
 
-def _retencion_politica_dias(claim: EvidenceInstance) -> int | None:
+def retencion_politica_dias(claim: EvidenceInstance) -> int | None:
     """Extrae los dias de `contenido.retencion` (texto libre: "7 dias", "7d", "1 mes")."""
 
     contenido = claim.value.get("contenido") or {}
@@ -82,7 +82,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     peor_retencion = min(e.value["retencion_dias"] for e in resolved)
     politica = best_found(doc_claims(evidence, "backup_policy"))
-    politica_dias = _retencion_politica_dias(politica) if politica else None
+    politica_dias = retencion_politica_dias(politica) if politica else None
     ids_tf = [e.id for e in resolved]
 
     if politica_dias is not None:

@@ -190,7 +190,7 @@ evidencia y recalcular solo los criterios afectados.
 | `GET` | `/jobs/{job_id}` | Estado y progreso de cualquier trabajo (`assessment_run`/`event_ingest`). |
 | `GET` | `/assessments/{id}/criteria` | Resultados por criterio con explicación y evidencias. |
 | `GET` | `/assessments/{id}/evidence` | Evidencias con procedencia y limitaciones (filtrable). |
-| `GET` | `/assessments/{id}/findings` | Hallazgos. Hoy solo tipo `brecha`; `contradiccion`/`limitacion` son OP-04 (docs/11 §D). |
+| `GET` | `/assessments/{id}/findings` | Hallazgos. Tipos `brecha` y `contradiccion` (docs/09 §38); `limitacion` queda como opcional (docs/11 OP-04). Los hallazgos no se persisten: se derivan al consultar, con la evidencia. |
 | `GET` | `/assessments/{id}/plans` | Planes con pasos, prioridad, verificación y estado de seguimiento. |
 | `POST` | `/assessments/{id}/plans` | Genera/recalcula los planes (`?use_ai=true` para U3, sujeto al guard de costo). |
 | `PATCH` | `/assessments/{id}/plans/{plan_id}` | Cambia el estado de seguimiento del plan (`pendiente`\|`en_progreso`\|`hecho`). No afecta el puntaje (docs/05 §4.4). |

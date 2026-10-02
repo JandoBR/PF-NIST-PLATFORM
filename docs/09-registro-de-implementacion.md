@@ -28,7 +28,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
 | Multitenancy + auth (doc 10) | Login con token, tabla `users`, aislamiento por `org_id` en toda la API | Hecho |
-| Pruebas | 322 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
+| Pruebas | 336 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
 | API REST (doc 04 §6) | FastAPI + colas: crear/reevaluar/ingerir son asíncronos (202 + `GET /jobs/{id}`) | Hecho |
 | Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api + `worker-core`/`worker-logs` + frontend (7 servicios) | Hecho |
 
@@ -329,7 +329,7 @@ completo, para no tener que releer cada sección arriba:
 | Sin tabla `ai_adjustments` | Ajuste de IA (§8) | Persistir modelo/prompt_version/propuesta/justificación por separado si el texto en `explanation` deja de ser suficiente |
 | `findings` no persistido | Planes (§9) | Solo si recalcular se vuelve costoso |
 | `score_aggregates`/`tier_estimates` no persistidos | Núcleo (§3) | Idem |
-| Solo hallazgos tipo `brecha` | Planes (§9) | `contradiccion` (doc 02 §5) y `limitacion` quedan para una ampliación |
+| Solo hallazgos tipo `brecha` y `contradiccion` | Planes (§9, §38) | `limitacion` queda como opcional (docs/11 OP-04) |
 | `CRI-PR-03` no usa evidencia de Ansible | Ansible (§7) | Decisión deliberada, no pendiente — ver §7 |
 | Un `Source` por adaptador, no por archivo | Persistencia (§6) | Solo si se necesita trazabilidad por archivo individual |
 | Disparador D2 no implementado | Motor operativo (§10) | Ningún escenario de aceptación (doc 08 §9) lo ejercita; agregar su patron `incident_triaged` cuando haga falta |
@@ -1299,3 +1299,35 @@ derivado de IA. Evaluaciones previas quedan en `NULL`. El dashboard muestra una 
 **Verificación:** backend **322 tests** + `ruff` limpio (`test_op12_op14_ai_hardening.py`, más
 `test_api_assessments::test_detail_exposes_reproducibility`). Frontend `typecheck`/`lint` limpios.
 La migración se probó con la guarda `test_migrations`; no contra el Postgres de Docker.
+
+## 38. OP-04 (contradicciones) y TS-03
+
+El diseño (docs/02 §5, D7) dice qué hacer cuando un documento y la configuración discrepan, pero el
+sistema solo producía `brecha`. Ahora también `contradiccion`: deterministas, sin IA, comparando dos
+lados que **ya son evidencia** (`app/recommendations/contradictions.py`).
+
+- **Técnico vs documental:** `doc.claim(backup_policy)` vs `tf.backup.config`. Alta si la política
+  declara respaldos y Terraform los deshabilita (retención 0); media si la retención configurada es
+  menor que la de la política.
+- **Documento vs documento:** dos documentos **distintos** con retención de backup (`PR-02`) o
+  frecuencia de revisión (`GV-01`) diferentes. Un mismo documento repitiéndose no cuenta.
+- **Reglas:** solo evidencia del mismo `scope`; las afirmaciones de confianza baja no participan; una
+  retención desconocida es una limitación, no una contradicción; si Terraform "no aporta nada", se
+  acepta lo documental (sin hallazgo).
+- **Un hallazgo por criterio y clase**, aunque haya varios recursos (docs/07 "registrado una sola
+  vez"); cita ambos lados en `evidence_ids` y los describe en `detalle`.
+- **No penaliza doble:** el puntaje ya usa el valor técnico (`PR-02` puntúa con la retención real) y la
+  contradicción **no altera ningún puntaje ni genera plan** (`generate_plans` sigue usando solo
+  `brecha`).
+
+`Finding` gana `detalle` y `score` pasa a opcional (`None` en una contradicción). `derive_findings`
+recibe la evidencia de forma opcional; `GET /assessments/{id}/findings` la pasa, los planes no. El
+frontend muestra las contradicciones en una tarjeta aparte en Recomendaciones y deja la lista de
+brechas intacta.
+
+**Límite conocido:** hoy solo hay dos propiedades con ambos lados estructurados. Otros ejemplos de
+docs/02 (p. ej. "BD no pública" vs `publicly_accessible`) requieren que U1 extraiga esa afirmación y
+que el adaptador de Terraform emita el atributo; no se hizo para no inventar contratos.
+
+**Verificación:** backend **336 tests** + `ruff` limpio (`test_contradictions.py`: 15 casos, incluido
+un E2E con el fixture `gaps` y una política extraída). Frontend `typecheck`/`lint` limpios.

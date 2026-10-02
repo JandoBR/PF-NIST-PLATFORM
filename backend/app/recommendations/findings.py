@@ -2,9 +2,10 @@
 evidencia"). No se persisten: son tan baratos de recalcular desde `criterion_results` como los
 agregados y el Tier (misma decision que ahi).
 
-Alcance de este corte (simplificado a proposito): solo el tipo `brecha` (score bajo). Las
-`contradiccion` (tecnico vs documental, docs/02 §5) y `limitacion` quedan para una ampliacion
-posterior; no se calcula criticidad de activo todavia, asi que la severidad viene solo del score.
+Tipos: `brecha` (score bajo; unica que genera plan) y `contradiccion` (tecnico vs documental o
+documento vs documento, docs/02 §5; ver `contradictions.py`, solo si se pasa la evidencia). La
+`limitacion` queda para una ampliacion posterior. No se calcula criticidad de activo todavia, asi
+que la severidad de una brecha viene solo del score.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from pydantic import BaseModel
 
 from app.evaluation.schemas import SCORING_STATES, CriterionResult
 from app.methodology.loader import Methodology
+from app.schemas.evidence import EvidenceInstance
 
 #: Bandas de severidad por score (simplificado: sin ponderar criticidad de activo todavia).
 _SEVERIDAD_ALTA_MAX = 25
@@ -24,8 +26,11 @@ class Finding(BaseModel):
     titulo: str
     tipo: str = "brecha"
     severidad: str
-    score: float
+    #: Puntaje del criterio en una `brecha`; `None` en una `contradiccion` (no puntua).
+    score: float | None
     evidence_ids: list[str]
+    #: Texto con ambos lados de una `contradiccion`; `None` en una `brecha`.
+    detalle: str | None = None
 
 
 def _severidad(score: float) -> str:
@@ -36,8 +41,13 @@ def _severidad(score: float) -> str:
     return "baja"
 
 
-def derive_findings(methodology: Methodology, results: list[CriterionResult]) -> list[Finding]:
-    """Un hallazgo por cada criterio puntuado por debajo de `planes.umbral_brecha`."""
+def derive_findings(
+    methodology: Methodology,
+    results: list[CriterionResult],
+    evidence: list[EvidenceInstance] | None = None,
+) -> list[Finding]:
+    """Un hallazgo `brecha` por cada criterio puntuado por debajo de `planes.umbral_brecha`; con
+    `evidence`, ademas las `contradiccion` (que nunca generan plan ni alteran el puntaje)."""
 
     umbral = methodology.settings.planes.umbral_brecha
     findings = []
@@ -57,4 +67,8 @@ def derive_findings(methodology: Methodology, results: list[CriterionResult]) ->
                 evidence_ids=result.evidence_ids,
             )
         )
+    if evidence is not None:
+        from app.recommendations.contradictions import detect_contradictions  # evita ciclo
+
+        findings.extend(detect_contradictions(evidence))
     return findings

@@ -218,7 +218,8 @@ def get_findings(
 ) -> list[Finding]:
     _require_assessment(session, assessment_id, user)
     results = svc.load_criterion_results(session, assessment_id)
-    return derive_findings(methodology, results)
+    evidence = svc.load_evidence(session, assessment_id)
+    return derive_findings(methodology, results, evidence)
 
 
 @router.get("/assessments/{assessment_id}/plans", response_model=list[Plan])

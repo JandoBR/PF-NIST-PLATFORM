@@ -23,7 +23,18 @@ interface Props {
 
 const SEVERITY_ORDER: Finding['severidad'][] = ['alta', 'media', 'baja'];
 
-export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpdated }: Props) {
+export function RecommendationEngine({
+  assessmentId,
+  findings: allFindings,
+  plans,
+  onPlansUpdated,
+}: Props) {
+  // Las contradicciones (docs/02 §5) no puntúan ni generan plan: se muestran aparte.
+  const findings = useMemo(() => allFindings.filter((f) => f.tipo !== 'contradiccion'), [allFindings]);
+  const contradictions = useMemo(
+    () => allFindings.filter((f) => f.tipo === 'contradiccion'),
+    [allFindings]
+  );
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [generating, setGenerating] = useState<'plantilla' | 'ia' | null>(null);
   const [savingPlan, setSavingPlan] = useState<string | null>(null);
@@ -80,6 +91,7 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
 
   return (
     <div className="space-y-6">
+      {contradictions.length > 0 && <ContradictionsCard items={contradictions} />}
       <div className="card p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -226,7 +238,7 @@ function FindingsList({
                   <Link2 className="h-3 w-3" /> {f.evidence_ids.length}
                 </span>
                 <span className="w-10 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
-                  {Math.round(f.score)}
+                  {f.score != null ? Math.round(f.score) : '—'}
                 </span>
                 <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
               </button>
@@ -331,6 +343,47 @@ function PlanBody({
         {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />}
         <span className="text-[11px] text-slate-600">No cambia el puntaje del criterio.</span>
       </div>
+    </div>
+  );
+}
+
+function ContradictionsCard({ items }: { items: Finding[] }) {
+  return (
+    <div className="card border-amber-500/20 p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-300" />
+        <h3 className="text-sm font-semibold text-white">
+          Contradicciones entre fuentes ({items.length})
+        </h3>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        Lo declarado en un documento no coincide con lo observado en la configuración (o con otro
+        documento). Prevalece la observación técnica; estas incoherencias no modifican ningún puntaje.
+      </p>
+      <ul className="space-y-3">
+        {items.map((f) => {
+          const meta = SEVERITY_META[f.severidad];
+          return (
+            <li
+              key={`${f.criterion_id}-${f.titulo}`}
+              className="rounded-lg border border-white/[0.06] bg-ink-900/40 p-3.5"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-slate-200">{f.titulo}</span>
+                <span className={`chip border text-[10px] ${meta.bg} ${meta.border} ${meta.text}`}>
+                  {meta.label}
+                </span>
+                <span className="text-[11px] text-slate-600">{f.criterion_id}</span>
+              </div>
+              {f.detalle && <p className="mt-1.5 text-xs leading-relaxed text-slate-400">{f.detalle}</p>}
+              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-600">
+                <Link2 className="h-3 w-3" />
+                {f.evidence_ids.length} evidencia(s) citadas (ambos lados)
+              </p>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
