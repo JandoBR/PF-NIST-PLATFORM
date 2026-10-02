@@ -25,11 +25,14 @@ import { incidentEstadoMeta, incidentSeverityMeta, isIncidentClosed } from '@/li
 interface Props {
   orgId: string | null;
   orgNombre: string | null;
+  /** Se llama tras una ingesta exitosa: la app refresca el historial por si el worker disparo un
+   * refresco automatico de madurez (docs/08 §8). */
+  onIngested?: () => void;
 }
 
 type Tab = 'activos' | 'historial';
 
-export function ThreatSimulation({ orgId, orgNombre }: Props) {
+export function ThreatSimulation({ orgId, orgNombre, onIngested }: Props) {
   const [incidents, setIncidents] = useState<IncidentOut[]>([]);
   const [loading, setLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
@@ -85,6 +88,7 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
           ? `"${label}": ${nuevos} incidente(s) nuevo(s) · ${after.length} en total`
           : `"${label}": sin incidentes nuevos · ${after.length} en total. Los eventos de este log no cumplen los disparadores; los incidentes abiertos siguen en Activos.`
       );
+      onIngested?.();
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : err instanceof Error ? err.message : 'Error desconocido.');
     } finally {

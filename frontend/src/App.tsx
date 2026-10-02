@@ -288,13 +288,21 @@ function App() {
           </div>
         )}
 
-        {!assessment ? (
+        {tab === 'threats' ? (
+          // Eventos e incidentes dependen de la organizacion (sesion), no de una evaluacion: se
+          // pueden ingerir logs y ver incidentes sin haber evaluado nada (docs/08).
+          <ThreatSimulation
+            orgId={user.org_id}
+            orgNombre={user.org_nombre}
+            onIngested={() => void refreshHistory()}
+          />
+        ) : !assessment ? (
           <div className="card flex flex-col items-center justify-center px-6 py-20 text-center">
             <ShieldCheck className="mb-4 h-12 w-12 text-slate-700" />
             <h2 className="text-lg font-semibold text-slate-300">Ninguna evaluación activa</h2>
             <p className="mt-1 max-w-sm text-sm text-slate-500">
               Crea una evaluación con datos de ejemplo o tus propios archivos de Terraform/Ansible/documentos
-              para empezar.
+              para empezar. Los eventos e incidentes, en cambio, no necesitan una evaluación.
             </p>
             <button onClick={() => setSelectorOpen(true)} className="btn-primary mt-5">
               Nueva Evaluación
@@ -314,8 +322,6 @@ function App() {
             plans={plans}
             onPlansUpdated={setPlans}
           />
-        ) : tab === 'threats' ? (
-          <ThreatSimulation orgId={assessment.org_id} orgNombre={assessment.org_nombre} />
         ) : (
           <CompareAssessments orgId={assessment.org_id} currentAssessmentId={assessment.id} />
         )}
