@@ -61,7 +61,10 @@ sesión y aislamiento por organización — doc 10) y el despliegue completo con
 (`frontend/`) es funcional: los cuatro paneles (Resumen de Madurez, Recomendaciones, Eventos e
 Incidentes, Comparar) llaman a la API real — asíncrona, con login, sondeo de jobs en vivo,
 historial de evaluaciones, seguimiento de planes, vista de privacidad y refresco automático de
-madurez al ingerir eventos. Falta pulir UX y, deliberadamente fuera de este corte, nginx + dominio
+madurez al ingerir eventos. El catálogo de criterios está completo (23/23, `criteria.yml` v5, doc 03) y el pulido de UI del
+backlog (UI-01…UI-10) está hecho. Lo pendiente del prototipo está en
+[docs/11](docs/11-backlog-y-pulido.md) y lo descartado a propósito en
+[docs/12](docs/12-alcance-y-trabajo-futuro.md); deliberadamente fuera de este corte queda nginx + dominio
 real (`VITE_API_BASE_URL`/`CORS_ORIGINS` ya están pensados para ese cambio — ver doc 09 §19).
 
 Para probarlo sin levantar nada: `cd backend && uv run python -m app.main run --terraform

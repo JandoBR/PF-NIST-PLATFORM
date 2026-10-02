@@ -28,7 +28,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
 | Multitenancy + auth (doc 10) | Login con token, tabla `users`, aislamiento por `org_id` en toda la API | Hecho |
-| Pruebas | 223 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
+| Pruebas | 283 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
 | API REST (doc 04 §6) | FastAPI + colas: crear/reevaluar/ingerir son asíncronos (202 + `GET /jobs/{id}`) | Hecho |
 | Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api + `worker-core`/`worker-logs` + frontend (7 servicios) | Hecho |
 
@@ -339,6 +339,14 @@ completo, para no tener que releer cada sección arriba:
 | Sin `POST /assessments/{id}/sources` ni `/run` separados | API (§12), Workers (§16) | `GET /jobs/{id}` ya existe y es real (§16); lo que falta es solo subir evidencia y lanzar la corrida como dos pasos en vez de uno |
 | `app/api/app.py` en vez de `app/main.py` (doc 04 §7 asumía este último) | API (§12) | `app/main.py` ya es la CLI; no se desplaza |
 | Sin consumidores de `log_ingest`/`log_aggregate` separados (una sola cola/job `event_ingest`) | Motor operativo (§10), Workers (§16) | Simplificación deliberada: el pipeline de eventos ya corre completo (patrones→disparadores→incidentes) en un solo job porque así ya estaba escrito en `assessment_service.ingest_events`; partirlo en dos jobs es evolución, no un gap funcional |
+
+> **Estado de estas simplificaciones (revisión §35):** este cuadro es el snapshot de cuando se
+> escribió. Hoy la clasificación vive en otros documentos: lo que **sigue pendiente del prototipo**
+> está en `docs/11 §D` (`OP-01`, `OP-04`, `OP-05` = disparador D2, `OP-11`…`OP-15`); lo
+> **descartado deliberadamente** está en `docs/12` (sin tabla `ai_adjustments` = OP-02, `findings`/
+> agregados/`log.window` no persistidos = OP-03/OP-17, `Source` por adaptador = OP-18, cooldown =
+> OP-06, ventanas deslizantes = OP-07, un solo job `event_ingest` = OP-08, sin `sources`/`run`
+> separados = API-01).
 
 ## 12. API REST (FastAPI)
 

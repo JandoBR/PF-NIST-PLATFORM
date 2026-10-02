@@ -87,4 +87,4 @@ los resultados y da oficialidad al informe — ver `docs/11 §G`.)*
 | ID | Motivo |
 |---|---|
 | FN-04 | El botón "Reevaluar" se eliminó (UI-10); no hay dónde exponer el toggle de IA. El endpoint sigue aceptando `ai_adjust`. |
-| CAL-01 | Modelado de calendario aproximado (meses de 28–31 días) | Aproximación aceptada; no se necesita calendario real. |
+| CAL-01 | Modelado de calendario aproximado (meses de 28–31 días): aproximación aceptada; no se necesita calendario real. |
