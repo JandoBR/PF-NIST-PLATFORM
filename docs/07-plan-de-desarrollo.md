@@ -16,6 +16,9 @@ evidencia y escenarios **sin cambiar los contratos**.
 
 ## 2. Backlog Priorizado
 
+> Este fue el plan original. El **estado vigente** está en `docs/09` (registro) y `docs/11`
+> (trabajo pendiente); las casillas de abajo quedan como planificación histórica.
+
 ### MVP obligatorio (semanas 1–4)
 
 - [ ] Cargador de metodología YAML con validación Pydantic.
@@ -24,30 +27,30 @@ evidencia y escenarios **sin cambiar los contratos**.
 - [ ] Adaptador Terraform: `aws_db_instance`, `aws_s3_bucket`, `aws_security_group`, `aws_cloudtrail`.
 - [ ] Adaptador Ansible: módulos declarativos del alcance.
 - [ ] Extracción documental: chunking + prompt v1 + validación + citas.
-- [ ] Motor de evaluación: 16–19 criterios MVP con reglas.
+- [ ] Motor de evaluación: 16 criterios MVP (+2 parciales) con reglas.
 - [ ] Agregación + cobertura + Tier estimado.
 - [ ] Ajuste IA con `α`, `D` y degradación controlada.
-- [ ] Simulador de eventos + 3 escenarios + patrones publicados en Redis Streams.
+- [ ] Simulador de eventos + 6 escenarios + patrones publicados en la cola de Redis. (Streams es objetivo futuro: docs/12 §1.)
 - [ ] Entity `incident` + disparadores determinísticos + cooldown (motor operativo mínimo).
 - [ ] Planes de mejora y de recovery (plantillas + IA), un plan por incidente.
-- [ ] Endpoints: assessments, sources, run, jobs, scores, criteria, evidence, findings, plans, events, incidents, reevaluate, compare, methodology.
-- [ ] Cola/stream y caché en Redis; workers `core` y `logs` (evita Celery).
+- [ ] Endpoints: auth, assessments, jobs, criteria, evidence, findings, plans, events, incidents, reevaluate, compare, methodology. (Los pasos separados `sources`/`run` y `scores` quedaron fuera del prototipo, docs/12 §1.)
+- [ ] Cola de trabajos en Redis y caché de IA en disco; workers `core` y `logs` (evita Celery).
 - [ ] `deploy/docker-compose.yml`, `deploy/.env.example` y Dockerfiles funcionando.
 
 ### Ampliación si alcanza el tiempo
 
-- [ ] Criterios MVP `parcial` y `no` (GV-04, DE-03, RS-02, RS-03, RC-03, ID-04).
+- [ ] Criterios MVP `parcial` y `no` (DE-02, DE-03, GV-04, RS-02, RS-03, RC-03, ID-04).
 - [ ] Comparación visual de evaluaciones (React).
 - [ ] Más tipos de recursos Terraform (IAM, VPC, RDS snapshots).
-- [ ] Recuperación semántica sobre el catálogo NIST (embeddings).
-- [ ] Exportación PDF del informe ejecutivo.
+- [ ] Recuperación semántica sobre el catálogo NIST (embeddings). *(descartado del prototipo: docs/12 §5)*
+- [ ] Exportación PDF del informe ejecutivo. *(promovido: AMP-02, docs/11 §G)*
 
 ### Fuera de alcance (documentar como trabajo futuro)
 
 - Múltiples nubes y proveedores.
 - Agentes reales / integración con nube o SIEM.
 - Ejecución de remediaciones.
-- Multiusuario, OIDC, multi-tenant.
+- Registro/alta de cuentas fuera del seed, OIDC/SSO y panel de administración. (La **multitenancy con login sí está en el prototipo**: docs/00 D15, docs/10.)
 
 ## 3. Estrategia de Validación
 
@@ -59,7 +62,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 | IA extracción | Golden set de documentos anotados | script de evaluación | ≥ 90 % afirmaciones correctas, 0 invenciones, citas localizables |
 | IA ajuste | Límites y degradación | tests con respuestas simuladas (válidas, vacías, malformadas) | `S` siempre acotado; degradado sin crash |
 | Contradicciones | Técnico vs documental | fixtures | Prevalece técnica; hallazgo registrado una sola vez |
-| Vigilancia | Escenarios E1–E3 y variante E3-b | fixtures JSONL | Patrones y criterios actualizados como se espera |
+| Vigilancia | Escenarios E1/E1-b/E2/E2-b/E3/E3-b | fixtures JSONL | Patrones y criterios actualizados como se espera |
 | Motor operativo | Flujo correcto y fallos (D1, D3, D4) | fixtures JSONL | Incidente solo con disparador; un plan por incidente; sin ruido |
 | E2E | Flujo completo | test de integración | Evaluación inicial → corrección → mejora demostrada |
 | Demo | Estabilidad del guion | ejecución repetida | Resultados idénticos entre corridas |
@@ -105,4 +108,3 @@ evidencia y escenarios **sin cambiar los contratos**.
 - Agentes de recolección para Ansible con hechos reales.
 - Recuperación semántica y explicaciones más ricas sobre referencias NIST.
 - Calibración de α, D y umbrales de Tier con datos de validación.
-- Frontend React completo con vistas ejecutiva y técnica.

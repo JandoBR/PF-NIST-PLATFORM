@@ -53,7 +53,7 @@ Nueva tabla `users` (una organización tiene N usuarios):
 | `POST /assessments` | Fuerza la organización del usuario; ignora cualquier `org_name` del cliente. |
 | `GET /assessments` | Devuelve solo las evaluaciones de la organización del usuario. |
 | `GET /assessments/{id}` y sub-recursos | 404 si el assessment no es de su organización. |
-| `POST /assessments/{id}/reevaluate`, `/plans`, `/compare` | Igual: 404 si no es suyo. |
+| `POST /assessments/{id}/reevaluate`, `POST /assessments/{id}/plans`, `GET /assessments/{id}/compare/{other_id}` | Igual: 404 si no es suyo. |
 | `POST /orgs/{org_id}/events`, `GET /orgs/{org_id}/incidents` | 404 si `org_id` ≠ la del usuario. |
 | `GET /incidents/{id}`, `/incidents/{id}/plans` | 404 si el incidente no es de su organización. |
 | `GET /jobs/{id}` | 404 si el job no pertenece a su organización. |

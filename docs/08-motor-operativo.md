@@ -32,7 +32,7 @@ operativa (B) y evidencia de capacidad (A).
 - Disparadores **determinísticos** sobre los escenarios E1–E3 del doc 06.
 - Un plan por incidente, con esquema fijo y condición de cierre.
 - Retroalimentación: los hechos operativos de los escenarios alimentan criterios de DE/RS/RC.
-- Sin streaming real, sin correlación avanzada, sin múltiples organizaciones.
+- Sin streaming real ni correlación avanzada (el motor ya opera por organización + scope).
 
 Fuera de alcance: motor de reglas configurable por el usuario, ML de detección, integración con SIEM,
 notificaciones reales, ejecución de acciones.
@@ -104,7 +104,7 @@ Los umbrales `N`, `W` y plazos provienen de la metodología versionada (`setting
 
 ## 7. Generación de Planes
 
-Contrato de salida (mismo esquema que doc 05 §4.1):
+Contrato de salida (esquema de plan de recovery, docs/05 §4.3):
 
 ```json
 {
@@ -112,7 +112,6 @@ Contrato de salida (mismo esquema que doc 05 §4.1):
   "objetivo": "Asegurar que el patrón de accesos fallidos genere alerta.",
   "brecha_ref": "D1",
   "prioridad": "media",
-  "justificacion_prioridad": "No se observó alerta pese a 12 fallos en 2 minutos.",
   "diagnostico_observable": "auth_failures_burst en srv-app-01 sin alert_raised.",
   "hipotesis": ["Regla de detección ausente o umbral mal configurado."],
   "comprobaciones_seguras": ["Revisar reglas y umbrales sin modificar producción."],
@@ -123,9 +122,14 @@ Contrato de salida (mismo esquema que doc 05 §4.1):
 }
 ```
 
+> En un plan de incidente, `brecha_ref` referencia el **disparador** (`D1`…); `prioridad` la fija el
+> código (severidad del disparador), no la IA.
+
 - El plan se **actualiza** si el incidente recibe nuevos hechos.
-- Al cerrar el incidente, el plan pasa a `cerrado` y se registra cómo se verificó.
-- La IA puede matizar prioridad y redactar, siempre citando evidencia/observaciones.
+- Al cerrar el incidente se registra cómo se verificó; el plan conserva su estado de seguimiento
+  (`pendiente`/`en_progreso`/`hecho`, docs/05 §4.4).
+- La IA **solo redacta** (diagnóstico, hipótesis, pasos, verificación) citando evidencia; la
+  prioridad la fija el código (severidad del disparador).
 
 ## 8. Retroalimentación hacia Madurez
 

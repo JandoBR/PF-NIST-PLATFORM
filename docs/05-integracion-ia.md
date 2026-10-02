@@ -48,6 +48,10 @@ Documento → extracción de texto → chunking (por sección/página)
 }
 ```
 
+> Al persistir, el extractor normaliza `tipo` → `tipo_afirmacion` en la evidencia `doc.claim`
+> (`extraction._CONTENT_FIELDS`, docs/02 §3.3): `tipo` es el nombre en el contrato de la IA,
+> `tipo_afirmacion` el de la evidencia guardada. Los criterios leen `tipo_afirmacion`.
+
 ### 2.3 Reglas
 
 | # | Regla |
@@ -104,7 +108,7 @@ Parámetros iniciales (en `methodology/settings.yml`):
 | J3 | `evidencia_insuficiente` y `error` no reciben ajuste. |
 | J4 | Si `A` falta, es inválido o vacío → ajuste 0, criterio `degradado`, evaluación continúa. |
 | J5 | La justificación debe referenciar IDs de evidencia existentes; si no, ajuste 0. |
-| J6 | El contexto de negocio (criticidad) va en el prompt con fines de matiz, pero la prioridad se resuelve en U3. |
+| J6 | El contexto de negocio (p. ej. criticidad) puede ir en el prompt U2 con fines de matiz; la prioridad **no** se decide aquí ni en U3: la fija el código por la severidad del hallazgo (docs/05 §4.2). |
 | J7 | El ajuste y sus artefactos se guardan siempre, aun cuando el resultado final sea igual al base. |
 
 ### 3.4 Qué NO puede hacer
@@ -123,8 +127,6 @@ Parámetros iniciales (en `methodology/settings.yml`):
   "titulo": "Cerrar exposición administrativa a Internet",
   "objetivo": "Eliminar acceso SSH público a los servidores de producción.",
   "brecha_ref": "CRI-PR-03",
-  "prioridad": "alta",
-  "justificacion_prioridad": "Activo crítico expuesto; riesgo de acceso no autorizado.",
   "pasos": [
     "Restringir la regla del security group a rangos corporativos o VPN.",
     "Verificar acceso administrativo por canal alterno.",
@@ -137,15 +139,15 @@ Parámetros iniciales (en `methodology/settings.yml`):
 
 ### 4.2 Priorización
 
-Orden por defecto (fórmula propia simple, configurable):
+Hoy la prioridad **la decide el código**, no la IA: es la severidad del hallazgo
+(`alta`/`media`/`baja` por bandas de score, `recommendations/findings.py`; en un plan de incidente,
+la severidad del disparador). U3 solo redacta objetivo/pasos/verificación; su contrato de salida
+**no** incluye `prioridad` (`ai/schemas.py`).
 
-```text
-prioridad = impacto(criticidad del activo) × estado de la brecha (falla = 1.0, parcial = 0.6)
-           + ajuste por contexto declarado en la evaluación
-```
+La fórmula completa de diseño —`prioridad = impacto(criticidad del activo) × estado de la brecha
+(falla = 1.0, parcial = 0.6) + ajuste por contexto`— queda como ampliación (OP-01, docs/11 §D; el
+pipeline `ctx.*` completo es OP-09, docs/12 §3): hoy no hay criticidad de activo.
 
-- La crítica se asigna a `alta` / `media` / `baja` con umbrales de metodología.
-- La IA puede matizar la prioridad, pero **siempre explicando** qué evidencia/contexto lo justifica.
 - Las plantillas de recomendación del catálogo son el punto de partida; la IA las adapta al caso.
 
 ### 4.3 Planes de recuperación ante eventos (ver doc 06)

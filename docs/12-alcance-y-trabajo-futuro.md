@@ -6,7 +6,7 @@ documento es el **índice de decisiones de alcance**, con el motivo en una líne
 documento donde vive la explicación. La idea es no re-razonar cada vez que alguien se pregunte "¿por
 qué no está esto?" ni mantener estos ítems como si fueran deuda del prototipo.
 
-- Detalle de arquitectura: `docs/04 §5`, `docs/09 §11`.
+- Detalle de arquitectura: `docs/04 §1/§3`, `docs/09 §11`.
 - Trabajo futuro de producto: `docs/07 §7`.
 - Precedencia y contradicciones: `docs/02 §5`.
 
@@ -16,8 +16,9 @@ qué no está esto?" ni mantener estos ítems como si fueran deuda del prototipo
 
 ## 1. Arquitectura distribuida / continua
 
-El prototipo es un proceso síncrono con colas Redis que ejecuta cada etapa completa. El diseño de
-`docs/04 §5` imaginaba un motor de larga duración; a esta escala no aporta.
+El prototipo usa **workers asíncronos** (un job por pipeline) que ejecutan cada etapa completa dentro
+del proceso. El diseño de `docs/04 §5` imaginaba además un ciclo de vida con siete fases y tipos de
+job separados; a esta escala no aporta.
 
 | ID | Qué es | Por qué no en el prototipo | Detalle |
 |---|---|---|---|
@@ -26,7 +27,8 @@ El prototipo es un proceso síncrono con colas Redis que ejecuta cada etapa comp
 | OP-08 | Consumidores `log_ingest`/`log_aggregate` separados | Un solo job `event_ingest` ya corre normalizar→agregar→disparadores→incidentes. Partirlo solo escala por etapa. Simplificación deliberada. | docs/09 §11 |
 | OP-07 | Ventanas deslizantes (stream continuo) | La ingesta es por lotes (JSONL); "una ventana = un lote" alcanza. El stream real es evolución. | docs/08 §11 |
 | OP-06 | Cooldown / rate-limit real de incidentes (O4) | Idempotencia por `correlation_key` evita duplicados; el spam solo aparece en un stream continuo. | `ops/incidents.py` |
-| API-01 | `POST /sources` + `/run` separados | El flujo es de un solo disparo desde la UI; las subidas ya quedan persistentes. | docs/09 §12 |
+| API-01 | `POST /sources` + `/run` separados | El flujo es de un solo disparo desde la UI; las subidas ya quedan persistentes. | docs/09 §12/§16 |
+| API-02 | `GET /assessments/{id}/scores` explícito | Redundante: los puntajes ya se pliegan en `GET /assessments/{id}` y ningún consumidor lo pide. | docs/04 §6 |
 
 ## 2. Persistencia de datos derivados
 
@@ -42,11 +44,12 @@ de verdad y bugs de invalidación.
 
 | ID | Qué es | Por qué no en el prototipo | Detalle |
 |---|---|---|---|
-| OP-09 | `ctx.profile`/`ctx.exclusions` como evidencia (sector, tamaño, activos críticos, datos, nube, exclusiones → `no_aplicable`) | Pipeline de contexto completo con efecto en el puntaje: investigación. El prototipo resuelve la prioridad de planes con un campo de criticidad (OP-01, versión fina), que es lo único con valor inmediato. | docs/02 §3.5, docs/05 §4.2 |
+| OP-09 | `ctx.profile`/`ctx.exclusions` como evidencia (sector, tamaño, activos críticos, datos, nube, exclusiones → `no_aplicable`) | Pipeline de contexto completo con efecto en el puntaje: investigación. El prototipo **no** prioriza por criticidad todavía: la prioridad de un plan sale de la severidad del hallazgo; la versión fina (OP-01) sigue pendiente en docs/11 §D. | docs/02 §3.5, docs/05 §4.2 |
 
 ## 4. Seguridad para despliegue real
 
-El prototipo corre **solo en local** y no se despliega; estas medidas no tienen superficie real aquí.
+El prototipo corre **solo en local** (Docker Compose) y **no se despliega a producción/Internet**;
+estas medidas no tienen superficie real aquí.
 (NO se mantienen en el backlog del prototipo.)
 
 | ID | Qué es |

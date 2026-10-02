@@ -20,10 +20,10 @@ alcance.
 - Marcar esos criterios con un badge "privacidad" en la tabla de criterios.
 - Mostrar en el reporte la nota de alcance ("cubre eventos de ciberseguridad que afectan datos
   personales; no es una evaluación integral de privacidad", docs/00 §6).
-- Depende de implementar `ID-04` y `RS-03` (ver CR-01).
+- Depende de implementar `ID-04` y `RS-03` (ver CR-02/CR-03).
 - **Hecho:** en vez de una tarjeta aparte, es una vista alternativa (**Criterios / Privacidad**) dentro
   de la sección de criterios; muestra relación PF/CSF, score/cobertura del cruce y la nota de alcance.
-  Los criterios del cruce implementados aparecen solos; `ID-04`, `RS-03`, `RC-01` se sumarán con CR-03.
+  Los criterios del cruce implementados aparecen solos; `ID-04` y `RS-03` se sumaron con CR-03.
 - **Detalle desplegable:** cada fila se expande para ver la explicación completa (antes se truncaba
   sin forma de leer el resto) + score base/final y evidencias.
 
@@ -125,22 +125,23 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 
 - [x] CR-01 · Implementar los **7 MVP faltantes** (P0): `GV-02`, `ID-03` (desbloquean Tier 2),
   `RC-01`, `DE-01`, `GV-03`, `ID-01`, `ID-02`. Hecho (docs/09 §31). `criteria.yml` v2.
-- [x] CR-02 · Completar Tier 3/4: `GV-04`, `RS-02`, `ID-04`. Hecho (docs/09 §32). `criteria.yml` v3.
+- [x] CR-02 · Completar Tier 3/4: `GV-04`, `RS-02`. Hecho (docs/09 §32). `criteria.yml` v3.
 - [x] CR-03 · `RS-03` (notificación) e `ID-04` (inventario de datos) para la privacidad (ver UI-01).
   Hecho (docs/09 §32); la vista de privacidad ya los muestra.
 - [x] CR-04 · `DE-02` incorpora `doc.claim(process_defined)` y llega a 100 cuando hay criterios de
   declaración + evidencia operativa. Hecho (docs/09 §33).
 
-> Nota transversal: los criterios **documentales** (`GV-02/03/04`, `ID-01/02/03/04`, `RC-01`,
-> `RS-02/03`, `DE-02/03`) dependen de `doc.claim` extraído por U1; sin IA quedan
-> `evidencia_insuficiente` (igual que `GV-01`). `DE-01` e `ID-01` tienen además una parte
-  determinística (Terraform/Ansible) que puntúa sin IA.
+> Nota transversal: los criterios con componente **documental** (`GV-02/03/04`, `ID-02/03/04`,
+> `RC-01`, `RS-02/03`) dependen de `doc.claim` extraído por U1; sin IA quedan
+> `evidencia_insuficiente` (igual que `GV-01`). Los **mixtos** (`ID-01`, `DE-01`, `DE-02`, `DE-03`)
+> tienen además una parte determinística (Terraform/Ansible/logs) que puntúa sin IA, aunque su tope
+> alto suele exigir el `doc.claim`.
 
 ## D. Simplificaciones activas (docs/09 §11) — pendientes del prototipo
 
 - [ ] OP-01 · **Prioridad de planes por criticidad de activo** (versión fina, un campo): hoy
-  `prioridad = finding.severidad` (`recommendations/plans.py`); la fórmula completa de docs/05 §4.2 es
-  OP-09 (fuera de alcance, docs/12 §3).
+  `prioridad = finding.severidad` (`recommendations/plans.py`); la fórmula completa de docs/05 §4.2
+  depende del pipeline `ctx.*` (OP-09, fuera de alcance, docs/12 §3).
 - [~] OP-04 · **Transiciones de estado de incidente: hecho** (`PATCH /incidents/{id}`, ver docs/09
   §24; habilita UI-06). Siguen pendientes los hallazgos `contradiccion` (docs/02 §5) y `limitacion`
   además de `brecha`.

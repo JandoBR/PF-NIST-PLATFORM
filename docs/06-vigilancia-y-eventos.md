@@ -4,7 +4,8 @@ El pipeline convierte actividad operativa simulada en **evidencia evaluable** (f
 **motor operativo** de incidentes y planes en vivo (flujo B). El motor operativo se especifica en
 `08-motor-operativo.md`. No es un SIEM.
 
-La ingesta, la agregación y las colas se implementan sobre **Redis Streams** (ver doc 04 §11).
+La ingesta, la agregación y las colas se implementan sobre **listas de Redis** (`RPUSH`/`BLPOP`);
+**Redis Streams** con consumer groups es el diseño objetivo a mayor escala (docs/04 §3.1, docs/12 §1).
 
 ## 1. Objetivo
 
@@ -34,6 +35,9 @@ Formato JSONL, un evento por línea:
   "fuente": "log:sshd"
 }
 ```
+
+> `fuente` es el campo del contrato JSONL; al normalizar se persiste como `source_id` en `events`
+> (docs/04 §4). Los demás campos se conservan.
 
 Campos obligatorios: `event_id`, `event_time`, `tipo`, `recurso`, `scope`.
 `event_time` es el **tiempo del evento**, no el de reproducción.
@@ -69,6 +73,7 @@ La capa de vigilancia agrega eventos en `log.pattern`:
 | `escalation_done` | Existe `escalation_done` dentro del plazo declarado | CRI-RS-01 |
 | `restore_exercise_run` | Ejercicio completo con resultado | CRI-RC-02 |
 | `restore_verified` | Verificación posterior con confirmación | CRI-RC-02, CRI-RC-03 |
+| `recovery_communicated` | Comunicación de recuperación a stakeholders | CRI-RC-03 |
 
 Cada patrón guarda `desde`, `hasta`, `conteo`, `resultado` y la referencia al `evidence_id` generado.
 
@@ -88,6 +93,16 @@ Un patrón sin disparador aplicable solo alimenta madurez.
 
 Evalúa: ¿hay detección?, ¿la alerta referencia el patrón correcto?, ¿el triaje ocurre?
 
+Variante E1-b (caso negativo, dispara D1):
+
+```text
+03:10  auth_failure (admin, srv-app-01) × 12 en 2 min
+sin alert_raised
+```
+
+→ hay actividad que debía alertar y no lo hizo: abre incidente (D1) y alimenta CRI-DE-02 con fallo de
+detección.
+
 ### E2 — Incidente escalado y contenido
 
 ```text
@@ -97,6 +112,15 @@ Evalúa: ¿hay detección?, ¿la alerta referencia el patrón correcto?, ¿el tr
 ```
 
 Evalúa: ¿se declara según criterios?, ¿se escala dentro de plazos?, ¿se contiene?
+
+Variante E2-b (caso negativo, dispara D3):
+
+```text
+03:14  incident_declared
+sin escalation_done dentro del plazo
+```
+
+→ declarado sin escalar: abre incidente (D3) y alimenta CRI-RS-01 con fallo de respuesta.
 
 ### E3 — Ejercicio de recuperación
 
@@ -174,7 +198,7 @@ incidente** (nunca ejecución). La tabla de disparadores (D1–D5), el esquema d
 
 - Los escenarios viven en `tests/fixtures/scenarios/*.jsonl` con su metadata (ventana esperada,
   resultado esperado y **disparadores esperados**).
-- El simulador hace replay respetando `event_time`; publica en Redis Streams y los consumidores
+- El simulador hace replay respetando `event_time`; publica en la cola de Redis y los consumidores
   (madurez y operativo) procesan los eventos.
 - Cada ejecución de un escenario es determinística (sin aleatoriedad en el prototipo; si se agrega,
   con semilla fija).

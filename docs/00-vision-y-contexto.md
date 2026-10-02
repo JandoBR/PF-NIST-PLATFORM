@@ -29,8 +29,8 @@ Una plataforma que:
 | Dentro del alcance | Fuera del alcance (prototipo) |
 |---|---|
 | NIST CSF 2.0 completo como estructura de despliegue | Evaluar todas las subcategorías de NIST |
-| Subconjunto inicial de 23 criterios definidos (16 MVP) | Cobertura exhaustiva del framework |
-| Privacidad secundaria vía solapamiento con Protect-P | Evaluación integral de privacidad (PF 1.0 completo) |
+| Subconjunto inicial de 23 criterios definidos (16 MVP + 2 parciales) | Cobertura exhaustiva del framework |
+| Privacidad secundaria vía solapamiento con Identify-P y Protect-P | Evaluación integral de privacidad (PF 1.0 completo) |
 | Terraform (AWS), Ansible, documentos y logs simulados | Múltiples nubes, agentes reales, SIEM |
 | Configuración declarada y prácticas documentadas | Estado real de la infraestructura desplegada |
 | Asesoría y planes de mejora/recovery | Ejecución automática de acciones o remediación |
@@ -49,7 +49,7 @@ Una plataforma que:
 | D2 | Privacidad secundaria: solo la intersección con ciberseguridad | El solapamiento PROTECT-P ↔ DETECT/RESPOND/RECOVER. |
 | D3 | Las prácticas documentadas se asumen ciertas | El sistema no audita la veracidad de los documentos. |
 | D4 | Evidencias con contrato predefinido e inmutable | Permite cambiar recolectores sin tocar la evaluación. |
-| D5 | Los criterios son fijos; la IA solo extrae evidencia | Evita criterios ambiguos generados por el modelo. |
+| D5 | Los criterios son fijos; la IA extrae evidencia (U1), matiza con contexto (U2) y redacta planes (U3), pero nunca crea criterios | Evita criterios ambiguos generados por el modelo. |
 | D6 | Un único puntaje visible por criterio, con ajuste de IA acotado | Simplicidad para el usuario, trazabilidad interna. |
 | D7 | La observación técnica prevalece sobre la documental | Un recurso explícito en Terraform contradice una política genérica. |
 | D8 | Tier mediante rúbrica propia inspirada en NIST, separado del puntaje | NIST no define una fórmula oficial puntaje → Tier. |
@@ -57,7 +57,7 @@ Una plataforma que:
 | D10 | Logs simulados con tiempo de evento, no de reproducción | Permite evaluar ventanas temporales de forma reproducible. |
 | D11 | Monolito modular en Python | Velocidad de desarrollo para 5 semanas; sin microservicios. |
 | D12 | Nodo operativo de primera clase sobre el mismo stream de eventos | Separa asesoría en vivo (incidentes/planes) de la evaluación de madurez. |
-| D13 | Redis para stream, cola de trabajos y caché | Simplifica el desacoplamiento sin añadir mucha complejidad. |
+| D13 | Redis para la cola de eventos y trabajos (la caché de extracción IA es en disco) | Simplifica el desacoplamiento sin añadir mucha complejidad. |
 | D14 | Despliegue con Docker + docker-compose | Todo el prototipo es reproducible con `docker compose up`. |
 | D15 | Multitenancy con login: varias organizaciones por despliegue, aisladas por usuario | El cliente ve solo su organización; las cuentas las crea el proveedor (seed). Ver doc 10. |
 

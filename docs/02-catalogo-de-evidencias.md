@@ -103,14 +103,14 @@ Tipos de afirmación (`tipo_afirmacion`) usados por los criterios:
 |---|---|
 | `policy_exists` | `{ nombre, aprobada_por?, fecha? }` |
 | `policy_review` | `{ frecuencia, ultima_revision? }` |
-| `role_assigned` | `{ rol, responsable, responsabilidades[] }` |
-| `risk_tolerance` | `{ descripcion }` |
-| `process_defined` | `{ proceso, pasos[], responsables[] }` |
-| `escalation_path` | `{ niveles[], criterios[] }` |
-| `notification_list` | `{ stakeholders[] }` |
-| `backup_policy` | `{ frecuencia, retencion, pruebas? }` |
-| `training_program` | `{ alcance, frecuencia }` |
-| `data_inventory` | `{ tipos_datos[], clasificacion? }` |
+| `role_assigned` | `{ roles: [{ rol, responsable, autoridad }] }` |
+| `risk_tolerance` | `{ objetivos_riesgo, tolerancia?, responsable? }` |
+| `process_defined` | `{ proceso, pasos, responsables?, criterios_activacion?, criterios_declaracion?, metricas?, ajustes? }` |
+| `escalation_path` | `{ niveles[], criterios[] }` *(declarado; aún no extraído por U1)* |
+| `notification_list` | `{ destinatarios[], criterios?, plazos? }` |
+| `backup_policy` | `{ respaldo, verificacion_integridad?, retencion? }` |
+| `training_program` | `{ alcance, frecuencia }` *(declarado; aún no extraído por U1)* |
+| `data_inventory` | `{ activos[], tipos_datos[], clasificacion?, criticidad? }` |
 
 Reglas de extracción:
 
@@ -124,11 +124,11 @@ Reglas de extracción:
 | ID | value (resumen) | Uso principal |
 |---|---|---|
 | `log.event` | evento individual normalizado (ver doc 06) | Correlación y patrones. |
-| `log.pattern` | `{ patron, resultado, inicio, fin, conteo }` | Evidencia operativa agregada. |
+| `log.pattern` | `{ patron, resultado, desde, hasta, conteo }` | Evidencia operativa agregada. |
 | `log.window` | `{ desde, hasta, completo: bool }` | Completitud de la ventana observada. |
 
 Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_declared`, `escalation_done`,
-`restore_exercise_run`, `restore_verified`.
+`restore_exercise_run`, `restore_verified`, `recovery_communicated`.
 
 ### 3.5 Contexto (`ctx.*`)
 

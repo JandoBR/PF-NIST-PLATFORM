@@ -138,7 +138,7 @@ S = 0.75·60 + 0.25·80 = 65
 | R4 | La IA no convierte `evidencia_insuficiente` en `evaluado` ni sube desde ese estado. |
 | R5 | Si la respuesta es inválida o vacía: ajuste = 0, criterio marcado `degradado`, evaluación continúa. |
 | R6 | Los parámetros `D` y `α` pertenecen a la metodología versionada; la IA no los elige. |
-| R7 | La criticidad del negocio afecta la **prioridad del plan**, no el ajuste de madurez. |
+| R7 | El contexto de negocio (p. ej. criticidad) puede matizar el **ajuste de IA (U2, docs/05 §3)**, pero no decide por sí solo la **prioridad** de un plan: hoy la prioridad sale de la severidad del hallazgo (OP-01, docs/11 §D). |
 | R8 | Todo ajuste queda registrado con modelo, versión de prompt, entrada y salida. |
 
 ## 6. Agregación Jerárquica
@@ -205,7 +205,7 @@ Cobertura de evidencia (por evaluación):
 | 1 | Partial | Base: sin requisitos. Se asigna si no se alcanza Tier 2. |
 | 2 | Risk Informed | `CRI-GV-01 ≥ 50` (política o gestión aprobada), `CRI-GV-02 ≥ 50` (roles), `CRI-ID-03 ≥ 50` (riesgos) |
 | 3 | Repeatable | Requisitos de T2 + `CRI-GV-01 ≥ 75`, `CRI-GV-03 ≥ 75` (tolerancia), `CRI-GV-04 ≥ 75` (revisión), `CRI-DE-01 ≥ 75` (monitoreo), `CRI-RS-01 ≥ 75` (plan de respuesta), `CRI-RC-01 ≥ 75` (recuperación), `CRI-RC-02 ≥ 75` (backups probados) |
-| 4 | Adaptive | Requisitos de T3 + `CRI-GV-04 = 100` (mejora basada en resultados), `CRI-RS-02 ≥ 75` (análisis de incidentes), `CRI-RC-03 ≥ 75` (restauración verificada y comunicada), `CRI-ID-04 ≥ 75` (mejora identificada) |
+| 4 | Adaptive | Requisitos de T3 + `CRI-GV-04 = 100` (mejora basada en resultados), `CRI-RS-02 ≥ 75` (análisis de incidentes), `CRI-RC-03 ≥ 75` (restauración verificada y comunicada), `CRI-ID-04 ≥ 75` (inventario de datos) |
 
 ### 8.3 Reglas
 
@@ -252,10 +252,10 @@ Cálculo base:
 
 Ajuste IA:
   A = 35 (reconoce política formal y recurso no crítico)
-  D = 20, α = 0.25 → A_acotado = 45 → S = 0.75·25 + 0.25·45 = 30
+  D = 20, α = 0.25 → A_acotado = 35 (dentro de [B-D, B+D] = [5, 45]) → S = 0.75·25 + 0.25·35 ≈ 28
 ```
 
-Salida visible: `CRI-PR-01 = 30`, con explicación “ajuste contextual: +5” y referencia a E1–E3.
+Salida visible: `CRI-PR-01 = 28`, con explicación “ajuste contextual: +3” y referencia a E1–E3.
 
 ## 10. Reproducibilidad
 

@@ -161,7 +161,7 @@ de Docker), Alembic real (`alembic/`, migraciones autogeneradas, `env.py` lee la
 - **SQLite por defecto, no Postgres.** Mismo principio que todo lo anterior: no exigir Docker
   para ver el siguiente corte funcionando. `DATABASE_URL` cambia el motor sin tocar los modelos
   (tipos genéricos de SQLAlchemy, no `postgresql.JSONB` directo).
-- `reevaluate` implementa "nueva evaluación heredando fuentes" (docs 01 §10) **re-leyendo las
+- `reevaluate` implementa "nueva evaluación heredando fuentes" (docs/04 §5) **re-leyendo las
   mismas rutas de archivo** registradas en `sources` de la evaluación anterior. Si el usuario
   corrigió ese archivo en disco, la correción se refleja automáticamente — no hay necesidad de
   un mecanismo de "diff de fuentes" más sofisticado todavía.
@@ -370,7 +370,7 @@ completo de una vez — no existen `POST /assessments/{id}/sources`, `POST .../r
   ninguna de las dos lo tiene que importar "de prestado" de la otra.
 - **Segundo bug real encontrado por un test, no en revision manual:** `_save_uploads` guardaba
   los archivos subidos en un `tempfile.TemporaryDirectory()` que se autoborraba al terminar el
-  request. `reevaluate` vuelve a leer esa misma ruta mas tarde (docs/01 §10) — asi que **todo**
+  request. `reevaluate` vuelve a leer esa misma ruta mas tarde (docs/04 §5) — asi que **todo**
   assessment creado por la API quedaria imposible de reevaluar en producción, no solo en tests.
   Se encontro porque el test de reevaluate+compare fallo con `FileNotFoundError` en la primera
   corrida, no por inspeccion de codigo. Arreglado guardando las subidas en
@@ -440,7 +440,7 @@ igual se levanta, sano, para no tener que tocar esto de nuevo el día que exista
 real — pero `api` todavía no lo usa para nada.
 
 Dicho de otro modo: el contenedor final todavía corre exactamente la misma "ejecución síncrona
-de respaldo" que docs/04 §10 y docs/07 §5 ya daban por aceptable sin Redis — ponerlo en Docker no
+de respaldo" que docs/04 §10 y docs/07 §4 ya daban por aceptable sin Redis — ponerlo en Docker no
 cambió esa decisión, solo la hizo reproducible con Postgres real en vez de SQLite.
 
 **Verificado de verdad, no solo "docker build" sin correr nada:**
@@ -1110,7 +1110,7 @@ se piden a la IA dinámicamente vía `criterio.regla.tipos_afirmacion` (loader).
   criterio que `CRI-PR-06` (docs/09 §7): un servicio corriendo es una señal más directa y es lo que el
   adaptador de Ansible puede afirmar con confianza.
 - `ID-02` no contrasta todavía con `ctx.profile` (activos críticos del contexto): ese pipeline no
-  existe (docs/11 OP-01/OP-09). La consistencia con el contexto queda pendiente.
+  existe (docs/11 OP-01 + docs/12 §3). La consistencia con el contexto queda pendiente.
 - Los criterios **documentales** dependen de `doc.claim` extraído por IA (U1): sin `DEEPSEEK_API_KEY`
   quedan `evidencia_insuficiente`, igual que `CRI-GV-01` hoy. No hay parser documental determinístico.
 

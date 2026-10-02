@@ -52,9 +52,9 @@ De ese mismo stream cuelgan dos consumidores: **madurez** (evidencia por ventana
 | ORM | SQLAlchemy 2.x | Con migraciones Alembic. |
 | Migraciones | Alembic | Job `migrate` en docker-compose antes de API/workers (§11). |
 | BD | PostgreSQL | JSONB para `value`, `locator`, metadatos. |
-| Cola / stream | Redis (Streams + cola de trabajos) | `log_ingest`, `log_aggregate`, `ops_evaluate` y trabajos del core. |
+| Cola | Redis (listas `RPUSH`/`BLPOP`) | Dos colas: trabajos del core (`assessment_run`) y del pipeline de logs (`event_ingest`). Streams con consumer groups es el diseño objetivo a mayor escala (docs/12 §1). |
 | Trabajos | Workers propios leyendo de Redis | Sin Celery; un worker por tipo de trabajo. |
-| Caché | Redis | Caché de extracción por `sha256` y de catálogo NIST. |
+| Caché | Disco | Caché de extracción IA por hash de prompt (`app/ai/cache.py`); no usa Redis. |
 | Contenedores | Docker + docker-compose | API, workers, Postgres y Redis; ver §11. |
 | Parsing TF | `python-hcl2` | Solo bloques y valores; expresiones → unknown. |
 | Parsing Ansible | `PyYAML` + inspección de estructura | Sin ejecutar nada. |
@@ -109,7 +109,7 @@ Reglas de diseño:
 | # | Regla |
 |---|---|
 | P1 | El pipeline es **stateless e idempotente**: se puede reiniciar sin perder evidencia. |
-| P2 | Tiene **colas propias** sobre Redis Streams con consumer groups (`log_ingest`, `log_aggregate`), escalables con independencia de la API. |
+| P2 | Tiene **cola propia** (`event_ingest`); hoy sobre una lista de Redis (`RPUSH`/`BLPOP`), sin consumer groups. Streams es el diseño objetivo a mayor escala. |
 | P3 | La comunicación con el core usa un **contrato de mensaje versionado** (`log.pattern@1`, `log.window@1`) con `desde`, `hasta`, `conteo`, `scope` y `schema_version`. |
 | P4 | El **core es el único escritor de `evidence`**; el pipeline publica, el core persiste y evalúa. |
 | P5 | Solo patrones y anomalías llegan a la IA; el volumen crudo se filtra con reglas determinísticas. |
@@ -141,7 +141,7 @@ porque toca el modelo de evidencias.
 | `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id` |
 | `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `evidence_id` |
 | `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `pattern_ids[]`, `criterios[]`, `timeline jsonb`, `creado_en`, `actualizado_en` |
-| `jobs` | `id`, `assessment_id?`, `org_id?`, `tipo`, `estado`, `progreso`, `error`, `creado_en`, `tomado_en` |
+| `jobs` | `id`, `assessment_id?`, `org_id?`, `tipo`, `estado`, `progreso`, `error`, `creado_en`, `tomado_en`, `actualizado_en` |
 
 ### Reglas de integridad
 
@@ -168,13 +168,12 @@ Tipos de `job`:
 
 | Tipo | Pertenece a | Descripción |
 |---|---|---|
-| `assess` | core | Pipeline de evaluación completo. |
-| `reevaluate` | core | Nueva instantánea heredando fuentes. |
-| `compare` | core | Diff entre dos evaluaciones. |
-| `log_ingest` | pipeline de logs | Normalizar y filtrar eventos recibidos. |
-| `log_aggregate` | pipeline de logs | Construir ventanas y patrones por `scope`. |
-| `ops_evaluate` | motor operativo | Evaluar disparadores y crear/actualizar incidentes. |
-| `plan_generate` | motor operativo | Generar o actualizar el plan de un incidente. |
+| `assessment_run` | core | Pipeline de evaluación completo (crear/reevaluar). |
+| `event_ingest` | pipeline de logs + motor operativo | Normalizar eventos, agregar patrones y disparar incidentes. |
+
+El diseño contemplaba una granularidad mayor (`assess`/`reevaluate`/`compare`/`log_ingest`/
+`log_aggregate`/`ops_evaluate`/`plan_generate`); el prototipo la resolvió con dos jobs porque el
+pipeline completo ya corre de una vez (docs/09 §11, docs/12 §1).
 
 Las colas y el stream se implementan sobre Redis; el core consume sus mensajes para persistir
 evidencia y recalcular solo los criterios afectados.
@@ -191,12 +190,12 @@ evidencia y recalcular solo los criterios afectados.
 | `GET` | `/jobs/{job_id}` | Estado y progreso de cualquier trabajo (`assessment_run`/`event_ingest`). |
 | `GET` | `/assessments/{id}/criteria` | Resultados por criterio con explicación y evidencias. |
 | `GET` | `/assessments/{id}/evidence` | Evidencias con procedencia y limitaciones (filtrable). |
-| `GET` | `/assessments/{id}/findings` | Brechas (contradicciones/limitaciones pendientes, docs/11 OP-04). |
+| `GET` | `/assessments/{id}/findings` | Hallazgos. Hoy solo tipo `brecha`; `contradiccion`/`limitacion` son OP-04 (docs/11 §D). |
 | `GET` | `/assessments/{id}/plans` | Planes con pasos, prioridad, verificación y estado de seguimiento. |
 | `POST` | `/assessments/{id}/plans` | Genera/recalcula los planes (`?use_ai=true` para U3, sujeto al guard de costo). |
 | `PATCH` | `/assessments/{id}/plans/{plan_id}` | Cambia el estado de seguimiento del plan (`pendiente`\|`en_progreso`\|`hecho`). No afecta el puntaje (docs/05 §4.4). |
 | `GET` | `/orgs` | Organización de la sesión (solo la propia). |
-| `POST` | `/orgs/{org_id}/events` | Carga eventos al stream de la organización (JSONL); encola `log_ingest`. |
+| `POST` | `/orgs/{org_id}/events` | Carga eventos al stream de la organización (JSONL); encola `event_ingest`. |
 | `GET` | `/orgs/{org_id}/incidents` | Lista incidentes operativos (filtrable por estado/severidad). |
 | `GET` | `/incidents/{id}` | Detalle, timeline y hechos del incidente. |
 | `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |
@@ -206,9 +205,8 @@ evidencia y recalcular solo los criterios afectados.
 | `GET` | `/methodology` | Catálogo de criterios y tipos de evidencia vigentes. |
 | `GET` | `/health` | Liveness/readiness. |
 
-> Pendientes de implementar (docs/11 §E): `POST /assessments/{id}/sources` y `POST
-> /assessments/{id}/run` como pasos separados (API-01), y `GET /assessments/{id}/scores` explícito
-> (API-02, hoy plegado en `GET /assessments/{id}`).
+> Descartados para el prototipo (docs/12 §1): API-01 (`POST /sources` + `/run` separados) y API-02
+> (`GET /assessments/{id}/scores`, hoy plegado en `GET /assessments/{id}`).
 
 Convenciones:
 
@@ -219,18 +217,23 @@ Convenciones:
 - Paginación por cursor en listados grandes.
 - Toda respuesta incluye `methodology_version` para trazabilidad.
 
-## 7. Estructura de Carpetas Propuesta
+## 7. Estructura de Carpetas
 
 ```text
 backend/
 ├── app/
-│   ├── main.py
+│   ├── main.py          # CLI (el entrypoint HTTP es app/api/app.py)
 │   ├── config.py
 │   ├── api/
-│   │   ├── assessments.py
-│   │   ├── scores.py
-│   │   ├── evidence.py
-│   │   └── methodology.py
+│   │   ├── app.py           # instancia FastAPI + routers
+│   │   ├── deps.py
+│   │   ├── schemas.py
+│   │   ├── errors.py
+│   │   ├── routes_assessments.py
+│   │   ├── routes_orgs.py
+│   │   ├── routes_incidents.py
+│   │   ├── routes_jobs.py
+│   │   └── routes_methodology.py
 │   ├── core/            # db, sesión, errores, logging
 │   ├── models/          # SQLAlchemy
 │   ├── schemas/         # Pydantic
@@ -259,7 +262,8 @@ backend/
 ├── pyproject.toml
 └── docker/
     ├── Dockerfile.api
-    └── Dockerfile.worker
+    ├── Dockerfile.worker
+    └── Dockerfile.frontend
 ```
 
 En la raíz del proyecto: `deploy/docker-compose.yml` y `deploy/.env.example` (ver §11).
@@ -327,7 +331,7 @@ Reglas:
 
 | Tema | Decisión para el prototipo |
 |---|---|
-| Cola dedicada | Sí, Redis para stream/cola y caché; sin Celery (workers propios). |
+| Cola dedicada | Sí, Redis para la cola de trabajos (la caché de extracción IA es en disco); sin Celery (workers propios). |
 | Orquestación | Docker + docker-compose; sin Kubernetes en el prototipo. |
 | Motor operativo (incidentes/planes) | Sí, mínimo: consumidor `ops` con disparadores determinísticos (doc 08). |
 | Base vectorial | No; recuperación por IDs y búsqueda textual sobre el catálogo NIST. |
@@ -336,24 +340,24 @@ Reglas:
 | AI gateway centralizado | No; el módulo `ai` aplica límites y caché. Se evalúa extraerlo si el costo/volumen lo justifica. |
 | Autenticación | Login usuario/contraseña con token firmado (doc 10); OAuth/SSO fuera de alcance. |
 | Multi-tenant | Sí: varias organizaciones por despliegue, aisladas por usuario (doc 10); el registro lo hace el proveedor por seed/CLI. |
-| Frontend | React después; la API ya expone todo lo necesario. |
+| Frontend | React implementado (`frontend/`, 7º servicio del compose); la API expone todo lo necesario. |
 
 ## 11. Despliegue en Docker
 
 Todo el prototipo debe ser desplegable con `docker compose up`. Redis entra como dependencia del
-prototipo (stream, cola y caché) sin añadir complejidad de orquestación.
+prototipo (cola de trabajos) sin añadir complejidad de orquestación.
 
 ### 11.1 Servicios
 
 | Servicio | Imagen / build | Rol | Depende de |
 |---|---|---|---|
 | `db` | `postgres:16` | Estado persistente. | — |
-| `redis` | `redis:7` | Streams, colas de trabajos y caché. | — |
+| `redis` | `redis:7` | Cola de trabajos (listas). | — |
 | `api` | `docker/Dockerfile.api` | FastAPI; encola trabajos y sirve lecturas. | db, redis |
 | `worker-core` | `docker/Dockerfile.worker` | Evaluación, adaptadores, IA. | db, redis |
 | `worker-logs` | `docker/Dockerfile.worker` | Pipeline de logs (`log_ingest`, `log_aggregate`) y `ops`. | db, redis |
 | `migrate` | `docker/Dockerfile.api` | Job de una sola ejecución: `alembic upgrade head`. | db |
-| `frontend` *(opcional)* | `node` | React; fuera del foco inicial. | api |
+| `frontend` | `docker/Dockerfile.frontend` | React/Vite servido por Nginx. | api |
 
 Notas:
 
@@ -423,6 +427,12 @@ services:
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
+
+  frontend:
+    build: { context: .., dockerfile: backend/docker/Dockerfile.frontend }
+    ports: ["5173:80"]
+    depends_on:
+      api: { condition: service_started }
 
 volumes:
   pgdata:
