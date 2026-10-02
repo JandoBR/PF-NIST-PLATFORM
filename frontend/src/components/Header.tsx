@@ -7,7 +7,7 @@ interface HeaderProps {
   onOpenSelector: () => void;
   user: AuthUser | null;
   onLogout: () => void;
-  /** Abre (o cierra) el historial de trabajos en segundo plano. */
+  /** Abre (o cierra) el historial de actividad en segundo plano. */
   onToggleJobs: () => void;
   jobsOpen: boolean;
 }
@@ -15,7 +15,7 @@ interface HeaderProps {
 export function Header({ onOpenSelector, user, onLogout, onToggleJobs, jobsOpen }: HeaderProps) {
   const [activeJobs, setActiveJobs] = useState(0);
 
-  // Cuenta los trabajos en curso para que el botón avise sin abrir la vista. Si la API no
+  // Cuenta lo que está en curso para que el botón avise sin abrir la vista. Si la API no
   // responde se deja el último valor: los errores de conexión ya se muestran donde se usan.
   useEffect(() => {
     if (!user) return;
@@ -55,7 +55,7 @@ export function Header({ onOpenSelector, user, onLogout, onToggleJobs, jobsOpen 
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={onToggleJobs}
-            title="Trabajos en segundo plano"
+            title="Actividad en segundo plano"
             aria-pressed={jobsOpen}
             className={`btn-ghost border ${
               jobsOpen
@@ -68,7 +68,7 @@ export function Header({ onOpenSelector, user, onLogout, onToggleJobs, jobsOpen 
             ) : (
               <ListChecks className="h-4 w-4" />
             )}
-            <span className="hidden sm:inline">Trabajos</span>
+            <span className="hidden sm:inline">Actividad</span>
             {activeJobs > 0 && (
               <span className="rounded-full bg-cyan-500/20 px-1.5 text-xs font-semibold text-cyan-200">
                 {activeJobs}

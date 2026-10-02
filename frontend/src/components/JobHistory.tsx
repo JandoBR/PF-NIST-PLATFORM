@@ -19,7 +19,7 @@ function formatWhen(iso: string): string {
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('es');
 }
 
-/** Historial de trabajos en segundo plano (evaluaciones e ingestas de eventos): qué corrió, en qué
+/** Historial de actividad en segundo plano (evaluaciones e ingestas de eventos): qué corrió, en qué
  * estado quedó y por qué falló (FN-01). Se refresca solo mientras haya jobs activos. */
 export function JobHistory({ onClose, onOpenAssessment, openableIds }: Props) {
   const [jobs, setJobs] = useState<JobOut[] | null>(null);
@@ -34,7 +34,7 @@ export function JobHistory({ onClose, onOpenAssessment, openableIds }: Props) {
       setJobs(await listJobs(estado === 'all' ? {} : { estado }));
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo cargar el historial de trabajos.');
+      setError(err instanceof Error ? err.message : 'No se pudo cargar la actividad.');
     } finally {
       setLoading(false);
     }
@@ -81,10 +81,10 @@ export function JobHistory({ onClose, onOpenAssessment, openableIds }: Props) {
           >
             <ArrowLeft className="h-3 w-3" /> Volver
           </button>
-          <h2 className="text-base font-semibold text-white">Trabajos</h2>
+          <h2 className="text-base font-semibold text-white">Actividad</h2>
           <p className="text-xs text-slate-500">
             Evaluaciones e ingestas de eventos que corren en segundo plano.
-            {hasActive && ' Se actualiza solo mientras haya trabajos activos.'}
+            {hasActive && ' Se actualiza sola mientras haya algo en curso.'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -118,7 +118,7 @@ export function JobHistory({ onClose, onOpenAssessment, openableIds }: Props) {
           <div className="px-5 py-12 text-center text-sm text-slate-500">Cargando…</div>
         ) : jobs.length === 0 ? (
           <div className="px-5 py-12 text-center text-sm text-slate-500">
-            No hay trabajos{estado !== 'all' ? ' con ese estado' : ''}.
+            No hay actividad{estado !== 'all' ? ' con ese estado' : ''}.
           </div>
         ) : (
           <div className="divide-y divide-white/[0.04]">

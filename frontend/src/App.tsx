@@ -275,7 +275,7 @@ function App() {
             onIngested={() => void refreshHistory()}
           />
         ) : tab === 'jobs' ? (
-          // Como los eventos, el historial de trabajos es de la organización: se ve sin evaluación.
+          // Como los eventos, la actividad en segundo plano es de la organización: se ve sin evaluación.
           <JobHistory
             onClose={() => setTab('dashboard')}
             onOpenAssessment={(id) => void selectAssessment(id)}
