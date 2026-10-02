@@ -46,32 +46,51 @@ _RULES: dict[str, RuleFn] = {
 }
 
 
+def _evaluate_one(
+    methodology: Methodology,
+    criterion_id: str,
+    evidence: list[EvidenceInstance],
+) -> CriterionResult:
+    """Evalua un criterio. Uno sin regla registrada produce `error`: es una metodologia
+    inconsistente (ver loader) y no debe pasar silenciosamente como si no existiera."""
+
+    criterion = methodology.criterios[criterion_id]
+    rule = _RULES.get(criterion_id)
+    if rule is None:
+        return CriterionResult(
+            criterion_id=criterion_id,
+            criterion_version=criterion.version,
+            estado=Estado.ERROR,
+            explanation="Criterio en el catalogo sin regla de evaluacion implementada.",
+        )
+    result = rule(evidence)
+    result.criterion_version = criterion.version
+    return result
+
+
 def evaluate_all(
     methodology: Methodology, evidence: list[EvidenceInstance]
 ) -> list[CriterionResult]:
-    """Evalua cada criterio del catalogo que tenga una regla registrada.
+    """Evalua cada criterio del catalogo que tenga una regla registrada."""
 
-    Un criterio en el catalogo sin regla registrada produce `error`: es una metodologia
-    inconsistente (ver loader) y no debe pasar silenciosamente como si no existiera.
-    """
+    return [
+        _evaluate_one(methodology, criterion_id, evidence)
+        for criterion_id in methodology.criterios
+    ]
 
-    results = []
-    for criterion_id, criterion in methodology.criterios.items():
-        rule = _RULES.get(criterion_id)
-        if rule is None:
-            results.append(
-                CriterionResult(
-                    criterion_id=criterion_id,
-                    criterion_version=criterion.version,
-                    estado=Estado.ERROR,
-                    explanation="Criterio en el catalogo sin regla de evaluacion implementada.",
-                )
-            )
-            continue
-        result = rule(evidence)
-        result.criterion_version = criterion.version
-        results.append(result)
-    return results
+
+def evaluate_only(
+    methodology: Methodology,
+    evidence: list[EvidenceInstance],
+    criterion_ids: list[str],
+) -> list[CriterionResult]:
+    """Evalua solo los criterios indicados: la base del refresco selectivo (docs/06 §6, FN-06)."""
+
+    return [
+        _evaluate_one(methodology, criterion_id, evidence)
+        for criterion_id in criterion_ids
+        if criterion_id in methodology.criterios
+    ]
 
 
 def apply_ai_adjustments(

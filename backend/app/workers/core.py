@@ -64,21 +64,32 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
         ai_client = build_default_client() if ai_requested else None
         if ai_requested:
             logger.info("Job %s: IA %s", job.id, describe_client(ai_client))
-        svc.run_pending_assessment(
-            session,
-            methodology,
-            message["assessment_id"],
-            terraform_path=(
-                Path(message["terraform_path"]) if message.get("terraform_path") else None
-            ),
-            ansible_path=Path(message["ansible_path"]) if message.get("ansible_path") else None,
-            documents_path=(
-                Path(message["documents_path"]) if message.get("documents_path") else None
-            ),
-            ai_client=ai_client,
-            apply_ai_adjustment=message.get("apply_ai_adjustment", False),
-            context=message.get("context") or {},
-        )
+        if message.get("selective_refresh"):
+            # Refresco selectivo (docs/06 §6, FN-06): reusa lo previo, recalcula solo lo operativo.
+            svc.run_surveillance_refresh(
+                session,
+                methodology,
+                message["assessment_id"],
+                message["previous_assessment_id"],
+            )
+        else:
+            svc.run_pending_assessment(
+                session,
+                methodology,
+                message["assessment_id"],
+                terraform_path=(
+                    Path(message["terraform_path"]) if message.get("terraform_path") else None
+                ),
+                ansible_path=(
+                    Path(message["ansible_path"]) if message.get("ansible_path") else None
+                ),
+                documents_path=(
+                    Path(message["documents_path"]) if message.get("documents_path") else None
+                ),
+                ai_client=ai_client,
+                apply_ai_adjustment=message.get("apply_ai_adjustment", False),
+                context=message.get("context") or {},
+            )
         job_service.mark_done(session, job)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Job %s (assessment %s) fallo", job.id, message.get("assessment_id"))

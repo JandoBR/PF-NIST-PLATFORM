@@ -7,7 +7,7 @@ import pytest
 from app.core import assessment_service as svc
 from app.evaluation.schemas import Estado
 from app.methodology.loader import load_methodology
-from app.models.tables import Assessment, Source
+from app.models.tables import Assessment, CriterionResultRow, EvidenceRow, PlanRow, Source
 
 
 class _EchoAdjustingClient:
@@ -35,6 +35,7 @@ class _EchoAdjustingClient:
 METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "terraform"
 ANSIBLE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "ansible"
+SCENARIOS = Path(__file__).resolve().parent / "fixtures" / "scenarios"
 
 
 def _fix_rds_encryption(main_tf: Path) -> None:
@@ -236,3 +237,56 @@ def test_generate_plans_is_idempotent(db_session, methodology):
 def test_generate_plans_unknown_assessment_raises(db_session, methodology):
     with pytest.raises(svc.AssessmentNotFoundError):
         svc.generate_plans(db_session, methodology, "no-existe")
+
+
+def test_surveillance_refresh_reuses_unaffected_and_recomputes_operational(
+    db_session, methodology
+):
+    """Refresco selectivo (docs/06 §6, FN-06): conserva lo no operativo (incluida la IA) y
+    recalcula solo los criterios de vigilancia."""
+
+    org = "Empresa Refresh Selectivo"
+    previous = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name=org,
+        scope="entorno:produccion",
+        terraform_path=FIXTURES / "gaps",
+    )
+
+    # Simular lo que aporta la IA: un resultado documental/tecnico con texto propio y un plan
+    # "generado_por IA". Un criterio NO de vigilancia no debe recomputarse.
+    db_session.query(CriterionResultRow).filter_by(
+        assessment_id=previous.id, criterion_id="CRI-PR-01"
+    ).one().explanation = "SENTINEL-PR01"
+    db_session.query(PlanRow).filter_by(
+        assessment_id=previous.id, criterion_id="CRI-PR-01"
+    ).one().generado_por = "ai:plan_v1"
+    # Un criterio de vigilancia: su resultado SI debe recomputarse.
+    db_session.query(CriterionResultRow).filter_by(
+        assessment_id=previous.id, criterion_id="CRI-DE-02"
+    ).one().explanation = "SENTINEL-DE02"
+    db_session.commit()
+
+    # Eventos nuevos: alimentan la evidencia operativa fresca.
+    svc.ingest_events(db_session, methodology, org, SCENARIOS / "incidentes_demo.jsonl")
+
+    refreshed, _paths = svc.create_pending_reevaluation(db_session, methodology, previous.id)
+    svc.run_surveillance_refresh(db_session, methodology, refreshed.id, previous.id)
+
+    assert refreshed.estado == "completada"
+    results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, refreshed.id)}
+    assert results["CRI-PR-01"].explanation == "SENTINEL-PR01"  # reusado
+    assert results["CRI-DE-02"].explanation != "SENTINEL-DE02"  # recomputado
+
+    plans = {p.criterion_id: p for p in svc.load_plans(db_session, refreshed.id)}
+    assert plans["CRI-PR-01"].generado_por == "ai:plan_v1"  # plan con IA preservado
+
+    # La evidencia operativa es la fresca del org (log.pattern de los eventos recien ingeridos).
+    refreshed_evidence = db_session.query(EvidenceRow).filter_by(assessment_id=refreshed.id).all()
+    assert any(row.type_id == "log.pattern" for row in refreshed_evidence)
+    assert all(
+        row.type_id in {"log.pattern", "log.window"}
+        for row in refreshed_evidence
+        if row.source_id == "surveillance:org"
+    )
