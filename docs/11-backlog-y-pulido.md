@@ -118,6 +118,11 @@ El catálogo implementa **11 de los 23** criterios de docs/03. Faltan 12, de los
 Consecuencia grave: el **Tier no puede pasar de Tier 1** (Tier 2 exige `GV-02` e `ID-03`, que no
 existen), así que una funcionalidad central del producto queda inutilizable.
 
+Cobertura por función: GV 1/4 · **ID 0/4** · PR 6/6 · DE 1/3 · RS 1/3 · RC 2/3. IDENTIFY es la única
+sin criterios, por eso no aparecía en la Matriz de Madurez.
+- **UI (hecho):** la matriz muestra siempre las **6 funciones**; la que no tiene criterios aparece como
+  "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
+
 - [ ] CR-01 · Implementar los **7 MVP faltantes** (P0), en este orden por impacto:
   - `GV-02` Roles y responsabilidades (documental) · `ID-03` Identificación/evaluación de riesgos
     (documental) → **desbloquean Tier 2**.

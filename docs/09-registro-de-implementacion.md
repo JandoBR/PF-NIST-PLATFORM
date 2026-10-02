@@ -1073,3 +1073,13 @@ use).
 **Verificación:** backend **223 tests** + `ruff` limpio
 (`test_surveillance_refresh_reuses_unaffected_and_recomputes_operational`: un resultado/plan con
 marca "IA" en un criterio no operativo se conserva; un criterio de vigilancia se recomputa).
+
+## 30. La Matriz de Madurez muestra las 6 funciones (no 5)
+
+`aggregate_by_funcion` solo produce agregados para funciones con resultados, así que **IDENTIFY** (0
+criterios implementados, docs/11 §C) no aparecía en la "Matriz de Madurez NIST CSF 2.0": parecía que
+el marco tuviera 5 funciones. El frontend ahora recorre las 6 de `FUNCTION_ORDER` y muestra la
+faltante como **"Sin criterios"** (borde punteado, sin barra, "Aún sin criterios implementados"),
+haciendo visible la brecha de cobertura hasta que CR-01/CR-02/CR-03 agreguen los criterios de ID.
+
+**Verificación:** solo frontend (`MaturityDashboard`); `typecheck`/`lint`/`build` limpios.

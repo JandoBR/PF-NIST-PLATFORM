@@ -41,13 +41,15 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
   const [query, setQuery] = useState('');
   const [tableMode, setTableMode] = useState<TableMode>('criteria');
 
+  // Las 6 funciones de CSF 2.0 siempre se muestran: una sin criterios implementados aparece como
+  // "sin criterios" en vez de desaparecer (docs/11 §C, cobertura IDENTIFY = 0).
   const functionScores = useMemo(() => {
     const byRef = new Map(assessment.agregados_funcion.map((a) => [a.ref, a]));
-    return FUNCTION_ORDER.filter((key) => byRef.has(key)).map((key) => ({
+    return FUNCTION_ORDER.map((key) => ({
       key,
       name: FUNCTION_NAMES[key] ?? key,
       accent: FUNCTION_ACCENTS[key] ?? '#94a3b8',
-      aggregate: byRef.get(key)!,
+      aggregate: byRef.get(key) ?? null,
     }));
   }, [assessment.agregados_funcion]);
 
@@ -122,11 +124,14 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           {functionScores.map((f) => {
-            const score = f.aggregate.score;
+            const score = f.aggregate?.score ?? null;
+            const isEmpty = f.aggregate === null;
             return (
               <div
                 key={f.key}
-                className="rounded-xl border border-white/[0.06] bg-ink-900/40 p-4 transition-colors hover:border-white/15"
+                className={`rounded-xl border border-white/[0.06] bg-ink-900/40 p-4 transition-colors ${
+                  isEmpty ? 'border-dashed' : 'hover:border-white/15'
+                }`}
               >
                 <div className="mb-3 flex items-center justify-between">
                   <span
@@ -135,19 +140,29 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
                   >
                     {f.key}
                   </span>
-                  <span className="text-lg font-bold text-white">
-                    {score != null ? Math.round(score) : '—'}
-                  </span>
+                  {isEmpty ? (
+                    <span className="chip border border-white/10 bg-white/[0.03] text-[11px] text-slate-500">
+                      Sin criterios
+                    </span>
+                  ) : (
+                    <span className="text-lg font-bold text-white">
+                      {score != null ? Math.round(score) : '—'}
+                    </span>
+                  )}
                 </div>
                 <p className="mb-2.5 text-xs font-medium text-slate-300">{f.name}</p>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${score ?? 0}%`, backgroundColor: f.accent }}
-                  />
+                  {!isEmpty && (
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${score ?? 0}%`, backgroundColor: f.accent }}
+                    />
+                  )}
                 </div>
                 <p className="mt-2 text-[11px] text-slate-600">
-                  Cobertura {f.aggregate.cobertura != null ? `${Math.round(f.aggregate.cobertura * 100)}%` : '—'}
+                  {isEmpty
+                    ? 'Aún sin criterios implementados'
+                    : `Cobertura ${f.aggregate!.cobertura != null ? `${Math.round(f.aggregate!.cobertura * 100)}%` : '—'}`}
                 </p>
               </div>
             );
