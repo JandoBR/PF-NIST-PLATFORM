@@ -1431,3 +1431,37 @@ no puede superar el de la evaluación anterior** del mismo org+scope (docs/02 §
 **Verificación:** backend **370 tests** (`test_contradictions.py`: tope, bajar sí
 permitido, sin puntaje anterior / otro criterio, sin contradicción, y un E2E de cuatro evaluaciones:
 nueva → tope, persiste → tope, se resuelve → se levanta).
+
+## 43. TS-02: golden set de la extracción de IA
+
+docs/05 §8 y docs/07 §3 prometían medir U1 contra documentos anotados, pero solo existían tests con
+respuestas simuladas, que prueban el contrato y no la calidad del modelo. Ahora hay un arnés que mide
+la extracción real con el mismo chunking y `extract_claims` del pipeline.
+
+- **Golden set:** `tests/golden_ai/` con 7 documentos (`documents/`) y su anotación manual
+  (`expected.json`): 5 documentos con 10 afirmaciones esperadas (tipo + campos clave de `contenido` +
+  cita literal), un documento sin información (`manual-operaciones.md`, abstención) y un memo con una
+  instrucción escondida (`memo-con-instrucciones.md`, prompt injection).
+- **Métricas** (`app/ai/golden_eval.py`): *recall* (afirmación esperada = mismo tipo y campos clave
+  contenidos en lo que dijo la IA; puede decir más, no menos ni distinto), *invenciones* (cualquier
+  afirmación `encontrado=true` sin pareja en la anotación) y *citas localizables* (el `fragmento`
+  aparece literal en el texto enviado, sin distinguir mayúsculas, acentos ni espacios). Éxito: recall
+  ≥ 90 %, 0 invenciones, 100 % de citas.
+- **Las citas se verifican sobre la respuesta cruda:** la evidencia `doc.claim` no guarda el
+  `fragmento` (solo página/sección), así que el arnés envuelve al cliente y lo captura antes de que
+  `extract_claims` lo descarte.
+- **Corrida real:** `uv run python -m app.main eval-ai --confirm-live-ai` (pasa por el guard de IA
+  viva, exige `DEEPSEEK_API_KEY`, sale con código 1 si no aprueba). Las respuestas se cachean como en
+  cualquier extracción. Las llamadas degradadas se reportan aparte para no confundirlas con recall
+  bajo.
+- **Tests** (`tests/test_ai_golden.py`, sin red): un cliente "oráculo" responde con la propia
+  anotación y debe aprobar; variantes rotas comprueban que cada métrica detecta su fallo (afirmación
+  omitida, invención en el documento vacío, orden obedecida desde el documento, contenido equivocado,
+  cita fabricada, IA degradada), y que la anotación es coherente con los documentos.
+
+**Pendiente:** la primera corrida contra el modelo real (cuesta dinero; no se ejecutó al
+implementarlo). Sus resultados deberían registrarse aquí y, si recall o citas no llegan al umbral,
+ajustar el prompt `extract_v1` (y subir `PROMPT_VERSION`).
+
+**Verificación:** backend **381 tests** (`test_ai_golden.py`: 11) + `ruff check` limpio.
+

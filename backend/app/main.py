@@ -13,6 +13,7 @@ defecto (ver app/core/db.py) para poder reevaluar y comparar sin levantar Postgr
     uv run python -m app.main events "Empresa Demo" \
         tests/fixtures/scenarios/e1b_fallos_sin_alerta.jsonl
     uv run python -m app.main incidents "Empresa Demo" --plans
+    uv run python -m app.main eval-ai --confirm-live-ai
 
 Sin `DEEPSEEK_API_KEY` configurada (shell o backend/.env), la extraccion documental se omite
 y el sistema sigue funcionando con los criterios tecnicos (doc 05 §7, principio de degradacion).
@@ -30,6 +31,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
 from app.ai.client import build_default_client
+from app.ai.golden_eval import evaluate_extraction, format_report
 from app.ai.guard import check_live_ai_guard
 from app.core import assessment_service as svc
 from app.core.db import build_engine, build_session_factory, ensure_schema
@@ -119,6 +121,23 @@ def cmd_run(args: argparse.Namespace) -> None:
     results = svc.load_criterion_results(session, assessment.id)
     print(f"\nAssessment guardado: {assessment.id} (org={args.org})\n")
     _print_report(methodology, results)
+
+
+def cmd_eval_ai(args: argparse.Namespace) -> None:
+    """TS-02: mide la extraccion U1 real contra el golden set anotado (docs/05 §8)."""
+
+    api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        _abort("eval-ai mide al modelo real: configura DEEPSEEK_API_KEY (shell o backend/.env).")
+    guard_error = check_live_ai_guard(True, api_key, args.confirm_live_ai)
+    if guard_error:
+        _abort(guard_error)
+
+    methodology = load_methodology(REPO_ROOT / "methodology")
+    report = evaluate_extraction(_build_ai_client_if_needed(True), methodology, args.golden_dir)
+    print(format_report(report))
+    if not report.passed:
+        raise SystemExit(1)
 
 
 def cmd_list(_args: argparse.Namespace) -> None:
@@ -306,6 +325,15 @@ def main() -> None:
     )
     run_parser.add_argument("--confirm-live-ai", action="store_true")
     run_parser.set_defaults(func=cmd_run)
+
+    eval_parser = subparsers.add_parser(
+        "eval-ai", help="Evalua la extraccion de IA contra el golden set (cuesta dinero)"
+    )
+    eval_parser.add_argument(
+        "--golden-dir", type=Path, default=REPO_ROOT / "tests" / "golden_ai"
+    )
+    eval_parser.add_argument("--confirm-live-ai", action="store_true")
+    eval_parser.set_defaults(func=cmd_eval_ai)
 
     list_parser = subparsers.add_parser("list", help="Lista evaluaciones guardadas")
     list_parser.set_defaults(func=cmd_list)

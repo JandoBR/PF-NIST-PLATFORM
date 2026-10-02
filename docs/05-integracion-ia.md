@@ -270,7 +270,7 @@ documental deshabilitada, declarando la limitación.
 
 | Prueba | Método | Criterio de éxito |
 |---|---|---|
-| Extracción correcta | Golden set de documentos anotados manualmente | ≥ 90 % de afirmaciones esperadas, sin invenciones |
+| Extracción correcta | Golden set de documentos anotados manualmente | ≥ 90 % de afirmaciones esperadas, sin invenciones (`python -m app.main eval-ai`, docs/09 §43) |
 | Abstención | Documentos sin la información | No debe afirmar lo que no existe |
 | Citas | Verificación de fragmentos contra el texto | 100 % de citas localizables |
 | Ajuste dentro de límites | Casos con B/A conocidos | `S` siempre en `[B−D, B+D]` acotado |

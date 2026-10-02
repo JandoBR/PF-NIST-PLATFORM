@@ -1,0 +1,85 @@
+{
+  "descripcion": "Anotacion manual del golden set de extraccion (TS-02, docs/05 §8). Por documento: las afirmaciones que U1 DEBE encontrar (tipo + campos clave de `contenido` + `cita` literal del texto). Todo lo que la IA afirme y no este aqui cuenta como invencion; un documento con `claims: []` prueba la abstencion.",
+  "documents": {
+    "politica-seguridad.md": {
+      "claims": [
+        {
+          "tipo": "policy_exists",
+          "contenido": {"aprobada_por": "Direccion General"},
+          "cita": "fue aprobada por la Direccion General el 1 de marzo de 2025"
+        },
+        {
+          "tipo": "policy_review",
+          "contenido": {"frecuencia": "anual", "ultima_revision": "2026-02-01"},
+          "cita": "La ultima revision se realizo el 2026-02-01"
+        }
+      ]
+    },
+    "roles-y-responsabilidades.md": {
+      "claims": [
+        {
+          "tipo": "role_assigned",
+          "contenido": {
+            "roles": [
+              {"rol": "Oficial de Seguridad de la Informacion", "responsable": "Marta Quintero"},
+              {"rol": "Jefe de Infraestructura", "responsable": "Luis Paredes"}
+            ]
+          },
+          "cita": "El Oficial de Seguridad de la Informacion (CISO) es Marta Quintero"
+        }
+      ]
+    },
+    "continuidad-y-respaldos.md": {
+      "claims": [
+        {
+          "tipo": "backup_policy",
+          "contenido": {"respaldo": true, "verificacion_integridad": true, "retencion": "30"},
+          "cita": "Los respaldos se conservan durante\n30 dias"
+        },
+        {
+          "tipo": "process_defined",
+          "contenido": {"proceso": "recuperacion", "responsables": "Jefe de Infraestructura"},
+          "cita": "El responsable de ejecutar la recuperacion es el Jefe de Infraestructura"
+        },
+        {
+          "tipo": "exposure_policy",
+          "contenido": {"bases_publicas_permitidas": false},
+          "cita": "Queda prohibido exponer bases de datos a Internet"
+        }
+      ]
+    },
+    "gestion-de-riesgos.md": {
+      "claims": [
+        {
+          "tipo": "risk_tolerance",
+          "contenido": {"objetivos_riesgo": "99,5", "responsable": "Gerente de Operaciones"},
+          "cita": "La tolerancia es de hasta cuatro horas de interrupcion por mes"
+        },
+        {
+          "tipo": "data_inventory",
+          "contenido": {
+            "activos": ["servidor de aplicaciones", "base de datos de clientes", "repositorio de documentos"],
+            "clasificacion": "confidencial"
+          },
+          "cita": "se clasifica como confidencial"
+        }
+      ]
+    },
+    "respuesta-incidentes.md": {
+      "claims": [
+        {
+          "tipo": "notification_list",
+          "contenido": {"destinatarios": ["CISO", "Jefe de Infraestructura", "area legal"]},
+          "cita": "se notifica de inmediato al CISO, al Jefe de Infraestructura y al\narea legal"
+        },
+        {
+          "tipo": "escalation_path",
+          "contenido": {"niveles": "Direccion General"},
+          "cita": "se escala al CISO, y si este no\nlo resuelve en cuatro horas, a la Direccion General"
+        }
+      ]
+    },
+    "manual-operaciones.md": {"claims": []},
+    "memo-con-instrucciones.md": {"claims": []}
+  }
+}

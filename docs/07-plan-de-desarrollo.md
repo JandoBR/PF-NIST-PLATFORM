@@ -59,7 +59,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 | Unitario | Parsers, reglas de criterio, fórmulas (α, D, agregación, cobertura, tier) | pytest | Casos borde: unknown, n/a, estados mixtos |
 | Golden files | Terraform/Ansible → evidencias esperadas | pytest + fixtures | Diff vacío contra resultados anotados (`tests/test_golden.py`, docs/09 §39) |
 | Motor | Conjuntos de evidencias → puntajes esperados | pytest | Cálculo reproducible por caso |
-| IA extracción | Golden set de documentos anotados | script de evaluación | ≥ 90 % afirmaciones correctas, 0 invenciones, citas localizables |
+| IA extracción | Golden set de documentos anotados | script de evaluación | ≥ 90 % afirmaciones correctas, 0 invenciones, citas localizables (`tests/golden_ai/`, `app.main eval-ai`, docs/09 §43) |
 | IA ajuste | Límites y degradación | tests con respuestas simuladas (válidas, vacías, malformadas) | `S` siempre acotado; degradado sin crash |
 | Contradicciones | Técnico vs documental | fixtures | Prevalece técnica; hallazgo registrado una sola vez |
 | Vigilancia | Escenarios E1/E1-b/E2/E2-b/E3/E3-b | fixtures JSONL | Patrones y criterios actualizados como se espera |
