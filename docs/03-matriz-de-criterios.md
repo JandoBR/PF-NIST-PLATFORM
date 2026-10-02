@@ -33,7 +33,7 @@ Resumen de cobertura del catálogo:
 | Recover | 3 | 2 | 1 |
 | **Total** | **23** | **16** | **2** |
 
-> **Estado de implementación:** **23 de 23** criterios implementados (CR-01…CR-04, docs/11 §C).
+> **Estado de implementación:** **23 de 23** criterios implementados (CR-01…CR-05, docs/11 §C).
 > Detalle del código en `09-registro-de-implementacion.md §31–§34`.
 
 ---

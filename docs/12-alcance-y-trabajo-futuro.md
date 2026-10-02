@@ -22,13 +22,15 @@ job separados; a esta escala no aporta.
 
 | ID | Qué es | Por qué no en el prototipo | Detalle |
 |---|---|---|---|
-| FN-02 | `Job.progreso` incremental real (no solo 0→100) | El pipeline local termina en segundos; sería una barra 0→100 igual. Cosmético. | docs/11 §B, `core/jobs.py` |
+| FN-02 | `Job.progreso` incremental real (no solo 0→100) | El pipeline local termina en segundos; sería una barra 0→100 igual. Cosmético. | docs/11 §B (nota FN-02), `core/jobs.py` |
 | OP-10 | Ciclo de vida completo (`creada→ingestando→…→completada`) y 7 tipos de job | La evaluación es atómica, inmutable y re-ejecutable; un fallo se ve por `job.error` y se reintenta entero. Fases = observabilidad, no función. | docs/04 §5 |
 | OP-08 | Consumidores `log_ingest`/`log_aggregate` separados | Un solo job `event_ingest` ya corre normalizar→agregar→disparadores→incidentes. Partirlo solo escala por etapa. Simplificación deliberada. | docs/09 §11 |
 | OP-07 | Ventanas deslizantes (stream continuo) | La ingesta es por lotes (JSONL); "una ventana = un lote" alcanza. El stream real es evolución. | docs/08 §11 |
 | OP-06 | Cooldown / rate-limit real de incidentes (O4) | Idempotencia por `correlation_key` evita duplicados; el spam solo aparece en un stream continuo. | `ops/incidents.py` |
 | API-01 | `POST /sources` + `/run` separados | El flujo es de un solo disparo desde la UI; las subidas ya quedan persistentes. | docs/09 §12/§16 |
 | API-02 | `GET /assessments/{id}/scores` explícito | Redundante: los puntajes ya se pliegan en `GET /assessments/{id}` y ningún consumidor lo pide. | docs/04 §6 |
+| OP-16 | Reintento automático de jobs huérfanos | `fail_if_stale` solo los marca `fallido`; reintentar automáticamente abre la puerta a duplicados y no hace falta en local. | docs/09 §20 |
+| DEP-01 | Despliegue real (nginx + dominio, `VITE_API_BASE_URL`, `CORS_ORIGINS`) | El prototipo corre solo en local con Compose. | docs/09 §19 |
 
 ## 2. Persistencia de datos derivados
 
@@ -39,6 +41,8 @@ de verdad y bugs de invalidación.
 |---|---|---|---|
 | OP-03 | Persistir `findings`/`score_aggregates`/`tier_estimates` | Recalcular es barato y siempre consistente; solo se justifica si el cálculo se vuelve costoso. | `recommendations/findings.py` |
 | OP-02 | Tabla `ai_adjustments` (modelo, prompt_version, propuesta, justificación) | La justificación ya queda en `explanation` y los tests verifican las cotas; la tabla solo agrega consultabilidad. | `ai/adjustment.py` |
+| OP-17 | Persistir `log.window` (hoy se recalcula desde `Event`) | Mismo patrón que OP-03: recálculo barato y sin segunda fuente de verdad. | docs/09 §11 |
+| OP-18 | `Source` por archivo (hoy uno por adaptador) | Solo se necesita si se quiere trazabilidad por archivo individual. | docs/09 §11 |
 
 ## 3. Contexto y tailoring
 
@@ -60,12 +64,20 @@ estas medidas no tienen superficie real aquí.
 | SEC-04 | Rate limiting / bloqueo por intentos en `/auth/login` |
 | SEC-05 | Alta/administración de cuentas fuera del seed (CLI o panel admin) |
 | SEC-06 | Rotar/eliminar credenciales de demo antes de uso real |
+| SEC-07 | Redacción de patrones de secretos antes de enviar a la IA (`docs/02:120`, `docs/04 §9`) |
+| SEC-08 | Límite de tamaño por archivo/evaluación (`docs/04 §9`) |
+| SEC-09 | Registro por el cliente, recuperación/cambio de contraseña, OAuth/SSO/MFA, roles granulares y refresh tokens (`docs/10 §1`) |
+
+> El **path traversal** de las subidas (nombre de archivo crudo del cliente) **se corrigió** en el
+> prototipo (`app/core/uploads.py`, docs/09 §35): no forma parte de esta lista.
 
 ## 5. Ampliaciones de investigación / producto
 
 | ID | Qué es | Por qué no en el prototipo | Detalle |
 |---|---|---|---|
 | AMP-01 | Recuperación semántica (embeddings) sobre el catálogo NIST | El motor es determinístico y basado en reglas + evidencia estructurada; añade proveedor, índice, costo y no-determinismo. | docs/07 §2/§7 |
+| AMP-04 | Cobertura de implementación del producto (subcategorías con criterio / total CSF) expuesta en API/UI | Métrica de producto, no de evaluación; no altera puntajes. | docs/01 §7 |
+| AMP-06 | Niveles por función A/B/C/D (Consolidado/Gestionado/…) | El diseño lo marca opcional y no-NIST. | docs/01 §8.4 |
 
 *(AMP-02, exportación PDF, se promovió al prototipo: separa el acceso a la herramienta del acceso a
 los resultados y da oficialidad al informe — ver `docs/11 §G`.)*
@@ -75,3 +87,4 @@ los resultados y da oficialidad al informe — ver `docs/11 §G`.)*
 | ID | Motivo |
 |---|---|
 | FN-04 | El botón "Reevaluar" se eliminó (UI-10); no hay dónde exponer el toggle de IA. El endpoint sigue aceptando `ai_adjust`. |
+| CAL-01 | Modelado de calendario aproximado (meses de 28–31 días) | Aproximación aceptada; no se necesita calendario real. |

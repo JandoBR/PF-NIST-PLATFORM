@@ -1190,3 +1190,26 @@ Mixto** (usa `log.pattern`), se quita el "Tier: T3" huérfano de `PR-02`, `PR-06
 
 **Verificación:** backend **272 tests** + `ruff` limpio (`test_cr05_docclaim_criteria.py` cubre los 4;
 `criteria.yml` v5).
+
+## 35. Revisión final del backlog y saneo de subidas
+
+**Revisión de cierre (solo documentación).** Pasada cruzando diseño (00–08) ↔ implementación (09) ↔
+backlog (11) ↔ fuera de alcance (12) para detectar requisitos sin registrar. No apareció ningún ítem
+`[ ]` falso; los huecos detectados se registraron en `docs/11` (FN-07/FN-08, CR-06/CR-07,
+OP-11…OP-15, API-04, TS-01…TS-04, AMP-05) y `docs/12` (OP-16/OP-17/OP-18, DEP-01, SEC-07…SEC-09,
+AMP-04/AMP-06, CAL-01). En `docs/05 §7` se eliminó la "opción de modo sin documentos externos": no
+aporta capacidad nueva — sin documentos o sin U1, la dimensión documental ya queda
+`evidencia_insuficiente`.
+
+**Fix: saneo de nombres de archivo subidos (path traversal).** `_save_uploads`
+(`routes_assessments.py`) y `POST /orgs/{id}/events` (`routes_orgs.py`) escribían
+`upload_dir / filename` con el nombre **crudo** del cliente, permitiendo `../` o rutas absolutas.
+Nuevo helper `app/core/uploads.py::safe_filename`: se queda con el **basename** (`Path(name).name`),
+rechaza vacío/`.`/`..`/bytes nulos/`\` y valida la extensión contra una lista blanca por tipo
+(`terraform` `.tf`; `ansible` `.yml`/`.yaml`; `documents` `.pdf`/`.md`/`.markdown`/`.txt`; `events`
+`.jsonl`). La API responde **422** ante un nombre inválido (docs/04 §9). Registrado como corregido en
+`docs/12 §4` (ya no está entre los SEC pendientes).
+
+**Verificación:** `test_uploads.py` (basename, separadores, lista blanca, nombres inválidos) y
+`test_api_assessments.py::test_upload_rejects_disallowed_extension`; backend **283 tests** +
+`ruff` limpio.

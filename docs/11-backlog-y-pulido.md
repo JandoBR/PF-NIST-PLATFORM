@@ -66,6 +66,8 @@ pestaña refleje el estado actual y conserve un historial.
   pestaña (pestañas o filtro activos/historial).
 - Requiere que el backend permita cambiar el estado de un incidente (hoy es de solo lectura desde la
   API): ver OP-04.
+- **Hecho:** pestañas **Activos / Historial**; cerrar un incidente lo mueve al historial (usa el
+  `PATCH /incidents/{id}` de OP-04, docs/09 §24).
 
 ### [x] UI-07 · Comparación más explícita + gráficos (P1)
 La pestaña de comparación debería explicar *qué* cambió, no solo listarlo.
@@ -113,12 +115,18 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
   resultados y planes de los criterios no operativos (preserva IA: claims U1, ajuste U2, texto de
   planes) y recalcula solo los criterios de vigilancia con los patrones frescos; hereda el estado de
   seguimiento. El worker lo dispara con `selective_refresh=True` (docs/06 §6, docs/09 §29).
+- [ ] FN-07 · **Origen del evento** (P2): `RawEvent.fuente` se parsea pero se descarta; la evidencia
+  operativa usa `source_id="events:{ruta}"` en vez del origen por evento (docs/06 §2). Propagar
+  `fuente` a `source_id`.
+- [ ] FN-08 · **Patrones sin consumidor** (P2): `incident_triaged` y `containment_done` figuran como
+  tipos de evento pero no tienen patrón ni criterio/disparador que los use (docs/06 §2/§3). Definir
+  patrón y consumo, o documentar que son solo contexto. Amplía OP-05.
 
 > `FN-02` (progreso real del job) **descartado** para el prototipo: ver docs/12 §1.
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **23 de 23** criterios de docs/03 (`criteria.yml` v4). Cobertura por función:
+El catálogo implementa **23 de 23** criterios de docs/03 (`criteria.yml` v5). Cobertura por función:
 GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 - **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
@@ -134,6 +142,14 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   backups), `RS-01` (plan de respuesta + escalamiento), `RC-02` (verificación de integridad) y
   `RC-03` (notificación documentada). Hecho (docs/09 §34). `criteria.yml` v5. (`RS-02` ya lo hacía
   desde CR-03.)
+- [ ] CR-06 · **Evidencia declarada sin consumir**: reglas que listan evidencia en docs/03 que hoy no
+  leen: `PR-01` (`doc.claim(policy_exists)` + `tipos_afirmacion`), `PR-02` (cifrado de backups para
+  100), `PR-04` (`an.file.permissions`), `PR-05` (`tf.versioning.config`), `DE-01` (`log.window`)
+  (P2). Incluye **emitir `tf.expression.unresolved`**: el tipo existe en `evidence_types.yml` pero el
+  adaptador de Terraform nunca lo produce.
+- [ ] CR-07 · **Tipos de evidencia sin productor**: `tf.attr.value`, `doc.source.info` (marcador
+  "documento analizado", docs/05 §2.3 E6) y `log.event` figuran en docs/02 y no existen. Definir
+  contrato y productor, o declararlos fuera de alcance (P2).
 
 > Nota transversal: los criterios con componente **documental** (`GV-02/03/04`, `ID-02/03/04`,
 > `RC-01`, `RS-02/03`) dependen de `doc.claim` extraído por U1; sin IA quedan
@@ -150,12 +166,29 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   §24; habilita UI-06). Siguen pendientes los hallazgos `contradiccion` (docs/02 §5) y `limitacion`
   además de `brecha`.
 - [ ] OP-05 · Trigger D2 (`alert_raised` sin `incident_triaged`).
+- [ ] OP-11 · **Plan/incidente**: `brecha_ref` (disparador) en el plan, "condición de cierre",
+  registrar motivo/verificación al cerrar un incidente y validar las **transiciones de estado**
+  (`PATCH` hoy permite cualquier estado→cualquier estado) (docs/05 §4.3, docs/08 §4/§7).
+- [ ] OP-12 · **Contratos de IA**: validación de formatos (docs/05 §2.3 E5), reintento con backoff
+  (hoy `continue` sin espera), registro por llamada (`prompt_version`, `criterion_id`, duración,
+  resultado) y `max_criterios_ajustados_por_evaluacion` en `settings.yml`.
+- [ ] OP-13 · **Modelo/persistencia**: `evidence_definitions`/`criteria_catalog` (o declarar
+  YAML-only), `incidents.pattern_ids`, `log_patterns.evidence_id`, `Source` por archivo y
+  `schema_version` en el contrato de mensaje de la cola (docs/04 §3.1/§4).
+- [ ] OP-14 · **Reproducibilidad**: persistir versión de adaptador/parser y de prompt/modelo de IA por
+  evaluación (docs/01 §10); hoy solo `methodology_version` (OP-02 cubre la tabla de ajustes).
+- [ ] OP-15 · **Contrato menor de evidencia**: llenar `Locator.line_start/line_end`, registrar
+  `resuelto_por: parser`, registrar la limitación de recursos Terraform no soportados y alinear
+  `created_by` (docs/01 §2/§5, docs/02 §4).
 
 > Descartados para el prototipo (OP-02, OP-03, OP-06…OP-10): ver **docs/12**.
 
 ## E. API / contratos faltantes (docs/04 §6)
 
 - [ ] API-03 · `GET /jobs` (listado, filtrable por estado/org) — habilita FN-01.
+- [ ] API-04 · **Convenciones**: paginación por cursor y filtros en listados (hoy "(filtrable)" en
+  docs/04 §6 no tiene query params), `application/problem+json` para **todos** los errores (no solo
+  assessments) y `methodology_version` en las respuestas que docs/04 promete.
 
 > Descartados para el prototipo (API-01 `sources`+`run` separados, API-02 `GET /scores`): ver **docs/12 §1**.
 
@@ -169,10 +202,21 @@ registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototi
 - [ ] AMP-02 · **Exportación PDF del informe ejecutivo** (y de la comparación, UI-07). Se promueve al
   prototipo: da oficialidad al informe y **separa el acceso a la herramienta del acceso a los
   resultados** (común en entornos corporativos).
+- [ ] AMP-05 · **Puntaje "provisional" con cobertura baja**: marcar el score como provisional cuando la
+  cobertura de evidencia es baja (docs/01 §7); hoy "provisional" solo aplica al Tier.
 - [x] AMP-03 · Último criterio no-MVP: `DE-03` (información de eventos a personal/herramientas).
   Hecho (docs/09 §33): catálogo completo 23/23.
 
 > AMP-01 (embeddings): descartado para el prototipo, ver **docs/12 §5**.
+
+## H. Testing / validación (docs/07 §3)
+
+- [ ] TS-01 · **Golden files**: resultados esperados anotados para Terraform/Ansible (docs/07 §3).
+- [ ] TS-02 · **Golden set de IA**: documentos anotados + script de métricas (≥ 90 % de afirmaciones,
+  0 invenciones, citas localizables).
+- [ ] TS-03 · **Test de contradicción** técnico-vs-documental (se cierra junto con OP-04).
+- [ ] TS-04 · Cobertura opcional: handlers de la CLI, `test_methodology_loader` e ingesta con solape
+  parcial (docs/09 §25).
 
 ## Priorización sugerida
 
@@ -181,6 +225,6 @@ registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototi
 3. **OP-04** (hallazgos `contradiccion`/`limitacion`) y **AMP-02** (PDF), según tiempo.
 4. **OP-01** (prioridad por criticidad, versión fina).
 
-> **Hecho:** catálogo completo (CR-01…CR-04), UI-01…UI-10, FN-05, FN-06 y la parte de estado de
-> incidente de OP-04. Ver docs/09 §23–§33.
+> **Hecho:** catálogo completo (CR-01…CR-05), UI-01…UI-10, FN-05, FN-06 y la parte de estado de
+> incidente de OP-04. Ver docs/09 §23–§34.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).

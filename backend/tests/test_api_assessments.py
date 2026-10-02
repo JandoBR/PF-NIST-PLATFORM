@@ -31,6 +31,15 @@ def test_create_assessment_requires_at_least_one_file(api_client):
     assert response.status_code == 422
 
 
+def test_upload_rejects_disallowed_extension(api_client):
+    response = api_client.post(
+        "/assessments",
+        data={"scope": "entorno:produccion"},
+        files={"terraform_files": ("payload.exe", b"MZ", "application/octet-stream")},
+    )
+    assert response.status_code == 422
+
+
 def test_create_assessment_is_accepted_and_queued(api_client):
     response = _upload_terraform(api_client, "good")
 

@@ -35,6 +35,7 @@ from app.core import assessment_service as svc
 from app.core import jobs as job_service
 from app.core.queue import QUEUE_CORE, enqueue
 from app.core.repository import row_to_plan
+from app.core.uploads import safe_filename
 from app.evaluation import aggregation, tier
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
@@ -91,7 +92,10 @@ async def _save_uploads(files: list[UploadFile] | None, tipo: str) -> Path | Non
     upload_dir = UPLOADS_DIR / str(uuid4()) / tipo
     upload_dir.mkdir(parents=True, exist_ok=True)
     for upload in files:
-        name = upload.filename or "archivo"
+        try:
+            name = safe_filename(upload.filename, tipo=tipo)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         content = await upload.read()
         (upload_dir / name).write_bytes(content)
     return upload_dir

@@ -23,6 +23,7 @@ from app.api.schemas import EventsAccepted, IncidentOut, OrganizationOut
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
 from app.core.queue import QUEUE_LOGS, enqueue
+from app.core.uploads import safe_filename
 from app.methodology.loader import Methodology
 from app.models.tables import User
 
@@ -67,7 +68,11 @@ async def ingest_events(
 
     upload_dir = EVENTS_UPLOADS_DIR / str(uuid4())
     upload_dir.mkdir(parents=True, exist_ok=True)
-    jsonl_path = upload_dir / (file.filename or "events.jsonl")
+    try:
+        name = safe_filename(file.filename, tipo="events")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    jsonl_path = upload_dir / name
     jsonl_path.write_bytes(await file.read())
 
     job = job_service.create_job(session, "event_ingest", org_id=org.id)

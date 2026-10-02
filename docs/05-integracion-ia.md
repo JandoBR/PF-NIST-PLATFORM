@@ -257,7 +257,7 @@ Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extrac
 | Riesgo | Medida |
 |---|---|
 | Prompt injection en documentos/logs | Contenido en secciones delimitadas y etiquetadas como datos; instrucción explícita de no seguirlas; el modelo no tiene herramientas de ejecución. |
-| Exfiltración de datos sensibles | Redacción de patrones de secretos antes de enviar; exclusión de campos sensibles; opción de modo sin documentos externos. |
+| Exfiltración de datos sensibles | Redacción de patrones de secretos antes de enviar; exclusión de campos sensibles. |
 | Alucinación de evidencia | U1 exige cita; U2 exige IDs existentes; validación de esquema; sin cita/ID → descarte. |
 | Respuestas vacías o truncadas | Manejo explícito, reintentos limitados, degradación controlada. |
 | Costos | Límite de chunks por documento, límite de tokens, caché de extracción por `sha256` del documento. |
