@@ -81,6 +81,17 @@ sigue saliendo de la evidencia (docs/05 §4.4).
   hereda por `criterion_id` desde la evaluación completada inmediatamente anterior
   (`Assessment.previous_assessment_id`, autodetectado; docs/05 §4.4).
 
+### [x] UI-09 · Eventos e incidentes sin depender de la evaluación (P1)
+Antes la pestaña de eventos/incidentes usaba `org_id` de la evaluación activa y no se podía abrir
+sin una evaluación. Deben funcionar con la organización de la **sesión**.
+- **Hecho:** la pestaña usa `user.org_id`/`user.org_nombre` y se puede abrir sin evaluación. Backend
+  ya era independiente (`/orgs/{id}/events`, `/orgs/{id}/incidents`).
+
+### [ ] UI-10 · Revisar el botón "Reevaluar" (P2)
+Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo input ⇒ mismo resultado).
+Decidir: quitarlo, o dejarlo solo con una etiqueta clara y cuando haya motivo (fuentes cambiadas en
+disco). Pendiente de confirmar con el usuario.
+
 ## B. Funcionalidad pendiente (lo que reportó Claude)
 
 - [ ] FN-01 · **Historial de jobs** (P1): no hay `GET /jobs` (listado) ni UI; hoy solo `GET /jobs/{id}`.
@@ -90,6 +101,10 @@ sigue saliendo de la evidencia (docs/05 §4.4).
   (la API devuelve solo `job_id`); recuperarlo en la respuesta o en el resultado del job.
 - [ ] FN-04 · **Toggle de IA en "Reevaluar"** (P2): la API lo soporta (`ai_adjust`), el botón del
   dashboard no lo pregunta.
+- [x] FN-05 · **Refresco automático de madurez al ingerir** (P1): `worker-logs` encola una
+  reevaluación de la última evaluación completada del `org`+`scope` cuando la ingesta suma al menos
+  `vigilancia.refresco_min_patrones_nuevos` patrones nuevos (default 3). No pide nada al usuario;
+  no dispara sin evaluación previa, con evaluación en vuelo, ni bajo el umbral (docs/08 §8).
 
 ## C. Cobertura de criterios y Tier (P0)
 

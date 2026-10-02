@@ -145,6 +145,16 @@ Cargar eventos (event_time en orden)
 - El recálculo solo toca criterios afectados; el resto conserva su puntaje y versión.
 - El diff responde: “¿qué cambió y por qué?” (evidencia nueva, patrón detectado, estado).
 
+**Automático (docs/08 §8).** La nueva evaluación **no la pide el usuario**: al procesar una ingesta,
+si agregó suficientes `log.pattern` **nuevos** para su scope (umbral
+`vigilancia.refresco_min_patrones_nuevos`, default 3), el worker de logs encola una reevaluación de
+la última evaluación completada del `org`+`scope`. Reingerir el mismo archivo agrega 0 patrones y
+no dispara. La evaluación hereda el estado de seguimiento (docs/05 §4.4).
+
+**Independencia de la evaluación.** Los eventos y los incidentes son **organización+scope**, no
+pertenecen a una evaluación: se ingieren y consultan aunque nunca se haya evaluado. Si no hay una
+evaluación completada previa, simplemente no hay nada que refrescar.
+
 ## 7. Recomendaciones Generadas por Eventos
 
 El motor operativo (doc 08) convierte patrones anómalos o fallos en un **plan de asesoría por

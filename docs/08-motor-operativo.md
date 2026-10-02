@@ -143,6 +143,19 @@ Hechos operativos (incident_declared, escalation_done, containment_done,
 - Un incidente abierto sin hechos de respuesta genera `evidencia_insuficiente` o falla según la regla
   de justicia (doc 06 §5), nunca un valor inventado.
 
+**Refresco automático.** Como el motor no puntúa, la madurez solo cambia cuando se corre una
+evaluación nueva. Para no exigirle al usuario ese paso, `worker-logs`, al terminar una ingesta,
+dispara una reevaluación de la última evaluación completada del `org`+`scope` cuando la ingesta
+sumó al menos `vigilancia.refresco_min_patrones_nuevos` patrones nuevos (default 3). No dispara si:
+no hay evaluación previa, ya hay una evaluación en vuelo para ese `org`+`scope` (anti-apilamiento),
+o el ingreso no alcanzó el umbral. La reevaluación corre sin IA (determinista) y hereda el
+seguimiento de planes.
+
+**Eventos e incidentes son independientes de la evaluación.** Pertenecen a la organización+scope, no
+a una evaluación: se ingieren y se ven aunque no se haya evaluado nunca. El refresco es una
+consecuencia *opcional* (solo si hay evaluación previa), no un requisito para operar el flujo
+operativo.
+
 ## 9. Escenarios Esperados
 
 | Escenario | Disparador esperado | Incidente | Plan generado |

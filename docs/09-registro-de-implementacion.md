@@ -976,3 +976,38 @@ comprueba persistencia y que el score no cambia; `..._invalid_state_is_422`;
 `test_reevaluate_inherits_plan_follow_up_state` y
 `test_new_assessment_inherits_follow_up_from_same_org_scope` comprueban la herencia). Frontend
 `typecheck`/`lint`/`build` limpios.
+
+## 27. Refresco automático de madurez al ingerir + eventos sin evaluación
+
+**Por qué:** el motor operativo no puntúa; la madurez solo cambia cuando se corre una evaluación.
+Pedirle al usuario que "reevalúe" era (a) un paso manual y (b) sin valor si nada cambió (el pipeline
+es determinista). Además, eventos e incidentes quedaban atados a la evaluación activa en el
+frontend, cuando backend ya eran por `org`+`scope`.
+
+**Refresco automático (docs/06 §6, docs/08 §8):**
+- `ingest_events` ahora cuenta los `log.pattern` **realmente nuevos** por scope
+  (`IngestResult.patrones_nuevos_por_scope`); reingerir el mismo archivo suma 0.
+- Umbral configurable `vigilancia.refresco_min_patrones_nuevos` (`settings.yml`, default **3** =
+  "cambio considerable", criterio de diseño).
+- `svc.maybe_enqueue_maturity_refresh` encola una reevaluación de la última evaluación `completada`
+  del `org`+`scope` si se supera el umbral. No dispara si: no hay Redis, no hay evaluación previa
+  (nada que refrescar), ya hay una evaluación `pendiente`/`en_progreso` para ese `org`+`scope`
+  (anti-apilamiento) o no se llega al umbral. Corre **sin IA** (determinista) y hereda seguimiento.
+- `svc.enqueue_reevaluation` centraliza el "crear reevaluación + encolar `assessment_run`"; lo usan
+  el endpoint `POST /assessments/{id}/reevaluate` **y** el refresco (antes duplicado en la ruta).
+- `worker-logs.process_message` recibe un `redis_client` (opcional) y hace el refresco **best-effort**
+  antes de `mark_done`: si falla, la ingesta ya fue exitosa y su job no se marca fallido. El worker
+  `main()` pasa el cliente real.
+- `tests/conftest.run_pending_jobs` ahora **drena en loop** (logs puede encolar core) y pasa el
+  `FakeRedis` a `worker_logs.process_message`.
+
+**Eventos e incidentes sin evaluación (UI-09):** la pestaña usa `user.org_id`/`user.org_nombre` de la
+sesión y se puede abrir sin evaluación activa; tras una ingesta, la app refresca el **historial** por
+si se encoló un refresco (`onIngested`). El backend no cambió: ya era independiente.
+
+**Decisión pendiente:** el botón "Reevaluar" del dashboard quedó como estaba; con el refresco
+automático su valor es marginal (docs/11 UI-10).
+
+**Verificación:** backend **222 tests** + `ruff` limpio (tres tests nuevos en `test_workers_logs.py`:
+dispara sobre el umbral, no dispara debajo, no dispara sin evaluación previa; fixture
+`incidentes_demo.jsonl`). Frontend `typecheck`/`lint`/`build` limpios.
