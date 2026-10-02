@@ -18,9 +18,11 @@ from app.evaluation.rules import (
     gv01_policy,
     gv02_roles,
     gv03_risk_tolerance,
+    gv04_strategy_review,
     id01_asset_inventory,
     id02_asset_criticality,
     id03_risk_assessment,
+    id04_data_inventory,
     pr01_encryption,
     pr02_backup,
     pr03_admin_access,
@@ -31,6 +33,8 @@ from app.evaluation.rules import (
     rc02_backup_verification,
     rc03_recovery_communication,
     rs01_response_plan,
+    rs02_incident_analysis,
+    rs03_notification,
 )
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.loader import Methodology
@@ -42,9 +46,11 @@ _RULES: dict[str, RuleFn] = {
     gv01_policy.CRITERION_ID: gv01_policy.evaluate,
     gv02_roles.CRITERION_ID: gv02_roles.evaluate,
     gv03_risk_tolerance.CRITERION_ID: gv03_risk_tolerance.evaluate,
+    gv04_strategy_review.CRITERION_ID: gv04_strategy_review.evaluate,
     id01_asset_inventory.CRITERION_ID: id01_asset_inventory.evaluate,
     id02_asset_criticality.CRITERION_ID: id02_asset_criticality.evaluate,
     id03_risk_assessment.CRITERION_ID: id03_risk_assessment.evaluate,
+    id04_data_inventory.CRITERION_ID: id04_data_inventory.evaluate,
     de01_monitoring.CRITERION_ID: de01_monitoring.evaluate,
     pr01_encryption.CRITERION_ID: pr01_encryption.evaluate,
     pr02_backup.CRITERION_ID: pr02_backup.evaluate,
@@ -57,6 +63,8 @@ _RULES: dict[str, RuleFn] = {
     rc01_recovery_procedure.CRITERION_ID: rc01_recovery_procedure.evaluate,
     rc02_backup_verification.CRITERION_ID: rc02_backup_verification.evaluate,
     rc03_recovery_communication.CRITERION_ID: rc03_recovery_communication.evaluate,
+    rs02_incident_analysis.CRITERION_ID: rs02_incident_analysis.evaluate,
+    rs03_notification.CRITERION_ID: rs03_notification.evaluate,
 }
 
 

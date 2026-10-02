@@ -5,7 +5,8 @@
 # el tope sin evidencia documental es 75, igual que CRI-PR-02 sin politica.
 # Ampliar este archivo y agregar su modulo en app/evaluation/rules van siempre juntos (D5).
 # v2: CR-01 agrega los 7 criterios MVP que faltaban (GV-02/03, ID-01/02/03, DE-01, RC-01).
-version: 2
+# v3: CR-02/CR-03 agregan el resto salvo DE-03 (GV-04, ID-04, RS-02, RS-03).
+version: 3
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -52,6 +53,21 @@ criterios:
       tipo: tolerancia_documental
       tipos_afirmacion: [risk_tolerance]
 
+  - id: CRI-GV-04
+    version: 1
+    titulo: "Revision del desempeno y mejora de la estrategia"
+    tipo: proceso
+    funcion: GV
+    categorias: [GV.OV]
+    subcategorias: [GV.OV-01, GV.OV-03]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [doc.claim@1]
+    recomendacion: "Institucionalizar una revision periodica de la estrategia basada en resultados y registrar los ajustes."
+    regla:
+      tipo: revision_documental
+      tipos_afirmacion: [policy_review, process_defined]
+
   - id: CRI-ID-01
     version: 1
     titulo: "Inventario de activos"
@@ -96,6 +112,21 @@ criterios:
     regla:
       tipo: proceso_riesgos
       tipos_afirmacion: [process_defined]
+
+  - id: CRI-ID-04
+    version: 1
+    titulo: "Inventario de datos y metadatos"
+    tipo: proceso
+    funcion: ID
+    categorias: [ID.AM]
+    subcategorias: [ID.AM-07]
+    peso: 2
+    ai_adjustable: true
+    evidencias: [doc.claim@1]
+    recomendacion: "Documentar que datos existen, donde residen y su clasificacion, incluyendo datos personales."
+    regla:
+      tipo: inventario_datos
+      tipos_afirmacion: [data_inventory]
 
   - id: CRI-PR-01
     version: 1
@@ -231,6 +262,36 @@ criterios:
       tipo: patron_con_justicia
       patrones_positivos: [escalation_done]
       patron_oportunidad: incident_declared
+
+  - id: CRI-RS-02
+    version: 1
+    titulo: "Analisis de incidentes y preservacion de evidencia"
+    tipo: mixto
+    funcion: RS
+    categorias: [RS.AN]
+    subcategorias: [RS.AN-03, RS.AN-07]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [doc.claim@1, log.pattern@1]
+    recomendacion: "Definir analisis de causa raiz y preservacion de evidencia con registros."
+    regla:
+      tipo: analisis_incidentes
+      tipos_afirmacion: [process_defined]
+
+  - id: CRI-RS-03
+    version: 1
+    titulo: "Notificacion a partes interesadas"
+    tipo: proceso
+    funcion: RS
+    categorias: [RS.CO]
+    subcategorias: [RS.CO-02]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [doc.claim@1]
+    recomendacion: "Definir a quien, cuando y como se notifica un incidente."
+    regla:
+      tipo: notificacion
+      tipos_afirmacion: [notification_list]
 
   - id: CRI-RC-01
     version: 1

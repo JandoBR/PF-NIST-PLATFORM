@@ -36,12 +36,16 @@ _CONTENT_FIELDS: dict[str, str] = {
         " criticidad (lista de {activo, nivel}|null)"
     ),
     "process_defined": (
-        "proceso (riesgos|recuperacion|otro), pasos (string), responsables (string|null),"
-        " criterios_activacion (string|null), registro_riesgos (bool|null),"
-        " priorizacion (bool|null)"
+        "proceso (riesgos|recuperacion|revision|analisis|otro), pasos (string),"
+        " responsables (string|null), criterios_activacion (string|null),"
+        " registro_riesgos (bool|null), priorizacion (bool|null), metricas (bool|null),"
+        " ajustes (bool|null)"
     ),
     "backup_policy": (
         "respaldo (bool), verificacion_integridad (bool|null), retencion (string|null)"
+    ),
+    "notification_list": (
+        "destinatarios (lista), criterios (string|null), plazos (string|null)"
     ),
 }
 
