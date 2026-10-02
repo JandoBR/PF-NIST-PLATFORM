@@ -188,6 +188,7 @@ evidencia y recalcular solo los criterios afectados.
 | `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). |
 | `GET` | `/assessments` | Lista de evaluaciones de la organización (cada una con su resumen/Tier). |
 | `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
+| `GET` | `/jobs` | Historial de jobs de la organización, del más reciente al más antiguo. Filtros `estado`, `tipo` y `limit` (1–200, por defecto 50). Marca `fallido` los jobs activos que se quedaron colgados antes de listar (docs/09 §45). |
 | `GET` | `/jobs/{job_id}` | Estado y progreso de cualquier trabajo (`assessment_run`/`event_ingest`). |
 | `GET` | `/assessments/{id}/criteria` | Resultados por criterio con explicación y evidencias. |
 | `GET` | `/assessments/{id}/evidence` | Evidencias con procedencia y limitaciones (filtrable). |

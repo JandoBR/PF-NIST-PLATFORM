@@ -1,4 +1,4 @@
-import type { Estado } from '@/lib/types';
+import type { Estado, JobEstado } from '@/lib/types';
 
 type Severity = 'alta' | 'media' | 'baja';
 
@@ -177,3 +177,15 @@ export const PLAN_ESTADOS: Array<'pendiente' | 'en_progreso' | 'hecho'> = [
   'en_progreso',
   'hecho',
 ];
+
+export const JOB_ESTADO_META: Record<JobEstado, { label: string; text: string; bg: string; border: string }> = {
+  pendiente: { label: 'Pendiente', text: 'text-slate-300', bg: 'bg-slate-500/10', border: 'border-slate-500/30' },
+  en_progreso: { label: 'En progreso', text: 'text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
+  completado: { label: 'Completado', text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
+  fallido: { label: 'Fallido', text: 'text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
+};
+
+export const JOB_TIPO_LABEL: Record<string, string> = {
+  assessment_run: 'Evaluación',
+  event_ingest: 'Ingesta de eventos',
+};

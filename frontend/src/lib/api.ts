@@ -7,6 +7,7 @@ import type {
   EvidenceInstance,
   Finding,
   IncidentOut,
+  JobEstado,
   JobOut,
   MethodologyCatalog,
   Plan,
@@ -246,6 +247,15 @@ export const compareAssessments = (idA: string, idB: string) =>
 
 // --- Jobs (POST /assessments, /assessments/{id}/reevaluate y /orgs/{id}/events son
 // asincronicos: devuelven un job_id que hay que sondear -- ver docs/09 §16) -------------------
+
+export const listJobs = (filters: { estado?: JobEstado; tipo?: string; limit?: number } = {}) => {
+  const params = new URLSearchParams();
+  if (filters.estado) params.set('estado', filters.estado);
+  if (filters.tipo) params.set('tipo', filters.tipo);
+  if (filters.limit) params.set('limit', String(filters.limit));
+  const qs = params.toString();
+  return request<JobOut[]>(`/jobs${qs ? `?${qs}` : ''}`);
+};
 
 export const getJob = (jobId: string, signal?: AbortSignal) =>
   request<JobOut>(`/jobs/${jobId}`, signal ? { signal } : undefined);

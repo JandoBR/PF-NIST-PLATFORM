@@ -7,9 +7,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models.tables import Job
+from app.models.tables import Assessment, Job
 
 #: Mismo valor por defecto que `app/workers/core.py`/`logs.py` (ambos lo leen de
 #: `JOB_STALE_TIMEOUT_SECONDS`); se repite aqui solo como default de la funcion, no como otra
@@ -34,6 +35,36 @@ def create_job(
 
 def get_job(session: Session, job_id: str) -> Job | None:
     return session.get(Job, job_id)
+
+
+def org_jobs_query(session: Session, org_id: str):
+    """Jobs de una organizacion. Un `event_ingest` lleva `org_id`; un `assessment_run` solo lleva
+    `assessment_id` (la organizacion sale de la evaluacion), asi que se buscan los dos caminos."""
+
+    return session.query(Job).filter(
+        or_(
+            Job.org_id == org_id,
+            Job.assessment_id.in_(select(Assessment.id).where(Assessment.org_id == org_id)),
+        )
+    )
+
+
+def list_jobs(
+    session: Session,
+    org_id: str,
+    *,
+    estado: str | None = None,
+    tipo: str | None = None,
+    limit: int = 50,
+) -> list[Job]:
+    """Los jobs mas recientes de la organizacion, opcionalmente filtrados por estado y tipo."""
+
+    query = org_jobs_query(session, org_id)
+    if estado is not None:
+        query = query.filter(Job.estado == estado)
+    if tipo is not None:
+        query = query.filter(Job.tipo == tipo)
+    return query.order_by(Job.creado_en.desc(), Job.id).limit(limit).all()
 
 
 def mark_taken(session: Session, job: Job) -> None:

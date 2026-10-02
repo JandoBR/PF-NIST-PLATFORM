@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   RefreshCw,
   History,
+  ListChecks,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Login } from '@/components/Login';
@@ -16,6 +17,7 @@ import { MaturityDashboard } from '@/components/MaturityDashboard';
 import { RecommendationEngine } from '@/components/RecommendationEngine';
 import { ThreatSimulation } from '@/components/ThreatSimulation';
 import { CompareAssessments } from '@/components/CompareAssessments';
+import { JobHistory } from '@/components/JobHistory';
 import {
   getCriteria,
   getFindings,
@@ -28,13 +30,14 @@ import {
 import type { AuthUser } from '@/lib/api';
 import type { AssessmentDetail, CriterionResult, Finding, Plan } from '@/lib/types';
 
-type Tab = 'dashboard' | 'recommendations' | 'threats' | 'compare';
+type Tab = 'dashboard' | 'recommendations' | 'threats' | 'compare' | 'jobs';
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'dashboard', label: 'Resumen de Madurez', icon: <LayoutDashboard className="h-4 w-4" /> },
   { key: 'recommendations', label: 'Recomendaciones', icon: <Brain className="h-4 w-4" /> },
   { key: 'threats', label: 'Eventos e Incidentes', icon: <Radar className="h-4 w-4" /> },
   { key: 'compare', label: 'Comparar', icon: <GitCompare className="h-4 w-4" /> },
+  { key: 'jobs', label: 'Trabajos', icon: <ListChecks className="h-4 w-4" /> },
 ];
 
 //: Id de la evaluación activa, para que al recargar la página se restaure en vez de perderse.
@@ -270,6 +273,12 @@ function App() {
             orgId={user.org_id}
             orgNombre={user.org_nombre}
             onIngested={() => void refreshHistory()}
+          />
+        ) : tab === 'jobs' ? (
+          // Como los eventos, el historial de trabajos es de la organización: se ve sin evaluación.
+          <JobHistory
+            onOpenAssessment={(id) => void selectAssessment(id)}
+            openableIds={new Set(history.map((a) => a.id))}
           />
         ) : !assessment ? (
           <div className="card flex flex-col items-center justify-center px-6 py-20 text-center">

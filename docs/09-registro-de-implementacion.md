@@ -1494,3 +1494,34 @@ resultados a quien no usa la plataforma (separa el acceso a la herramienta del a
 incluye 404 de otra organización, 409, 401 y que un plan `hecho` no aparece) + `ruff check` limpio;
 frontend `typecheck`, `lint` y `build` limpios. Se revisó el render de ambos PDF a mano.
 
+## 45. FN-01/API-03: historial de jobs
+
+Hasta ahora solo existía `GET /jobs/{id}`: había que conocer el id, y la UI solo lo conocía para el job que
+acababa de lanzar. Recargar la página a mitad de una evaluación, o querer ver por qué falló una, no tenía
+salida. Se comprobó primero qué había: la tabla `jobs` ya guarda todo lo necesario (`tipo`, `estado`,
+`progreso`, `error`, `assessment_id`, `org_id` y las tres fechas), así que **no hubo cambios de esquema ni
+migración**.
+
+- **Pertenencia:** un `event_ingest` lleva `org_id`; un `assessment_run` solo lleva `assessment_id` (la
+  organización sale de la evaluación). El listado busca por los dos caminos (`jobs.org_jobs_query`), igual
+  que ya hacía `GET /jobs/{id}` para devolver 404 a otra organización.
+- **Endpoint:** `GET /jobs?estado=&tipo=&limit=`, solo de la organización del usuario, del más reciente al
+  más antiguo. `estado` y `tipo` fuera de los valores conocidos responden 422; `limit` va de 1 a 200
+  (50 por defecto).
+- **Reaping al listar:** antes de listar se marcan `fallido` los jobs activos de la organización que se
+  quedaron colgados (mismas reglas y mismos timeouts que `GET /jobs/{id}`, y se falla la `Assessment`
+  ligada). Sin esto el historial mostraría "pendiente" un job que nadie va a tomar, justo el caso en que más
+  se necesita. La lógica se extrajo a `_reap_if_stale` y la comparten ambos endpoints.
+- **UI:** pestaña "Trabajos" (`JobHistory.tsx`), independiente de la evaluación activa como la de eventos:
+  fecha, tipo, estado (con progreso si está en curso), error y, si el job completó una evaluación que está
+  en el historial, un acceso para abrirla. Filtro por estado; se refresca sola cada 3 s mientras haya jobs
+  activos.
+- **No incluido:** reintentar un job fallido. El mensaje `fallido` ya dice que se vuelva a intentar, pero
+  las rutas de los archivos subidos (ya guardados en disco) viajan solo en el mensaje
+  de Redis, no en la base de datos; si el job se pierde, no queda de dónde reencolarlo. Hace falta decidir
+  primero dónde persistir las entradas del job (p. ej. en `jobs`). Queda como seguimiento, no se promovió a un ítem nuevo del backlog.
+
+**Verificación:** backend **395 tests** (6 nuevos en `test_api_jobs.py`: ambos tipos y orden, aislamiento
+por organización, filtros, límite, reaping con la evaluación fallada, 401) + `ruff check` limpio;
+frontend `typecheck`, `lint` y `build` limpios.
+

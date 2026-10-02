@@ -101,8 +101,8 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## B. Funcionalidad pendiente (lo que reportó Claude)
 
-- [ ] FN-01 · **Historial de jobs** (P1): no hay `GET /jobs` (listado) ni UI; hoy solo `GET /jobs/{id}`.
-  Sin esto no se puede ver qué corrió ni reintentar un job fallido sin reenviar todo.
+- [x] FN-01 · **Historial de jobs**. Hecho (docs/09 §45): `GET /jobs` y pestaña "Trabajos". Queda fuera el
+  reintento de un job fallido (ver docs/09 §45).
 - [ ] FN-03 · **Ingesta "nuevos vs actualizados"** (P2): la conversión a async perdió ese detalle
   (la API devuelve solo `job_id`); recuperarlo en la respuesta o en el resultado del job.
 - [~] FN-04 · **Toggle de IA en "Reevaluar"** (P2): **obsoleto** — el botón "Reevaluar" se eliminó
@@ -189,7 +189,7 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 
 ## E. API / contratos faltantes (docs/04 §6)
 
-- [ ] API-03 · `GET /jobs` (listado, filtrable por estado/org) — habilita FN-01.
+- [x] API-03 · `GET /jobs` (listado, filtrable por estado y tipo). Hecho (docs/09 §45).
 - [ ] API-04 · (P2) **Convenciones**: `application/problem+json` para **todos** los errores (no solo
   assessments) y `methodology_version` en las respuestas que docs/04 promete. La paginación por
   cursor y los filtros en listados pasaron a docs/12 §1 (volúmenes mínimos, uso local).
@@ -232,10 +232,10 @@ demostrable.
 2. ~~**OP-12** y **OP-14**~~ (hechos, docs/09 §37).
 3. ~~**OP-04 (contradicciones) + TS-03**~~ (hechos, docs/09 §38); ~~**TS-01**~~ (hecho, docs/09 §39), ~~**TS-02**~~ (hecho, docs/09 §43) y **AMP-02**:
    lo más demostrable y lo que respalda las afirmaciones del diseño.
-4. Pulido barato: **FN-03**, **FN-07**, **FN-01 + API-03**, **OP-05 + FN-08**, **OP-11** (transiciones
+4. Pulido barato: **FN-03**, **FN-07**, ~~FN-01 + API-03~~ (hechos, docs/09 §45), **OP-05 + FN-08**, **OP-11** (transiciones
    y motivo de cierre), **OP-15** (líneas), **OP-13** (`schema_version`), **API-04** (problem+json) y
    la decisión de **CR-07**.
 
-> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, AMP-02, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
-> incidente de OP-04. Ver docs/09 §23–§44.
+> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, AMP-02, FN-01, API-03, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
+> incidente de OP-04. Ver docs/09 §23–§45.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).
