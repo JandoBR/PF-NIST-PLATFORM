@@ -933,3 +933,33 @@ dentro de `ingest_events`); esto solo iguala el comportamiento para los planes d
 
 **Verificación:** backend **215 tests** + `ruff` limpio (nuevo
 `test_completed_assessment_already_has_template_plans`). Frontend `typecheck`/`lint`/`build` limpios.
+
+## 26. Seguimiento del plan (UI-08): estado sin tocar el puntaje
+
+Se evaluó pedir un "implementado" que ajuste el puntaje al estilo de los incidentes y se descartó:
+rompería el determinismo y la reproducibilidad (docs/00 §7, principios 1/3/4), creando dos fuentes
+de verdad para un mismo criterio (evidencia vs. afirmación). La forma correcta de reflejar una
+mejora sigue siendo reevaluar + comparar. Lo que sí se agregó es **seguimiento del plan**, que es
+informativo.
+
+**Modelo:** `PlanRow.estado` ya existía (default `abierto`, sin uso). Pasa a
+`pendiente` · `en_progreso` · `hecho` (`PLAN_ESTADOS`, `app/recommendations/plans.py`). El contrato
+`Plan` gana `id` y `estado`. Migración de datos `21178e83bca2` normaliza las filas existentes
+(`abierto`/vacío → `pendiente`); no cambia el esquema.
+
+**API:** `PATCH /assessments/{id}/plans/{plan_id}` (`PlanUpdate`), validado contra `PLAN_ESTADOS`
+(422) y con scoping por assessment/org (404). `svc.set_plan_estado` persiste; el puntaje del
+criterio no se toca (test lo verifica).
+
+**Al regenerar** (p. ej. `POST /plans?use_ai=true`) se **conserva** el estado por `criterion_id`,
+para no perder el avance del usuario (docs/05 §4.4).
+
+**Frontend:** en Recomendaciones, cada plan desplegado tiene el control Pendiente / En progreso /
+Hecho y el encabezado cuenta "X de Y hechos". El chip de estado aparece en la fila del hallazgo.
+
+**Pendiente / futuro:** el seguimiento no se hereda entre evaluaciones de una reevaluación (el plan
+es de otra instantánea). Ver docs/11 UI-08.
+
+**Verificación:** backend **217 tests** + `ruff` limpio (`test_plan_follow_up_state_is_persisted`
+comprueba persistencia y que el score no cambia; `..._invalid_state_is_422`). Frontend
+`typecheck`/`lint`/`build` limpios.

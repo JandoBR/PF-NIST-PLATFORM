@@ -70,6 +70,15 @@ La pestaña de comparación debería explicar *qué* cambió, no solo listarlo.
   cambio por función/categoría.
 - (Opcional) exportar la comparación.
 
+### [x] UI-08 · Seguimiento del plan (P1)
+Que el usuario pueda marcar el avance de una recomendación (`pendiente` · `en_progreso` · `hecho`)
+sin que eso finja que el criterio está implementado. Es **seguimiento**, no evaluación: el puntaje
+sigue saliendo de la evidencia (docs/05 §4.4).
+- **Hecho:** `plans.estado` persistido + `PATCH /assessments/{id}/plans/{plan_id}`; control por
+  hallazgo y contador "X de Y hechos" en Recomendaciones. Se conserva al regenerar. Decidido en
+  contra de un "implementado" que ajuste el puntaje (rompería determinismo/reproducibilidad).
+- Futuro: heredar el seguimiento entre evaluaciones de una reevaluación.
+
 ## B. Funcionalidad pendiente (lo que reportó Claude)
 
 - [ ] FN-01 · **Historial de jobs** (P1): no hay `GET /jobs` (listado) ni UI; hoy solo `GET /jobs/{id}`.

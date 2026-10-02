@@ -154,6 +154,21 @@ prioridad = impacto(criticidad del activo) × estado de la brecha (falla = 1.0, 
 - Estructura: diagnóstico observable, hipótesis, comprobaciones seguras, pasos de recuperación,
   condición de cierre y **prohibición explícita de ejecución automática**.
 
+### 4.4 Seguimiento del plan (no evaluativo)
+
+Un plan tiene un `estado` de **seguimiento** propio — `pendiente` · `en_progreso` · `hecho` — que
+el usuario cambia para saber en qué va. Es **informativo y no afecta el puntaje**: un criterio se
+considera implementado por su **evidencia**, no por una afirmación. Meterlo en el score crearía dos
+fuentes de verdad (evidencia vs. clic) y rompería el determinismo y la reproducibilidad
+(docs/00 §7, principios 1/3/4).
+
+- La forma **correcta** de reflejar una mejora es corregir la infraestructura/documentación y
+  **reevaluar**: la nueva evaluación (inmutable) y la comparación (docs/04 §6) muestran el delta.
+- El seguimiento es solo para el trabajo en curso; al regenerar el plan (p. ej. con IA) se
+  **conserva** el estado por `criterion_id` para no perder el avance.
+- En una **reevaluación** el plan es nuevo (nueva instantánea): el seguimiento no se hereda. La
+  herencia entre evaluaciones queda como mejora futura.
+
 ## 5. Configuración con DeepSeek
 
 | Parámetro | Valor |
