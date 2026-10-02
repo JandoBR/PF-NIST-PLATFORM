@@ -181,11 +181,19 @@ def _collect_evidence_and_sources(
 
 
 def create_pending_assessment(
-    session: Session, methodology: Methodology, *, org_name: str, scope: str
+    session: Session,
+    methodology: Methodology,
+    *,
+    org_name: str,
+    scope: str,
+    previous_assessment_id: str | None = None,
 ) -> Assessment:
     """Crea el registro de `Assessment` sin ejecutar el pipeline todavia (docs/09 §16: la API
     ahora encola la ejecucion pesada en vez de correrla en el request). Se usa tanto para una
-    evaluacion nueva como, con `create_pending_reevaluation`, para una reevaluacion."""
+    evaluacion nueva como, con `create_pending_reevaluation`, para una reevaluacion.
+
+    `previous_assessment_id` solo se setea en una reevaluacion: es la fuente de la herencia del
+    estado de seguimiento de los planes (docs/05 §4.4)."""
 
     org = get_or_create_organization(session, org_name)
     assessment = Assessment(
@@ -193,6 +201,7 @@ def create_pending_assessment(
         estado="pendiente",
         methodology_version=methodology.methodology_version,
         scope=scope,
+        previous_assessment_id=previous_assessment_id,
     )
     session.add(assessment)
     session.commit()
@@ -325,7 +334,11 @@ def create_pending_reevaluation(
 
     paths = _resolve_previous_sources(previous)
     assessment = create_pending_assessment(
-        session, methodology, org_name=previous.organization.nombre, scope=previous.scope
+        session,
+        methodology,
+        org_name=previous.organization.nombre,
+        scope=previous.scope,
+        previous_assessment_id=previous.id,
     )
     return assessment, paths
 
@@ -342,16 +355,13 @@ def reevaluate(
     """Atajo sincronico (CLI, tests): crea una nueva evaluacion re-leyendo las mismas rutas que
     la anterior, sin pasar por la cola."""
 
-    previous = session.get(Assessment, previous_assessment_id)
-    if previous is None:
-        raise AssessmentNotFoundError(previous_assessment_id)
-
-    paths = _resolve_previous_sources(previous)
-    return run_assessment(
+    assessment, paths = create_pending_reevaluation(
+        session, methodology, previous_assessment_id
+    )
+    return run_pending_assessment(
         session,
         methodology,
-        org_name=previous.organization.nombre,
-        scope=previous.scope,
+        assessment.id,
         ai_client=ai_client,
         apply_ai_adjustment=apply_ai_adjustment,
         context=context,
@@ -377,7 +387,8 @@ def generate_plans(
 ) -> list[PlanRow]:
     """Genera los planes de un assessment (docs/05 §4). Idempotente: reemplaza los anteriores."""
 
-    if session.get(Assessment, assessment_id) is None:
+    assessment = session.get(Assessment, assessment_id)
+    if assessment is None:
         raise AssessmentNotFoundError(assessment_id)
 
     results = load_criterion_results(session, assessment_id)
@@ -385,15 +396,24 @@ def generate_plans(
 
     # Regenerar (p.ej. con IA) no debe perder el seguimiento ya hecho por el usuario (docs/05
     # §4.4): se conserva el `estado` de cada criterio que ya tenia plan.
-    estados_previos = {
+    estados = {
         row.criterion_id: row.estado
         for row in session.query(PlanRow).filter_by(assessment_id=assessment_id).all()
     }
+    # Primera generacion de una reevaluacion: hereda el estado de la evaluacion inmediatamente
+    # anterior por criterio, para no perder el avance (docs/05 §4.4).
+    if not estados and assessment.previous_assessment_id:
+        estados = {
+            row.criterion_id: row.estado
+            for row in session.query(PlanRow)
+            .filter_by(assessment_id=assessment.previous_assessment_id)
+            .all()
+        }
     session.query(PlanRow).filter_by(assessment_id=assessment_id).delete()
     rows = [plan_to_row(plan, assessment_id=assessment_id) for plan in plans]
     for row in rows:
-        if row.criterion_id in estados_previos:
-            row.estado = estados_previos[row.criterion_id]
+        if row.criterion_id in estados:
+            row.estado = estados[row.criterion_id]
     session.add_all(rows)
     session.commit()
     return rows

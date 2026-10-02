@@ -63,6 +63,11 @@ class Assessment(Base):
     estado: Mapped[str] = mapped_column(String, default="creada")
     methodology_version: Mapped[str] = mapped_column(String)
     scope: Mapped[str] = mapped_column(String)
+    #: Solo en una reevaluacion: la evaluacion de la que se heredan fuentes y, al generar planes,
+    #: el estado de seguimiento por criterio (docs/05 §4.4).
+    previous_assessment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("assessments.id"), nullable=True
+    )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)

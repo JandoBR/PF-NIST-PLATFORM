@@ -189,6 +189,25 @@ def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
     assert compare.json()["diffs"]  # el mismo criterio aparece en ambos lados, sin cambio
 
 
+def test_reevaluate_inherits_plan_follow_up_state(
+    api_client, db_session, methodology, fake_redis
+):
+    """Una reevaluacion hereda el seguimiento desde la evaluacion anterior (docs/05 §4.4)."""
+
+    before = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
+    target = api_client.get(f"/assessments/{before['id']}/plans").json()[0]
+    api_client.patch(
+        f"/assessments/{before['id']}/plans/{target['id']}", json={"estado": "en_progreso"}
+    )
+
+    reeval = api_client.post(f"/assessments/{before['id']}/reevaluate").json()
+    run_pending_jobs(db_session, methodology, fake_redis)
+
+    new_plans = api_client.get(f"/assessments/{reeval['assessment_id']}/plans").json()
+    inherited = next(p for p in new_plans if p["criterion_id"] == target["criterion_id"])
+    assert inherited["estado"] == "en_progreso"
+
+
 def test_reevaluate_after_editing_the_persisted_upload_shows_the_fix(
     api_client, db_session, methodology, fake_redis
 ):
