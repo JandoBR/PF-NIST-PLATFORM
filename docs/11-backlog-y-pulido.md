@@ -107,11 +107,10 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
   reevaluación de la última evaluación completada del `org`+`scope` cuando la ingesta suma al menos
   `vigilancia.refresco_min_patrones_nuevos` patrones nuevos (default 3). No pide nada al usuario;
   no dispara sin evaluación previa, con evaluación en vuelo, ni bajo el umbral (docs/08 §8).
-- [ ] FN-06 · **Refresco selectivo** (P1, gap de diseño vs. implementación): docs/06 §6 dice "recalcular
-  SOLO los criterios afectados", pero hoy el refresco re-corre todo el pipeline sin IA. Si la
-  evaluación previa usó IA (U1 documentos / U2 ajuste), el refresco puede diferir en criterios
-  documentales y los planes vuelven a plantilla. Reusar evidencia/resultados previos y recalcular
-  solo lo operativo (más el estado de seguimiento heredado).
+- [x] FN-06 · **Refresco selectivo** (P1): hecho. `run_surveillance_refresh` reusa evidencia,
+  resultados y planes de los criterios no operativos (preserva IA: claims U1, ajuste U2, texto de
+  planes) y recalcula solo los criterios de vigilancia con los patrones frescos; hereda el estado de
+  seguimiento. El worker lo dispara con `selective_refresh=True` (docs/06 §6, docs/09 §29).
 
 ## C. Cobertura de criterios y Tier (P0)
 

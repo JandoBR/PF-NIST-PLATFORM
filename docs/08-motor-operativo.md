@@ -159,8 +159,12 @@ operativo.
 **La reevaluación automática corre sin IA a propósito:** (1) el puntaje base es determinista y no la
 necesita — la IA es aumento opcional (U1/U2), no requisito; y (2) no debe gastar créditos sin que el
 usuario lo pida. La IA, cuando se usa, solo ve datos estructurados del criterio/disparador (nunca las
-líneas de log) y solo para redactar el plan (docs/05 §4). Hoy el refresco re-corre todo sin IA, así que
-una evaluación previa con IA puede diferir al refrescarse (gap: docs/06 §6, docs/11 FN-06).
+líneas de log) y solo para redactar el plan (docs/05 §4).
+
+**El refresco es selectivo (docs/06 §6, FN-06):** reusa evidencia, resultados y planes de los
+criterios **no operativos** (incluido lo que produjo la IA) y **solo recalcula los criterios de
+vigilancia** con los patrones nuevos. Por eso una evaluación previa con IA **no se degrada** al
+refrescarse por eventos.
 
 ## 9. Escenarios Esperados
 

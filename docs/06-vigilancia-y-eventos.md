@@ -155,14 +155,14 @@ no dispara. La evaluación hereda el estado de seguimiento (docs/05 §4.4).
 pertenecen a una evaluación: se ingieren y consultan aunque nunca se haya evaluado. Si no hay una
 evaluación completada previa, simplemente no hay nada que refrescar.
 
-**Simplificación del refresco (gap conocido).** Hoy el refresco **re-corre todo el pipeline**
-(adaptadores + motor) sobre las mismas fuentes y **sin IA**, en vez de "recalcular SOLO los criterios
-afectados" como describe el diagrama de arriba. Consecuencia: si la evaluación previa usó IA (U1 para
-documentos y/o U2 para el ajuste de puntajes), el refresco determinista **puede diferir en los
-criterios documentales** (sin `doc.claim`), los puntajes vuelven a su base determinista y los planes
-se regeneran con plantilla. El **estado de seguimiento sí se hereda** por `criterion_id` (docs/05
-§4.4). Reusar la evidencia/resultados previos y recalcular solo lo operativo es la evolución pendiente
-(docs/11 FN-06).
+**Refresco selectivo (implementado, FN-06).** El refresco **no** re-corre todo: reusa de la
+evaluación anterior las fuentes, la evidencia **no operativa** (Terraform/Ansible/`doc.claim`), los
+resultados y los planes de los criterios que **no** consumen vigilancia, y **recalcula solo los
+criterios afectados** (`log.pattern`/`log.window`) con los patrones frescos — exactamente el
+diagrama de arriba. Así se preserva lo derivado de IA (claims U1, ajuste U2, texto de planes) en los
+criterios no afectados, sin gastar IA ni degradar el resto. El **estado de seguimiento** de los
+planes afectados se conserva por `criterion_id` (docs/05 §4.4). Implementado en
+`svc.run_surveillance_refresh`; el worker lo dispara con `selective_refresh=True`.
 
 ## 7. Recomendaciones Generadas por Eventos
 

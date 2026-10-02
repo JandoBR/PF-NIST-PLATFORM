@@ -1039,3 +1039,36 @@ El endpoint `POST /assessments/{id}/reevaluate` **sigue existiendo**: lo usa el 
   `evidence_ids`). El filtrado de ruido es determinístico (patrones → disparadores) y ocurre antes.
 
 **Verificación:** frontend `typecheck`/`lint`/`build` limpios; backend sin cambios (222 tests).
+
+## 29. Refresco selectivo de madurez (FN-06)
+
+El refresco automático (FN-05) re-correría **todo** el pipeline sin IA, perdiendo lo derivado de IA
+(claims U1, ajuste U2, texto de planes) y pudiendo "degradar" una evaluación previa con IA. Docs/06
+§6 pedía recalcular **solo** los criterios afectados. Se implementó.
+
+**Motor:** `engine.evaluate_only(methodology, evidence, criterion_ids)` (refactor de `evaluate_all`
+sobre un helper `_evaluate_one`) para re-evaluar un subconjunto.
+
+**Servicio (`svc.run_surveillance_refresh`):**
+1. Copia las `Source` y la evidencia **no** operativa (todo menos `log.pattern`/`log.window`) de la
+   evaluación anterior a la nueva, **remapeando ids** (cada `EvidenceInstance` es un uuid; los
+   `evidence_ids` de los resultados copiados se reescriben).
+2. Agrega evidencia de vigilancia **fresca** (`_collect_surveillance_evidence` con los
+   `log_patterns` actuales del org+scope).
+3. Copia los `criterion_results` de criterios **no afectados**; recalcula los **afectados** (los
+   cuyo `criterio.evidencias` incluye `log.pattern`/`log.window`: hoy DE-02, RS-01, RC-02, RC-03).
+4. Copia los planes de criterios no afectados (texto/estado, incluida IA) y regenera (plantilla)
+   los de criterios afectados, preservando su estado de seguimiento.
+
+Los agregados y el Tier se recalculan en lectura desde los `criterion_results` (no se persisten),
+así que la instantánea queda coherente.
+
+**Encolado/worker:** `enqueue_surveillance_refresh` marca el mensaje con `selective_refresh=True` y
+`previous_assessment_id`; `worker-core` llama a `run_surveillance_refresh` en vez de
+`run_pending_assessment`. `maybe_enqueue_maturity_refresh` ahora usa este encolado. El endpoint
+`POST /assessments/{id}/reevaluate` y la CLI siguen haciendo el re-run completo (no hay botón que los
+use).
+
+**Verificación:** backend **223 tests** + `ruff` limpio
+(`test_surveillance_refresh_reuses_unaffected_and_recomputes_operational`: un resultado/plan con
+marca "IA" en un criterio no operativo se conserva; un criterio de vigilancia se recomputa).
