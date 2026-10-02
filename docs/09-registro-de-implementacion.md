@@ -868,3 +868,43 @@ transiciones de estado de incidente (OP-04), hoy de solo lectura. Queda pendient
 
 **Verificación:** frontend `typecheck`, `lint` y `build` limpios. Sin cambios de backend (no afecta los
 212 tests).
+
+## 24. Segunda pasada de UI + primer cambio de contrato para incidentes (docs/11 §A/§D)
+
+Ajustes pedidos sobre la primera pasada de UI. Esta vez sí toca un contrato de la API: para el
+historial de incidentes hizo falta exponer la transición de estado (OP-04).
+
+**Privacidad: vista alternativa dentro de "Criterios Evaluados".** Se quitó la tarjeta independiente
+de privacidad. Ahora, dentro de la sección de criterios, un conmutador **Criterios / Privacidad**
+cambia la tabla: en modo privacidad las columnas pasan a *Criterio · Relación PF/CSF · Detalle ·
+Score · Estado*, con score/cobertura del cruce y la nota de alcance. No es un filtro: es otra vista de
+la misma tabla. La relación PF/CSF por criterio vive en `PRIVACY_RELATION` (`lib/ui.ts`).
+
+**Recomendaciones: una sola vista.** Se eliminó la pestaña "Plan de Acción" (los planes se despliegan
+inline bajo cada hallazgo, docs/11 UI-04). Los filtros de prioridad se movieron a la vista de
+hallazgos, que ahora se ordena **alta → media → baja**. El botón de plantilla pasó a mostrarse solo
+cuando **no hay** plan: una evaluación es inmutable, así que regenerar desde plantilla con un plan ya
+existente daría exactamente el mismo resultado (botón sin efecto perceptible). Cuando ya hay plan solo
+queda "Regenerar con IA", que sí puede cambiar la salida.
+
+**Incidentes: activos e historial (UI-06 + OP-04, parcial).** Nuevo `PATCH /incidents/{id}` con
+`{"estado": ...}` (`IncidentUpdate`), validado contra `INCIDENT_ESTADOS`
+(`open/triaged/contained/recovering/closed`, `app/ops/incidents.py`) y con scoping por organización
+como el resto. `svc.update_incident_estado` persiste el cambio. La pestaña de incidentes ahora tiene
+**Activos / Historial** (historial = `estado == "closed"`); desde el plan de respuesta del incidente,
+el botón **"Marcar como resuelto"** lo cierra y lo mueve al historial. `estado` se muestra con
+etiqueta/color (`incidentEstadoMeta`). Nota: un `closed` que vuelve a dispararse **no** se reabre
+automáticamente (el `upsert` no toca `estado`); queda como historial. Reabrir sería un cambio de
+política posterior.
+
+**Ingesta de eventos: feedback menos ambiguo.** Los dos botones de demo no son un interruptor (nunca
+borran incidentes ya abiertos); se aclaró con un texto fijo y el resultado de cada ingesta ahora
+siempre indica log, nuevos y total. "Flujo correcto" muestra explícitamente "sin incidentes nuevos…
+los eventos de este log no cumplen los disparadores".
+
+**OP-04 queda parcialmente cubierto:** transiciones de estado de incidente hechas; siguen pendientes
+los hallazgos `contradiccion`/`limitacion`.
+
+**Verificación:** backend **214 tests** + `ruff` limpio (dos tests nuevos en
+`test_api_methodology_orgs.py`: cierre persiste el estado, estado inválido → 422). Frontend
+`typecheck`/`lint`/`build` limpios.

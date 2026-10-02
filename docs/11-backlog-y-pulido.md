@@ -18,11 +18,17 @@ alcance.
 - Mostrar en el reporte la nota de alcance ("cubre eventos de ciberseguridad que afectan datos
   personales; no es una evaluación integral de privacidad", docs/00 §6).
 - Depende de implementar `ID-04` y `RS-03` (ver CR-01).
+- **Hecho:** en vez de una tarjeta aparte, es una vista alternativa (**Criterios / Privacidad**) dentro
+  de la sección de criterios; muestra relación PF/CSF, score/cobertura del cruce y la nota de alcance.
+  Los criterios del cruce implementados aparecen solos; `ID-04`, `RS-03`, `RC-01` se sumarán con CR-03.
 
 ### [x] UI-02 · "Regenerar" en Recomendaciones (P2)
 El botón de regenerar plantilla no tiene una función clara y hoy es redundante (los planes ya se
 generan desde la plantilla). Decidir: quitarlo, o dejarlo solo cuando no hay planes, o renombrarlo
 y explicar qué hace. Criterio: que ningún botón exista sin efecto perceptible.
+- **Hecho:** "Generar plan (plantilla)" se muestra **solo cuando no hay plan** (única forma de crearlo
+  desde la UI). Con un plan ya existente regenerar plantilla daría el mismo resultado, así que solo
+  queda "Regenerar con IA". Ver docs/09 §24.
 
 ### [x] UI-03 · Toggles de IA momentáneos (P1)
 Los checkboxes de IA (U1/U2) son **por corrida**: existen para no gastar tokens, no son una
@@ -37,13 +43,15 @@ En Recomendaciones, tocar un hallazgo debería **desplegar su plan de acción** 
 Simulación de Amenazas con sus incidentes), en vez de tener un botón que salta a otra sección.
 - Acordeón por hallazgo: pasos, verificación, prioridad, `generado_por`.
 - Si no hay plan generado para el hallazgo, ofrecer "generar plan" desde ahí.
+- **Hecho:** con esto se eliminó la pestaña "Plan de Acción" (era redundante); la lista de hallazgos
+  pasó a ordenarse por prioridad y a llevar los filtros de prioridad.
 
 ### [x] UI-05 · Renombrar "Simulación de Amenazas" (P1)
 No es una simulación: son **eventos/amenazas reales** ingestados. Renombrar la pestaña y sus textos
 (p. ej. "Vigilancia Operativa" o "Eventos e Incidentes"), y quitar la palabra "simulación" de la UI
 (el nombre del fixture puede quedar interno).
 
-### [ ] UI-06 · Incidentes: reemplazo/archivo e historial (P1) — bloqueado por OP-04
+### [x] UI-06 · Incidentes: reemplazo/archivo e historial (P1)
 Al ingerir otro log ("Con incidentes" → "Flujo correcto") los incidentes anteriores no desaparecen
 ni se reemplazan; al marcar un incidente como completado tampoco sale de la lista. Objetivo: que la
 pestaña refleje el estado actual y conserve un historial.
@@ -94,8 +102,9 @@ existen), así que una funcionalidad central del producto queda inutilizable.
 - [ ] OP-02 · Persistir la auditoría de ajustes de IA (tabla `ai_adjustments`: modelo, prompt_version,
   propuesta, justificación) en vez de solo el texto en `explanation`.
 - [ ] OP-03 · Persistir `findings`/`score_aggregates`/`tier_estimates` si recalcular se vuelve costoso.
-- [ ] OP-04 · Hallazgos `contradiccion` (docs/02 §5) y `limitacion` además de `brecha`; y transiciones
-  de estado de incidente (`open→…→closed`) expuestas por la API (habilita UI-06).
+- [~] OP-04 · **Transiciones de estado de incidente: hecho** (`PATCH /incidents/{id}`, ver docs/09
+  §24; habilita UI-06). Siguen pendientes los hallazgos `contradiccion` (docs/02 §5) y `limitacion`
+  además de `brecha`.
 - [ ] OP-05 · Trigger D2 (`alert_raised` sin `incident_triaged`).
 - [ ] OP-06 · Cooldown / rate-limit real de incidentes (O4), no solo idempotencia por `correlation_key`.
 - [ ] OP-07 · Ventanas deslizantes (hoy "una ventana = un lote ingerido").
