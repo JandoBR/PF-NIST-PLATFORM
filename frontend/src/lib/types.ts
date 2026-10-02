@@ -48,7 +48,10 @@ export interface Finding {
   evidence_ids: string[];
 }
 
+export type PlanEstado = 'pendiente' | 'en_progreso' | 'hecho';
+
 export interface Plan {
+  id: string;
   criterion_id: string;
   titulo: string;
   prioridad: string;
@@ -57,6 +60,7 @@ export interface Plan {
   verificacion: string;
   dependencias: string[];
   generado_por: string;
+  estado: PlanEstado;
   origen: 'criterio' | 'evento';
   diagnostico_observable: string | null;
   hipotesis: string[];

@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import {
   Brain,
   Sparkles,
-  Route,
   ListChecks,
   AlertTriangle,
   Loader2,
@@ -11,9 +10,9 @@ import {
   Link2,
   ChevronRight,
 } from 'lucide-react';
-import { ApiError, createPlans } from '@/lib/api';
-import type { Finding, Plan } from '@/lib/types';
-import { SEVERITY_META } from '@/lib/ui';
+import { ApiError, createPlans, updatePlanEstado } from '@/lib/api';
+import type { Finding, Plan, PlanEstado } from '@/lib/types';
+import { PLAN_ESTADOS, PLAN_ESTADO_META, SEVERITY_META } from '@/lib/ui';
 
 interface Props {
   assessmentId: string;
@@ -27,6 +26,7 @@ const SEVERITY_ORDER: Finding['severidad'][] = ['alta', 'media', 'baja'];
 export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpdated }: Props) {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [generating, setGenerating] = useState<'plantilla' | 'ia' | null>(null);
+  const [savingPlan, setSavingPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsConfirm, setNeedsConfirm] = useState(false);
 
@@ -49,7 +49,21 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
     }
   }
 
+  async function setEstado(plan: Plan, estado: PlanEstado) {
+    setSavingPlan(plan.id);
+    setError(null);
+    try {
+      const updated = await updatePlanEstado(assessmentId, plan.id, estado);
+      onPlansUpdated(plans.map((p) => (p.id === updated.id ? updated : p)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo actualizar el seguimiento.');
+    } finally {
+      setSavingPlan(null);
+    }
+  }
+
   const hasPlans = plans.length > 0;
+  const done = plans.filter((p) => p.estado === 'hecho').length;
 
   const orderedFindings = useMemo(
     () =>
@@ -75,8 +89,8 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
             <div>
               <h3 className="text-sm font-semibold text-white">Motor de Recomendaciones</h3>
               <p className="text-xs text-slate-500">
-                {findings.length} hallazgo{findings.length === 1 ? '' : 's'} por debajo del umbral · {plans.length}{' '}
-                plan{plans.length === 1 ? '' : 'es'} generado{plans.length === 1 ? '' : 's'}
+                {findings.length} hallazgo{findings.length === 1 ? '' : 's'} por debajo del umbral · {done} de{' '}
+                {plans.length} plan{plans.length === 1 ? '' : 'es'} marcado{done === 1 ? '' : 's'} como hecho
               </p>
             </div>
           </div>
@@ -107,7 +121,7 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
           <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3.5 text-xs text-amber-200">
             <div className="mb-1 flex items-center gap-2 font-medium">
               <AlertTriangle className="h-3.5 w-3.5" />
-              {needsConfirm ? 'Confirmación requerida' : 'No se pudo generar el plan'}
+              {needsConfirm ? 'Confirmación requerida' : 'No se pudo completar la acción'}
             </div>
             <p className="whitespace-pre-line leading-relaxed">{error}</p>
             {needsConfirm && (
@@ -146,13 +160,28 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
           </span>
         </div>
 
-        <FindingsList findings={visibleFindings} plans={plans} />
+        <FindingsList
+          findings={visibleFindings}
+          plans={plans}
+          savingPlan={savingPlan}
+          onSetEstado={setEstado}
+        />
       </div>
     </div>
   );
 }
 
-function FindingsList({ findings, plans }: { findings: Finding[]; plans: Plan[] }) {
+function FindingsList({
+  findings,
+  plans,
+  savingPlan,
+  onSetEstado,
+}: {
+  findings: Finding[];
+  plans: Plan[];
+  savingPlan: string | null;
+  onSetEstado: (plan: Plan, estado: PlanEstado) => void;
+}) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const planByCriterion = new Map(plans.map((p) => [p.criterion_id, p]));
 
@@ -175,6 +204,7 @@ function FindingsList({ findings, plans }: { findings: Finding[]; plans: Plan[] 
           const meta = SEVERITY_META[f.severidad];
           const open = expanded === f.criterion_id;
           const plan = planByCriterion.get(f.criterion_id);
+          const planMeta = plan ? PLAN_ESTADO_META[plan.estado] : null;
           return (
             <div key={f.criterion_id}>
               <button
@@ -187,9 +217,9 @@ function FindingsList({ findings, plans }: { findings: Finding[]; plans: Plan[] 
                 <ShieldAlert className="h-4 w-4 flex-shrink-0 text-slate-500" />
                 <span className="flex-shrink-0 font-mono text-xs font-semibold text-slate-300">{f.criterion_id}</span>
                 <span className="min-w-0 flex-1 truncate text-sm text-slate-300">{f.titulo}</span>
-                {plan && (
-                  <span className="hidden flex-shrink-0 items-center gap-1 text-xs text-cyan-400/80 sm:flex">
-                    <Route className="h-3 w-3" /> plan
+                {plan && planMeta && plan.estado !== 'pendiente' && (
+                  <span className={`chip hidden border sm:inline-flex ${planMeta.bg} ${planMeta.text} ${planMeta.border}`}>
+                    {planMeta.label}
                   </span>
                 )}
                 <span className="flex items-center gap-1 text-xs text-slate-500">
@@ -204,7 +234,11 @@ function FindingsList({ findings, plans }: { findings: Finding[]; plans: Plan[] 
               {open && (
                 <div className="animate-fade-in border-t border-white/[0.04] bg-ink-900/30 px-5 py-4 pl-14">
                   {plan ? (
-                    <PlanBody plan={plan} />
+                    <PlanBody
+                      plan={plan}
+                      saving={savingPlan === plan.id}
+                      onSetEstado={onSetEstado}
+                    />
                   ) : (
                     <p className="text-xs text-slate-500">
                       Este hallazgo no tiene plan: la evaluación es anterior a la generación automática.
@@ -221,8 +255,16 @@ function FindingsList({ findings, plans }: { findings: Finding[]; plans: Plan[] 
   );
 }
 
-/** Cuerpo de un plan, desplegado inline bajo el hallazgo correspondiente (docs/11 UI-04). */
-function PlanBody({ plan }: { plan: Plan }) {
+/** Cuerpo de un plan, desplegado inline bajo el hallazgo (docs/11 UI-04) con su seguimiento. */
+function PlanBody({
+  plan,
+  saving,
+  onSetEstado,
+}: {
+  plan: Plan;
+  saving: boolean;
+  onSetEstado: (plan: Plan, estado: PlanEstado) => void;
+}) {
   const meta = SEVERITY_META[plan.prioridad as keyof typeof SEVERITY_META] ?? SEVERITY_META.media;
   const isAi = plan.generado_por.startsWith('ai:');
   return (
@@ -266,6 +308,29 @@ function PlanBody({ plan }: { plan: Plan }) {
           ))}
         </div>
       )}
+
+      {/* Seguimiento del plan (docs/05 §4.4): informativo, NO cambia el puntaje del criterio. */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">
+        <span className="text-xs text-slate-500">Seguimiento:</span>
+        {PLAN_ESTADOS.map((e) => {
+          const em = PLAN_ESTADO_META[e];
+          const active = plan.estado === e;
+          return (
+            <button
+              key={e}
+              onClick={() => onSetEstado(plan, e)}
+              disabled={saving || active}
+              className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-default ${
+                active ? `${em.bg} ${em.text} ${em.border}` : 'border-white/[0.06] text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {em.label}
+            </button>
+          );
+        })}
+        {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />}
+        <span className="text-[11px] text-slate-600">No cambia el puntaje del criterio.</span>
+      </div>
     </div>
   );
 }

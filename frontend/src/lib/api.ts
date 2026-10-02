@@ -10,6 +10,7 @@ import type {
   JobOut,
   MethodologyCatalog,
   Plan,
+  PlanEstado,
 } from '@/lib/types';
 
 // Base de la API, configurable sin recompilar el codigo fuente -- solo el build (ver
@@ -185,6 +186,13 @@ export const getEvidence = (id: string) =>
 export const getFindings = (id: string) => request<Finding[]>(`/assessments/${id}/findings`);
 
 export const getPlans = (id: string) => request<Plan[]>(`/assessments/${id}/plans`);
+
+export const updatePlanEstado = (assessmentId: string, planId: string, estado: PlanEstado) =>
+  request<Plan>(`/assessments/${assessmentId}/plans/${planId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ estado }),
+  });
 
 export const createPlans = (id: string, opts: { useAi?: boolean; confirmLiveAi?: boolean } = {}) => {
   const params = new URLSearchParams();

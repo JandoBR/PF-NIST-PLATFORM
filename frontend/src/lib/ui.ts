@@ -149,3 +149,31 @@ export function incidentEstadoMeta(estado: string) {
 
 /** Un incidente está en el historial cuando alcanzó el estado terminal `closed` (docs/08 §4). */
 export const isIncidentClosed = (estado: string): boolean => estado === 'closed';
+
+/** Estado de seguimiento de un plan (docs/05 §4.4). Informativo: no afecta el puntaje. */
+export const PLAN_ESTADO_META: Record<string, { label: string; text: string; bg: string; border: string }> = {
+  pendiente: {
+    label: 'Pendiente',
+    text: 'text-slate-400',
+    bg: 'bg-white/[0.04]',
+    border: 'border-white/10',
+  },
+  en_progreso: {
+    label: 'En progreso',
+    text: 'text-amber-300',
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/30',
+  },
+  hecho: {
+    label: 'Hecho',
+    text: 'text-emerald-300',
+    bg: 'bg-emerald-500/10',
+    border: 'border-emerald-500/30',
+  },
+};
+
+export const PLAN_ESTADOS: Array<'pendiente' | 'en_progreso' | 'hecho'> = [
+  'pendiente',
+  'en_progreso',
+  'hecho',
+];
