@@ -6,6 +6,9 @@ Lista de trabajo viva. No es un changelog: cuando algo se implementa, se registr
 Prioridades: **P0** bloquea valor central · **P1** importante · **P2** deseable.
 IDs estables para referenciarlos en commits/PRs.
 
+> Lo **descartado deliberadamente** para el prototipo (pero válido a mayor escala) no figura aquí:
+> vive en `docs/12-alcance-y-trabajo-futuro.md`. Este backlog es solo trabajo que sí haremos.
+
 ## A. UI / UX (pulido)
 
 ### [x] UI-01 · Privacidad visible (P1)
@@ -98,7 +101,6 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 - [ ] FN-01 · **Historial de jobs** (P1): no hay `GET /jobs` (listado) ni UI; hoy solo `GET /jobs/{id}`.
   Sin esto no se puede ver qué corrió ni reintentar un job fallido sin reenviar todo.
-- [ ] FN-02 · **`Job.progreso` incremental** (P2): hoy es 0→100 cosmético; no hay barra real.
 - [ ] FN-03 · **Ingesta "nuevos vs actualizados"** (P2): la conversión a async perdió ese detalle
   (la API devuelve solo `job_id`); recuperarlo en la respuesta o en el resultado del job.
 - [~] FN-04 · **Toggle de IA en "Reevaluar"** (P2): **obsoleto** — el botón "Reevaluar" se eliminó
@@ -111,6 +113,8 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
   resultados y planes de los criterios no operativos (preserva IA: claims U1, ajuste U2, texto de
   planes) y recalcula solo los criterios de vigilancia con los patrones frescos; hereda el estado de
   seguimiento. El worker lo dispara con `selective_refresh=True` (docs/06 §6, docs/09 §29).
+
+> `FN-02` (progreso real del job) **descartado** para el prototipo: ver docs/12 §1.
 
 ## C. Cobertura de criterios y Tier (P0)
 
@@ -132,51 +136,46 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 > `evidencia_insuficiente` (igual que `GV-01`). `DE-01` e `ID-01` tienen además una parte
   determinística (Terraform/Ansible) que puntúa sin IA.
 
-## D. Simplificaciones activas (docs/09 §11) — siguen abiertas
+## D. Simplificaciones activas (docs/09 §11) — pendientes del prototipo
 
-- [ ] OP-01 · `ctx.profile` / criticidad de activo para la fórmula de prioridad de planes (docs/05 §4.2).
-- [ ] OP-02 · Persistir la auditoría de ajustes de IA (tabla `ai_adjustments`: modelo, prompt_version,
-  propuesta, justificación) en vez de solo el texto en `explanation`.
-- [ ] OP-03 · Persistir `findings`/`score_aggregates`/`tier_estimates` si recalcular se vuelve costoso.
+- [ ] OP-01 · **Prioridad de planes por criticidad de activo** (versión fina, un campo): hoy
+  `prioridad = finding.severidad` (`recommendations/plans.py`); la fórmula completa de docs/05 §4.2 es
+  OP-09 (fuera de alcance, docs/12 §3).
 - [~] OP-04 · **Transiciones de estado de incidente: hecho** (`PATCH /incidents/{id}`, ver docs/09
   §24; habilita UI-06). Siguen pendientes los hallazgos `contradiccion` (docs/02 §5) y `limitacion`
   además de `brecha`.
 - [ ] OP-05 · Trigger D2 (`alert_raised` sin `incident_triaged`).
-- [ ] OP-06 · Cooldown / rate-limit real de incidentes (O4), no solo idempotencia por `correlation_key`.
-- [ ] OP-07 · Ventanas deslizantes (hoy "una ventana = un lote ingerido").
-- [ ] OP-08 · Consumidores `log_ingest`/`log_aggregate` separados (hoy un solo job `event_ingest`).
-- [ ] OP-09 · Modelar `ctx.*` como evidencia (contexto del formulario → criterios).
-- [ ] OP-10 · Ciclo de vida completo del job (docs/01 §5): `creada→ingestando→analizando→…` (hoy solo
-  `pendiente/en_progreso/completado/fallido`).
+
+> Descartados para el prototipo (OP-02, OP-03, OP-06…OP-10): ver **docs/12**.
 
 ## E. API / contratos faltantes (docs/04 §6)
 
-- [ ] API-01 · `POST /assessments/{id}/sources` y `POST /assessments/{id}/run` como pasos separados
-  (hoy `POST /assessments` fusiona subir+crear+encolar).
-- [ ] API-02 · `GET /assessments/{id}/scores` explícito (hoy se pliega en `GET /assessments/{id}`).
 - [ ] API-03 · `GET /jobs` (listado, filtrable por estado/org) — habilita FN-01.
+
+> Descartados para el prototipo (API-01 `sources`+`run` separados, API-02 `GET /scores`): ver **docs/12 §1**.
 
 ## F. Seguridad / endurecimiento
 
-- [ ] SEC-01 · `SECRET_KEY` obligatoria en despliegues reales (hoy default inseguro de demo).
-- [ ] SEC-02 · Evaluar cookie `HttpOnly`+`SameSite` en vez de token en `localStorage` (mitiga XSS).
-- [ ] SEC-03 · Decidir visibilidad de `/docs`, `/redoc`, `/openapi.json` (hoy públicos).
-- [ ] SEC-04 · Rate limiting / bloqueo por intentos en `/auth/login`.
-- [ ] SEC-05 · Registro/administración de cuentas fuera del seed (CLI o panel admin mínimo).
-- [ ] SEC-06 · Quitar/rotar las contraseñas de demo antes de cualquier uso real.
+**Fuera de alcance:** el prototipo corre solo en local y no se despliega. `SEC-01`…`SEC-06` se
+registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototipo.
 
 ## G. Ampliaciones (docs/07)
 
-- [ ] AMP-01 · Recuperación semántica (embeddings) sobre el catálogo NIST.
-- [ ] AMP-02 · Exportación PDF del informe ejecutivo (y de la comparación, UI-07).
+- [ ] AMP-02 · **Exportación PDF del informe ejecutivo** (y de la comparación, UI-07). Se promueve al
+  prototipo: da oficialidad al informe y **separa el acceso a la herramienta del acceso a los
+  resultados** (común en entornos corporativos).
 - [x] AMP-03 · Último criterio no-MVP: `DE-03` (información de eventos a personal/herramientas).
   Hecho (docs/09 §33): catálogo completo 23/23.
 
+> AMP-01 (embeddings): descartado para el prototipo, ver **docs/12 §5**.
+
 ## Priorización sugerida
 
-1. **FN-01 + API-03** (`GET /jobs`): ver qué corrió y reintentar; hoy solo hay `GET /jobs/{id}`.
-2. **OP/SEC/AMP**: simplificaciones (docs/09 §11), endurecimiento y ampliaciones, según tiempo.
-3. **SEC-02/SEC-04** (cookie `HttpOnly`, rate limiting de login) si el foco pasa a producción.
+1. **FN-03 + OP-05** (baratos y con valor real): detalle de la ingesta y disparador D2.
+2. **FN-01 + API-03** (`GET /jobs`): ver qué corrió y reintentar; hoy solo hay `GET /jobs/{id}`.
+3. **OP-04** (hallazgos `contradiccion`/`limitacion`) y **AMP-02** (PDF), según tiempo.
+4. **OP-01** (prioridad por criticidad, versión fina).
 
-> **Hecho:** catálogo completo (CR-01…CR-04), UI-01…UI-10, FN-05, FN-06, DE-03 y la parte de estado
-> de incidente de OP-04. Ver docs/09 §23–§33.
+> **Hecho:** catálogo completo (CR-01…CR-04), UI-01…UI-10, FN-05, FN-06 y la parte de estado de
+> incidente de OP-04. Ver docs/09 §23–§33.
+> **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).

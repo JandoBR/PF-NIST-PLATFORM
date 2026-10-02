@@ -35,6 +35,7 @@
 | [docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md) | Qué existe en `backend/` hoy, en qué orden se construyó y qué se simplificó respecto a los docs 00–08. |
 | [docs/10-multitenancy-y-autenticacion.md](docs/10-multitenancy-y-autenticacion.md) | Multitenancy, login con token y aislamiento de datos por organización. |
 | [docs/11-backlog-y-pulido.md](docs/11-backlog-y-pulido.md) | Lista de trabajo viva: pulido de UI, funciones pendientes y gaps vs. el diseño. |
+| [docs/12-alcance-y-trabajo-futuro.md](docs/12-alcance-y-trabajo-futuro.md) | Registro de lo descartado para el prototipo (válido a mayor escala) y trabajo futuro. |
 
 ## Stack previsto
 
