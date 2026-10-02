@@ -1143,3 +1143,23 @@ estaban en la vista de privacidad del frontend (`PRIVACY_CRITERIA`), así que ah
 
 **Verificación:** backend **256 tests** + `ruff` limpio (`test_cr02_cr03_criteria.py` cubre los 4;
 `test_methodology_loader` actualizado a 22 criterios).
+
+## 33. Catálogo completo: DE-03 y CR-04 (DE-02 a 100)
+
+Últimos dos pendientes de cobertura. `criteria.yml` pasa a **v4**: **23/23 criterios**.
+
+- **DE-03** (`de03_alert_notification`): mixto. `notification_list` (destinatarios) + evidencia
+  operativa de `alert_raised`: 100 con ambos, 75 solo documentado, 0 sin definición, sin nada →
+  `evidencia_insuficiente`.
+- **CR-04 / DE-02**: dejó de topar en 75. Ahora incorpora `doc.claim(process_defined)` con
+  `contenido.criterios_declaracion`: 100 = criterios de declaración documentados **y** evidencia
+  operativa de alerta/declaración; 75 = una de las dos; 50 = análisis descrito sin criterios; 0 =
+  declaración sin alerta pese a una oportunidad real (regla de justicia intacta). Se agregó
+  `tipos_afirmacion: [process_defined]` a la regla de `DE-02` y `criterios_declaracion` a los campos
+  del prompt de U1.
+
+**Nota:** el test `test_ops_plans::test_skips_unknown_criterion_...` se ajustó para usar un criterio
+inexistente (`CRI-XX-99`): ya no queda ningún criterio del catálogo sin regla.
+
+**Verificación:** backend **260 tests** + `ruff` limpio (DE-03 en `test_surveillance_criteria.py`;
+caso documental de DE-02; `test_methodology_loader` a 23 criterios).
