@@ -114,23 +114,20 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **11 de los 23** criterios de docs/03. Faltan 12, de los cuales **7 son MVP**.
-Consecuencia grave: el **Tier no puede pasar de Tier 1** (Tier 2 exige `GV-02` e `ID-03`, que no
-existen), así que una funcionalidad central del producto queda inutilizable.
+El catálogo implementa **18 de los 23** criterios de docs/03. Faltan 5: `GV-04`, `ID-04`, `DE-03`,
+`RS-02`, `RS-03` (CR-02/CR-03).
 
-Cobertura por función: GV 1/4 · **ID 0/4** · PR 6/6 · DE 1/3 · RS 1/3 · RC 2/3. IDENTIFY es la única
-sin criterios, por eso no aparecía en la Matriz de Madurez.
-- **UI (hecho):** la matriz muestra siempre las **6 funciones**; la que no tiene criterios aparece como
+Cobertura por función: GV 3/4 · ID 3/4 · PR 6/6 · DE 2/3 · RS 1/3 · RC 3/3. Ya ninguna función queda
+sin criterios.
+- **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
 
-- [ ] CR-01 · Implementar los **7 MVP faltantes** (P0), en este orden por impacto:
-  - `GV-02` Roles y responsabilidades (documental) · `ID-03` Identificación/evaluación de riesgos
-    (documental) → **desbloquean Tier 2**.
-  - `RC-01` Procedimiento de recuperación (documental) · `DE-01` Monitoreo de red/cómputo (mixto).
-  - `GV-03` Tolerancia al riesgo · `ID-01` Inventario de activos · `ID-02` Priorización por criticidad.
-- [ ] CR-02 · Completar Tier 3/4: `GV-04`, `DE-02` (ya está), `RS-01` (ya está), `RC-01/02` (falta
-  RC-01), `RS-02`, `RC-03`, `ID-04`.
-- [ ] CR-03 · `ID-04` (inventario de datos) y `RS-03` (notificación) para dar sustancia a la
+- [x] CR-01 · Implementar los **7 MVP faltantes** (P0): `GV-02`, `ID-03` (desbloquean Tier 2),
+  `RC-01`, `DE-01`, `GV-03`, `ID-01`, `ID-02`. Hecho (docs/09 §31). `criteria.yml` v2.
+  - Nota: los criterios documentales (`GV-02/03`, `ID-01/02/03`, `RC-01`) dependen de `doc.claim`
+    extraído por U1; sin IA quedan `evidencia_insuficiente` (igual que `GV-01` hoy).
+- [ ] CR-02 · Completar Tier 3/4: `GV-04`, `RS-02`, `ID-04` (los demás de esos tiers ya existen).
+- [ ] CR-03 · `RS-03` (notificación) y `ID-04` (inventario de datos) para dar sustancia a la
   privacidad (ver UI-01).
 - [ ] CR-04 · Revisar `DE-02` (hoy "parcial"): incorporar `doc.claim` para llegar a 100, no topar en 75.
 
@@ -175,10 +172,10 @@ sin criterios, por eso no aparecía en la Matriz de Madurez.
 
 ## Priorización sugerida
 
-1. **CR-01** (`GV-02`, `ID-03`, `RC-01`, `DE-01`): desbloquea el Tier (hoy tope Tier 1) y sube la
-   cobertura de forma real. Es lo de mayor valor pendiente.
+1. **CR-02 + CR-03** (`GV-04`, `RS-02`, `ID-04`, `RS-03`): completar Tier 3/4 y dar sustancia a la
+   privacidad.
 2. **FN-01 + API-03** (`GET /jobs`): ver qué corrió y reintentar; hoy solo hay `GET /jobs/{id}`.
 3. **OP/SEC/AMP**: simplificaciones (docs/09 §11), endurecimiento y ampliaciones, según tiempo.
 
-> **Hecho en esta iteración:** UI-01…UI-10, FN-05, FN-06 y la parte de estado de incidente de OP-04.
-> Ver docs/09 §23–§29.
+> **Hecho:** UI-01…UI-10, FN-05, FN-06, CR-01 y la parte de estado de incidente de OP-04.
+> Ver docs/09 §23–§31.

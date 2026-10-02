@@ -1083,3 +1083,39 @@ faltante como **"Sin criterios"** (borde punteado, sin barra, "Aún sin criterio
 haciendo visible la brecha de cobertura hasta que CR-01/CR-02/CR-03 agreguen los criterios de ID.
 
 **Verificación:** solo frontend (`MaturityDashboard`); `typecheck`/`lint`/`build` limpios.
+
+## 31. CR-01: los 7 criterios MVP faltantes
+
+El catálogo tenía 11 de los 23 criterios de docs/03 y el **Tier no podía pasar de Tier 1** (Tier 2
+exige `GV-02` e `ID-03`). Se agregaron los 7 MVP: `GV-02`, `GV-03`, `ID-01`, `ID-02`, `ID-03`,
+`DE-01`, `RC-01`. `criteria.yml` pasa a **v2**; quedan 18/23.
+
+**Reglas:** un módulo por criterio en `app/evaluation/rules/`, registrados en `engine._RULES`.
+Helpers nuevos en `rules/_common.py` (`doc_claims`, `best_found`, `result`).
+- **Documentales** (`GV-02`, `GV-03`, `ID-02`, `ID-03`, `RC-01`): leen `doc.claim` de un
+  `tipo_afirmacion` y evalúan `contenido` con umbrales de docs/03 (100/75/50/0; sin documentos →
+  `evidencia_insuficiente`). `ID-03` y `RC-01` comparten `process_defined` y se distinguen por
+  `contenido.proceso` (`riesgos` vs `recuperacion`).
+- **Mixtos** (`ID-01`, `DE-01`): `ID-01` contrasta el inventario documental con los tipos de recurso
+  presentes en Terraform (cobertura sobre tipos soportados, docs/03 lo declara como limitación);
+  `DE-01` combina CloudTrail con logs de sistema.
+
+**Extracción (U1):** se extendió el prompt con los **campos de `contenido`** esperados por tipo de
+afirmación (`extraction._CONTENT_FIELDS`), para que la IA no invente nombres de campo distintos. Los
+tipos nuevos (`role_assigned`, `risk_tolerance`, `data_inventory`, `process_defined`, `backup_policy`)
+se piden a la IA dinámicamente vía `criterio.regla.tipos_afirmacion` (loader).
+
+**Simplificaciones / desvíos de docs/03 (documentados):**
+- `DE-01` usa `an.service.state` (servicio de logging habilitado) en vez de `an.task.config`, mismo
+  criterio que `CRI-PR-06` (docs/09 §7): un servicio corriendo es una señal más directa y es lo que el
+  adaptador de Ansible puede afirmar con confianza.
+- `ID-02` no contrasta todavía con `ctx.profile` (activos críticos del contexto): ese pipeline no
+  existe (docs/11 OP-01/OP-09). La consistencia con el contexto queda pendiente.
+- Los criterios **documentales** dependen de `doc.claim` extraído por IA (U1): sin `DEEPSEEK_API_KEY`
+  quedan `evidencia_insuficiente`, igual que `CRI-GV-01` hoy. No hay parser documental determinístico.
+
+**Efecto:** con evidencia documental (U1), **Tier 2 pasa a ser alcanzable** (`GV-02`+`ID-03`); `GV-03`,
+`DE-01` y `RC-01` alimentan Tier 3. Sin IA, esos criterios no puntúan (abstención, no penalización).
+
+**Verificación:** backend **243 tests** + `ruff` limpio (`test_cr01_mvp_criteria.py` cubre los 7;
+`test_methodology_loader` actualizado a 18 criterios).
