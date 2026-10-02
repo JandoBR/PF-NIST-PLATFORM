@@ -127,7 +127,7 @@ porque toca el modelo de evidencias.
 |---|---|
 | `organizations` | `id`, `nombre`, `contexto jsonb` |
 | `users` | `id`, `org_id`, `username`, `password_salt`, `password_hash`, `role`, `creado_en` (doc 10) |
-| `assessments` | `id`, `org_id`, `estado`, `methodology_version`, `scope`, `previous_assessment_id?` (auto-referencia, solo en reevaluación — docs/05 §4.4), `error?`, `creado_en` |
+| `assessments` | `id`, `org_id`, `estado`, `methodology_version`, `scope`, `previous_assessment_id?` (auto-referencia a la evaluación anterior del mismo org+scope, para heredar seguimiento — docs/05 §4.4), `error?`, `creado_en` |
 | `sources` | `id`, `assessment_id`, `tipo`, `nombre`, `sha256`, `contenido_ref`, `subido_en` |
 | `evidence_definitions` | `id`, `version`, `descripcion`, `schema jsonb`, `estado`, `publicado_en` (catálogo, no por evaluación) |
 | `evidence` | `id`, `assessment_id`, `type_id`, `type_version`, `subject_type`, `subject_ref`, `scope`, `value jsonb`, `source_id`, `locator jsonb`, `observed_at`, `modality`, `limitations`, `created_by` |

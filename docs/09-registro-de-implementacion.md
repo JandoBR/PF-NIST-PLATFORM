@@ -957,14 +957,22 @@ para no perder el avance del usuario (docs/05 §4.4).
 **Frontend:** en Recomendaciones, cada plan desplegado tiene el control Pendiente / En progreso /
 Hecho y el encabezado cuenta "X de Y hechos". El chip de estado aparece en la fila del hallazgo.
 
-**Herencia entre evaluaciones (misma pasada):** al reevaluar, el plan es de otra instantánea, así que
-sin esto el seguimiento se perdía. Se agregó `Assessment.previous_assessment_id` (auto-referencia,
-migración `9f9593a6de1c`), seteado en `create_pending_reevaluation`; `generate_plans`, en la primera
-generación de esa evaluación, hereda el `estado` por `criterion_id` desde la evaluación anterior.
-`reevaluate` (CLI/tests) se refactorizó para pasar por `create_pending_reevaluation`, así que también
-queda enlazado. La herencia es solo desde la **inmediatamente anterior** (decisión del usuario).
+**Herencia entre evaluaciones:** al crear una evaluación nueva, el plan es de otra instantánea, así
+que sin esto el seguimiento se perdía. Se agregó `Assessment.previous_assessment_id` (auto-referencia,
+migración `9f9593a6de1c`); `generate_plans`, en la primera generación, hereda el `estado` por
+`criterion_id` desde la evaluación anterior.
 
-**Verificación:** backend **218 tests** + `ruff` limpio (`test_plan_follow_up_state_is_persisted`
+- **Bug real (reportado):** la primera versión solo enlazaba en `create_pending_reevaluation`, así
+  que **volver a evaluar el mismo entorno con "Nueva Evaluación" no heredaba nada** (todas las filas
+  quedaban con `previous_assessment_id = NULL`; verificado en la BD del stack). Fix:
+  `create_pending_assessment` **autodetecta** la última evaluación `completada` del mismo `org_id` +
+  `scope` cuando no se le pasa una explícita; `create_pending_reevaluation` sigue pasando la suya
+  (precisión) y `reevaluate` (CLI/tests) se refactorizó para pasar por ahí. Si el scope cambia u otra
+  organización, no hay herencia.
+- La herencia es desde la **inmediatamente anterior** (decisión del usuario).
+
+**Verificación:** backend **219 tests** + `ruff` limpio (`test_plan_follow_up_state_is_persisted`
 comprueba persistencia y que el score no cambia; `..._invalid_state_is_422`;
-`test_reevaluate_inherits_plan_follow_up_state` comprueba la herencia). Frontend
+`test_reevaluate_inherits_plan_follow_up_state` y
+`test_new_assessment_inherits_follow_up_from_same_org_scope` comprueban la herencia). Frontend
 `typecheck`/`lint`/`build` limpios.

@@ -77,8 +77,9 @@ sigue saliendo de la evidencia (docs/05 §4.4).
 - **Hecho:** `plans.estado` persistido + `PATCH /assessments/{id}/plans/{plan_id}`; control por
   hallazgo y contador "X de Y hechos" en Recomendaciones. Se conserva al regenerar. Decidido en
   contra de un "implementado" que ajuste el puntaje (rompería determinismo/reproducibilidad).
-- **Herencia:** hecho — al reevaluar, el seguimiento se hereda por `criterion_id` desde la evaluación
-  inmediatamente anterior (`Assessment.previous_assessment_id`, docs/05 §4.4).
+- **Herencia:** hecho — al reevaluar **o volver a evaluar el mismo org+scope**, el seguimiento se
+  hereda por `criterion_id` desde la evaluación completada inmediatamente anterior
+  (`Assessment.previous_assessment_id`, autodetectado; docs/05 §4.4).
 
 ## B. Funcionalidad pendiente (lo que reportó Claude)
 
