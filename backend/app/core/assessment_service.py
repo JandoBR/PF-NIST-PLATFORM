@@ -250,13 +250,17 @@ def run_pending_assessment(
             session.add(result_to_row(assessment.id, result))
 
         assessment.estado = "completada"
+        session.commit()
+        # Los planes se generan solos al completar, con la plantilla determinista y sin IA
+        # (docs/11 UI-02): el usuario no tiene que pedirlos. La IA sigue siendo explicita via
+        # `POST /assessments/{id}/plans?use_ai=true`, que los recalcula.
+        generate_plans(session, methodology, assessment.id)
     except Exception as exc:
         assessment.estado = "fallida"
         assessment.error = str(exc)
         session.commit()
         raise
 
-    session.commit()
     return assessment
 
 

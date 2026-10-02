@@ -101,6 +101,21 @@ def test_get_unknown_assessment_is_404(api_client):
         assert response.status_code == 404, path
 
 
+def test_completed_assessment_already_has_template_plans(
+    api_client, db_session, methodology, fake_redis
+):
+    """Los planes (plantilla) se generan solos al completar: el usuario no los pide.
+
+    Ver docs/11 UI-02.
+    """
+
+    created = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
+
+    plans = api_client.get(f"/assessments/{created['id']}/plans").json()
+    assert len(plans) > 0
+    assert all(p["generado_por"] == "plantilla" for p in plans)
+
+
 def test_generate_and_list_plans(api_client, db_session, methodology, fake_redis):
     created = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
     assessment_id = created["id"]
