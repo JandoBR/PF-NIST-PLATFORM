@@ -1,0 +1,125 @@
+[
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "/etc/ssh/sshd_config",
+    "subject_type": "file",
+    "type_id": "an.file.permissions",
+    "type_version": 1,
+    "value": {
+      "modo": "0600",
+      "owner": "root",
+      "ruta": "/etc/ssh/sshd_config"
+    }
+  },
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "hardening",
+    "subject_type": "playbook",
+    "type_id": "an.playbook.present",
+    "type_version": 1,
+    "value": {
+      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/good/hardening.yml",
+      "hosts": [
+        "servidores_app"
+      ],
+      "plays": 1
+    }
+  },
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "rsyslog",
+    "subject_type": "service",
+    "type_id": "an.service.state",
+    "type_version": 1,
+    "value": {
+      "estado": "habilitado",
+      "servicio": "rsyslog"
+    }
+  },
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "Copiar banner de acceso",
+    "subject_type": "task",
+    "type_id": "an.task.config",
+    "type_version": 1,
+    "value": {
+      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/good/hardening.yml",
+      "modulo": "copy",
+      "parametros": {
+        "dest": "/etc/issue.net",
+        "src": "files/banner.txt"
+      },
+      "tarea": "Copiar banner de acceso"
+    }
+  },
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "Deshabilitar autenticacion por contrasena",
+    "subject_type": "task",
+    "type_id": "an.task.config",
+    "type_version": 1,
+    "value": {
+      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/good/hardening.yml",
+      "modulo": "lineinfile",
+      "parametros": {
+        "line": "PasswordAuthentication no",
+        "path": "/etc/ssh/sshd_config",
+        "regexp": "^#?PasswordAuthentication"
+      },
+      "tarea": "Deshabilitar autenticacion por contrasena"
+    }
+  },
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "Deshabilitar login de root por SSH",
+    "subject_type": "task",
+    "type_id": "an.task.config",
+    "type_version": 1,
+    "value": {
+      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/good/hardening.yml",
+      "modulo": "lineinfile",
+      "parametros": {
+        "line": "PermitRootLogin no",
+        "path": "/etc/ssh/sshd_config",
+        "regexp": "^#?PermitRootLogin"
+      },
+      "tarea": "Deshabilitar login de root por SSH"
+    }
+  }
+]

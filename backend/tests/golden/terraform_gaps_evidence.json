@@ -1,0 +1,156 @@
+[
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_db_instance.legacy",
+    "subject_type": "aws_db_instance",
+    "type_id": "tf.backup.config",
+    "type_version": 1,
+    "value": {
+      "habilitado": false,
+      "retencion_dias": 0,
+      "ventana": null
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_db_instance.legacy",
+    "subject_type": "aws_db_instance",
+    "type_id": "tf.encryption.config",
+    "type_version": 1,
+    "value": {
+      "estado": "disabled",
+      "llave": null,
+      "mecanismo": null
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_s3_bucket.backups",
+    "subject_type": "aws_s3_bucket",
+    "type_id": "tf.public_access.config",
+    "type_version": 1,
+    "value": {
+      "bloqueo_publico": false,
+      "nivel": "ninguno"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_db_instance.legacy",
+    "subject_type": "aws_db_instance",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "legacy",
+      "tipo": "aws_db_instance"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_s3_bucket.backups",
+    "subject_type": "aws_s3_bucket",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "backups",
+      "tipo": "aws_s3_bucket"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_s3_bucket_public_access_block.backups",
+    "subject_type": "aws_s3_bucket_public_access_block",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "backups",
+      "tipo": "aws_s3_bucket_public_access_block"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_security_group.legacy_app",
+    "subject_type": "aws_security_group",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "legacy_app",
+      "tipo": "aws_security_group"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_security_group.legacy_app",
+    "subject_type": "aws_security_group",
+    "type_id": "tf.security_group.rules",
+    "type_version": 1,
+    "value": [
+      {
+        "cidr": "0.0.0.0/0",
+        "direccion": "ingress",
+        "protocolo": "tcp",
+        "puerto_desde": 22,
+        "puerto_hasta": 22
+      },
+      {
+        "cidr": "0.0.0.0/0",
+        "direccion": "ingress",
+        "protocolo": "tcp",
+        "puerto_desde": 3389,
+        "puerto_hasta": 3389
+      }
+    ]
+  }
+]

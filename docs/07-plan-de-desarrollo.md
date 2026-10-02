@@ -57,7 +57,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 | Nivel | Qué se prueba | Herramienta | Evidencia de éxito |
 |---|---|---|---|
 | Unitario | Parsers, reglas de criterio, fórmulas (α, D, agregación, cobertura, tier) | pytest | Casos borde: unknown, n/a, estados mixtos |
-| Golden files | Terraform/Ansible → evidencias esperadas | pytest + fixtures | Diff vacío contra resultados anotados |
+| Golden files | Terraform/Ansible → evidencias esperadas | pytest + fixtures | Diff vacío contra resultados anotados (`tests/test_golden.py`, docs/09 §39) |
 | Motor | Conjuntos de evidencias → puntajes esperados | pytest | Cálculo reproducible por caso |
 | IA extracción | Golden set de documentos anotados | script de evaluación | ≥ 90 % afirmaciones correctas, 0 invenciones, citas localizables |
 | IA ajuste | Límites y degradación | tests con respuestas simuladas (válidas, vacías, malformadas) | `S` siempre acotado; degradado sin crash |

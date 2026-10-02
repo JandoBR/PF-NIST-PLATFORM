@@ -1,0 +1,79 @@
+[
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "hardening",
+    "subject_type": "playbook",
+    "type_id": "an.playbook.present",
+    "type_version": 1,
+    "value": {
+      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/gaps/hardening.yml",
+      "hosts": [
+        "servidores_legacy"
+      ],
+      "plays": 1
+    }
+  },
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "ufw",
+    "subject_type": "service",
+    "type_id": "an.service.state",
+    "type_version": 1,
+    "value": {
+      "estado": "deshabilitado",
+      "servicio": "ufw"
+    }
+  },
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "Permitir login de root por SSH",
+    "subject_type": "task",
+    "type_id": "an.task.config",
+    "type_version": 1,
+    "value": {
+      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/gaps/hardening.yml",
+      "modulo": "lineinfile",
+      "parametros": {
+        "line": "PermitRootLogin yes",
+        "path": "/etc/ssh/sshd_config",
+        "regexp": "^#?PermitRootLogin"
+      },
+      "tarea": "Permitir login de root por SSH"
+    }
+  },
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
+      "file": "hardening.yml"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "Reiniciar servicio a mano",
+    "subject_type": "task",
+    "type_id": "an.task.uninterpreted",
+    "type_version": 1,
+    "value": {
+      "motivo": "modulo no soportado: command",
+      "tarea": "Reiniciar servicio a mano"
+    }
+  }
+]

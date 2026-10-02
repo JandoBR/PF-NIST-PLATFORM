@@ -1,0 +1,290 @@
+{
+  "criteria": [
+    {
+      "base_score": 100.0,
+      "criterion_id": "CRI-DE-01",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.logging.config|aws_cloudtrail.main"
+      ],
+      "explanation": "Fuentes de log habilitadas y centralizadas (CloudTrail + logs de sistema).",
+      "final_score": 100.0
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-DE-02",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin ventana de observacion completa: no se puede concluir.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-DE-03",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin destinatarios declarados ni evidencia operativa de alerta.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-GV-01",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre la existencia de una politica de ciberseguridad.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-GV-02",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre roles y responsabilidades.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-GV-03",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre objetivos de riesgo y tolerancia.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-GV-04",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre revision del desempeno.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-ID-01",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre inventario de activos.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-ID-02",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre clasificacion de activos.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-ID-03",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre evaluacion de riesgos.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-ID-04",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre inventario de datos.",
+      "final_score": null
+    },
+    {
+      "base_score": 100.0,
+      "criterion_id": "CRI-PR-01",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.encryption.config|aws_db_instance.principal",
+        "tf.encryption.config|aws_s3_bucket.documentos"
+      ],
+      "explanation": "Cifrado habilitado en todos los recursos resueltos: aws_db_instance.principal, aws_s3_bucket.documentos",
+      "final_score": 100.0
+    },
+    {
+      "base_score": 75.0,
+      "criterion_id": "CRI-PR-02",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.backup.config|aws_db_instance.principal"
+      ],
+      "explanation": "Retencion minima observada 14 dias (>= 7), sin politica documentada: puntaje maximo 75.",
+      "final_score": 75.0
+    },
+    {
+      "base_score": 100.0,
+      "criterion_id": "CRI-PR-03",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.security_group.rules|aws_security_group.app"
+      ],
+      "explanation": "Ningun security group expone puertos administrativos a 0.0.0.0/0 o ::/0.",
+      "final_score": 100.0
+    },
+    {
+      "base_score": 100.0,
+      "criterion_id": "CRI-PR-04",
+      "estado": "evaluado",
+      "evidence": [
+        "an.task.config|Deshabilitar autenticacion por contrasena",
+        "an.task.config|Deshabilitar login de root por SSH"
+      ],
+      "explanation": "PermitRootLogin no y PasswordAuthentication no declarados en sshd_config.",
+      "final_score": 100.0
+    },
+    {
+      "base_score": 100.0,
+      "criterion_id": "CRI-PR-05",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.public_access.config|aws_s3_bucket.documentos"
+      ],
+      "explanation": "bloqueo completo en los 4 modos: aws_s3_bucket.documentos.",
+      "final_score": 100.0
+    },
+    {
+      "base_score": 100.0,
+      "criterion_id": "CRI-PR-06",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.logging.config|aws_cloudtrail.main"
+      ],
+      "explanation": "CloudTrail multirregion + logs de sistema declarados: aws_cloudtrail.main.",
+      "final_score": 100.0
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-RC-01",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre recuperacion.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-RC-02",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin ventana de observacion completa ni politica que exija verificacion.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-RC-03",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin ventana de observacion completa: no se puede concluir.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-RS-01",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin plan de respuesta documentado ni evidencia operativa suficiente.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-RS-02",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre analisis de incidentes.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-RS-03",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre notificacion a interesados.",
+      "final_score": null
+    }
+  ],
+  "funciones": [
+    {
+      "cobertura": 0.3333,
+      "conteo_estados": {
+        "evaluado": 1,
+        "evidencia_insuficiente": 2
+      },
+      "nivel": "funcion",
+      "provisional": true,
+      "ref": "DE",
+      "score": 100.0
+    },
+    {
+      "cobertura": 0.0,
+      "conteo_estados": {
+        "evidencia_insuficiente": 4
+      },
+      "nivel": "funcion",
+      "provisional": false,
+      "ref": "GV",
+      "score": null
+    },
+    {
+      "cobertura": 0.0,
+      "conteo_estados": {
+        "evidencia_insuficiente": 4
+      },
+      "nivel": "funcion",
+      "provisional": false,
+      "ref": "ID",
+      "score": null
+    },
+    {
+      "cobertura": 1.0,
+      "conteo_estados": {
+        "evaluado": 6
+      },
+      "nivel": "funcion",
+      "provisional": false,
+      "ref": "PR",
+      "score": 94.79
+    },
+    {
+      "cobertura": 0.0,
+      "conteo_estados": {
+        "evidencia_insuficiente": 3
+      },
+      "nivel": "funcion",
+      "provisional": false,
+      "ref": "RC",
+      "score": null
+    },
+    {
+      "cobertura": 0.0,
+      "conteo_estados": {
+        "evidencia_insuficiente": 3
+      },
+      "nivel": "funcion",
+      "provisional": false,
+      "ref": "RS",
+      "score": null
+    }
+  ],
+  "global": {
+    "cobertura": 0.2222,
+    "conteo_estados": {
+      "evaluado": 7,
+      "evidencia_insuficiente": 16
+    },
+    "nivel": "global",
+    "provisional": true,
+    "ref": "global",
+    "score": 97.4
+  },
+  "tier": {
+    "estimable": true,
+    "faltantes": [
+      "CRI-GV-01 con evidencia insuficiente",
+      "CRI-GV-02 con evidencia insuficiente",
+      "CRI-ID-03 con evidencia insuficiente"
+    ],
+    "justificacion": "Tier 1 (Partial): mayor nivel cuyos requisitos se cumplen. Marcado provisional: algun indicador tiene evidencia insuficiente (T2).",
+    "nombre": "Partial",
+    "provisional": true,
+    "tier": 1
+  }
+}

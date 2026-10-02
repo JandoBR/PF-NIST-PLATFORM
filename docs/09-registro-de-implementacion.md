@@ -28,7 +28,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
 | Multitenancy + auth (doc 10) | Login con token, tabla `users`, aislamiento por `org_id` en toda la API | Hecho |
-| Pruebas | 336 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
+| Pruebas | 343 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
 | API REST (doc 04 §6) | FastAPI + colas: crear/reevaluar/ingerir son asíncronos (202 + `GET /jobs/{id}`) | Hecho |
 | Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api + `worker-core`/`worker-logs` + frontend (7 servicios) | Hecho |
 
@@ -1331,3 +1331,27 @@ que el adaptador de Terraform emita el atributo; no se hizo para no inventar con
 
 **Verificación:** backend **336 tests** + `ruff` limpio (`test_contradictions.py`: 15 casos, incluido
 un E2E con el fixture `gaps` y una política extraída). Frontend `typecheck`/`lint` limpios.
+
+## 39. TS-01: golden files
+
+Un golden file es la salida esperada, versionada en git, de correr el código real sobre un fixture
+fijo (`tests/golden/*.json`, `tests/test_golden.py`, `tests/golden_utils.py`). Convierte "el motor es
+determinista" en una prueba de regresión sobre entradas reales, no solo sobre evidencia armada a mano.
+
+- **Dos niveles:** la **evidencia** que emite cada adaptador (`terraform`/`ansible` × `good`/`gaps`;
+  detecta cambios de parser) y el **resultado del pipeline** para cada caso (Terraform + Ansible →
+  23 criterios con estado, puntajes, explicación y evidencia citada, agregados por función, global y
+  Tier; detecta cambios de reglas, pesos o umbrales).
+- **Normalización:** se quitan `id`, `observed_at` y `source_id` (varían por corrida); `locator.file`
+  queda como nombre de archivo; `evidence_ids` pasa a etiquetas `tipo|sujeto`; todo con orden estable.
+  Un test comprueba que dos corridas normalizan igual.
+- **Cambio intencional:** `UPDATE_GOLDEN=1 uv run pytest tests/test_golden.py` reescribe los archivos y
+  el diff se revisa en git. El mensaje de fallo lo recuerda.
+- **Revisión manual de los valores iniciales** (no se aceptaron a ciegas): `gaps` coincide con
+  `main.tf` (cifrado `false` → `PR-01`=25, retención 0 → `PR-02`=25, 22/3389 abiertos → `PR-03`=25,
+  `block_public_acls=false` → `PR-05`=0) y su score global (21.25) coincide con el medido a mano en
+  §16. Se comprobó que alterar un valor del golden hace fallar el test.
+- **Observación:** `publicly_accessible = true` está en el fixture `gaps` pero ningún adaptador lo emite
+  (es el ejemplo de contradicción de docs/02 §5 que quedó sin contrato; ver §38).
+
+**Verificación:** backend **343 tests** + `ruff` limpio.
