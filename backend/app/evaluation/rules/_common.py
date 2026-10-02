@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from functools import wraps
+
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -51,3 +54,38 @@ def result(
         explanation=explanation,
         evidence_ids=evidence_ids or [],
     )
+
+
+def noting_unresolved(atributos: set[str]) -> Callable:
+    """Decorador de `evaluate`: si el parser dejo expresiones sin resolver sobre los `atributos`
+    que decide el criterio, el resultado lo declara como limitacion y cita esa evidencia
+    (`tf.expression.unresolved`, docs/02 §4). El puntaje no cambia: se calcula sobre lo resuelto
+    y la limitacion queda visible, igual que los recursos `unknown`."""
+
+    def decorator(evaluate: Callable[[list[EvidenceInstance]], CriterionResult]) -> Callable:
+        @wraps(evaluate)
+        def wrapper(evidence: list[EvidenceInstance]) -> CriterionResult:
+            resultado = evaluate(evidence)
+            pendientes = [
+                e
+                for e in by_type(evidence, "tf.expression.unresolved")
+                if e.value["atributo"] in atributos
+            ]
+            if not pendientes or resultado.estado == Estado.NO_APLICABLE:
+                return resultado
+            detalle = ", ".join(
+                sorted({f"{e.value['recurso']}.{e.value['atributo']}" for e in pendientes})
+            )
+            return resultado.model_copy(
+                update={
+                    "explanation": (
+                        f"{resultado.explanation} Limitacion: {len(pendientes)} expresion(es) sin"
+                        f" resolver ({detalle}); el puntaje solo refleja lo resuelto."
+                    ),
+                    "evidence_ids": [*resultado.evidence_ids, *(e.id for e in pendientes)],
+                }
+            )
+
+        return wrapper
+
+    return decorator

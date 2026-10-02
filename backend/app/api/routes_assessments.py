@@ -80,6 +80,7 @@ def _assessment_detail(
         error=assessment.error,
         score_global=glob.score,
         cobertura_global=glob.cobertura,
+        provisional_global=glob.provisional,
         agregados_categoria=categorias,
         agregados_funcion=funciones,
         tier=tier_estimate,

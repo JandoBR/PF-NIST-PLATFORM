@@ -142,3 +142,34 @@ def test_tier_marked_provisional_when_indicator_has_insufficient_evidence():
     estimate = tier.estimate_tier(settings, results)
 
     assert estimate.provisional is True
+
+
+def test_low_coverage_marks_score_provisional(methodology):
+    # 1 de 3 criterios con evidencia suficiente en PR -> cobertura 33% < umbral (50%).
+    results = [
+        _result("CRI-PR-01", Estado.EVALUADO, 100),
+        _result("CRI-PR-02", Estado.EVIDENCIA_INSUFICIENTE),
+        _result("CRI-PR-03", Estado.EVIDENCIA_INSUFICIENTE),
+    ]
+    funciones = aggregation.aggregate_by_funcion(methodology, results)
+    pr = next(a for a in funciones if a.ref == "PR")
+    assert pr.cobertura == pytest.approx(1 / 3, abs=1e-3)
+    assert pr.provisional is True
+    assert aggregation.aggregate_global(methodology, funciones).provisional is True
+
+
+def test_full_coverage_is_not_provisional(methodology):
+    results = [
+        _result("CRI-PR-01", Estado.EVALUADO, 80),
+        _result("CRI-PR-02", Estado.EVALUADO, 60),
+    ]
+    funciones = aggregation.aggregate_by_funcion(methodology, results)
+    assert not any(a.provisional for a in funciones)
+    assert aggregation.aggregate_global(methodology, funciones).provisional is False
+
+
+def test_no_score_is_never_provisional(methodology):
+    funciones = aggregation.aggregate_by_funcion(
+        methodology, [_result("CRI-PR-01", Estado.EVIDENCIA_INSUFICIENTE)]
+    )
+    assert funciones[0].score is None and funciones[0].provisional is False

@@ -146,7 +146,7 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** PR.DS-11 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí
 - **Evidencias:** `tf.backup.config` (retención), `doc.claim(tipo=backup_policy)`
 - **Regla:**
-  - 100: retención configurada ≥ política documentada y backups con cifrado.
+  - 100: retención configurada ≥ política documentada y backups con cifrado (instancia RDS con cifrado `enabled`; si no está confirmado, tope 75).
   - 75: retención configurada ≥ 7 días sin otros detalles.
   - 50: backups habilitados con retención < política.
   - 25: retención en 0 o backups deshabilitados explícitamente.
@@ -171,6 +171,7 @@ Resumen de cobertura del catálogo:
   - 75: solo uno de los dos endurecido.
   - 50: SSH configurado sin opciones explícitas de endurecimiento.
   - 25: `PermitRootLogin yes` o `PasswordAuthentication yes` explícito.
+  - `an.file.permissions` sobre `sshd_config` con escritura para grupo/otros → tope 25.
   - Sin tareas de SSH interpretadas → insuficiente.
 - **Recomendación:** deshabilitar login de root y autenticación por contraseña; usar claves.
 

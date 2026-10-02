@@ -70,6 +70,22 @@ def _backup(retencion: int) -> EvidenceInstance:
     )
 
 
+def _rds_encryption(estado: str = "enabled") -> EvidenceInstance:
+    return EvidenceInstance(
+        type_id="tf.encryption.config",
+        type_version=1,
+        subject_type="aws_db_instance",
+        subject_ref="db-principal",
+        scope="entorno:produccion",
+        value={"estado": estado, "mecanismo": None, "llave": None},
+        source_id="test:cr05",
+        locator=Locator(file="rds.tf"),
+        observed_at=datetime.now(UTC),
+        modality=Modality.DECLARADA,
+        created_by="terraform",
+    )
+
+
 def _claim(tipo: str, contenido: dict) -> EvidenceInstance:
     return EvidenceInstance(
         type_id="doc.claim",
@@ -97,9 +113,22 @@ def _claim(tipo: str, contenido: dict) -> EvidenceInstance:
 def test_pr02_retencion_cumple_politica_scores_100():
     evidence = [
         _backup(7),
+        _rds_encryption("enabled"),
         _claim("backup_policy", {"respaldo": True, "retencion": "7 dias"}),
     ]
     assert pr02_backup.evaluate(evidence).final_score == 100
+
+
+def test_pr02_cumple_politica_sin_cifrado_confirmado_topa_en_75():
+    for estado in ("disabled", "unknown"):
+        evidence = [
+            _backup(7),
+            _rds_encryption(estado),
+            _claim("backup_policy", {"respaldo": True, "retencion": "7 dias"}),
+        ]
+        resultado = pr02_backup.evaluate(evidence)
+        assert resultado.final_score == 75
+        assert "cifrado" in resultado.explanation
 
 
 def test_pr02_retencion_bajo_politica_scores_50():

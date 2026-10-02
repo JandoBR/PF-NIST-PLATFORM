@@ -7,7 +7,7 @@ registrados como limitacion.
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import by_type
+from app.evaluation.rules._common import best_found, by_type, doc_claims, noting_unresolved
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -15,7 +15,28 @@ CRITERION_ID = "CRI-PR-01"
 CRITERION_VERSION = 1
 
 
+@noting_unresolved({"storage_encrypted", "sse_algorithm", "bucket"})
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
+    """Puntaje tecnico; la politica documental (`doc.claim(policy_exists)`) nunca lo eleva
+    (docs/03 §3): solo se cita como contexto cuando hay cifrado deshabilitado."""
+
+    resultado = _evaluate_technical(evidence)
+    politica = best_found(doc_claims(evidence, "policy_exists"))
+    if politica is None or resultado.final_score != 25:
+        return resultado
+    return resultado.model_copy(
+        update={
+            "explanation": (
+                f"{resultado.explanation} Existe una politica documentada"
+                " (doc.claim policy_exists) que no se refleja en la configuracion: es una brecha"
+                " entre lo declarado y lo observado."
+            ),
+            "evidence_ids": [*resultado.evidence_ids, politica.id],
+        }
+    )
+
+
+def _evaluate_technical(evidence: list[EvidenceInstance]) -> CriterionResult:
     relevant = by_type(evidence, "tf.encryption.config")
     if not relevant:
         return CriterionResult(

@@ -28,7 +28,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
 | Multitenancy + auth (doc 10) | Login con token, tabla `users`, aislamiento por `org_id` en toda la API | Hecho |
-| Pruebas | 283 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
+| Pruebas | 301 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
 | API REST (doc 04 §6) | FastAPI + colas: crear/reevaluar/ingerir son asíncronos (202 + `GET /jobs/{id}`) | Hecho |
 | Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api + `worker-core`/`worker-logs` + frontend (7 servicios) | Hecho |
 
@@ -1221,3 +1221,43 @@ rechaza vacío/`.`/`..`/bytes nulos/`\` y valida la extensión contra una lista 
 **Verificación:** `test_uploads.py` (basename, separadores, lista blanca, nombres inválidos) y
 `test_api_assessments.py::test_upload_rejects_disallowed_extension`; backend **283 tests** +
 `ruff` limpio.
+
+## 36. CR-06 y AMP-05: puntajes que no aparentan más certeza de la que tienen
+
+**CR-06 · expresiones sin resolver (`tf.expression.unresolved`).** Antes, un atributo como
+`storage_encrypted = var.enc` quedaba como `unknown` con la limitación equivocada ("atributo
+ausente"), y había tres fallos peores: `enable_logging = var.x` se convertía en `True`
+(`bool("${var.x}")`), un `cidr_blocks = var.cidrs` rompía el adaptador (`str + list`), y un
+`bucket` que no se resolvía descartaba la evidencia en silencio. Ahora el adaptador detecta las
+expresiones (`python-hcl2` las serializa como `"${...}"`) en los atributos que deciden un puntaje
+(`_WATCHED_ATTRS`: RDS, S3 cifrado/acceso público/versionado, security groups, CloudTrail), emite
+`tf.expression.unresolved` por cada una, y deja el valor en `unknown` (CloudTrail
+`habilitado: "unknown"`) o lo omite (CIDR). Los CIDR nunca se inventan.
+
+Las reglas lo consumen con el decorador `noting_unresolved` (`rules/_common.py`): el puntaje se
+calcula solo sobre lo resuelto y la explicación añade "Limitacion: N expresion(es) sin resolver
+(recurso.atributo)", citando esa evidencia. `PR-06`/`DE-01` ya no puntúan 0 cuando CloudTrail es
+`unknown`: quedan `evidencia_insuficiente`.
+
+**CR-06 · evidencia declarada que las reglas ignoraban** (`criteria.yml` v6):
+- `PR-02`: el 100 exige cifrado de la instancia RDS confirmado (`tf.encryption.config`); con
+  retención ≥ política pero sin cifrado confirmado, tope 75.
+- `PR-04`: `an.file.permissions` sobre `sshd_config` con escritura para grupo/otros (`mode & 0o022`)
+  limita el puntaje a 25.
+- `PR-05`: `tf.versioning.config` se informa en la explicación; no cambia el puntaje (docs/03).
+- `DE-01`: cita `log.window` como corroboración de actividad observable; no cambia el puntaje.
+- `PR-01`: `doc.claim(policy_exists)` nunca eleva el puntaje; se cita junto a una brecha (25) como
+  diferencia entre lo declarado y lo observado. Se declaró `tipos_afirmacion: [policy_exists]`.
+
+**AMP-05 · puntaje provisional.** `Aggregate.provisional` (también en subcategoría/categoría/función
+y global) es verdadero cuando hay puntaje y la cobertura < `cobertura.umbral_provisional` (nuevo en
+`settings.yml`, 0.5). La API expone `provisional_global`; el dashboard muestra una etiqueta
+"Provisional" en la función y avisa en la tarjeta de Score Global. Es independiente de la marca
+provisional del Tier (T2).
+
+**Decisión:** el umbral 0.5 es un criterio de diseño, no un dato; vive en la metodología para poder
+cambiarlo sin tocar código.
+
+**Verificación:** backend **301 tests** + `ruff` limpio (`test_cr06_declared_evidence.py`, casos
+nuevos en `test_aggregation.py`; `test_cr05_...::PR-02` actualizado porque el 100 ahora exige
+cifrado). Frontend `typecheck`/`lint` limpios.

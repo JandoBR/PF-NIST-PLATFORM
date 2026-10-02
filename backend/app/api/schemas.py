@@ -31,6 +31,8 @@ class AssessmentSummary(BaseModel):
     error: str | None = None
     score_global: float | None = None
     cobertura_global: float | None = None
+    #: Score global con cobertura baja (docs/01 §7, AMP-05).
+    provisional_global: bool = False
 
 
 class AssessmentDetail(AssessmentSummary):

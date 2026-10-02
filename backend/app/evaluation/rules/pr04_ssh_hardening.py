@@ -36,7 +36,42 @@ def _directive_value(tasks: list[EvidenceInstance], directive: str) -> bool | No
     return valor
 
 
+def _permisos_inseguros(evidence: list[EvidenceInstance]) -> list[EvidenceInstance]:
+    """`an.file.permissions` sobre `sshd_config` con escritura para grupo u otros (modo octal)."""
+
+    inseguros = []
+    for e in by_type(evidence, "an.file.permissions"):
+        if "sshd_config" not in e.value["ruta"]:
+            continue
+        try:
+            modo = int(str(e.value["modo"]), 8)
+        except ValueError:
+            continue
+        if modo & 0o022:
+            inseguros.append(e)
+    return inseguros
+
+
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
+    resultado = _evaluate_directives(evidence)
+    inseguros = _permisos_inseguros(evidence)
+    if not inseguros or resultado.estado != Estado.EVALUADO:
+        return resultado
+    score = min(resultado.base_score or 0, 25)
+    return resultado.model_copy(
+        update={
+            "base_score": score,
+            "final_score": score,
+            "explanation": (
+                f"{resultado.explanation} sshd_config con permisos de escritura para grupo u"
+                " otros (" + ", ".join(e.value["modo"] for e in inseguros) + "): puntaje maximo 25."
+            ),
+            "evidence_ids": [*resultado.evidence_ids, *(e.id for e in inseguros)],
+        }
+    )
+
+
+def _evaluate_directives(evidence: list[EvidenceInstance]) -> CriterionResult:
     lineinfile_tasks = [
         e for e in by_type(evidence, "an.task.config") if e.value["modulo"] == "lineinfile"
     ]

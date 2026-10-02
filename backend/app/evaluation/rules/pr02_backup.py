@@ -8,7 +8,13 @@ from __future__ import annotations
 
 import re
 
-from app.evaluation.rules._common import best_found, by_type, doc_claims, result
+from app.evaluation.rules._common import (
+    best_found,
+    by_type,
+    doc_claims,
+    noting_unresolved,
+    result,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -27,6 +33,19 @@ def _retencion_politica_dias(claim: EvidenceInstance) -> int | None:
     return int(coincidencia.group(1)) if coincidencia else None
 
 
+def _rds_sin_cifrado(evidence: list[EvidenceInstance], recursos: list[str]) -> list[str]:
+    """Recursos cuya instancia no tiene cifrado confirmado (`enabled`): sus backups heredan el
+    cifrado del almacenamiento, asi que sin el el 100 no se justifica (docs/03 §3)."""
+
+    estado = {
+        e.subject_ref: e.value["estado"]
+        for e in by_type(evidence, "tf.encryption.config")
+        if e.subject_type == "aws_db_instance"
+    }
+    return [ref for ref in recursos if estado.get(ref) != "enabled"]
+
+
+@noting_unresolved({"backup_retention_period"})
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     relevant = by_type(evidence, "tf.backup.config")
     if not relevant:
@@ -68,6 +87,17 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     if politica_dias is not None:
         if peor_retencion >= politica_dias:
+            sin_cifrado = _rds_sin_cifrado(evidence, [e.subject_ref for e in resolved])
+            if sin_cifrado:
+                return result(
+                    CRITERION_ID,
+                    Estado.EVALUADO,
+                    75,
+                    f"Retencion configurada ({peor_retencion} dias) cumple la politica documentada"
+                    f" ({politica_dias} dias), pero el cifrado de los backups no esta confirmado"
+                    " en: " + ", ".join(sin_cifrado) + ". Puntaje maximo 75.",
+                    [politica.id, *ids_tf],
+                )
             return result(
                 CRITERION_ID,
                 Estado.EVALUADO,

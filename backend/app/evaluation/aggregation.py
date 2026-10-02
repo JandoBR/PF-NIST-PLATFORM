@@ -8,8 +8,17 @@ from app.evaluation.schemas import SCORING_STATES, Aggregate, CriterionResult, E
 from app.methodology.loader import Methodology
 
 
+def is_provisional(score: float | None, cobertura: float | None, umbral: float) -> bool:
+    """Un puntaje con cobertura baja es provisional (docs/01 §7: 80/100 con 30% de cobertura)."""
+
+    return score is not None and cobertura is not None and cobertura < umbral
+
+
 def _weighted_aggregate(
-    nivel: Nivel, ref: str, weighted: list[tuple[CriterionResult, float]]
+    nivel: Nivel,
+    ref: str,
+    weighted: list[tuple[CriterionResult, float]],
+    umbral_provisional: float,
 ) -> Aggregate:
     """Promedio ponderado por `peso` sobre los resultados que aportan puntaje (A1-A3)."""
 
@@ -34,6 +43,7 @@ def _weighted_aggregate(
         score=round(score, 2) if score is not None else None,
         cobertura=round(cobertura, 4) if cobertura is not None else None,
         conteo_estados=dict(conteo_estados),
+        provisional=is_provisional(score, cobertura, umbral_provisional),
     )
 
 
@@ -49,7 +59,12 @@ def aggregate_by_subcategoria(
             by_subcategoria[subcategoria].append((result, criterio.peso))
 
     return [
-        _weighted_aggregate(Nivel.SUBCATEGORIA, subcategoria, weighted)
+        _weighted_aggregate(
+            Nivel.SUBCATEGORIA,
+            subcategoria,
+            weighted,
+            methodology.settings.cobertura.umbral_provisional,
+        )
         for subcategoria, weighted in sorted(by_subcategoria.items())
     ]
 
@@ -66,7 +81,12 @@ def aggregate_by_categoria(
             by_categoria[categoria].append((result, criterio.peso))
 
     return [
-        _weighted_aggregate(Nivel.CATEGORIA, categoria, weighted)
+        _weighted_aggregate(
+            Nivel.CATEGORIA,
+            categoria,
+            weighted,
+            methodology.settings.cobertura.umbral_provisional,
+        )
         for categoria, weighted in sorted(by_categoria.items())
     ]
 
@@ -80,7 +100,9 @@ def aggregate_by_funcion(
         by_funcion[criterio.funcion].append((result, criterio.peso))
 
     return [
-        _weighted_aggregate(Nivel.FUNCION, funcion, weighted)
+        _weighted_aggregate(
+            Nivel.FUNCION, funcion, weighted, methodology.settings.cobertura.umbral_provisional
+        )
         for funcion, weighted in sorted(by_funcion.items())
     ]
 
@@ -116,4 +138,9 @@ def aggregate_global(
         score=round(score, 2) if score is not None else None,
         cobertura=round(cobertura, 4) if cobertura is not None else None,
         conteo_estados=dict(conteo_estados),
+        provisional=is_provisional(
+            round(score, 2) if score is not None else None,
+            round(cobertura, 4) if cobertura is not None else None,
+            methodology.settings.cobertura.umbral_provisional,
+        ),
     )

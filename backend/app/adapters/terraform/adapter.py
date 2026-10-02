@@ -46,6 +46,76 @@ def _resolve_simple_ref(value: Any) -> tuple[str, str] | None:
     return match.group(1), match.group(2)
 
 
+#: Atributos cuyo valor decide un puntaje. Si alguno es una expresion que el parser no resuelve
+#: (variable, local, funcion, modulo...), se emite `tf.expression.unresolved` en vez de adivinar
+#: (docs/02 §4). `bucket` de los recursos S3 de configuracion se trata aparte (referencia).
+_WATCHED_ATTRS: dict[str, set[str]] = {
+    "aws_db_instance": {
+        "storage_encrypted",
+        "kms_key_id",
+        "backup_retention_period",
+        "backup_window",
+    },
+    "aws_s3_bucket_server_side_encryption_configuration": {
+        "sse_algorithm",
+        "kms_master_key_id",
+    },
+    "aws_s3_bucket_public_access_block": {
+        "block_public_acls",
+        "block_public_policy",
+        "ignore_public_acls",
+        "restrict_public_buckets",
+    },
+    "aws_s3_bucket_versioning": {"status"},
+    "aws_security_group": {"cidr_blocks", "ipv6_cidr_blocks", "from_port", "to_port"},
+    "aws_cloudtrail": {"enable_logging", "is_multi_region_trail"},
+}
+
+_EXPRESSION_REASON = (
+    "expresion no resoluble de forma determinista (variable, local, funcion o modulo)"
+)
+
+
+def _is_expression(value: Any) -> bool:
+    """`python-hcl2` serializa toda expresion no literal como un string `${...}`."""
+
+    return isinstance(value, str) and "${" in value
+
+
+def _expressions_in(value: Any) -> list[str]:
+    if _is_expression(value):
+        return [value]
+    if isinstance(value, list):
+        return [expr for item in value for expr in _expressions_in(item)]
+    return []
+
+
+def _find_unresolved(obj: Any, watched: set[str]) -> list[tuple[str, str]]:
+    """(atributo, expresion) de cada atributo vigilado cuyo valor es una expresion, a cualquier
+    profundidad (los atributos de S3/SG viven en bloques anidados)."""
+
+    found: list[tuple[str, str]] = []
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key in watched:
+                found.extend((key, expr) for expr in _expressions_in(value))
+            else:
+                found.extend(_find_unresolved(value, watched))
+    elif isinstance(obj, list):
+        for item in obj:
+            found.extend(_find_unresolved(item, watched))
+    return found
+
+
+def _literal_list(value: Any) -> list[Any]:
+    """Elementos literales de una lista; una expresion (o un elemento-expresion) se descarta y
+    queda registrada como `tf.expression.unresolved`, nunca como un CIDR inventado."""
+
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if not _is_expression(item)]
+
+
 def _strip_meta(block: dict) -> dict:
     return {k: v for k, v in block.items() if k != "__is_block__"}
 
@@ -129,13 +199,20 @@ class TerraformAdapter:
             return [
                 *self._rds_encryption(file_path, subject_ref, attrs),
                 *self._rds_backup(file_path, subject_ref, attrs),
+                *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
             ]
 
         if resource_type == "aws_security_group":
-            return [self._security_group_rules(file_path, subject_ref, attrs)]
+            return [
+                self._security_group_rules(file_path, subject_ref, attrs),
+                *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
+            ]
 
         if resource_type == "aws_cloudtrail":
-            return [self._cloudtrail_logging(file_path, subject_ref, attrs)]
+            return [
+                self._cloudtrail_logging(file_path, subject_ref, attrs),
+                *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
+            ]
 
         if resource_type in (
             "aws_s3_bucket_server_side_encryption_configuration",
@@ -144,14 +221,57 @@ class TerraformAdapter:
         ):
             target = self._resolve_bucket_ref(attrs.get("bucket"), all_resources)
             if target is None:
-                return []
+                bucket = attrs.get("bucket")
+                return [
+                    self._unresolved(
+                        file_path,
+                        resource_type,
+                        subject_ref,
+                        "bucket",
+                        str(bucket),
+                        "el bucket al que apunta no se pudo resolver a un aws_s3_bucket local",
+                    )
+                ]
+            unresolved = self._unresolved_for(file_path, resource_type, target, attrs)
             if resource_type == "aws_s3_bucket_server_side_encryption_configuration":
-                return [self._s3_encryption(file_path, target, attrs)]
+                return [self._s3_encryption(file_path, target, attrs), *unresolved]
             if resource_type == "aws_s3_bucket_public_access_block":
-                return [self._s3_public_access(file_path, target, attrs)]
-            return [self._s3_versioning(file_path, target, attrs)]
+                return [self._s3_public_access(file_path, target, attrs), *unresolved]
+            return [self._s3_versioning(file_path, target, attrs), *unresolved]
 
         return []
+
+    def _unresolved(
+        self,
+        file_path: Path,
+        resource_type: str,
+        subject_ref: str,
+        atributo: str,
+        expresion: str,
+        motivo: str = _EXPRESSION_REASON,
+    ) -> EvidenceInstance:
+        return self._make_evidence(
+            type_id="tf.expression.unresolved",
+            subject_type=resource_type,
+            subject_ref=subject_ref,
+            value={
+                "recurso": subject_ref,
+                "atributo": atributo,
+                "expresion": expresion,
+                "motivo": motivo,
+            },
+            file_path=file_path,
+            limitations=f"expresion_no_resuelta: {atributo}",
+        )
+
+    def _unresolved_for(
+        self, file_path: Path, resource_type: str, subject_ref: str, attrs: dict
+    ) -> list[EvidenceInstance]:
+        watched = _WATCHED_ATTRS.get(resource_type, set())
+        return [
+            self._unresolved(file_path, resource_type, subject_ref, atributo, expresion)
+            for atributo, expresion in _find_unresolved(attrs, watched)
+        ]
 
     @staticmethod
     def _resolve_bucket_ref(
@@ -183,11 +303,16 @@ class TerraformAdapter:
         value = {
             "estado": estado,
             "mecanismo": "aws:kms" if kms_key_id else None,
-            "llave": kms_key_id if isinstance(kms_key_id, str) else None,
+            "llave": kms_key_id
+            if isinstance(kms_key_id, str) and not _is_expression(kms_key_id)
+            else None,
         }
-        limitations = (
-            None if storage_encrypted is not None else "atributo_ausente: storage_encrypted"
-        )
+        if _is_expression(storage_encrypted):
+            limitations: str | None = "expresion_no_resuelta: storage_encrypted"
+        elif storage_encrypted is None:
+            limitations = "atributo_ausente: storage_encrypted"
+        else:
+            limitations = None
         return [
             self._make_evidence(
                 type_id="tf.encryption.config",
@@ -203,14 +328,19 @@ class TerraformAdapter:
         self, file_path: Path, subject_ref: str, attrs: dict
     ) -> list[EvidenceInstance]:
         retencion = attrs.get("backup_retention_period")
+        backup_window = attrs.get("backup_window")
         if not isinstance(retencion, int):
             value = {"retencion_dias": None, "habilitado": None, "ventana": None}
-            limitations = "atributo_ausente: backup_retention_period"
+            limitations = (
+                "expresion_no_resuelta: backup_retention_period"
+                if _is_expression(retencion)
+                else "atributo_ausente: backup_retention_period"
+            )
         else:
             value = {
                 "retencion_dias": retencion,
                 "habilitado": retencion > 0,
-                "ventana": attrs.get("backup_window"),
+                "ventana": backup_window if not _is_expression(backup_window) else None,
             }
             limitations = None
         return [
@@ -231,11 +361,16 @@ class TerraformAdapter:
         rule = rules[0] if rules else {}
         default_rule = (rule.get("apply_server_side_encryption_by_default") or [{}])[0]
         sse_algorithm = default_rule.get("sse_algorithm")
+        if _is_expression(sse_algorithm):
+            sse_algorithm = None
         estado = "enabled" if sse_algorithm else "unknown"
         value = {
             "estado": estado,
             "mecanismo": sse_algorithm,
-            "llave": default_rule.get("kms_master_key_id"),
+            "llave": kms_key
+            if isinstance(kms_key := default_rule.get("kms_master_key_id"), str)
+            and not _is_expression(kms_key)
+            else None,
         }
         limitations = (
             None if sse_algorithm else "sin bloque apply_server_side_encryption_by_default"
@@ -251,10 +386,13 @@ class TerraformAdapter:
 
     def _s3_public_access(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
         flags = [
-            attrs.get("block_public_acls"),
-            attrs.get("block_public_policy"),
-            attrs.get("ignore_public_acls"),
-            attrs.get("restrict_public_buckets"),
+            None if _is_expression(flag) else flag
+            for flag in (
+                attrs.get("block_public_acls"),
+                attrs.get("block_public_policy"),
+                attrs.get("ignore_public_acls"),
+                attrs.get("restrict_public_buckets"),
+            )
         ]
         if any(flag is False for flag in flags):
             bloqueo_publico: Any = False
@@ -285,6 +423,8 @@ class TerraformAdapter:
     def _s3_versioning(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
         config = (attrs.get("versioning_configuration") or [{}])[0]
         status = config.get("status")
+        if _is_expression(status):
+            status = None
         if status == "Enabled":
             habilitado: Any = True
         elif status == "Suspended":
@@ -308,9 +448,11 @@ class TerraformAdapter:
         rules: list[dict] = []
         for direccion in ("ingress", "egress"):
             for block in attrs.get(direccion) or []:
-                ipv4 = block.get("cidr_blocks") or []
-                ipv6 = block.get("ipv6_cidr_blocks") or []
-                cidrs = ipv4 + ipv6
+                cidrs = [
+                    cidr
+                    for key in ("cidr_blocks", "ipv6_cidr_blocks")
+                    for cidr in _literal_list(block.get(key))
+                ]
                 for cidr in cidrs:
                     rules.append(
                         {
@@ -335,8 +477,13 @@ class TerraformAdapter:
         self, file_path: Path, subject_ref: str, attrs: dict
     ) -> EvidenceInstance:
         enable_logging = attrs.get("enable_logging")
-        habilitado: Any = True if enable_logging is None else bool(enable_logging)
+        if _is_expression(enable_logging):
+            habilitado: Any = "unknown"
+        else:
+            habilitado = True if enable_logging is None else bool(enable_logging)
         multi_region = attrs.get("is_multi_region_trail")
+        if _is_expression(multi_region):
+            multi_region = None
         return self._make_evidence(
             type_id="tf.logging.config",
             subject_type="aws_cloudtrail",
@@ -347,6 +494,9 @@ class TerraformAdapter:
                 "destino": attrs.get("s3_bucket_name"),
             },
             file_path=file_path,
+            limitations=(
+                "expresion_no_resuelta: enable_logging" if habilitado == "unknown" else None
+            ),
         )
 
     # -- helpers --------------------------------------------------------------------

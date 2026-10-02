@@ -28,6 +28,8 @@ export interface Aggregate {
   score: number | null;
   cobertura: number | null;
   conteo_estados: Record<string, number>;
+  /** Cobertura por debajo del umbral de la metodología: el score no es representativo. */
+  provisional?: boolean;
 }
 
 export interface TierEstimate {
@@ -111,6 +113,7 @@ export interface AssessmentSummary {
   error: string | null;
   score_global: number | null;
   cobertura_global: number | null;
+  provisional_global?: boolean;
 }
 
 export interface AssessmentDetail extends AssessmentSummary {

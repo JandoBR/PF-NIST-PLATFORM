@@ -142,7 +142,7 @@ Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_declared`, 
 | Situación | Tratamiento |
 |---|---|
 | Atributo con expresión simple resoluble (variable local literal) | Se resuelve y se registra `resuelto_por: parser`. |
-| Atributo con función, `for_each`, `count`, módulo o referencia remota | `unknown` + `tf.expression.unresolved` con motivo. |
+| Atributo con función, `for_each`, `count`, módulo o referencia remota | `unknown` + `tf.expression.unresolved` con motivo (emitido por el adaptador sobre los atributos que deciden un puntaje; docs/09 §36). |
 | Ansible con `command`, `shell`, plantilla compleja, `when` no evaluable | `an.task.uninterpreted`. |
 | Atributo simplemente ausente | **No** se asume `false`; produce `unknown` con motivo `atributo_ausente`, salvo default documentado del proveedor. |
 | Default conocido del proveedor (ej. S3 cifra nuevas cargas por defecto) | Se registra como `unknown` y el criterio decide; no se asume cumplimiento automático. |

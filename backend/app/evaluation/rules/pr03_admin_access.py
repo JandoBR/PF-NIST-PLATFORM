@@ -7,7 +7,7 @@ solo en la exposicion de puertos administrativos en los security groups.
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import by_type
+from app.evaluation.rules._common import by_type, noting_unresolved
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -26,6 +26,7 @@ def _expone_administracion(rule: dict) -> bool:
     return any(desde <= puerto <= hasta for puerto in PUERTOS_ADMINISTRATIVOS)
 
 
+@noting_unresolved({"cidr_blocks", "ipv6_cidr_blocks", "from_port", "to_port"})
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     relevant = by_type(evidence, "tf.security_group.rules")
     if not relevant:

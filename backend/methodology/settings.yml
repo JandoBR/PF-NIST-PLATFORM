@@ -17,6 +17,10 @@ tier:
     CRI-RC-02: 75
   t4: { CRI-GV-04: 100, CRI-RS-02: 75, CRI-RC-03: 75, CRI-ID-04: 75 }
 funciones: { GV: 1, ID: 1, PR: 1, DE: 1, RS: 1, RC: 1 }
+cobertura:
+  # Cobertura (criterios con evidencia suficiente / aplicables) bajo la cual el puntaje se marca
+  # provisional (docs/01 §7).
+  umbral_provisional: 0.5
 planes:
   # Un criterio con final_score por debajo de esto genera un hallazgo/plan (docs/05 §4).
   umbral_brecha: 75

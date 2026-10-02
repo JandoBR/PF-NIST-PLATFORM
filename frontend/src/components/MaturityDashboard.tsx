@@ -85,7 +85,11 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
           accent="cyan"
           label="Score Global"
           value={assessment.score_global != null ? `${Math.round(assessment.score_global)}` : '—'}
-          sub="Promedio ponderado por criterio"
+          sub={
+            assessment.provisional_global
+              ? 'Provisional: cobertura baja, no representa a toda la organización'
+              : 'Promedio ponderado por criterio'
+          }
         />
         <SummaryCard
           icon={<Target className="h-5 w-5" />}
@@ -145,8 +149,18 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
                       Sin criterios
                     </span>
                   ) : (
-                    <span className="text-lg font-bold text-white">
-                      {score != null ? Math.round(score) : '—'}
+                    <span className="flex items-center gap-1.5">
+                      {f.aggregate!.provisional && (
+                        <span
+                          className="chip border border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-300"
+                          title="Cobertura baja: el score solo describe los criterios con evidencia suficiente"
+                        >
+                          Provisional
+                        </span>
+                      )}
+                      <span className="text-lg font-bold text-white">
+                        {score != null ? Math.round(score) : '—'}
+                      </span>
                     </span>
                   )}
                 </div>

@@ -183,7 +183,9 @@ Cobertura de evidencia (por evaluación):
 ```
 
 - `criterios aplicables` = todos menos `no_aplicable`.
-- Un puntaje de 80/100 con cobertura 30% se muestra como **provisional**.
+- Un puntaje de 80/100 con cobertura 30% se muestra como **provisional**: `Aggregate.provisional` es
+  verdadero cuando la cobertura es menor que `cobertura.umbral_provisional` (`settings.yml`, 0.5) y
+  hay puntaje. Aplica a cada agregado y al global; el Tier tiene su propia marca (T2).
 - La UI/API siempre devuelve puntaje y cobertura juntos.
 
 ## 8. Tier Estimado

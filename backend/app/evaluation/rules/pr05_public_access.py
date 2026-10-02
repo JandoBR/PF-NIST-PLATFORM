@@ -6,7 +6,7 @@ Distingue "no hay buckets" (no_aplicable) de "hay buckets sin `public_access_blo
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import by_type
+from app.evaluation.rules._common import by_type, noting_unresolved
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -14,7 +14,36 @@ CRITERION_ID = "CRI-PR-05"
 CRITERION_VERSION = 1
 
 
+def _versioning_note(evidence: list[EvidenceInstance]) -> str:
+    """`tf.versioning.config` no cambia el puntaje (docs/03 §3): solo se informa."""
+
+    versionings = by_type(evidence, "tf.versioning.config")
+    sin_versionado = [e.subject_ref for e in versionings if e.value["habilitado"] is not True]
+    if not sin_versionado:
+        return ""
+    return (
+        " Sin versionado habilitado o desconocido (informativo): "
+        + ", ".join(sin_versionado)
+        + "."
+    )
+
+
+@noting_unresolved({
+    "block_public_acls",
+    "block_public_policy",
+    "ignore_public_acls",
+    "restrict_public_buckets",
+    "bucket",
+})
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
+    resultado = _evaluate_public_access(evidence)
+    nota = _versioning_note(evidence)
+    if not nota or resultado.estado == Estado.NO_APLICABLE:
+        return resultado
+    return resultado.model_copy(update={"explanation": resultado.explanation + nota})
+
+
+def _evaluate_public_access(evidence: list[EvidenceInstance]) -> CriterionResult:
     presentes = by_type(evidence, "tf.resource.present")
     buckets = [e for e in presentes if e.subject_type == "aws_s3_bucket"]
     relevant = by_type(evidence, "tf.public_access.config")

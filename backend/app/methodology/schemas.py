@@ -59,6 +59,13 @@ class PlanesSettings(BaseModel):
     umbral_brecha: float = 75.0
 
 
+class CoberturaSettings(BaseModel):
+    """Un puntaje con cobertura por debajo de este umbral se marca `provisional` (docs/01 §7):
+    el promedio solo describe los criterios con evidencia suficiente, no la organizacion."""
+
+    umbral_provisional: float = 0.5
+
+
 class AuthFailuresBurstSettings(BaseModel):
     n: int = 5
     ventana_minutos: int = 5
@@ -84,6 +91,7 @@ class MethodologySettings(BaseModel):
     tier: TierSettings
     funciones: dict[str, float]
     planes: PlanesSettings = Field(default_factory=PlanesSettings)
+    cobertura: CoberturaSettings = Field(default_factory=CoberturaSettings)
     vigilancia: VigilanciaSettings = Field(default_factory=VigilanciaSettings)
 
 

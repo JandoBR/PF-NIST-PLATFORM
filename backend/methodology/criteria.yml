@@ -8,7 +8,9 @@
 # v3: CR-02/CR-03 agregan el resto salvo DE-03 (GV-04, ID-04, RS-02, RS-03).
 # v4: DE-03 cierra el catalogo (23/23) y DE-02 incorpora doc.claim (CR-04).
 # v5: PR-02, RS-01, RC-02 y RC-03 consumen doc.claim (CR-05).
-version: 5
+# v6: CR-06 - PR-01/02/03/04/05/06 y DE-01 consumen la evidencia declarada que ignoraban y
+#     declaran las expresiones Terraform sin resolver (tf.expression.unresolved).
+version: 6
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -144,6 +146,7 @@ criterios:
     regla:
       tipo: umbral_por_recurso
       estados: { all_enabled: 100, any_disabled: 25, any_unknown: insuficiente }
+      tipos_afirmacion: [policy_exists]
 
   - id: CRI-PR-02
     version: 1

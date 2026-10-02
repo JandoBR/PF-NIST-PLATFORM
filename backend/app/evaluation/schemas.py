@@ -47,6 +47,9 @@ class Aggregate(BaseModel):
     score: float | None
     cobertura: float | None
     conteo_estados: dict[str, int]
+    #: Cobertura por debajo de `cobertura.umbral_provisional`: el puntaje no es representativo
+    #: (docs/01 §7). `None` si no hay puntaje o cobertura que juzgar.
+    provisional: bool = False
 
 
 class TierEstimate(BaseModel):

@@ -142,12 +142,11 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   backups), `RS-01` (plan de respuesta + escalamiento), `RC-02` (verificación de integridad) y
   `RC-03` (notificación documentada). Hecho (docs/09 §34). `criteria.yml` v5. (`RS-02` ya lo hacía
   desde CR-03.)
-- [ ] CR-06 · (P1) **Evidencia declarada sin consumir**: reglas que listan evidencia en docs/03 que hoy no
-  leen: `PR-01` (`doc.claim(policy_exists)` + `tipos_afirmacion`), `PR-02` (cifrado de backups para
-  100), `PR-04` (`an.file.permissions`), `PR-05` (`tf.versioning.config`), `DE-01` (`log.window`)
-  Incluye **emitir `tf.expression.unresolved`** (clave: una expresión que el parser no resuelve debe
-  dar `unknown`, no un puntaje confiado): el tipo existe en `evidence_types.yml` pero el
-  adaptador de Terraform nunca lo produce.
+- [x] CR-06 · **Evidencia declarada sin consumir**. Hecho (docs/09 §36), `criteria.yml` v6:
+  `tf.expression.unresolved` se emite (RDS, S3, SG, CloudTrail) y las reglas lo declaran como
+  limitación; `PR-02` exige cifrado confirmado para el 100; `PR-04` consume `an.file.permissions`;
+  `PR-05` informa `tf.versioning.config`; `DE-01` cita `log.window`; `PR-01` cita `policy_exists`
+  junto a una brecha sin elevar el puntaje.
 - [ ] CR-07 · (P2) **Tipos de evidencia sin productor** (es sobre todo una decisión, no código): `tf.attr.value`, `doc.source.info` (marcador
   "documento analizado", docs/05 §2.3 E6) y `log.event` figuran en docs/02 y no existen. Definir
   contrato y productor, o declararlos fuera de alcance (P2).
@@ -204,8 +203,9 @@ registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototi
 - [ ] AMP-02 · (P1) **Exportación PDF del informe ejecutivo** (y de la comparación, UI-07). Se promueve al
   prototipo: da oficialidad al informe y **separa el acceso a la herramienta del acceso a los
   resultados** (común en entornos corporativos).
-- [ ] AMP-05 · (P1) **Puntaje "provisional" con cobertura baja**: marcar el score como provisional cuando la
-  cobertura de evidencia es baja (docs/01 §7); hoy "provisional" solo aplica al Tier.
+- [x] AMP-05 · **Puntaje "provisional" con cobertura baja**. Hecho (docs/09 §36): `Aggregate.provisional`
+  cuando la cobertura < `cobertura.umbral_provisional` (0.5, `settings.yml`); la UI lo marca en el
+  score global y por función.
 - [x] AMP-03 · Último criterio no-MVP: `DE-03` (información de eventos a personal/herramientas).
   Hecho (docs/09 §33): catálogo completo 23/23.
 
@@ -223,8 +223,7 @@ registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototi
 Criterio: primero lo que hace el motor más honesto y reproducible, luego la capa de IA, luego lo
 demostrable.
 
-1. **CR-06** (incluye `tf.expression.unresolved`) y **AMP-05**: el puntaje no debe parecer más
-   sólido de lo que es la evidencia.
+1. ~~**CR-06** y **AMP-05**~~ (hechos, docs/09 §36).
 2. **OP-12** y **OP-14**: capa de IA acotada, auditable y reproducible.
 3. **OP-04 (contradicciones) + TS-03**, **TS-01**, **TS-02** y **AMP-02**: lo más demostrable y lo
    que respalda las afirmaciones del diseño.
@@ -232,6 +231,6 @@ demostrable.
    y motivo de cierre), **OP-15** (líneas), **OP-13** (`schema_version`), **API-04** (problem+json) y
    la decisión de **CR-07**.
 
-> **Hecho:** catálogo completo (CR-01…CR-05), UI-01…UI-10, FN-05, FN-06 y la parte de estado de
-> incidente de OP-04. Ver docs/09 §23–§34.
+> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
+> incidente de OP-04. Ver docs/09 §23–§36.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).

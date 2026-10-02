@@ -8,7 +8,7 @@ no se puede observar).
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import by_type, result
+from app.evaluation.rules._common import by_type, noting_unresolved, result
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -24,8 +24,31 @@ def _system_logs(evidence: list[EvidenceInstance]) -> bool:
     )
 
 
+@noting_unresolved({"enable_logging"})
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    logging_cfg = by_type(evidence, "tf.logging.config")
+    """Evalua la configuracion y, si hay una ventana de observacion (`log.window`), la cita como
+    corroboracion de actividad observable (docs/03): no cambia el puntaje de la configuracion."""
+
+    resultado = _evaluate_config(evidence)
+    ventanas = by_type(evidence, "log.window")
+    if not ventanas or resultado.estado not in (Estado.EVALUADO, Estado.NO_IMPLEMENTADO):
+        return resultado
+    ventana = max(ventanas, key=lambda e: e.value["hasta"])
+    return resultado.model_copy(
+        update={
+            "explanation": (
+                f"{resultado.explanation} Actividad observable en la ventana"
+                f" {ventana.value['desde']} .. {ventana.value['hasta']}."
+            ),
+            "evidence_ids": [*resultado.evidence_ids, ventana.id],
+        }
+    )
+
+
+def _evaluate_config(evidence: list[EvidenceInstance]) -> CriterionResult:
+    declarados = by_type(evidence, "tf.logging.config")
+    # `habilitado == "unknown"` (expresion sin resolver) no se puntua: ni suma ni penaliza.
+    logging_cfg = [e for e in declarados if e.value.get("habilitado") != "unknown"]
     syslog = _system_logs(evidence)
 
     if not logging_cfg and not syslog:
@@ -33,7 +56,11 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             CRITERION_ID,
             Estado.EVIDENCIA_INSUFICIENTE,
             None,
-            "Sin configuracion de monitoreo (CloudTrail ni logs de sistema) evaluable.",
+            "Sin configuracion de monitoreo (CloudTrail ni logs de sistema) evaluable."
+            if not declarados
+            else "El estado de CloudTrail es desconocido (expresion sin resolver) y no hay logs"
+            " de sistema declarados.",
+            [e.id for e in declarados],
         )
 
     habilitados = [e for e in logging_cfg if e.value.get("habilitado") is True]

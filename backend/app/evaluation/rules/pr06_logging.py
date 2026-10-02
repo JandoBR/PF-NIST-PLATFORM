@@ -9,7 +9,7 @@ una tarea de configuracion, y es lo que el adaptador de Ansible puede afirmar co
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import by_type
+from app.evaluation.rules._common import by_type, noting_unresolved
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -26,8 +26,11 @@ def _system_logs_declared(evidence: list[EvidenceInstance]) -> bool:
     )
 
 
+@noting_unresolved({"enable_logging"})
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    relevant = by_type(evidence, "tf.logging.config")
+    declarados = by_type(evidence, "tf.logging.config")
+    # `habilitado == "unknown"` (expresion sin resolver) no se puntua: ni suma ni penaliza.
+    relevant = [e for e in declarados if e.value["habilitado"] != "unknown"]
     system_logs = _system_logs_declared(evidence)
 
     if not relevant:
@@ -44,7 +47,12 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             criterion_id=CRITERION_ID,
             criterion_version=CRITERION_VERSION,
             estado=Estado.EVIDENCIA_INSUFICIENTE,
-            explanation="Sin recursos de logging (CloudTrail ni logs de sistema) evaluables.",
+            explanation=(
+                "Sin recursos de logging (CloudTrail ni logs de sistema) evaluables."
+                if not declarados
+                else "El estado de logging de CloudTrail es desconocido (expresion sin resolver)."
+            ),
+            evidence_ids=[e.id for e in declarados],
         )
 
     habilitados = [e for e in relevant if e.value["habilitado"] is True]
