@@ -33,9 +33,9 @@ Resumen de cobertura del catálogo:
 | Recover | 3 | 2 | 1 |
 | **Total** | **23** | **16** | **2** |
 
-> **Estado de implementación:** 18 de 23 implementados (CR-01 cerró los 7 MVP que faltaban; restan
-> `GV-04`, `ID-04`, `DE-03`, `RS-02`, `RS-03`). Cobertura por función y pendientes en
-> `11-backlog-y-pulido.md §C`; detalle del código en `09-registro-de-implementacion.md §31`.
+> **Estado de implementación:** 22 de 23 implementados (CR-01/CR-02/CR-03). Solo resta `DE-03`
+> (no-MVP, docs/11 AMP-03). Cobertura por función y pendientes en `11-backlog-y-pulido.md §C`;
+> detalle del código en `09-registro-de-implementacion.md §31–§32`.
 
 ---
 

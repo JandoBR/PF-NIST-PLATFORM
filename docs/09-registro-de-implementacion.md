@@ -1119,3 +1119,27 @@ se piden a la IA dinámicamente vía `criterio.regla.tipos_afirmacion` (loader).
 
 **Verificación:** backend **243 tests** + `ruff` limpio (`test_cr01_mvp_criteria.py` cubre los 7;
 `test_methodology_loader` actualizado a 18 criterios).
+
+## 32. CR-02 / CR-03: el resto del catálogo (salvo DE-03)
+
+Se agregaron `GV-04` (revisión del desempeño), `ID-04` (inventario de datos, privacidad), `RS-02`
+(análisis de incidentes) y `RS-03` (notificación, privacidad). `criteria.yml` pasa a **v3**;
+quedan **22/23** (solo `DE-03`, no-MVP, docs/11 AMP-03). Cobertura por función: GV 4/4, ID 4/4,
+PR 6/6, DE 2/3, RS 3/3, RC 3/3.
+
+**Reglas:** `gv04_strategy_review`, `id04_data_inventory`, `rs02_incident_analysis`,
+`rs03_notification` (registradas en `engine._RULES`). Documentales salvo `RS-02` (mixto: proceso +
+`log.pattern(incident_declared)`).
+- `GV-04`: revisión (`policy_review` y/o `process_defined` con proceso de revisión) — 100 si además
+  hay métricas/ajustes, 75 si solo la revisión, 0 si no se declara.
+- `ID-04`: `data_inventory` con tipos de datos y clasificación (100), solo uno de los dos (50), o
+  ninguno (0).
+- `RS-02`: proceso de análisis/causa raíz; 100 con evidencia operativa de declaración, 75 documentado.
+- `RS-03`: `notification_list` con destinatarios y plazos (100), sin plazos (75), genérico (50).
+
+**Extracción:** se agregó `notification_list` a los campos esperados del prompt y se extendió
+`process_defined` con `metricas`/`ajustes` (`extraction._CONTENT_FIELDS`). `ID-04` y `RS-03` ya
+estaban en la vista de privacidad del frontend (`PRIVACY_CRITERIA`), así que ahora aparecen con datos.
+
+**Verificación:** backend **256 tests** + `ruff` limpio (`test_cr02_cr03_criteria.py` cubre los 4;
+`test_methodology_loader` actualizado a 22 criterios).

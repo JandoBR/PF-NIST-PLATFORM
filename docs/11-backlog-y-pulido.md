@@ -114,22 +114,22 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **18 de los 23** criterios de docs/03. Faltan 5: `GV-04`, `ID-04`, `DE-03`,
-`RS-02`, `RS-03` (CR-02/CR-03).
+El catálogo implementa **22 de los 23** criterios de docs/03. Solo falta `DE-03` (no-MVP, ver
+AMP-03).
 
-Cobertura por función: GV 3/4 · ID 3/4 · PR 6/6 · DE 2/3 · RS 1/3 · RC 3/3. Ya ninguna función queda
-sin criterios.
+Cobertura por función: GV 4/4 · ID 4/4 · PR 6/6 · DE 2/3 · RS 3/3 · RC 3/3.
 - **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
 
 - [x] CR-01 · Implementar los **7 MVP faltantes** (P0): `GV-02`, `ID-03` (desbloquean Tier 2),
   `RC-01`, `DE-01`, `GV-03`, `ID-01`, `ID-02`. Hecho (docs/09 §31). `criteria.yml` v2.
-  - Nota: los criterios documentales (`GV-02/03`, `ID-01/02/03`, `RC-01`) dependen de `doc.claim`
-    extraído por U1; sin IA quedan `evidencia_insuficiente` (igual que `GV-01` hoy).
-- [ ] CR-02 · Completar Tier 3/4: `GV-04`, `RS-02`, `ID-04` (los demás de esos tiers ya existen).
-- [ ] CR-03 · `RS-03` (notificación) y `ID-04` (inventario de datos) para dar sustancia a la
-  privacidad (ver UI-01).
+- [x] CR-02 · Completar Tier 3/4: `GV-04`, `RS-02`, `ID-04`. Hecho (docs/09 §32). `criteria.yml` v3.
+- [x] CR-03 · `RS-03` (notificación) e `ID-04` (inventario de datos) para la privacidad (ver UI-01).
+  Hecho (docs/09 §32); la vista de privacidad ya los muestra.
 - [ ] CR-04 · Revisar `DE-02` (hoy "parcial"): incorporar `doc.claim` para llegar a 100, no topar en 75.
+
+> Nota transversal: los criterios **documentales** (`GV-02/03/04`, `ID-01/02/03/04`, `RC-01`, `RS-02/03`)
+> dependen de `doc.claim` extraído por U1; sin IA quedan `evidencia_insuficiente` (igual que `GV-01`).
 
 ## D. Simplificaciones activas (docs/09 §11) — siguen abiertas
 
@@ -168,14 +168,14 @@ sin criterios.
 
 - [ ] AMP-01 · Recuperación semántica (embeddings) sobre el catálogo NIST.
 - [ ] AMP-02 · Exportación PDF del informe ejecutivo (y de la comparación, UI-07).
-- [ ] AMP-03 · Criterios por debajo de los MVP (`GV-04`, `DE-03`, `RS-02`, `ID-04`) — se solapa con CR.
+- [ ] AMP-03 · Último criterio no-MVP: `DE-03` (información de eventos a personal/herramientas).
+  `GV-04`, `RS-02` e `ID-04` ya se implementaron con CR-02/CR-03.
 
 ## Priorización sugerida
 
-1. **CR-02 + CR-03** (`GV-04`, `RS-02`, `ID-04`, `RS-03`): completar Tier 3/4 y dar sustancia a la
-   privacidad.
-2. **FN-01 + API-03** (`GET /jobs`): ver qué corrió y reintentar; hoy solo hay `GET /jobs/{id}`.
+1. **FN-01 + API-03** (`GET /jobs`): ver qué corrió y reintentar; hoy solo hay `GET /jobs/{id}`.
+2. **CR-04** (`DE-02` a 100) y **AMP-03** (`DE-03`): cerrar el catálogo (23/23).
 3. **OP/SEC/AMP**: simplificaciones (docs/09 §11), endurecimiento y ampliaciones, según tiempo.
 
-> **Hecho:** UI-01…UI-10, FN-05, FN-06, CR-01 y la parte de estado de incidente de OP-04.
-> Ver docs/09 §23–§31.
+> **Hecho:** UI-01…UI-10, FN-05, FN-06, CR-01, CR-02, CR-03 y la parte de estado de incidente de
+> OP-04. Ver docs/09 §23–§32.
