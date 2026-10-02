@@ -28,7 +28,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
 | Multitenancy + auth (doc 10) | Login con token, tabla `users`, aislamiento por `org_id` en toda la API | Hecho |
-| Pruebas | 357 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
+| Pruebas | 365 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
 | API REST (doc 04 §6) | FastAPI + colas: crear/reevaluar/ingerir son asíncronos (202 + `GET /jobs/{id}`) | Hecho |
 | Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api + `worker-core`/`worker-logs` + frontend (7 servicios) | Hecho |
 
@@ -1316,9 +1316,9 @@ lados que **ya son evidencia** (`app/recommendations/contradictions.py`).
   acepta lo documental (sin hallazgo).
 - **Un hallazgo por criterio y clase**, aunque haya varios recursos (docs/07 "registrado una sola
   vez"); cita ambos lados en `evidence_ids` y los describe en `detalle`.
-- **No penaliza doble:** el puntaje ya usa el valor técnico (`PR-02` puntúa con la retención real) y la
-  contradicción **no altera ningún puntaje ni genera plan** (`generate_plans` sigue usando solo
-  `brecha`).
+- **Plan:** una contradicción no genera plan (`generate_plans` sigue usando solo `brecha`).
+- **Puntaje:** en esta primera versión no lo alteraba; §41 cambió eso (la afirmación contradicha no
+  cuenta).
 
 `Finding` gana `detalle` y `score` pasa a opcional (`None` en una contradicción). `derive_findings`
 recibe la evidencia de forma opcional; `GET /assessments/{id}/findings` la pasa, los planes no. El
@@ -1380,3 +1380,31 @@ quería evitar, así que se cableó completo.
 
 **Verificación:** backend **357 tests** + `ruff` limpio (`test_db_exposure.py`, con un E2E sobre
 `gaps`).
+
+## 41. La afirmación contradicha no cuenta para el puntaje
+
+Antes (§38), una contradicción solo se informaba; el criterio seguía leyendo ambas fuentes. En el caso
+documento-vs-documento eso significaba que "ganaba" la afirmación con mayor confianza de la IA, que no
+es un criterio de verdad (docs/02 §5 pide la más reciente o específica). Decisión: **una afirmación
+documental que contradice a otra fuente no cuenta para puntuar**, como si no existiera, y se marca.
+
+- **Dónde:** la detección se movió a `app/evaluation/contradictions.py` (el motor la necesita antes de
+  puntuar y `recommendations` depende de `evaluation`, no al revés); `recommendations/contradictions.py`
+  solo la presenta como `Finding`. `engine.evaluate_all`/`evaluate_only` llaman a
+  `exclude_contradicted`, evalúan sobre la evidencia sin las afirmaciones contradichas y anotan la
+  explicación del criterio ("Contradiccion entre fuentes… no cuenta para este puntaje").
+- **Qué se excluye:** tecnico-vs-documental → solo la afirmación documental (la técnica nunca);
+  documento-vs-documento → **todas** las afirmaciones de esa propiedad en ese scope (no se elige
+  ganador). El mismo documento repitiéndose no es contradicción.
+- **La evidencia no se borra:** sigue guardada y citada en el hallazgo; solo deja de usarse para
+  puntuar, y no aparece en `evidence_ids` del criterio.
+
+**Efecto que conviene conocer:** si la retención configurada está por debajo de la política pero
+cumple el mínimo (`7 ≤ retención < política`), `PR-02` pasa de 50 ("bajo la política") a 75 (solo
+técnico, sin política), porque la política deja de contar. Con retención 0 sigue en 25 (el técnico ya
+dominaba). `PR-05` no cambia (la política de exposición nunca puntuaba). Los golden files no cambian
+(ningún caso tiene contradicciones).
+
+**Verificación:** backend **365 tests** + `ruff` limpio (8 casos nuevos en `test_contradictions.py`:
+exclusión, política concordante que sí cuenta, evidencia técnica intacta, retención 0, dos documentos,
+repetición en un mismo documento, `evaluate_only`, sin contradicción).

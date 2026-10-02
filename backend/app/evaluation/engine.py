@@ -12,6 +12,7 @@ from typing import Any
 
 from app.ai.adjustment import adjust, is_adjustable
 from app.ai.client import AIClient
+from app.evaluation.contradictions import Contradiction, exclude_contradicted
 from app.evaluation.rules import (
     de01_monitoring,
     de02_event_analysis,
@@ -92,15 +93,48 @@ def _evaluate_one(
     return result
 
 
+def _annotate_contradictions(
+    results: list[CriterionResult], contradicciones: list[Contradiction]
+) -> list[CriterionResult]:
+    """Deja constancia en la explicacion de que una afirmacion documental no conto (docs/02 §5)."""
+
+    if not contradicciones:
+        return results
+    por_criterio: dict[str, list[Contradiction]] = {}
+    for c in contradicciones:
+        por_criterio.setdefault(c.criterion_id, []).append(c)
+
+    anotados = []
+    for r in results:
+        pendientes = por_criterio.get(r.criterion_id)
+        if not pendientes or r.estado == Estado.ERROR:
+            anotados.append(r)
+            continue
+        detalle = " ".join(c.detalle for c in pendientes)
+        anotados.append(
+            r.model_copy(
+                update={
+                    "explanation": (
+                        f"{r.explanation} Contradiccion entre fuentes: {detalle} La afirmacion"
+                        " documental contradicha no cuenta para este puntaje (ver hallazgo)."
+                    )
+                }
+            )
+        )
+    return anotados
+
+
 def evaluate_all(
     methodology: Methodology, evidence: list[EvidenceInstance]
 ) -> list[CriterionResult]:
-    """Evalua cada criterio del catalogo que tenga una regla registrada."""
+    """Evalua cada criterio del catalogo que tenga una regla registrada. Las afirmaciones
+    documentales que contradicen a otra fuente no cuentan para puntuar (docs/02 §5)."""
 
-    return [
-        _evaluate_one(methodology, criterion_id, evidence)
-        for criterion_id in methodology.criterios
+    visible, contradicciones = exclude_contradicted(evidence)
+    results = [
+        _evaluate_one(methodology, criterion_id, visible) for criterion_id in methodology.criterios
     ]
+    return _annotate_contradictions(results, contradicciones)
 
 
 def evaluate_only(
@@ -110,11 +144,13 @@ def evaluate_only(
 ) -> list[CriterionResult]:
     """Evalua solo los criterios indicados: la base del refresco selectivo (docs/06 §6, FN-06)."""
 
-    return [
-        _evaluate_one(methodology, criterion_id, evidence)
+    visible, contradicciones = exclude_contradicted(evidence)
+    results = [
+        _evaluate_one(methodology, criterion_id, visible)
         for criterion_id in criterion_ids
         if criterion_id in methodology.criterios
     ]
+    return _annotate_contradictions(results, contradicciones)
 
 
 def _criterios_a_ajustar(methodology: Methodology, results: list[CriterionResult]) -> set[str]:

@@ -168,6 +168,11 @@ cuando ambas hablan del mismo recurso, propiedad y alcance.**
 Las contradicciones se registran como **hallazgos** con ambos lados citados (evidencia + locator).
 No penalizan doble: el hallazgo referencia el criterio afectado una sola vez.
 
+**Efecto en el puntaje:** una afirmación documental que contradice a otra fuente **no cuenta** para
+puntuar; el criterio se evalúa como si no existiera, y queda el hallazgo más una nota en la explicación
+del criterio. En documento-vs-documento no cuenta ninguno de los dos (no se elige un ganador). La
+evidencia técnica nunca se excluye.
+
 Implementado en `app/recommendations/contradictions.py` (docs/09 §38, §40): backup de la política vs
 `tf.backup.config`, "BD no pública" (`doc.claim(exposure_policy)`) vs `tf.db_exposure.config`, y dos
 documentos con retención o frecuencia de revisión distintas.

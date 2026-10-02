@@ -358,7 +358,7 @@ function ContradictionsCard({ items }: { items: Finding[] }) {
       </div>
       <p className="mb-3 text-xs text-slate-500">
         Lo declarado en un documento no coincide con lo observado en la configuración (o con otro
-        documento). Prevalece la observación técnica; estas incoherencias no modifican ningún puntaje.
+        documento). Prevalece la observación técnica y la afirmación documental contradicha no cuenta para el puntaje; el criterio se evalúa como si no existiera.
       </p>
       <ul className="space-y-3">
         {items.map((f) => {

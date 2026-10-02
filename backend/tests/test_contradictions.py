@@ -1,12 +1,13 @@
 """OP-04 / TS-03: contradicciones tecnico-vs-documental y documento-vs-documento (docs/02 §5)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from app.ai.client import FakeAIClient
 from app.core import assessment_service as svc
+from app.evaluation import engine
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.loader import load_methodology
 from app.recommendations.contradictions import detect_contradictions
@@ -241,3 +242,103 @@ def test_end_to_end_policy_says_backups_but_terraform_disables_them(db_session, 
     # prevalece lo tecnico: el criterio puntua con retencion 0, no con la politica
     pr02 = next(r for r in results if r.criterion_id == "CRI-PR-02")
     assert pr02.final_score == 25
+
+
+# -- efecto en el puntaje: la afirmacion contradicha no cuenta ----------------------------
+
+
+def _encryption(estado: str = "enabled"):
+    return EvidenceInstance(
+        type_id="tf.encryption.config",
+        type_version=1,
+        subject_type="aws_db_instance",
+        subject_ref="aws_db_instance.db",
+        scope=SCOPE,
+        value={"estado": estado, "mecanismo": None, "llave": None},
+        source_id="t",
+        locator=Locator(file="main.tf"),
+        observed_at=datetime.now(UTC),
+        modality=Modality.DECLARADA,
+        created_by="terraform",
+    )
+
+
+def _score(methodology, evidence, criterion_id):
+    results = engine.evaluate_all(methodology, evidence)
+    return next(r for r in results if r.criterion_id == criterion_id)
+
+
+def test_contradicted_policy_does_not_count_and_the_result_says_so(methodology):
+    # retencion 7 vs politica 30: antes puntuaba 50; ahora la politica no cuenta
+    evidence = [_backup(7), _encryption(), _claim("backup_policy", {"retencion": "30 dias"})]
+    pr02 = _score(methodology, evidence, "CRI-PR-02")
+
+    assert pr02.final_score == 75  # solo tecnico (>= 7 dias), sin politica: tope 75
+    assert "Contradiccion entre fuentes" in pr02.explanation
+    assert "no cuenta" in pr02.explanation
+    claim_id = evidence[2].id
+    assert claim_id not in pr02.evidence_ids  # no se cita como evidencia usada
+
+
+def test_agreeing_policy_still_counts(methodology):
+    evidence = [_backup(7), _encryption(), _claim("backup_policy", {"retencion": "7 dias"})]
+    pr02 = _score(methodology, evidence, "CRI-PR-02")
+    assert pr02.final_score == 100
+    assert "Contradiccion" not in pr02.explanation
+
+
+def test_technical_evidence_is_never_excluded(methodology):
+    from app.evaluation.contradictions import exclude_contradicted
+
+    evidence = [_backup(7), _claim("backup_policy", {"retencion": "30 dias"})]
+    visibles, contradicciones = exclude_contradicted(evidence)
+    assert len(contradicciones) == 1
+    assert evidence[0] in visibles and evidence[1] not in visibles
+
+
+def test_policy_declaring_backups_with_zero_retention_keeps_the_technical_25(methodology):
+    evidence = [_backup(0), _claim("backup_policy", {"respaldo": True, "retencion": "7 dias"})]
+    pr02 = _score(methodology, evidence, "CRI-PR-02")
+    assert pr02.final_score == 25
+    assert "Contradiccion entre fuentes" in pr02.explanation
+
+
+def test_two_disagreeing_documents_both_stop_counting(methodology):
+    politica = _claim("policy_exists", {"nombre": "Politica", "aprobada_por": "Direccion"})
+    reciente = (date.today() - timedelta(days=30)).isoformat()
+    review_a = _claim(
+        "policy_review", {"frecuencia": "anual", "ultima_revision": reciente}, doc="politica"
+    )
+
+    solo_a = _score(methodology, [politica, review_a], "CRI-GV-01")
+    assert solo_a.final_score == 100  # sin contradiccion, la revision vigente cuenta
+
+    review_b = _claim(
+        "policy_review", {"frecuencia": "trimestral", "ultima_revision": reciente}, doc="manual"
+    )
+    ambos = _score(methodology, [politica, review_a, review_b], "CRI-GV-01")
+    assert ambos.final_score == 75  # como si ninguna revision existiera
+    assert "Contradiccion entre fuentes" in ambos.explanation
+    assert review_a.id not in ambos.evidence_ids and review_b.id not in ambos.evidence_ids
+
+
+def test_same_document_repeating_itself_is_not_excluded(methodology):
+    politica = _claim("policy_exists", {"nombre": "Politica", "aprobada_por": "Direccion"})
+    reciente = (date.today() - timedelta(days=30)).isoformat()
+    revisiones = [
+        _claim("policy_review", {"frecuencia": f, "ultima_revision": reciente}, doc="politica")
+        for f in ("anual", "trimestral")
+    ]
+    assert _score(methodology, [politica, *revisiones], "CRI-GV-01").final_score == 100
+
+
+def test_evaluate_only_applies_the_same_exclusion(methodology):
+    evidence = [_backup(7), _encryption(), _claim("backup_policy", {"retencion": "30 dias"})]
+    (pr02,) = engine.evaluate_only(methodology, evidence, ["CRI-PR-02"])
+    assert pr02.final_score == 75 and "no cuenta" in pr02.explanation
+
+
+def test_no_contradiction_leaves_evaluation_untouched(methodology):
+    evidence = [_backup(14), _encryption()]
+    with_engine = engine.evaluate_all(methodology, evidence)
+    assert all("Contradiccion" not in r.explanation for r in with_engine)

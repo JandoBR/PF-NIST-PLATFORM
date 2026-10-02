@@ -237,5 +237,5 @@ demostrable.
    la decisión de **CR-07**.
 
 > **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
-> incidente de OP-04. Ver docs/09 §23–§39.
+> incidente de OP-04. Ver docs/09 §23–§41.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).
