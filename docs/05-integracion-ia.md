@@ -166,8 +166,10 @@ fuentes de verdad (evidencia vs. clic) y rompería el determinismo y la reproduc
   **reevaluar**: la nueva evaluación (inmutable) y la comparación (docs/04 §6) muestran el delta.
 - El seguimiento es solo para el trabajo en curso; al regenerar el plan (p. ej. con IA) se
   **conserva** el estado por `criterion_id` para no perder el avance.
-- En una **reevaluación** el plan es nuevo (nueva instantánea): el seguimiento no se hereda. La
-  herencia entre evaluaciones queda como mejora futura.
+- En una **reevaluación** el plan es nuevo (nueva instantánea), pero el seguimiento **se hereda por
+  `criterion_id` desde la evaluación inmediatamente anterior** (`Assessment.previous_assessment_id`):
+  si un criterio sigue siendo hallazgo, conserva su estado; si ya se corrigió, deja de ser hallazgo y
+  no hay nada que heredar.
 
 ## 5. Configuración con DeepSeek
 

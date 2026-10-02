@@ -957,9 +957,14 @@ para no perder el avance del usuario (docs/05 §4.4).
 **Frontend:** en Recomendaciones, cada plan desplegado tiene el control Pendiente / En progreso /
 Hecho y el encabezado cuenta "X de Y hechos". El chip de estado aparece en la fila del hallazgo.
 
-**Pendiente / futuro:** el seguimiento no se hereda entre evaluaciones de una reevaluación (el plan
-es de otra instantánea). Ver docs/11 UI-08.
+**Herencia entre evaluaciones (misma pasada):** al reevaluar, el plan es de otra instantánea, así que
+sin esto el seguimiento se perdía. Se agregó `Assessment.previous_assessment_id` (auto-referencia,
+migración `9f9593a6de1c`), seteado en `create_pending_reevaluation`; `generate_plans`, en la primera
+generación de esa evaluación, hereda el `estado` por `criterion_id` desde la evaluación anterior.
+`reevaluate` (CLI/tests) se refactorizó para pasar por `create_pending_reevaluation`, así que también
+queda enlazado. La herencia es solo desde la **inmediatamente anterior** (decisión del usuario).
 
-**Verificación:** backend **217 tests** + `ruff` limpio (`test_plan_follow_up_state_is_persisted`
-comprueba persistencia y que el score no cambia; `..._invalid_state_is_422`). Frontend
+**Verificación:** backend **218 tests** + `ruff` limpio (`test_plan_follow_up_state_is_persisted`
+comprueba persistencia y que el score no cambia; `..._invalid_state_is_422`;
+`test_reevaluate_inherits_plan_follow_up_state` comprueba la herencia). Frontend
 `typecheck`/`lint`/`build` limpios.
