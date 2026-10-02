@@ -43,9 +43,9 @@ def test_falls_back_to_template_without_ai(methodology):
     assert "no se ejecuta" in plan.advertencia.lower()
 
 
-def test_skips_unimplemented_criterion_and_uses_the_next_one(methodology):
-    # CRI-DE-03 no esta implementado en el catalogo; debe usar CRI-DE-02.
-    plan = generate_incident_plan(methodology, _trigger(criterios=["CRI-DE-03", "CRI-DE-02"]))
+def test_skips_unknown_criterion_and_uses_the_next_one(methodology):
+    # Un criterio que no esta en el catalogo se ignora; usa el siguiente.
+    plan = generate_incident_plan(methodology, _trigger(criterios=["CRI-XX-99", "CRI-DE-02"]))
     assert plan.criterion_id == "CRI-DE-02"
 
 

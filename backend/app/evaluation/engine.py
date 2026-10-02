@@ -15,6 +15,7 @@ from app.ai.client import AIClient
 from app.evaluation.rules import (
     de01_monitoring,
     de02_event_analysis,
+    de03_alert_notification,
     gv01_policy,
     gv02_roles,
     gv03_risk_tolerance,
@@ -59,6 +60,7 @@ _RULES: dict[str, RuleFn] = {
     pr05_public_access.CRITERION_ID: pr05_public_access.evaluate,
     pr06_logging.CRITERION_ID: pr06_logging.evaluate,
     de02_event_analysis.CRITERION_ID: de02_event_analysis.evaluate,
+    de03_alert_notification.CRITERION_ID: de03_alert_notification.evaluate,
     rs01_response_plan.CRITERION_ID: rs01_response_plan.evaluate,
     rc01_recovery_procedure.CRITERION_ID: rc01_recovery_procedure.evaluate,
     rc02_backup_verification.CRITERION_ID: rc02_backup_verification.evaluate,

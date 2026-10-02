@@ -4,6 +4,7 @@ import pytest
 
 from app.evaluation.rules import (
     de02_event_analysis,
+    de03_alert_notification,
     rc02_backup_verification,
     rc03_recovery_communication,
     rs01_response_plan,
@@ -56,12 +57,42 @@ def _pattern(patron: str, resultado: str = "ok") -> EvidenceInstance:
     )
 
 
+def _claim(tipo: str, contenido: dict | None = None) -> EvidenceInstance:
+    return EvidenceInstance(
+        type_id="doc.claim",
+        type_version=1,
+        subject_type="document",
+        subject_ref="doc:politica",
+        scope="entorno:produccion",
+        value={
+            "tipo_afirmacion": tipo,
+            "contenido": contenido or {},
+            "encontrado": True,
+            "confianza": 0.9,
+        },
+        source_id="src",
+        locator=Locator(file="politica.md"),
+        observed_at=datetime.now(UTC),
+        modality=Modality.DOCUMENTAL,
+        created_by="ai:extraction",
+    )
+
+
 # -- CRI-DE-02 ----------------------------------------------------------------------
 
 
 def test_de02_no_window_is_insufficient():
     result = de02_event_analysis.evaluate([])
     assert result.estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+def test_de02_doc_criteria_and_evidence_scores_100():
+    evidence = [
+        _window(),
+        _pattern("alert_raised"),
+        _claim("process_defined", {"proceso": "incidentes", "criterios_declaracion": True}),
+    ]
+    assert de02_event_analysis.evaluate(evidence).final_score == 100
 
 
 def test_de02_alert_present_scores_75():
@@ -77,6 +108,26 @@ def test_de02_burst_without_alert_scores_0():
 def test_de02_nothing_relevant_is_insufficient_not_zero():
     result = de02_event_analysis.evaluate([_window()])
     assert result.estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+# -- CRI-DE-03 ----------------------------------------------------------------------
+
+
+def test_de03_destinatarios_y_alerta_scores_100():
+    evidence = [
+        _claim("notification_list", {"destinatarios": ["soc"], "plazos": "1h"}),
+        _pattern("alert_raised"),
+    ]
+    assert de03_alert_notification.evaluate(evidence).final_score == 100
+
+
+def test_de03_destinatarios_sin_alerta_scores_75():
+    evidence = [_claim("notification_list", {"destinatarios": ["soc"]})]
+    assert de03_alert_notification.evaluate(evidence).final_score == 75
+
+
+def test_de03_nada_es_insuficiente():
+    assert de03_alert_notification.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
 
 
 # -- CRI-RS-01 ----------------------------------------------------------------------

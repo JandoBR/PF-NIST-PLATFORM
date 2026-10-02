@@ -6,7 +6,8 @@
 # Ampliar este archivo y agregar su modulo en app/evaluation/rules van siempre juntos (D5).
 # v2: CR-01 agrega los 7 criterios MVP que faltaban (GV-02/03, ID-01/02/03, DE-01, RC-01).
 # v3: CR-02/CR-03 agregan el resto salvo DE-03 (GV-04, ID-04, RS-02, RS-03).
-version: 3
+# v4: DE-03 cierra el catalogo (23/23) y DE-02 incorpora doc.claim (CR-04).
+version: 4
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -246,6 +247,22 @@ criterios:
       tipo: patron_con_justicia
       patrones_positivos: [alert_raised, incident_declared]
       patron_oportunidad: auth_failures_burst
+      tipos_afirmacion: [process_defined]
+
+  - id: CRI-DE-03
+    version: 1
+    titulo: "Informacion de eventos a personal y herramientas"
+    tipo: mixto
+    funcion: DE
+    categorias: [DE.AE]
+    subcategorias: [DE.AE-06]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [log.pattern@1, doc.claim@1]
+    recomendacion: "Definir destinatarios de alertas y verificar la entrega."
+    regla:
+      tipo: notificacion_eventos
+      tipos_afirmacion: [notification_list]
 
   - id: CRI-RS-01
     version: 1

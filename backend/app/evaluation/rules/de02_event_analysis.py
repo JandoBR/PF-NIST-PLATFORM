@@ -1,16 +1,15 @@
 """CRI-DE-02 — Analisis de eventos y declaracion de incidentes (docs/03 §4).
 
-Simplificado a `log.pattern`/`log.window` solamente (sin `doc.claim` todavia): el tope sin
-criterios de declaracion documentados es 75, igual patron que CRI-PR-02 sin politica.
-
-Aplica la "regla de justicia" (docs/06 §5) literalmente: sin `log.window` no se puede concluir
-nada; con ventana completa, solo se penaliza si hubo una oportunidad real (`auth_failures_burst`)
-que no produjo alerta/declaracion.
+Combina lo documental (`doc.claim(tipo=process_defined)`, con `contenido.criterios_declaracion`) con
+lo operativo (`log.pattern`). Aplica la "regla de justicia" (docs/06 §5) literalmente: sin
+`log.window` no se puede concluir nada; con ventana completa, solo se penaliza si hubo una
+oportunidad real (`auth_failures_burst`) que no produjo alerta/declaracion.
 """
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import by_type
+from app.evaluation.rules._common import best_found, by_type, doc_claims
+from app.evaluation.rules._common import result as build
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -25,50 +24,83 @@ def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance |
     return None
 
 
+def _es_de_declaracion(claim: EvidenceInstance) -> bool:
+    proceso = str(claim.value.get("contenido", {}).get("proceso", "")).lower()
+    return any(
+        palabra in proceso
+        for palabra in ("incidente", "declaracion", "declaración", "evento", "analisis", "análisis")
+    )
+
+
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     ventana = by_type(evidence, "log.window")
     if not ventana or not ventana[0].value["completo"]:
-        return CriterionResult(
-            criterion_id=CRITERION_ID,
-            criterion_version=CRITERION_VERSION,
-            estado=Estado.EVIDENCIA_INSUFICIENTE,
-            explanation="Sin ventana de observacion completa: no se puede concluir.",
+        return build(
+            CRITERION_ID,
+            Estado.EVIDENCIA_INSUFICIENTE,
+            None,
+            "Sin ventana de observacion completa: no se puede concluir.",
         )
 
     alerta = _patron(evidence, "alert_raised")
     declarado = _patron(evidence, "incident_declared")
     oportunidad = _patron(evidence, "auth_failures_burst")
+    positivo = alerta or declarado
 
-    if alerta or declarado:
-        presente = alerta or declarado
-        return CriterionResult(
-            criterion_id=CRITERION_ID,
-            criterion_version=CRITERION_VERSION,
-            estado=Estado.EVALUADO,
-            base_score=75,
-            final_score=75,
-            explanation="Evidencia operativa de alerta/declaracion en la ventana "
-            "(sin criterios de declaracion documentados aun): puntaje maximo 75.",
-            evidence_ids=[ventana[0].id, presente.id],
+    doc = [c for c in doc_claims(evidence, "process_defined") if _es_de_declaracion(c)]
+    doc_mejor = best_found(doc)
+    tiene_criterios = (
+        doc_mejor is not None
+        and doc_mejor.value.get("contenido", {}).get("criterios_declaracion")
+    )
+    doc_criterios = doc_mejor if tiene_criterios else None
+
+    if oportunidad and not positivo:
+        return build(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            0,
+            "Hubo actividad que debia generar alerta (auth_failures_burst) y no la hubo: falla de"
+            " deteccion con ventana completa (docs/06 §5).",
+            [ventana[0].id, oportunidad.id],
         )
-
-    if oportunidad:
-        return CriterionResult(
-            criterion_id=CRITERION_ID,
-            criterion_version=CRITERION_VERSION,
-            estado=Estado.EVALUADO,
-            base_score=0,
-            final_score=0,
-            explanation="Hubo actividad que debia generar alerta (auth_failures_burst) y no la"
-            " hubo: falla de deteccion con ventana completa (docs/06 §5).",
-            evidence_ids=[ventana[0].id, oportunidad.id],
+    if doc_criterios and positivo:
+        return build(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            100,
+            "Criterios de declaracion documentados y evidencia operativa de alerta/declaracion.",
+            [ventana[0].id, positivo.id, doc_criterios.id],
         )
-
-    return CriterionResult(
-        criterion_id=CRITERION_ID,
-        criterion_version=CRITERION_VERSION,
-        estado=Estado.EVIDENCIA_INSUFICIENTE,
-        explanation="Ventana completa sin ningun patron aplicable: sin oportunidad, no se"
-        " penaliza (docs/06 §5).",
-        evidence_ids=[ventana[0].id],
+    if doc_criterios:
+        return build(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            75,
+            "Criterios de declaracion documentados, sin evidencia operativa en la ventana.",
+            [ventana[0].id, doc_criterios.id],
+        )
+    if positivo:
+        return build(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            75,
+            "Evidencia operativa de alerta/declaracion, sin criterios de declaracion documentados.",
+            [ventana[0].id, positivo.id],
+        )
+    if doc_mejor is not None:
+        return build(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            50,
+            "Analisis de eventos descrito sin criterios de declaracion concretos.",
+            [ventana[0].id, doc_mejor.id],
+        )
+    return build(
+        CRITERION_ID,
+        Estado.EVIDENCIA_INSUFICIENTE,
+        None,
+        "Ventana completa sin ningun patron aplicable ni criterios documentados: sin"
+        " oportunidad, no se penaliza (docs/06 §5).",
+        [ventana[0].id],
     )
