@@ -17,7 +17,6 @@ import { RecommendationEngine } from '@/components/RecommendationEngine';
 import { ThreatSimulation } from '@/components/ThreatSimulation';
 import { CompareAssessments } from '@/components/CompareAssessments';
 import {
-  getAssessment,
   getCriteria,
   getFindings,
   getMe,
@@ -25,8 +24,6 @@ import {
   hasToken,
   listAssessments,
   logout as apiLogout,
-  pollJob,
-  reevaluateAssessment,
 } from '@/lib/api';
 import type { AuthUser } from '@/lib/api';
 import type { AssessmentDetail, CriterionResult, Finding, Plan } from '@/lib/types';
@@ -58,7 +55,6 @@ function App() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [reevaluating, setReevaluating] = useState(false);
 
   const [history, setHistory] = useState<AssessmentDetail[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -163,27 +159,6 @@ function App() {
     setDetailError(null);
     setTab('dashboard');
     await loadAssessmentDetails(chosen);
-  }
-
-  async function handleReevaluate() {
-    if (!assessment) return;
-    setReevaluating(true);
-    setDetailError(null);
-    try {
-      const accepted = await reevaluateAssessment(assessment.id);
-      const job = await pollJob(accepted.job_id);
-      if (job.estado === 'fallido') {
-        setDetailError(job.error ?? 'La reevaluación falló en el worker, sin más detalle.');
-        return;
-      }
-      const detail = await getAssessment(accepted.assessment_id);
-      await refreshHistory();
-      await loadAssessmentDetails(detail);
-    } catch (err) {
-      setDetailError(err instanceof Error ? err.message : 'No se pudo reevaluar.');
-    } finally {
-      setReevaluating(false);
-    }
   }
 
   function handleLogout() {
@@ -309,12 +284,7 @@ function App() {
             </button>
           </div>
         ) : tab === 'dashboard' ? (
-          <MaturityDashboard
-            assessment={assessment}
-            criteria={criteria}
-            onReevaluate={handleReevaluate}
-            reevaluating={reevaluating}
-          />
+          <MaturityDashboard assessment={assessment} criteria={criteria} />
         ) : tab === 'recommendations' ? (
           <RecommendationEngine
             assessmentId={assessment.id}

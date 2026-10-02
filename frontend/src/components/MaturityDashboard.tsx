@@ -7,8 +7,6 @@ import {
   Search,
   ChevronRight,
   Info,
-  RefreshCw,
-  Loader2,
   Lock,
 } from 'lucide-react';
 import type { AssessmentDetail, CriterionResult, Estado } from '@/lib/types';
@@ -26,8 +24,6 @@ type TableMode = 'criteria' | 'privacy';
 interface DashboardProps {
   assessment: AssessmentDetail;
   criteria: CriterionResult[];
-  onReevaluate: () => void;
-  reevaluating: boolean;
 }
 
 const FILTERS: { key: Estado | 'all'; label: string }[] = [
@@ -39,12 +35,7 @@ const FILTERS: { key: Estado | 'all'; label: string }[] = [
   { key: 'error', label: 'Error' },
 ];
 
-export function MaturityDashboard({
-  assessment,
-  criteria,
-  onReevaluate,
-  reevaluating,
-}: DashboardProps) {
+export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
   const [estadoFilter, setEstadoFilter] = useState<Estado | 'all'>('all');
   const [funcFilter, setFuncFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
@@ -79,26 +70,11 @@ export function MaturityDashboard({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">
-          {assessment.estado === 'en_progreso' || assessment.estado === 'pendiente'
-            ? 'Evaluación en curso…'
-            : `Evaluación ${assessment.estado}`}
-        </p>
-        <button
-          onClick={onReevaluate}
-          disabled={reevaluating || assessment.estado !== 'completada'}
-          className="btn-ghost border border-white/[0.06] text-xs"
-          title="Vuelve a correr el pipeline sobre las mismas fuentes subidas, para reflejar correcciones"
-        >
-          {reevaluating ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5" />
-          )}
-          Reevaluar
-        </button>
-      </div>
+      <p className="text-xs text-slate-500">
+        {assessment.estado === 'en_progreso' || assessment.estado === 'pendiente'
+          ? 'Evaluación en curso…'
+          : `Evaluación ${assessment.estado}`}
+      </p>
 
       {/* Tarjetas de resumen */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -285,6 +261,7 @@ function ViewSwitch({ mode, onChange }: { mode: TableMode; onChange: (mode: Tabl
 /** Vista alterna de la tabla de criterios: el cruce con privacidad (docs/03 §7). No es un filtro:
  * cambia las columnas para mostrar la relación con el Privacy Framework y la nota de alcance. */
 function PrivacyView({ criteria }: { criteria: CriterionResult[] }) {
+  const [open, setOpen] = useState<string | null>(null);
   const evaluados = criteria.filter((c) => c.estado === 'evaluado').length;
   const scored = criteria.filter((c) => c.final_score != null);
   const avg = scored.length > 0 ? scored.reduce((n, c) => n + (c.final_score ?? 0), 0) / scored.length : null;
@@ -322,25 +299,45 @@ function PrivacyView({ criteria }: { criteria: CriterionResult[] }) {
       <div className="divide-y divide-white/[0.04]">
         {criteria.map((c) => {
           const meta = ESTADO_META[c.estado];
+          const expanded = open === c.criterion_id;
           return (
-            <div key={c.criterion_id} className="flex items-center gap-4 px-5 py-3">
-              <span className="w-24 flex-shrink-0 font-mono text-xs font-semibold text-slate-300">
-                {c.criterion_id}
-              </span>
-              <span className="w-40 flex-shrink-0">
-                <span className="chip border border-teal-500/30 bg-teal-500/10 text-teal-300">
-                  {PRIVACY_RELATION[c.criterion_id] ?? 'Privacidad'}
+            <div key={c.criterion_id}>
+              <button
+                onClick={() => setOpen(expanded ? null : c.criterion_id)}
+                className="flex w-full items-center gap-4 px-5 py-3 text-left transition-colors hover:bg-white/[0.02]"
+              >
+                <span className="w-24 flex-shrink-0 font-mono text-xs font-semibold text-slate-300">
+                  {c.criterion_id}
                 </span>
-              </span>
-              <span className="min-w-0 flex-1 truncate text-sm text-slate-400" title={c.explanation}>
-                {c.explanation}
-              </span>
-              <span className="w-10 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
-                {c.final_score != null ? Math.round(c.final_score) : '—'}
-              </span>
-              <span className="w-28 flex-shrink-0 text-right">
-                <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
-              </span>
+                <span className="w-40 flex-shrink-0">
+                  <span className="chip border border-teal-500/30 bg-teal-500/10 text-teal-300">
+                    {PRIVACY_RELATION[c.criterion_id] ?? 'Privacidad'}
+                  </span>
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm text-slate-400">{c.explanation}</span>
+                <span className="w-10 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
+                  {c.final_score != null ? Math.round(c.final_score) : '—'}
+                </span>
+                <span className="w-28 flex-shrink-0 text-right">
+                  <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
+                </span>
+                <ChevronRight
+                  className={`h-4 w-4 flex-shrink-0 text-slate-600 transition-transform ${expanded ? 'rotate-90' : ''}`}
+                />
+              </button>
+              {expanded && (
+                <div className="animate-fade-in border-t border-white/[0.04] bg-ink-900/30 px-5 py-3">
+                  <p className="text-xs leading-relaxed text-slate-400">{c.explanation}</p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    <span className="font-semibold text-slate-400">Score base:</span>{' '}
+                    {c.base_score != null ? Math.round(c.base_score) : '—'} &nbsp;·&nbsp;
+                    <span className="font-semibold text-slate-400">Score final:</span>{' '}
+                    {c.final_score != null ? Math.round(c.final_score) : '—'} &nbsp;·&nbsp;
+                    <span className="font-semibold text-slate-400">Evidencias:</span> {c.evidence_ids.length}
+                    {c.degradado && <span className="text-amber-300"> &nbsp;·&nbsp; IA degradada</span>}
+                  </p>
+                </div>
+              )}
             </div>
           );
         })}
