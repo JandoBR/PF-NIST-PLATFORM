@@ -120,6 +120,11 @@ def _strip_meta(block: dict) -> dict:
     return {k: v for k, v in block.items() if k != "__is_block__"}
 
 
+#: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
+#: v2: emite tf.expression.unresolved y no convierte expresiones en valores (CR-06).
+ADAPTER_VERSION = "2"
+
+
 class TerraformAdapter:
     """Convierte uno o mas archivos `.tf` en instancias de evidencia normalizadas."""
 

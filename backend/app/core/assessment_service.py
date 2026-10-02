@@ -28,6 +28,7 @@ from app.adapters.documents.adapter import DocumentAdapter
 from app.adapters.terraform.adapter import TerraformAdapter
 from app.ai.client import AIClient, NullAIClient
 from app.core import jobs as job_service
+from app.core import reproducibility
 from app.core.queue import QUEUE_CORE, enqueue
 from app.core.repository import (
     evidence_to_row,
@@ -258,6 +259,13 @@ def run_pending_assessment(
             ai_client,
         )
         results = engine.evaluate_all(methodology, evidence)
+        assessment.reproducibility = reproducibility.build(
+            terraform=terraform_path is not None,
+            ansible=ansible_path is not None,
+            documents=documents_path is not None,
+            ai_client=ai_client,
+            ai_adjustment=apply_ai_adjustment,
+        )
 
         if apply_ai_adjustment and ai_client is not None:
             results = engine.apply_ai_adjustments(
@@ -574,6 +582,8 @@ def _apply_selective_refresh(
         for cid, criterion in methodology.criterios.items()
         if _criterion_uses_surveillance(criterion)
     }
+    # Lo no afectado se reusa tal cual (incluido lo derivado de IA): hereda con que se calculo.
+    assessment.reproducibility = previous.reproducibility
 
     # 1. Fuentes (trazabilidad) y evidencia base (todo menos vigilancia), con remapeo de ids.
     for source in previous.sources:
@@ -685,6 +695,10 @@ def generate_plans(
             .filter_by(assessment_id=assessment.previous_assessment_id)
             .all()
         }
+    if ai_client is not None:
+        assessment.reproducibility = reproducibility.with_plans_ai(
+            assessment.reproducibility, ai_client
+        )
     session.query(PlanRow).filter_by(assessment_id=assessment_id).delete()
     rows = [plan_to_row(plan, assessment_id=assessment_id) for plan in plans]
     for row in rows:

@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from app.ai.calllog import call_context
 from app.ai.client import AIClient
 from app.ai.schemas import AdjustmentResponse
 from app.evaluation.schemas import CriterionResult, Estado
@@ -62,6 +63,17 @@ def _degraded(result: CriterionResult) -> CriterionResult:
     return result.model_copy(update={"degradado": True})
 
 
+def is_adjustable(criterion: CriterionDefinition, result: CriterionResult) -> bool:
+    """Si `adjust` llamaria a la IA para este resultado (J1/R4): ajustable, estado que lo admite
+    y con puntaje base."""
+
+    return (
+        criterion.ai_adjustable
+        and result.estado in _ADJUSTABLE_STATES
+        and result.base_score is not None
+    )
+
+
 def adjust(
     client: AIClient,
     criterion: CriterionDefinition,
@@ -77,13 +89,13 @@ def adjust(
     `ai_adjustable` o el estado no lo admite: eso no es un fallo de IA, es la regla J1/R4.
     """
 
-    if not criterion.ai_adjustable or result.estado not in _ADJUSTABLE_STATES:
+    if not is_adjustable(criterion, result):
         return result
-    if result.base_score is None:
-        return result
+    assert result.base_score is not None
 
     user_prompt = _build_user_prompt(criterion, result, evidence_by_id, context, divergencia_maxima)
-    raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
+    with call_context(paso="U2", prompt_version=PROMPT_VERSION, criterion_id=criterion.id):
+        raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
     if raw is None:
         return _degraded(result)
 

@@ -268,5 +268,6 @@ Una evaluación registra:
 - Versión de adaptadores/parsers.
 - Modelo y versión de prompt de IA (para ajustes y extracción).
 
-Con eso, dos evaluaciones son comparables y un cambio de puntaje se puede atribuir a: nueva evidencia,
+Implementado en `assessments.reproducibility` (adaptador y parser por fuente; modelo y prompt de
+IA solo si participó), docs/09 §37. Con eso, dos evaluaciones son comparables y un cambio de puntaje se puede atribuir a: nueva evidencia,
 nuevo criterio, nuevo parser o nuevo modelo.

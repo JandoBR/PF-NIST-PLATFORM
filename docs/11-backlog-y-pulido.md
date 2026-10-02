@@ -168,15 +168,17 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   `brecha_ref` y "condición de cierre" son opcionales): `brecha_ref` (disparador) en el plan, "condición de cierre",
   registrar motivo/verificación al cerrar un incidente y validar las **transiciones de estado**
   (`PATCH` hoy permite cualquier estado→cualquier estado) (docs/05 §4.3, docs/08 §4/§7).
-- [ ] OP-12 · (P1) **Contratos de IA**: validación de formatos (docs/05 §2.3 E5), reintento con backoff
-  (hoy `continue` sin espera), registro por llamada (`prompt_version`, `criterion_id`, duración,
-  resultado) y `max_criterios_ajustados_por_evaluacion` en `settings.yml`.
+- [x] OP-12 · **Contratos de IA**. Hecho (docs/09 §37): reintento con backoff exponencial (1 s, 2 s),
+  registro JSON por llamada (`app.ai.calls`: paso, `prompt_version`, `criterion_id`/`doc_id`,
+  resultado, intentos, duración, tokens), validación E5 de fechas/frecuencias/roles y
+  `ia.max_criterios_ajustados_por_evaluacion` en `settings.yml` (desactivado por defecto).
 - [ ] OP-13 · **`schema_version` en el contrato de mensaje de la cola** (P2): protege la
   compatibilidad cuando `api` y workers se despliegan por separado (docs/04 §3.1). El resto de OP-13
   (`evidence_definitions`/`criteria_catalog`, `incidents.pattern_ids`, `log_patterns.evidence_id`,
   `Source` por archivo) pasó a docs/12 §2.
-- [ ] OP-14 · (P1) **Reproducibilidad**: persistir versión de adaptador/parser y de prompt/modelo de IA por
-  evaluación (docs/01 §10); hoy solo `methodology_version` (OP-02 cubre la tabla de ajustes).
+- [x] OP-14 · **Reproducibilidad**. Hecho (docs/09 §37): `assessments.reproducibility` guarda
+  versión de adaptador y parser por fuente y, si la IA participó, modelo y versión de prompt de
+  extracción/ajuste/planes (docs/01 §10). Expuesto en `GET /assessments/{id}`.
 - [ ] OP-15 · **Contrato menor de evidencia** (P2; lo útil es `line_start/line_end`, el resto es
   cosmético): llenar `Locator.line_start/line_end`, registrar
   `resuelto_por: parser`, registrar la limitación de recursos Terraform no soportados y alinear
@@ -224,13 +226,13 @@ Criterio: primero lo que hace el motor más honesto y reproducible, luego la cap
 demostrable.
 
 1. ~~**CR-06** y **AMP-05**~~ (hechos, docs/09 §36).
-2. **OP-12** y **OP-14**: capa de IA acotada, auditable y reproducible.
+2. ~~**OP-12** y **OP-14**~~ (hechos, docs/09 §37).
 3. **OP-04 (contradicciones) + TS-03**, **TS-01**, **TS-02** y **AMP-02**: lo más demostrable y lo
    que respalda las afirmaciones del diseño.
 4. Pulido barato: **FN-03**, **FN-07**, **FN-01 + API-03**, **OP-05 + FN-08**, **OP-11** (transiciones
    y motivo de cierre), **OP-15** (líneas), **OP-13** (`schema_version`), **API-04** (problem+json) y
    la decisión de **CR-07**.
 
-> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
-> incidente de OP-04. Ver docs/09 §23–§36.
+> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
+> incidente de OP-04. Ver docs/09 §23–§37.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).

@@ -28,7 +28,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
 | Multitenancy + auth (doc 10) | Login con token, tabla `users`, aislamiento por `org_id` en toda la API | Hecho |
-| Pruebas | 301 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
+| Pruebas | 322 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
 | API REST (doc 04 §6) | FastAPI + colas: crear/reevaluar/ingerir son asíncronos (202 + `GET /jobs/{id}`) | Hecho |
 | Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api + `worker-core`/`worker-logs` + frontend (7 servicios) | Hecho |
 
@@ -1261,3 +1261,41 @@ cambiarlo sin tocar código.
 **Verificación:** backend **301 tests** + `ruff` limpio (`test_cr06_declared_evidence.py`, casos
 nuevos en `test_aggregation.py`; `test_cr05_...::PR-02` actualizado porque el 100 ahora exige
 cifrado). Frontend `typecheck`/`lint` limpios.
+
+## 37. OP-12 y OP-14: capa de IA acotada, auditable y reproducible
+
+La IA es la única parte no determinista y de pago; los incidentes de §5 y §17-§18 mostraron que su
+consumo era difícil de ver. Se endureció sin tocar el contrato con el resto del sistema.
+
+**OP-12 · contratos de IA.**
+- **Backoff:** `DeepSeekClient` espera `1 s`, `2 s` entre reintentos (antes `continue` sin espera);
+  `sleep` es inyectable para probarlo sin dormir. Tras 3 intentos degrada (`None`), como antes.
+- **Log por llamada** (`app/ai/calllog.py`, logger `app.ai.calls`): una línea JSON con `paso`
+  (U1/U2/U3), `prompt_version`, `criterion_id` o `doc_id`, `resultado` (`ok`/`cache`/`degradado`),
+  motivo del fallo, intentos, duración y tokens. El cliente no sabe quién lo llama, así que el
+  contexto viaja en un `ContextVar` (`call_context`) que fijan extracción, ajuste y planes. La caché
+  también registra sus aciertos.
+- **E5 (docs/05 §2.3):** `extraction._sanitize_content` valida `ultima_revision` (ISO, entre 1990 y
+  mañana), `frecuencia` (mensual/trimestral/semestral/anual) y `roles` (lista de objetos con `rol`
+  no vacío y ≤120 caracteres). Lo inválido se quita y queda en `contenido._descartados`; **no**
+  se marca `limitations`, porque eso excluiría la afirmación entera de los criterios (`doc_claims`).
+- **Tope de ajustes:** `ia.max_criterios_ajustados_por_evaluacion` (`None` = sin límite, el
+  default). Con tope, `engine._criterios_a_ajustar` elige los de mayor peso (desempate por id); el
+  resto no se intenta y por tanto no queda `degradado`. `adjustment.is_adjustable` centraliza qué
+  resultado llamaría a la IA.
+- **Bug de logging encontrado al probar:** `alembic/env.py` llamaba `fileConfig(...)` con el default
+  `disable_existing_loggers=True`, así que correr migraciones desactivaba todos los loggers `app.*`
+  ya creados. Ahora `disable_existing_loggers=False`.
+
+**OP-14 · reproducibilidad.** Nueva columna `assessments.reproducibility` (JSON, migración
+`c41a7d2e9b10`) con, por fuente usada, la versión del adaptador (`ADAPTER_VERSION`, se sube a mano;
+Terraform arranca en `2` por CR-06) y de la librería que parsea (`python-hcl2`, `PyYAML`), y, solo si
+la IA participó de verdad, el modelo y la versión de prompt de cada paso (`extraccion`, `ajuste`,
+`planes`). El modelo se resuelve atravesando el envoltorio de caché. `generate_plans` con IA añade
+`planes`; el refresco selectivo hereda el valor de la evaluación anterior porque reutiliza lo
+derivado de IA. Evaluaciones previas quedan en `NULL`. El dashboard muestra una línea ("Sin IA
+(determinista)" o el modelo y prompts).
+
+**Verificación:** backend **322 tests** + `ruff` limpio (`test_op12_op14_ai_hardening.py`, más
+`test_api_assessments::test_detail_exposes_reproducibility`). Frontend `typecheck`/`lint` limpios.
+La migración se probó con la guarda `test_migrations`; no contra el Postgres de Docker.

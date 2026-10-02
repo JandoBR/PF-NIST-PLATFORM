@@ -39,6 +39,8 @@ class AssessmentDetail(AssessmentSummary):
     agregados_categoria: list[Aggregate]
     agregados_funcion: list[Aggregate]
     tier: TierEstimate
+    #: Versiones de adaptadores/parsers y, si participo, modelo y prompts de IA (OP-14).
+    reproducibility: dict | None = None
 
 
 class IncidentOut(BaseModel):

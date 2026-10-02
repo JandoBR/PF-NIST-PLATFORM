@@ -5,6 +5,8 @@ ia:
   alpha: 0.25
   divergencia_maxima: 20
   umbral_confianza_documental: 0.6
+  # Tope de criterios que U2 puede ajustar por evaluacion; omitido = sin limite (control de costo).
+  # max_criterios_ajustados_por_evaluacion: 10
 tier:
   t2: { CRI-GV-01: 50, CRI-GV-02: 50, CRI-ID-03: 50 }
   t3:

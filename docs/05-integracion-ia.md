@@ -97,7 +97,7 @@ Parámetros iniciales (en `methodology/settings.yml`):
 |---|---|---|
 | `alpha` | 0.25 | Peso de la IA. |
 | `divergencia_maxima` | 20 | Cuánto puede alejarse la IA del cálculo base. |
-| `max_criterios_ajustados_por_evaluacion` | sin límite en prototipo | Control de costo/tiempo. |
+| `max_criterios_ajustados_por_evaluacion` | sin límite por defecto (`ia.max_criterios_ajustados_por_evaluacion` en `settings.yml`) | Control de costo/tiempo. Con tope, se ajustan los criterios de mayor peso (desempate por id); el resto conserva S = B sin marcarse `degradado`. |
 
 ### 3.3 Reglas de aplicación
 

@@ -84,6 +84,7 @@ def _assessment_detail(
         agregados_categoria=categorias,
         agregados_funcion=funciones,
         tier=tier_estimate,
+        reproducibility=assessment.reproducibility,
     )
 
 

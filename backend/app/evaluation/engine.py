@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from app.ai.adjustment import adjust
+from app.ai.adjustment import adjust, is_adjustable
 from app.ai.client import AIClient
 from app.evaluation.rules import (
     de01_monitoring,
@@ -117,6 +117,23 @@ def evaluate_only(
     ]
 
 
+def _criterios_a_ajustar(methodology: Methodology, results: list[CriterionResult]) -> set[str]:
+    """Ids que U2 intentara ajustar, respetando `max_criterios_ajustados_por_evaluacion`: si hay
+    mas candidatos que el tope, los de mayor peso (desempate por id), de forma determinista."""
+
+    candidatos = [
+        r.criterion_id
+        for r in results
+        if (c := methodology.criterios.get(r.criterion_id)) is not None and is_adjustable(c, r)
+    ]
+    tope = methodology.settings.ia.max_criterios_ajustados_por_evaluacion
+    if tope is not None and len(candidatos) > tope:
+        candidatos = sorted(
+            candidatos, key=lambda cid: (-methodology.criterios[cid].peso, cid)
+        )[: max(tope, 0)]
+    return set(candidatos)
+
+
 def apply_ai_adjustments(
     methodology: Methodology,
     results: list[CriterionResult],
@@ -130,10 +147,12 @@ def apply_ai_adjustments(
     alpha = methodology.settings.ia.alpha
     divergencia_maxima = methodology.settings.ia.divergencia_maxima
 
+    permitidos = _criterios_a_ajustar(methodology, results)
+
     adjusted = []
     for result in results:
         criterion = methodology.criterios.get(result.criterion_id)
-        if criterion is None:
+        if criterion is None or result.criterion_id not in permitidos:
             adjusted.append(result)
             continue
         adjusted.append(

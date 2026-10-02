@@ -76,6 +76,16 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
         {assessment.estado === 'en_progreso' || assessment.estado === 'pendiente'
           ? 'Evaluación en curso…'
           : `Evaluación ${assessment.estado}`}
+        {assessment.reproducibility && (
+          <span className="ml-2 text-slate-600">
+            ·{' '}
+            {assessment.reproducibility.ai
+              ? `IA: ${Object.entries(assessment.reproducibility.ai)
+                  .map(([k, v]) => (k === 'modelo' ? v : `${k} ${v}`))
+                  .join(' · ')}`
+              : 'Sin IA (determinista)'}
+          </span>
+        )}
       </p>
 
       {/* Tarjetas de resumen */}

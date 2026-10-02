@@ -12,6 +12,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from app.ai.calllog import call_context
 from app.ai.client import AIClient
 from app.ai.schemas import PlanContentResponse
 from app.methodology.schemas import CriterionDefinition
@@ -53,7 +54,8 @@ def generate_plan_content(
     """Nunca devuelve None: degrada a la plantilla del criterio si la IA no es usable."""
 
     user_prompt = _build_user_prompt(criterion, severidad, score, evidence_ids)
-    raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
+    with call_context(paso="U3", prompt_version=PROMPT_VERSION, criterion_id=criterion.id):
+        raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
     if raw is None:
         return _template_fallback(criterion)
 

@@ -8,7 +8,11 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
+from collections.abc import Callable
 from typing import Protocol
+
+from app.ai.calllog import log_call
 
 logger = logging.getLogger("app.ai.client")
 
@@ -16,6 +20,8 @@ DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEFAULT_TIMEOUT_SECONDS = 60
 MAX_RETRIES = 2
+#: Espera antes del reintento n (1-based): BACKOFF_BASE_SECONDS * 2**(n-1) -> 1 s, 2 s (docs/05 §5).
+BACKOFF_BASE_SECONDS = 1.0
 
 
 class AIClient(Protocol):
@@ -37,7 +43,9 @@ class DeepSeekClient:
         model: str | None = None,
         base_url: str | None = None,
         timeout: int = DEFAULT_TIMEOUT_SECONDS,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
+        self._sleep = sleep
         api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
         if not api_key:
             raise ValueError("DEEPSEEK_API_KEY no configurada")
@@ -49,7 +57,13 @@ class DeepSeekClient:
         self.model = model or os.environ.get("DEEPSEEK_MODEL", DEFAULT_MODEL)
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
-        for _ in range(MAX_RETRIES + 1):
+        inicio = time.monotonic()
+        motivo = "sin_intentos"
+        intentos = 0
+        for intento in range(MAX_RETRIES + 1):
+            if intento > 0:
+                self._sleep(BACKOFF_BASE_SECONDS * 2 ** (intento - 1))
+            intentos += 1
             try:
                 response = self._client.chat.completions.create(
                     model=self.model,
@@ -61,14 +75,21 @@ class DeepSeekClient:
                     temperature=0.0,
                     max_tokens=2000,
                 )
-            except Exception:  # error transitorio: reintentar, nunca propagar (docs/05 §5)
+            except Exception as exc:  # error transitorio: reintentar, nunca propagar (docs/05 §5)
+                motivo = f"error:{type(exc).__name__}"
                 continue
 
             # docs/09: la API devuelve `usage` en cada respuesta; sin loguearlo, el consumo real
             # (tokens) es invisible desde el proceso -- solo se veria en la plataforma de DeepSeek,
             # y alli depende de que key/cuenta sea la que realmente se uso.
             usage = getattr(response, "usage", None)
+            tokens = None
             if usage is not None:
+                tokens = {
+                    "prompt": usage.prompt_tokens,
+                    "completion": usage.completion_tokens,
+                    "total": usage.total_tokens,
+                }
                 logger.info(
                     "DeepSeek %s tokens: prompt=%s completion=%s total=%s",
                     self.model,
@@ -79,11 +100,29 @@ class DeepSeekClient:
 
             content = response.choices[0].message.content
             if not content:
+                motivo = "respuesta_vacia"
                 continue
             try:
-                return json.loads(content)
+                parsed = json.loads(content)
             except json.JSONDecodeError:
+                motivo = "json_invalido"
                 continue
+            log_call(
+                resultado="ok",
+                modelo=self.model,
+                intentos=intentos,
+                duracion_ms=round((time.monotonic() - inicio) * 1000),
+                tokens=tokens,
+            )
+            return parsed
+
+        log_call(
+            resultado="degradado",
+            motivo=motivo,
+            modelo=self.model,
+            intentos=intentos,
+            duracion_ms=round((time.monotonic() - inicio) * 1000),
+        )
         return None
 
 

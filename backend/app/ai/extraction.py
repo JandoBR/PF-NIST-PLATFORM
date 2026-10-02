@@ -6,11 +6,12 @@ filtra y normaliza; la regla de cada criterio vive en `app/evaluation/rules`.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from pydantic import ValidationError
 
+from app.ai.calllog import call_context
 from app.ai.client import AIClient
 from app.ai.schemas import ExtractionResponse
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
@@ -51,6 +52,58 @@ _CONTENT_FIELDS: dict[str, str] = {
 }
 
 
+#: Frecuencias de revision aceptadas (docs/05 §2.3 E5); otro valor se descarta.
+_FRECUENCIAS = {"mensual", "trimestral", "semestral", "anual"}
+_FECHA_MINIMA = date(1990, 1, 1)
+_ROL_MAX_CHARS = 120
+
+
+def _sanitize_content(tipo: str, contenido: dict) -> dict:
+    """E5 (docs/05 §2.3): campos de fecha/rol se validan contra formatos esperados y los valores
+    absurdos se descartan. El campo descartado se quita (los criterios lo ven como ausente) y queda
+    anotado en `_descartados`; la afirmacion no se invalida entera."""
+
+    limpio = dict(contenido)
+    descartados: list[str] = []
+
+    if tipo == "policy_review":
+        ultima = limpio.get("ultima_revision")
+        if ultima is not None:
+            try:
+                fecha = date.fromisoformat(str(ultima))
+                valida = _FECHA_MINIMA <= fecha <= date.today() + timedelta(days=1)
+            except ValueError:
+                valida = False
+            if not valida:
+                limpio["ultima_revision"] = None
+                descartados.append(f"ultima_revision={ultima!r}: fecha invalida o fuera de rango")
+        frecuencia = limpio.get("frecuencia")
+        if frecuencia is not None and str(frecuencia).lower() not in _FRECUENCIAS:
+            limpio["frecuencia"] = None
+            descartados.append(f"frecuencia={frecuencia!r}: no es una frecuencia reconocida")
+
+    if tipo == "role_assigned" and "roles" in limpio:
+        roles = limpio["roles"]
+        if not isinstance(roles, list):
+            limpio.pop("roles")
+            descartados.append("roles: se esperaba una lista")
+        else:
+            validos = [
+                r
+                for r in roles
+                if isinstance(r, dict)
+                and isinstance(r.get("rol"), str)
+                and 0 < len(r["rol"].strip()) <= _ROL_MAX_CHARS
+            ]
+            if len(validos) != len(roles):
+                descartados.append(f"roles: {len(roles) - len(validos)} entrada(s) invalida(s)")
+            limpio["roles"] = validos
+
+    if descartados:
+        limpio["_descartados"] = descartados
+    return limpio
+
+
 def _contenido_esperado(tipos: list[str]) -> str:
     return "\n".join(
         f"- {tipo}: {_CONTENT_FIELDS.get(tipo, 'campos que describan la afirmacion')}"
@@ -82,7 +135,8 @@ def extract_claims(
     """Ejecuta U1 sobre un chunk y devuelve evidencia `doc.claim` (reglas E1-E7, docs/05 §2.3)."""
 
     user_prompt = _build_user_prompt(chunk_text, tipos_solicitados, doc_id)
-    raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
+    with call_context(paso="U1", prompt_version=PROMPT_VERSION, doc_id=doc_id):
+        raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
     if raw is None:
         return []  # degradado: sin respuesta util, no se inventa evidencia (E4/J4)
 
@@ -124,7 +178,7 @@ def extract_claims(
                 scope=scope,
                 value={
                     "tipo_afirmacion": claim.tipo,
-                    "contenido": claim.contenido,
+                    "contenido": _sanitize_content(claim.tipo, claim.contenido),
                     "encontrado": claim.encontrado,
                     "confianza": claim.confianza,
                 },

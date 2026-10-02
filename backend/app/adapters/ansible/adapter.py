@@ -60,6 +60,10 @@ def _any_module_key(task: dict) -> str | None:
     return None
 
 
+#: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
+ADAPTER_VERSION = "1"
+
+
 class AnsibleAdapter:
     """Convierte uno o mas playbooks YAML en instancias de evidencia normalizadas."""
 

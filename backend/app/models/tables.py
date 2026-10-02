@@ -69,6 +69,9 @@ class Assessment(Base):
         ForeignKey("assessments.id"), nullable=True
     )
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Con que se calculo (versiones de adaptadores/parsers y, si participo, modelo y prompts de
+    #: IA); ver `app/core/reproducibility.py`. `None` en evaluaciones anteriores a OP-14.
+    reproducibility: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

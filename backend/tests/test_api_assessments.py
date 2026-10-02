@@ -277,3 +277,10 @@ def test_live_ai_guard_blocks_ai_adjust_with_a_real_key(api_client, monkeypatch)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-real-for-test")
     response = _upload_terraform(api_client, "good", ai_adjust="true")
     assert response.status_code == 409
+
+
+def test_detail_exposes_reproducibility(api_client, db_session, methodology, fake_redis):
+    detail = _create_and_complete(api_client, db_session, methodology, fake_redis, "good")
+    info = detail["reproducibility"]
+    assert info["adapters"]["terraform"]["adapter"] == "2"
+    assert info["ai"] is None

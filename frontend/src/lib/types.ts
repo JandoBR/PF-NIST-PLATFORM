@@ -120,6 +120,10 @@ export interface AssessmentDetail extends AssessmentSummary {
   agregados_categoria: Aggregate[];
   agregados_funcion: Aggregate[];
   tier: TierEstimate;
+  reproducibility?: {
+    adapters: Record<string, { adapter: string; parser?: string }>;
+    ai: Record<string, string | null> | null;
+  } | null;
 }
 
 export interface IncidentOut {

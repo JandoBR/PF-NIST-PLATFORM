@@ -46,6 +46,10 @@ class IASettings(BaseModel):
     alpha: float
     divergencia_maxima: float
     umbral_confianza_documental: float
+    #: Tope de criterios que U2 puede ajustar por evaluacion (control de costo/tiempo, docs/05 §3).
+    #: `None` = sin limite. Si hay mas candidatos, se ajustan los de mayor peso (desempate por id);
+    #: el resto conserva S = B sin marcarse `degradado` (no se intento).
+    max_criterios_ajustados_por_evaluacion: int | None = None
 
 
 class TierSettings(BaseModel):

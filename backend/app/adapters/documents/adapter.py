@@ -16,6 +16,10 @@ from app.schemas.evidence import EvidenceInstance
 DEFAULT_MAX_CHUNKS_PER_DOCUMENT = 20
 
 
+#: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
+ADAPTER_VERSION = "1"
+
+
 class DocumentAdapter:
     """Convierte uno o mas documentos en evidencia `doc.claim`, via el cliente de IA inyectado."""
 

@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from app.ai.calllog import log_call
+
 if TYPE_CHECKING:
     from app.ai.client import AIClient
 
@@ -33,6 +35,7 @@ class CachingAIClient:
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
         cache_file = self._cache_file(system_prompt, user_prompt)
         if cache_file.exists():
+            log_call(resultado="cache")
             return json.loads(cache_file.read_text(encoding="utf-8"))
 
         result = self._inner.complete_json(system_prompt, user_prompt)
