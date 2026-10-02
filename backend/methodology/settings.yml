@@ -24,3 +24,6 @@ vigilancia:
   # Umbrales de disparadores operativos (docs/08 §5): N, W y plazos son metodologia, no modelo.
   auth_failures_burst: { n: 5, ventana_minutos: 5 }
   plazo_escalamiento_minutos: 30
+  # Patrones nuevos que debe agregar una ingesta para reevaluar la madurez del org+scope
+  # automaticamente (docs/06 §6, docs/08 §8). Reingerir el mismo log no suma y no dispara.
+  refresco_min_patrones_nuevos: 3

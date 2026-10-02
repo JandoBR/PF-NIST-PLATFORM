@@ -108,10 +108,19 @@ def run_pending_jobs(db_session, methodology, fake_redis: FakeRedis) -> None:
     from app.workers import core as worker_core
     from app.workers import logs as worker_logs
 
-    for message in fake_redis.drain(QUEUE_CORE):
-        worker_core.process_message(db_session, methodology, message)
-    for message in fake_redis.drain(QUEUE_LOGS):
-        worker_logs.process_message(db_session, methodology, message)
+    # Loop: procesar logs puede encolar un `assessment_run` en core (refresco automatico de
+    # madurez, docs/08 §8), y ese a su vez no encola mas; se drena hasta que ambas colas quedan
+    # vacias para no dejar trabajo a medias en un test.
+    while True:
+        processed = False
+        for message in fake_redis.drain(QUEUE_LOGS):
+            worker_logs.process_message(db_session, methodology, message, fake_redis)
+            processed = True
+        for message in fake_redis.drain(QUEUE_CORE):
+            worker_core.process_message(db_session, methodology, message)
+            processed = True
+        if not processed:
+            break
 
 
 def _client(db_session, fake_redis, *, authenticated: bool, auth_user: User | None = None):

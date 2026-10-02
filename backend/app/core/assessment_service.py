@@ -15,7 +15,7 @@ lo que una correccion aplicada a esos mismos archivos se refleja en la siguiente
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -26,6 +26,8 @@ from app.adapters.ansible.adapter import AnsibleAdapter
 from app.adapters.documents.adapter import DocumentAdapter
 from app.adapters.terraform.adapter import TerraformAdapter
 from app.ai.client import AIClient, NullAIClient
+from app.core import jobs as job_service
+from app.core.queue import QUEUE_CORE, enqueue
 from app.core.repository import (
     evidence_to_row,
     plan_to_row,
@@ -43,6 +45,7 @@ from app.models.tables import (
     Event,
     EvidenceRow,
     Incident,
+    Job,
     LogPatternRow,
     Organization,
     PlanRow,
@@ -379,6 +382,83 @@ def reevaluate(
     )
 
 
+def enqueue_reevaluation(
+    session: Session,
+    methodology: Methodology,
+    redis_client,
+    previous_assessment_id: str,
+    *,
+    apply_ai_adjustment: bool = False,
+    context: dict[str, Any] | None = None,
+) -> tuple[Assessment, Job]:
+    """Crea una reevaluacion y encola su `assessment_run` en la cola del core. Lo usan
+    `POST /assessments/{id}/reevaluate` y el refresco automatico de madurez (docs/08 §8)."""
+
+    assessment, paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
+    job = job_service.create_job(session, "assessment_run", assessment_id=assessment.id)
+    enqueue(
+        redis_client,
+        QUEUE_CORE,
+        {
+            "job_id": job.id,
+            "assessment_id": assessment.id,
+            "terraform_path": str(paths["terraform_path"]) if paths["terraform_path"] else None,
+            "ansible_path": str(paths["ansible_path"]) if paths["ansible_path"] else None,
+            "documents_path": str(paths["documents_path"]) if paths["documents_path"] else None,
+            "ai_requested": apply_ai_adjustment,
+            "apply_ai_adjustment": apply_ai_adjustment,
+            "context": context or {},
+        },
+    )
+    return assessment, job
+
+
+def maybe_enqueue_maturity_refresh(
+    session: Session,
+    methodology: Methodology,
+    redis_client,
+    *,
+    org_id: str,
+    scope: str,
+    nuevos_patrones: int,
+) -> Assessment | None:
+    """Refresco automatico de madurez al ingerir eventos (docs/06 §6, docs/08 §8): si la ingesta
+    agrego suficientes `log.pattern` nuevos para ese scope, encola una reevaluacion de la ultima
+    evaluacion completada del org+scope. `None` si no corresponde.
+
+    No dispara si: no hay evaluacion previa (nada que refrescar), no hay Redis, no se alcanza el
+    umbral (`settings.vigilancia.refresco_min_patrones_nuevos`) o ya hay una evaluacion en vuelo
+    para ese org+scope (evita apilar)."""
+
+    min_patrones = methodology.settings.vigilancia.refresco_min_patrones_nuevos
+    if redis_client is None or nuevos_patrones < min_patrones:
+        return None
+
+    in_flight = (
+        session.query(Assessment)
+        .filter(
+            Assessment.org_id == org_id,
+            Assessment.scope == scope,
+            Assessment.estado.in_(["pendiente", "en_progreso"]),
+        )
+        .first()
+    )
+    if in_flight is not None:
+        return None
+
+    previous = (
+        session.query(Assessment)
+        .filter_by(org_id=org_id, scope=scope, estado="completada")
+        .order_by(Assessment.creado_en.desc())
+        .first()
+    )
+    if previous is None:
+        return None
+
+    assessment, _ = enqueue_reevaluation(session, methodology, redis_client, previous.id)
+    return assessment
+
+
 def load_criterion_results(session: Session, assessment_id: str) -> list[CriterionResult]:
     rows = session.query(CriterionResultRow).filter_by(assessment_id=assessment_id).all()
     return [row_to_result(row) for row in rows]
@@ -458,6 +538,9 @@ class IngestResult:
     eventos_ingeridos: int
     nuevos_incidentes: list[Incident]
     incidentes_actualizados: list[Incident]
+    #: Patrones (`log.pattern`) realmente nuevos por scope, es decir la evidencia que consume la
+    #: madurez. Reingerir el mismo archivo da 0. Alimenta el refresco automatico (docs/08 §8).
+    patrones_nuevos_por_scope: dict[str, int] = field(default_factory=dict)
 
 
 def ingest_events(
@@ -484,6 +567,7 @@ def ingest_events(
 
     nuevos: list[Incident] = []
     actualizados: list[Incident] = []
+    patrones_nuevos_por_scope: dict[str, int] = {}
 
     for scope, eventos in por_scope.items():
         ya_ingeridos = {
@@ -515,6 +599,7 @@ def ingest_events(
             (row.patron, _naive(row.desde), _naive(row.hasta), row.conteo)
             for row in session.query(LogPatternRow).filter_by(org_id=org.id, scope=scope).all()
         }
+        agregados = 0
         for match in matches:
             clave = (match.patron, _naive(match.desde), _naive(match.hasta), match.conteo)
             if clave in patrones_existentes:
@@ -530,6 +615,8 @@ def ingest_events(
                     conteo=match.conteo,
                 )
             )
+            agregados += 1
+        patrones_nuevos_por_scope[scope] = agregados
         session.flush()
 
         triggers = evaluate_triggers(matches, methodology.settings.vigilancia, scope)
@@ -547,6 +634,7 @@ def ingest_events(
         eventos_ingeridos=len(raw_events),
         nuevos_incidentes=nuevos,
         incidentes_actualizados=actualizados,
+        patrones_nuevos_por_scope=patrones_nuevos_por_scope,
     )
 
 

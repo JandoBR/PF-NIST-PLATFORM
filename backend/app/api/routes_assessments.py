@@ -287,21 +287,13 @@ def reevaluate_assessment(
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
 
-    new_assessment, paths = svc.create_pending_reevaluation(session, methodology, assessment_id)
-    job = job_service.create_job(session, "assessment_run", assessment_id=new_assessment.id)
-    enqueue(
+    new_assessment, job = svc.enqueue_reevaluation(
+        session,
+        methodology,
         redis_client,
-        QUEUE_CORE,
-        {
-            "job_id": job.id,
-            "assessment_id": new_assessment.id,
-            "terraform_path": str(paths["terraform_path"]) if paths["terraform_path"] else None,
-            "ansible_path": str(paths["ansible_path"]) if paths["ansible_path"] else None,
-            "documents_path": str(paths["documents_path"]) if paths["documents_path"] else None,
-            "ai_requested": ai_adjust,
-            "apply_ai_adjustment": ai_adjust,
-            "context": json.loads(context),
-        },
+        assessment_id,
+        apply_ai_adjustment=ai_adjust,
+        context=json.loads(context),
     )
 
     return AssessmentAccepted(

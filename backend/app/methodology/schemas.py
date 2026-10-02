@@ -72,6 +72,10 @@ class VigilanciaSettings(BaseModel):
         default_factory=AuthFailuresBurstSettings
     )
     plazo_escalamiento_minutos: int = 30
+    #: Cuantos `log.pattern` nuevos (evidencia que consume la madurez) debe agregar una ingesta
+    #: para disparar una reevaluacion automatica del org+scope. Reingerir el mismo archivo agrega
+    #: 0 y no dispara. Default 3 = "cambio considerable"; configurable en settings.yml.
+    refresco_min_patrones_nuevos: int = 3
 
 
 class MethodologySettings(BaseModel):

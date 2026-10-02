@@ -34,7 +34,40 @@ logger = logging.getLogger("worker.logs")
 JOB_STALE_TIMEOUT_SECONDS = int(os.environ.get("JOB_STALE_TIMEOUT_SECONDS", "600"))
 
 
-def process_message(session: Session, methodology: Methodology, message: dict[str, Any]) -> None:
+def _maybe_refresh_maturity(
+    session: Session, methodology: Methodology, redis_client, result
+) -> None:
+    """Refresco automatico de madurez tras una ingesta (docs/06 §6, docs/08 §8). Best-effort: si
+    falla, la ingesta ya fue exitosa y no se debe marcar su job como fallido por esto."""
+
+    for scope, nuevos in result.patrones_nuevos_por_scope.items():
+        try:
+            refreshed = svc.maybe_enqueue_maturity_refresh(
+                session,
+                methodology,
+                redis_client,
+                org_id=result.org_id,
+                scope=scope,
+                nuevos_patrones=nuevos,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Refresco de madurez fallo (org %s, scope %s)", result.org_id, scope)
+            continue
+        if refreshed is not None:
+            logger.info(
+                "Refresco de madurez encolado (org %s, scope %s, assessment %s)",
+                result.org_id,
+                scope,
+                refreshed.id,
+            )
+
+
+def process_message(
+    session: Session,
+    methodology: Methodology,
+    message: dict[str, Any],
+    redis_client=None,
+) -> None:
     job = job_service.get_job(session, message["job_id"])
     if job is None:
         logger.warning("Job %s no existe (perdido o ya limpiado); se descarta.", message["job_id"])
@@ -46,13 +79,16 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
         ai_client = build_default_client() if ai_requested else None
         if ai_requested:
             logger.info("Job %s: IA %s", job.id, describe_client(ai_client))
-        svc.ingest_events(
+        result = svc.ingest_events(
             session,
             methodology,
             message["org_nombre"],
             Path(message["jsonl_path"]),
             ai_client=ai_client,
         )
+        # Antes de marcar el job como completado: que la evaluacion refrescada ya exista cuando el
+        # cliente que sondea vea "completado" (asi aparece en el historial enseguida).
+        _maybe_refresh_maturity(session, methodology, redis_client, result)
         job_service.mark_done(session, job)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Job %s (org %s) fallo", job.id, message.get("org_id"))
@@ -72,7 +108,7 @@ def main() -> None:
         session = session_factory()
         try:
             if message is not None:
-                process_message(session, methodology, message)
+                process_message(session, methodology, message, redis_client)
             job_service.reap_stale_jobs(session, "event_ingest", JOB_STALE_TIMEOUT_SECONDS)
         finally:
             session.close()
