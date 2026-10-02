@@ -110,6 +110,7 @@ Tipos de afirmación (`tipo_afirmacion`) usados por los criterios:
 | `escalation_path` | `{ niveles[], criterios[] }` *(declarado; aún no extraído por U1)* |
 | `notification_list` | `{ destinatarios[], criterios?, plazos? }` |
 | `backup_policy` | `{ respaldo, verificacion_integridad?, retencion? }` |
+| `exposure_policy` | `{ bases_publicas_permitidas: bool\|null, descripcion? }` (PR-05; contradicción con `tf.db_exposure.config`) |
 | `training_program` | `{ alcance, frecuencia }` *(declarado; aún no extraído por U1)* |
 | `data_inventory` | `{ activos[], tipos_datos[], clasificacion?, criticidad? }` |
 
