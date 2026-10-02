@@ -1,34 +1,39 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Settings2, Activity, LogOut, ListChecks } from 'lucide-react';
-import { getHealth } from '@/lib/api';
+import { ShieldCheck, Settings2, LogOut, ListChecks, Loader2 } from 'lucide-react';
+import { listJobs } from '@/lib/api';
 import type { AuthUser } from '@/lib/api';
 
 interface HeaderProps {
   onOpenSelector: () => void;
   user: AuthUser | null;
   onLogout: () => void;
-  /** Abre (o cierra) el historial de trabajos en segundo plano, colgado del indicador de la API. */
+  /** Abre (o cierra) el historial de trabajos en segundo plano. */
   onToggleJobs: () => void;
   jobsOpen: boolean;
 }
 
 export function Header({ onOpenSelector, user, onLogout, onToggleJobs, jobsOpen }: HeaderProps) {
-  const [apiOnline, setApiOnline] = useState<boolean | null>(null);
+  const [activeJobs, setActiveJobs] = useState(0);
 
+  // Cuenta los trabajos en curso para que el botón avise sin abrir la vista. Si la API no
+  // responde se deja el último valor: los errores de conexión ya se muestran donde se usan.
   useEffect(() => {
+    if (!user) return;
     let active = true;
     const check = () => {
-      getHealth()
-        .then(() => active && setApiOnline(true))
-        .catch(() => active && setApiOnline(false));
+      listJobs({ limit: 50 })
+        .then((jobs) => {
+          if (active) setActiveJobs(jobs.filter((j) => j.estado === 'pendiente' || j.estado === 'en_progreso').length);
+        })
+        .catch(() => undefined);
     };
     check();
-    const interval = window.setInterval(check, 20000);
+    const interval = window.setInterval(check, 10000);
     return () => {
       active = false;
       window.clearInterval(interval);
     };
-  }, []);
+  }, [user]);
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-ink-950/80 backdrop-blur-xl">
@@ -52,24 +57,23 @@ export function Header({ onOpenSelector, user, onLogout, onToggleJobs, jobsOpen 
             onClick={onToggleJobs}
             title="Trabajos en segundo plano"
             aria-pressed={jobsOpen}
-            className={`hidden items-center gap-3 rounded-lg border px-3.5 py-2 transition-colors md:flex ${
+            className={`btn-ghost border ${
               jobsOpen
-                ? 'border-cyan-500/40 bg-cyan-500/10'
-                : 'border-white/[0.06] bg-ink-900/60 hover:border-white/[0.14]'
+                ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-200'
+                : 'border-white/[0.06] bg-ink-900/60'
             }`}
           >
-            <Stat
-              icon={
-                <Activity
-                  className={`h-3.5 w-3.5 ${
-                    apiOnline === null ? 'text-slate-500' : apiOnline ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                />
-              }
-              label="API"
-              value={apiOnline === null ? 'Verificando…' : apiOnline ? 'En línea' : 'Sin conexión'}
-            />
-            <ListChecks className={`h-3.5 w-3.5 ${jobsOpen ? 'text-cyan-300' : 'text-slate-500'}`} />
+            {activeJobs > 0 ? (
+              <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+            ) : (
+              <ListChecks className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">Trabajos</span>
+            {activeJobs > 0 && (
+              <span className="rounded-full bg-cyan-500/20 px-1.5 text-xs font-semibold text-cyan-200">
+                {activeJobs}
+              </span>
+            )}
           </button>
 
           {user && (
@@ -98,15 +102,5 @@ export function Header({ onOpenSelector, user, onLogout, onToggleJobs, jobsOpen 
         </div>
       </div>
     </header>
-  );
-}
-
-function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      {icon}
-      <span className="text-xs text-slate-500">{label}</span>
-      <span className="text-xs font-semibold text-slate-200">{value}</span>
-    </div>
   );
 }

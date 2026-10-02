@@ -1513,9 +1513,10 @@ migración**.
   ligada). Sin esto el historial mostraría "pendiente" un job que nadie va a tomar, justo el caso en que más
   se necesita. La lógica se extrajo a `_reap_if_stale` y la comparten ambos endpoints.
 - **UI:** vista "Trabajos" (`JobHistory.tsx`), independiente de la evaluación activa como la de eventos. No es una
-  pestaña: es un detalle operativo, no parte del análisis, así que se abre desde el indicador "API · En línea" de
-  la cabecera (que vuelve a cerrarla; la vista también tiene "Volver"). El indicador solo se muestra en pantallas
-  anchas (`md`), igual que antes. La vista muestra:
+  pestaña: es un detalle operativo, no parte del análisis. Se abre con un botón "Trabajos" en la cabecera, que
+  **reemplaza al indicador "API · En línea"** (no aportaba nada: si la API cae, cada pantalla ya muestra
+  "No se pudo contactar la API"). El botón se ve en todos los tamaños de pantalla, cuenta los trabajos en curso
+  (consulta `GET /jobs` cada 10 s) y gira mientras haya alguno; la vista tiene "Volver". La vista muestra:
   fecha, tipo, estado (con progreso si está en curso), error y, si el job completó una evaluación que está
   en el historial, un acceso para abrirla. Filtro por estado; se refresca sola cada 3 s mientras haya jobs
   activos.
