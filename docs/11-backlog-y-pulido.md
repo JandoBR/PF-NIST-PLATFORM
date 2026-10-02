@@ -101,7 +101,7 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## B. Funcionalidad pendiente (lo que reportó Claude)
 
-- [x] FN-01 · **Historial de jobs**. Hecho (docs/09 §45): `GET /jobs` y pestaña "Trabajos".
+- [x] FN-01 · **Historial de jobs**. Hecho (docs/09 §45): `GET /jobs` y vista "Trabajos" (se abre desde el indicador de la API en la cabecera).
 - [x] FN-09 · **Reintentar un job fallido** (P1). Hecho (docs/09 §46): `POST /jobs/{id}/retry` y botón
   "Reintentar". Para poder hacerlo, los jobs ahora guardan sus entradas (`jobs.payload`).
 - [ ] FN-03 · **Ingesta "nuevos vs actualizados"** (P2): la conversión a async perdió ese detalle

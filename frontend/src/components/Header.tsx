@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Settings2, Activity, LogOut } from 'lucide-react';
+import { ShieldCheck, Settings2, Activity, LogOut, ListChecks } from 'lucide-react';
 import { getHealth } from '@/lib/api';
 import type { AuthUser } from '@/lib/api';
 
@@ -7,9 +7,12 @@ interface HeaderProps {
   onOpenSelector: () => void;
   user: AuthUser | null;
   onLogout: () => void;
+  /** Abre (o cierra) el historial de trabajos en segundo plano, colgado del indicador de la API. */
+  onToggleJobs: () => void;
+  jobsOpen: boolean;
 }
 
-export function Header({ onOpenSelector, user, onLogout }: HeaderProps) {
+export function Header({ onOpenSelector, user, onLogout, onToggleJobs, jobsOpen }: HeaderProps) {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -45,7 +48,16 @@ export function Header({ onOpenSelector, user, onLogout }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="hidden items-center gap-4 rounded-lg border border-white/[0.06] bg-ink-900/60 px-3.5 py-2 md:flex">
+          <button
+            onClick={onToggleJobs}
+            title="Trabajos en segundo plano"
+            aria-pressed={jobsOpen}
+            className={`hidden items-center gap-3 rounded-lg border px-3.5 py-2 transition-colors md:flex ${
+              jobsOpen
+                ? 'border-cyan-500/40 bg-cyan-500/10'
+                : 'border-white/[0.06] bg-ink-900/60 hover:border-white/[0.14]'
+            }`}
+          >
             <Stat
               icon={
                 <Activity
@@ -57,7 +69,8 @@ export function Header({ onOpenSelector, user, onLogout }: HeaderProps) {
               label="API"
               value={apiOnline === null ? 'Verificando…' : apiOnline ? 'En línea' : 'Sin conexión'}
             />
-          </div>
+            <ListChecks className={`h-3.5 w-3.5 ${jobsOpen ? 'text-cyan-300' : 'text-slate-500'}`} />
+          </button>
 
           {user && (
             <div className="hidden items-center gap-2 rounded-lg border border-white/[0.06] bg-ink-900/60 px-3 py-1.5 sm:flex">

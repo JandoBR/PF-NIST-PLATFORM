@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   RefreshCw,
   History,
-  ListChecks,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Login } from '@/components/Login';
@@ -37,7 +36,6 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'recommendations', label: 'Recomendaciones', icon: <Brain className="h-4 w-4" /> },
   { key: 'threats', label: 'Eventos e Incidentes', icon: <Radar className="h-4 w-4" /> },
   { key: 'compare', label: 'Comparar', icon: <GitCompare className="h-4 w-4" /> },
-  { key: 'jobs', label: 'Trabajos', icon: <ListChecks className="h-4 w-4" /> },
 ];
 
 //: Id de la evaluación activa, para que al recargar la página se restaure en vez de perderse.
@@ -194,6 +192,8 @@ function App() {
         onOpenSelector={() => setSelectorOpen(true)}
         user={user}
         onLogout={handleLogout}
+        jobsOpen={tab === 'jobs'}
+        onToggleJobs={() => setTab((current) => (current === 'jobs' ? 'dashboard' : 'jobs'))}
       />
 
       {(assessment || history.length > 0) && (
@@ -277,6 +277,7 @@ function App() {
         ) : tab === 'jobs' ? (
           // Como los eventos, el historial de trabajos es de la organización: se ve sin evaluación.
           <JobHistory
+            onClose={() => setTab('dashboard')}
             onOpenAssessment={(id) => void selectAssessment(id)}
             openableIds={new Set(history.map((a) => a.id))}
           />

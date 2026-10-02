@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, ExternalLink, Loader2, RefreshCw, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ExternalLink, Loader2, RefreshCw, RotateCcw } from 'lucide-react';
 import { listJobs, retryJob } from '@/lib/api';
 import type { JobEstado, JobOut } from '@/lib/types';
 import { JOB_ESTADO_META, JOB_TIPO_LABEL } from '@/lib/ui';
 
 interface Props {
+  onClose: () => void;
   /** Abre la evaluación ligada a un job (solo si ya está en el historial de evaluaciones). */
   onOpenAssessment: (assessmentId: string) => void;
   openableIds: Set<string>;
@@ -20,7 +21,7 @@ function formatWhen(iso: string): string {
 
 /** Historial de trabajos en segundo plano (evaluaciones e ingestas de eventos): qué corrió, en qué
  * estado quedó y por qué falló (FN-01). Se refresca solo mientras haya jobs activos. */
-export function JobHistory({ onOpenAssessment, openableIds }: Props) {
+export function JobHistory({ onClose, onOpenAssessment, openableIds }: Props) {
   const [jobs, setJobs] = useState<JobOut[] | null>(null);
   const [estado, setEstado] = useState<JobEstado | 'all'>('all');
   const [loading, setLoading] = useState(false);
@@ -74,6 +75,12 @@ export function JobHistory({ onOpenAssessment, openableIds }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
+          <button
+            onClick={onClose}
+            className="mb-1 flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300"
+          >
+            <ArrowLeft className="h-3 w-3" /> Volver
+          </button>
           <h2 className="text-base font-semibold text-white">Trabajos</h2>
           <p className="text-xs text-slate-500">
             Evaluaciones e ingestas de eventos que corren en segundo plano.

@@ -1512,7 +1512,10 @@ migración**.
   quedaron colgados (mismas reglas y mismos timeouts que `GET /jobs/{id}`, y se falla la `Assessment`
   ligada). Sin esto el historial mostraría "pendiente" un job que nadie va a tomar, justo el caso en que más
   se necesita. La lógica se extrajo a `_reap_if_stale` y la comparten ambos endpoints.
-- **UI:** pestaña "Trabajos" (`JobHistory.tsx`), independiente de la evaluación activa como la de eventos:
+- **UI:** vista "Trabajos" (`JobHistory.tsx`), independiente de la evaluación activa como la de eventos. No es una
+  pestaña: es un detalle operativo, no parte del análisis, así que se abre desde el indicador "API · En línea" de
+  la cabecera (que vuelve a cerrarla; la vista también tiene "Volver"). El indicador solo se muestra en pantallas
+  anchas (`md`), igual que antes. La vista muestra:
   fecha, tipo, estado (con progreso si está en curso), error y, si el job completó una evaluación que está
   en el historial, un acceso para abrirla. Filtro por estado; se refresca sola cada 3 s mientras haya jobs
   activos.
@@ -1547,7 +1550,7 @@ usuario tenía que volver a subir todo. Se registró como **FN-09** (P1) y se hi
 - **El permiso de gasto no se hereda:** si el job usaba IA real, el reintento exige `confirm_live_ai` otra vez
   (mismo guard que al crearlo); la UI pide confirmación explícita antes de reintentar. `JobOut` gana
   `reintentable` y `usa_ia` para que la UI sepa cuándo mostrar el botón y cuándo advertir.
-- **UI:** botón "Reintentar" en las filas fallidas de la pestaña Trabajos.
+- **UI:** botón "Reintentar" en las filas fallidas de la vista Trabajos.
 - **Límites:** los jobs anteriores a esta migración no tienen payload y no son reintentables (se indica al
   intentarlo). El reintento es manual; no hay reintento automático.
 
