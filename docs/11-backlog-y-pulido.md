@@ -26,9 +26,10 @@ alcance.
 El botón de regenerar plantilla no tiene una función clara y hoy es redundante (los planes ya se
 generan desde la plantilla). Decidir: quitarlo, o dejarlo solo cuando no hay planes, o renombrarlo
 y explicar qué hace. Criterio: que ningún botón exista sin efecto perceptible.
-- **Hecho:** "Generar plan (plantilla)" se muestra **solo cuando no hay plan** (única forma de crearlo
-  desde la UI). Con un plan ya existente regenerar plantilla daría el mismo resultado, así que solo
-  queda "Regenerar con IA". Ver docs/09 §24.
+- **Hecho:** los planes (plantilla) se generan **solos** al completar la evaluación
+  (`run_pending_assessment`, docs/09 §25); se quitó el botón manual. En Recomendaciones solo queda
+  "Regenerar con IA" (explícito, sujeto al guard de costo). Provisional: a futuro se generará
+  directamente con IA y se eliminará la plantilla.
 
 ### [x] UI-03 · Toggles de IA momentáneos (P1)
 Los checkboxes de IA (U1/U2) son **por corrida**: existen para no gastar tokens, no son una

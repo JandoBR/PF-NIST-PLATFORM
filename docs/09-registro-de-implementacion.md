@@ -908,3 +908,28 @@ los hallazgos `contradiccion`/`limitacion`.
 **Verificación:** backend **214 tests** + `ruff` limpio (dos tests nuevos en
 `test_api_methodology_orgs.py`: cierre persiste el estado, estado inválido → 422). Frontend
 `typecheck`/`lint`/`build` limpios.
+
+## 25. Los planes se generan solos (plantilla), la IA sigue siendo explícita
+
+Los planes de un assessment no se generaban automáticamente: había que pedirlos con
+`POST /assessments/{id}/plans` (el botón "Generar plan (plantilla)"). Eso obligaba al usuario a un
+paso manual que un prototipo no debería exigir.
+
+**Cambio:** `run_pending_assessment` (el pipeline que corren el worker, la CLI y los tests) ahora
+llama a `generate_plans` **sin cliente de IA** al terminar, después de persistir los resultados. Es
+determinista y barato. Así, apenas una evaluación queda `completada`, ya tiene su plan de acción.
+
+**La IA sigue siendo explícita:** `POST /assessments/{id}/plans?use_ai=true` recalcula los planes
+con IA (sujeto al guard de costo, docs/05 §7). No hay nada que genere IA de forma implícita. Esta
+separación es **provisional de prototipo**: cuando la capa de IA esté probada, la intención es
+generar los planes directamente con IA y eliminar la plantilla (docs/11 UI-02).
+
+**Frontend:** se quitó el botón "Generar plan (plantilla)"; en Recomendaciones solo queda "Regenerar
+con IA". Si un hallazgo no tiene plan (evaluación anterior a este cambio), se muestra un aviso para
+reevaluar en vez de un botón manual.
+
+**Nota:** los planes de incidente ya se generaban solos en la ingesta (`generate_incident_plan`
+dentro de `ingest_events`); esto solo iguala el comportamiento para los planes de assessment.
+
+**Verificación:** backend **215 tests** + `ruff` limpio (nuevo
+`test_completed_assessment_already_has_template_plans`). Frontend `typecheck`/`lint`/`build` limpios.
