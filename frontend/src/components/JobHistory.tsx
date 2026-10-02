@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
-import { listJobs } from '@/lib/api';
+import { AlertTriangle, ExternalLink, Loader2, RefreshCw, RotateCcw } from 'lucide-react';
+import { listJobs, retryJob } from '@/lib/api';
 import type { JobEstado, JobOut } from '@/lib/types';
 import { JOB_ESTADO_META, JOB_TIPO_LABEL } from '@/lib/ui';
 
@@ -25,6 +25,7 @@ export function JobHistory({ onOpenAssessment, openableIds }: Props) {
   const [estado, setEstado] = useState<JobEstado | 'all'>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,6 +42,26 @@ export function JobHistory({ onOpenAssessment, openableIds }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function handleRetry(job: JobOut) {
+    if (
+      job.usa_ia &&
+      !window.confirm(
+        'Reintentar volverá a llamar a la IA real y puede generar costo. ¿Quieres continuar?'
+      )
+    )
+      return;
+    setRetrying(job.id);
+    try {
+      await retryJob(job.id, job.usa_ia);
+      setError(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo reintentar el trabajo.');
+    } finally {
+      setRetrying(null);
+    }
+  }
 
   const hasActive = jobs?.some((j) => ACTIVE.includes(j.estado)) ?? false;
   useEffect(() => {
@@ -109,6 +130,20 @@ export function JobHistory({ onOpenAssessment, openableIds }: Props) {
                     {job.estado === 'en_progreso' ? ` · ${job.progreso}%` : ''}
                   </span>
                   <div className="min-w-0 flex-1 text-xs text-rose-300">{job.error}</div>
+                  {job.reintentable && (
+                    <button
+                      onClick={() => void handleRetry(job)}
+                      disabled={retrying === job.id}
+                      className="flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200 disabled:opacity-50"
+                    >
+                      {retrying === job.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-3 w-3" />
+                      )}
+                      Reintentar
+                    </button>
+                  )}
                   {job.assessment_id && job.estado === 'completado' && openableIds.has(job.assessment_id) && (
                     <button
                       onClick={() => onOpenAssessment(job.assessment_id as string)}

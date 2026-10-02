@@ -107,6 +107,17 @@ class JobOut(BaseModel):
     creado_en: datetime
     tomado_en: datetime | None
     actualizado_en: datetime
+    #: Fallido y con las entradas guardadas (`POST /jobs/{id}/retry`, docs/11 FN-09).
+    reintentable: bool = False
+    #: El reintento volveria a llamar a la IA real (cuesta dinero).
+    usa_ia: bool = False
+
+    @classmethod
+    def from_job(cls, job) -> JobOut:
+        out = cls.model_validate(job)
+        out.reintentable = job.estado == "fallido" and job.payload is not None
+        out.usa_ia = bool((job.payload or {}).get("ai_requested"))
+        return out
 
 
 class AssessmentAccepted(BaseModel):

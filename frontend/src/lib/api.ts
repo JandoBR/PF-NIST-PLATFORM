@@ -257,6 +257,11 @@ export const listJobs = (filters: { estado?: JobEstado; tipo?: string; limit?: n
   return request<JobOut[]>(`/jobs${qs ? `?${qs}` : ''}`);
 };
 
+export const retryJob = (jobId: string, confirmLiveAi = false) =>
+  request<JobOut>(`/jobs/${jobId}/retry${confirmLiveAi ? '?confirm_live_ai=true' : ''}`, {
+    method: 'POST',
+  });
+
 export const getJob = (jobId: string, signal?: AbortSignal) =>
   request<JobOut>(`/jobs/${jobId}`, signal ? { signal } : undefined);
 

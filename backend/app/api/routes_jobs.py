@@ -14,13 +14,16 @@ from __future__ import annotations
 import os
 from typing import Literal
 
+import redis
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_session
+from app.ai.guard import check_live_ai_guard
+from app.api.deps import get_current_user, get_redis, get_session
 from app.api.schemas import JobOut
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
+from app.core.dispatch import JobRetryError, retry_job
 from app.models.tables import Job, User
 
 router = APIRouter(tags=["jobs"])
@@ -71,7 +74,7 @@ def list_jobs(
     ):
         _reap_if_stale(session, job)
     jobs = job_service.list_jobs(session, user.org_id, estado=estado, tipo=tipo, limit=limit)
-    return [JobOut.model_validate(job) for job in jobs]
+    return [JobOut.from_job(job) for job in jobs]
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)
@@ -86,7 +89,7 @@ def get_job(
     _require_job_owned(session, job, user)
 
     _reap_if_stale(session, job)
-    return JobOut.model_validate(job)
+    return JobOut.from_job(job)
 
 
 def _fail_linked_assessment(session: Session, job: Job) -> None:
@@ -97,3 +100,34 @@ def _fail_linked_assessment(session: Session, job: Job) -> None:
         assessment.estado = "fallida"
         assessment.error = job.error
         session.commit()
+
+
+@router.post("/jobs/{job_id}/retry", response_model=JobOut, status_code=202)
+def retry_failed_job(
+    job_id: str,
+    confirm_live_ai: bool = False,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    redis_client: redis.Redis = Depends(get_redis),
+) -> JobOut:
+    """Reencola un job fallido con las mismas entradas (docs/11 FN-09). Devuelve el job nuevo.
+
+    Si el job usaba la IA real, pasa por el mismo guard de costo que la creacion: el permiso para
+    gastar no se hereda del intento anterior."""
+
+    job = job_service.get_job(session, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"No existe el job {job_id!r}.")
+    _require_job_owned(session, job, user)
+
+    guard_error = check_live_ai_guard(
+        bool((job.payload or {}).get("ai_requested")),
+        os.environ.get("DEEPSEEK_API_KEY"),
+        confirm_live_ai,
+    )
+    if guard_error:
+        raise HTTPException(status_code=409, detail=guard_error)
+    try:
+        return JobOut.from_job(retry_job(session, redis_client, job))
+    except JobRetryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

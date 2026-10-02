@@ -1516,12 +1516,42 @@ migración**.
   fecha, tipo, estado (con progreso si está en curso), error y, si el job completó una evaluación que está
   en el historial, un acceso para abrirla. Filtro por estado; se refresca sola cada 3 s mientras haya jobs
   activos.
-- **No incluido:** reintentar un job fallido. El mensaje `fallido` ya dice que se vuelva a intentar, pero
-  las rutas de los archivos subidos (ya guardados en disco) viajan solo en el mensaje
-  de Redis, no en la base de datos; si el job se pierde, no queda de dónde reencolarlo. Hace falta decidir
-  primero dónde persistir las entradas del job (p. ej. en `jobs`). Queda como seguimiento, no se promovió a un ítem nuevo del backlog.
+- **No incluido aquí:** reintentar un job fallido. Se resolvió enseguida, ver §46.
 
 **Verificación:** backend **395 tests** (6 nuevos en `test_api_jobs.py`: ambos tipos y orden, aislamiento
 por organización, filtros, límite, reaping con la evaluación fallada, 401) + `ruff check` limpio;
 frontend `typecheck`, `lint` y `build` limpios.
+
+## 46. FN-09: reintentar un job fallido
+
+El historial (§45) mostraba el error de un job fallido, y el mensaje de "job perdido" dice que se vuelva a
+intentar, pero no había cómo: las rutas de los archivos subidos (ya guardados en disco) viajaban solo en el
+mensaje de Redis, no en la base de datos. Un job perdido o fallido no tenía de dónde reencolarse, y el
+usuario tenía que volver a subir todo. Se registró como **FN-09** (P1) y se hizo.
+
+- **Entradas persistidas:** nueva columna `jobs.payload` (JSON, migración `d52e8b7f1a43`, nullable) con el
+  mensaje de la cola sin `job_id`. Los cuatro sitios que crean y encolan un job (crear evaluación,
+  reevaluar, refresco selectivo, ingesta de eventos) pasan por `core/dispatch.py::dispatch_job`, que crea el
+  job con su payload y lo encola; así no puede haber un job encolado sin entradas guardadas. `jobs.py` (base
+  de datos) y `queue.py` (Redis) siguen sin conocerse.
+- **`POST /jobs/{id}/retry`** (202, devuelve el job nuevo): solo un job `fallido`, de la organización del
+  usuario. Responde 409, con el motivo, si el job no está fallido, es anterior a FN-09 (sin payload), ya no
+  existen los archivos subidos, o la evaluación ya se reintentó.
+- **Se reutiliza la evaluación**, no se crea otra: vuelve a `pendiente`, sin error, y se encola un job nuevo
+  con las mismas entradas. El historial no se llena de evaluaciones fallidas y la evaluación anterior de la
+  que hereda (planes, tope de contradicciones) sigue siendo la misma. El job original queda `fallido` como
+  registro del intento.
+- **Sin duplicados:** antes de reencolar se borran evidencia, resultados, planes y fuentes de esa evaluación.
+  Una corrida que falló *después* de guardar (p. ej. al generar los planes) los habría dejado duplicados.
+  La ingesta de eventos ya era idempotente (dedup por `event_id`), y un test lo confirma.
+- **El permiso de gasto no se hereda:** si el job usaba IA real, el reintento exige `confirm_live_ai` otra vez
+  (mismo guard que al crearlo); la UI pide confirmación explícita antes de reintentar. `JobOut` gana
+  `reintentable` y `usa_ia` para que la UI sepa cuándo mostrar el botón y cuándo advertir.
+- **UI:** botón "Reintentar" en las filas fallidas de la pestaña Trabajos.
+- **Límites:** los jobs anteriores a esta migración no tienen payload y no son reintentables (se indica al
+  intentarlo). El reintento es manual; no hay reintento automático.
+
+**Verificación:** backend **409 tests** (`test_job_retry.py`: 13; más la migración en `test_migrations.py`)
++ `ruff check` limpio; frontend `typecheck`, `lint` y `build` limpios. Se comprobó que quitar el borrado de
+filas parciales hace fallar el test de duplicados.
 

@@ -27,9 +27,8 @@ from app.adapters.ansible.adapter import AnsibleAdapter
 from app.adapters.documents.adapter import DocumentAdapter
 from app.adapters.terraform.adapter import TerraformAdapter
 from app.ai.client import AIClient, NullAIClient
-from app.core import jobs as job_service
 from app.core import reproducibility
-from app.core.queue import QUEUE_CORE, enqueue
+from app.core.dispatch import dispatch_job
 from app.core.repository import (
     evidence_to_row,
     plan_to_row,
@@ -426,12 +425,11 @@ def enqueue_reevaluation(
     `POST /assessments/{id}/reevaluate` y el refresco automatico de madurez (docs/08 §8)."""
 
     assessment, paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
-    job = job_service.create_job(session, "assessment_run", assessment_id=assessment.id)
-    enqueue(
+    job = dispatch_job(
+        session,
         redis_client,
-        QUEUE_CORE,
+        "assessment_run",
         {
-            "job_id": job.id,
             "assessment_id": assessment.id,
             "terraform_path": str(paths["terraform_path"]) if paths["terraform_path"] else None,
             "ansible_path": str(paths["ansible_path"]) if paths["ansible_path"] else None,
@@ -440,6 +438,7 @@ def enqueue_reevaluation(
             "apply_ai_adjustment": apply_ai_adjustment,
             "context": context or {},
         },
+        assessment_id=assessment.id,
     )
     return assessment, job
 
@@ -503,12 +502,11 @@ def enqueue_surveillance_refresh(
     assessment, _paths = create_pending_reevaluation(
         session, methodology, previous_assessment_id
     )
-    job = job_service.create_job(session, "assessment_run", assessment_id=assessment.id)
-    enqueue(
+    job = dispatch_job(
+        session,
         redis_client,
-        QUEUE_CORE,
+        "assessment_run",
         {
-            "job_id": job.id,
             "assessment_id": assessment.id,
             "previous_assessment_id": previous_assessment_id,
             "selective_refresh": True,
@@ -516,6 +514,7 @@ def enqueue_surveillance_refresh(
             "apply_ai_adjustment": False,
             "context": {},
         },
+        assessment_id=assessment.id,
     )
     return assessment, job
 

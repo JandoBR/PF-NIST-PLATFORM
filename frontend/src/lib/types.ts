@@ -184,6 +184,10 @@ export interface JobOut {
   creado_en: string;
   tomado_en: string | null;
   actualizado_en: string;
+  /** Fallido y con las entradas guardadas: se puede reintentar (FN-09). */
+  reintentable: boolean;
+  /** El reintento volvería a llamar a la IA real (cuesta dinero). */
+  usa_ia: boolean;
 }
 
 export interface AssessmentAccepted {

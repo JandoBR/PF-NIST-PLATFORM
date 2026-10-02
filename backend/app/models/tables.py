@@ -267,6 +267,9 @@ class Job(Base):
     estado: Mapped[str] = mapped_column(String, default="pendiente")
     progreso: Mapped[int] = mapped_column(default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Mensaje de la cola sin `job_id` (rutas de archivos, flags de IA, contexto): lo que hace falta
+    #: para reencolar un job fallido (docs/11 FN-09). `None` en jobs anteriores a FN-09.
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     assessment_id: Mapped[str | None] = mapped_column(
         ForeignKey("assessments.id"), nullable=True
     )

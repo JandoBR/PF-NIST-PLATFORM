@@ -21,8 +21,7 @@ from app.ai.guard import check_live_ai_guard
 from app.api.deps import get_current_user, get_methodology, get_redis, get_session, require_same_org
 from app.api.schemas import EventsAccepted, IncidentOut, OrganizationOut
 from app.core import assessment_service as svc
-from app.core import jobs as job_service
-from app.core.queue import QUEUE_LOGS, enqueue
+from app.core.dispatch import dispatch_job
 from app.core.uploads import safe_filename
 from app.methodology.loader import Methodology
 from app.models.tables import User
@@ -75,17 +74,17 @@ async def ingest_events(
     jsonl_path = upload_dir / name
     jsonl_path.write_bytes(await file.read())
 
-    job = job_service.create_job(session, "event_ingest", org_id=org.id)
-    enqueue(
+    job = dispatch_job(
+        session,
         redis_client,
-        QUEUE_LOGS,
+        "event_ingest",
         {
-            "job_id": job.id,
             "org_id": org.id,
             "org_nombre": org.nombre,
             "jsonl_path": str(jsonl_path),
             "ai_requested": use_ai,
         },
+        org_id=org.id,
     )
 
     return EventsAccepted(org_id=org.id, job_id=job.id)

@@ -32,8 +32,7 @@ from app.api.schemas import (
     PlanUpdate,
 )
 from app.core import assessment_service as svc
-from app.core import jobs as job_service
-from app.core.queue import QUEUE_CORE, enqueue
+from app.core.dispatch import dispatch_job
 from app.core.repository import row_to_plan
 from app.core.uploads import safe_filename
 from app.evaluation import aggregation, tier
@@ -159,12 +158,11 @@ async def create_assessment(
     assessment = svc.create_pending_assessment(
         session, methodology, org_name=user.organization.nombre, scope=scope
     )
-    job = job_service.create_job(session, "assessment_run", assessment_id=assessment.id)
-    enqueue(
+    job = dispatch_job(
+        session,
         redis_client,
-        QUEUE_CORE,
+        "assessment_run",
         {
-            "job_id": job.id,
             "assessment_id": assessment.id,
             "terraform_path": str(terraform_path) if terraform_path else None,
             "ansible_path": str(ansible_path) if ansible_path else None,
@@ -173,6 +171,7 @@ async def create_assessment(
             "apply_ai_adjustment": ai_adjust,
             "context": json.loads(context),
         },
+        assessment_id=assessment.id,
     )
 
     return AssessmentAccepted(

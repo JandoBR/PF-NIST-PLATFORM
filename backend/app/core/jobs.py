@@ -25,9 +25,14 @@ DEFAULT_PENDING_TIMEOUT_SECONDS = 120
 
 
 def create_job(
-    session: Session, tipo: str, *, assessment_id: str | None = None, org_id: str | None = None
+    session: Session,
+    tipo: str,
+    *,
+    assessment_id: str | None = None,
+    org_id: str | None = None,
+    payload: dict | None = None,
 ) -> Job:
-    job = Job(tipo=tipo, assessment_id=assessment_id, org_id=org_id)
+    job = Job(tipo=tipo, assessment_id=assessment_id, org_id=org_id, payload=payload)
     session.add(job)
     session.commit()
     return job
