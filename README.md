@@ -48,20 +48,20 @@
 ## Estado
 
 Especificación completa. El núcleo determinista, los tres adaptadores (Terraform, Ansible,
-documentos), las tres integraciones de IA (extracción U1, ajuste U2, planes U3), la
-persistencia (`run`/`reevaluate`/`compare`/`plans`), el motor operativo (eventos, patrones,
-disparadores, incidentes y planes — docs 06/08), una API REST (FastAPI) sobre todo lo anterior,
-workers reales consumiendo colas de Redis (`worker-core`/`worker-logs`, con `POST /assessments`,
-`/reevaluate` y `POST /orgs/{id}/events` asíncronos vía `GET /jobs/{id}`) y el despliegue
-completo con Docker Compose (Postgres + Redis + los dos workers + frontend, los 7 servicios
-reales) ya están implementados y probados — detalle completo en
+documentos), las tres integraciones de IA (extracción U1, ajuste U2, planes U3), la persistencia
+(`run`/`reevaluate`/`compare`/`plans`), el motor operativo (eventos, patrones, disparadores,
+incidentes y planes — docs 06/08), una API REST (FastAPI) sobre todo lo anterior, workers reales
+consumiendo colas de Redis (`worker-core`/`worker-logs`: `POST /assessments`, `/reevaluate` y
+`POST /orgs/{id}/events` son asíncronos vía `GET /jobs/{id}`), **multitenancy con login** (token de
+sesión y aislamiento por organización — doc 10) y el despliegue completo con Docker Compose
+(Postgres + Redis + los dos workers + frontend; 7 servicios reales) están implementados y probados
+— detalle completo en
 [docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). El frontend
-(`frontend/`) es un punto de partida real pero incompleto: los cuatro paneles (madurez,
-recomendaciones, simulación de amenazas, comparar evaluaciones) ya llaman a la API de verdad —
-asíncrona, con sondeo de jobs en vivo —, con datos de ejemplo servidos como archivos estáticos o
-subida de archivos propios. Falta pulir UX y, deliberadamente fuera de este corte, nginx +
-dominio real (`VITE_API_BASE_URL`/`CORS_ORIGINS` ya están pensados para ese cambio — ver doc 09
-§19).
+(`frontend/`) es funcional: los cuatro paneles (Resumen de Madurez, Recomendaciones, Eventos e
+Incidentes, Comparar) llaman a la API real — asíncrona, con login, sondeo de jobs en vivo,
+historial de evaluaciones, seguimiento de planes, vista de privacidad y refresco automático de
+madurez al ingerir eventos. Falta pulir UX y, deliberadamente fuera de este corte, nginx + dominio
+real (`VITE_API_BASE_URL`/`CORS_ORIGINS` ya están pensados para ese cambio — ver doc 09 §19).
 
 Para probarlo sin levantar nada: `cd backend && uv run python -m app.main run --terraform
 tests/fixtures/terraform/gaps --org "Empresa Demo"`, `uv run uvicorn app.api.app:app --reload`

@@ -101,8 +101,8 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 - [ ] FN-02 · **`Job.progreso` incremental** (P2): hoy es 0→100 cosmético; no hay barra real.
 - [ ] FN-03 · **Ingesta "nuevos vs actualizados"** (P2): la conversión a async perdió ese detalle
   (la API devuelve solo `job_id`); recuperarlo en la respuesta o en el resultado del job.
-- [ ] FN-04 · **Toggle de IA en "Reevaluar"** (P2): la API lo soporta (`ai_adjust`), el botón del
-  dashboard no lo pregunta.
+- [~] FN-04 · **Toggle de IA en "Reevaluar"** (P2): **obsoleto** — el botón "Reevaluar" se eliminó
+  (UI-10); ya no hay dónde preguntarlo. El endpoint sigue aceptando `ai_adjust`.
 - [x] FN-05 · **Refresco automático de madurez al ingerir** (P1): `worker-logs` encola una
   reevaluación de la última evaluación completada del `org`+`scope` cuando la ingesta suma al menos
   `vigilancia.refresco_min_patrones_nuevos` patrones nuevos (default 3). No pide nada al usuario;
@@ -170,9 +170,10 @@ existen), así que una funcionalidad central del producto queda inutilizable.
 
 ## Priorización sugerida
 
-1. **CR-01** (`GV-02`, `ID-03`, `RC-01`, `DE-01`): desbloquea el Tier y sube la cobertura de forma
-   real. Es lo de mayor valor con menor superficie de UI.
-2. **UI-01/UI-03/UI-04/UI-05/UI-06**: deja la app coherente para una demo (privacidad visible, toggles
-   claros, hallazgos→plan, naming correcto, incidentes con historial).
-3. **UI-07 + FN-01**: comparación con gráficos e historial de jobs.
-4. **OP/SEC/AMP**: endurecimiento y ampliaciones, según tiempo.
+1. **CR-01** (`GV-02`, `ID-03`, `RC-01`, `DE-01`): desbloquea el Tier (hoy tope Tier 1) y sube la
+   cobertura de forma real. Es lo de mayor valor pendiente.
+2. **FN-01 + API-03** (`GET /jobs`): ver qué corrió y reintentar; hoy solo hay `GET /jobs/{id}`.
+3. **OP/SEC/AMP**: simplificaciones (docs/09 §11), endurecimiento y ampliaciones, según tiempo.
+
+> **Hecho en esta iteración:** UI-01…UI-10, FN-05, FN-06 y la parte de estado de incidente de OP-04.
+> Ver docs/09 §23–§29.

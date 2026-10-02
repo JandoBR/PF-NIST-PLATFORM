@@ -128,7 +128,7 @@ porque toca el modelo de evidencias.
 | `organizations` | `id`, `nombre`, `contexto jsonb` |
 | `users` | `id`, `org_id`, `username`, `password_salt`, `password_hash`, `role`, `creado_en` (doc 10) |
 | `assessments` | `id`, `org_id`, `estado`, `methodology_version`, `scope`, `previous_assessment_id?` (auto-referencia a la evaluación anterior del mismo org+scope, para heredar seguimiento — docs/05 §4.4), `error?`, `creado_en` |
-| `sources` | `id`, `assessment_id`, `tipo`, `nombre`, `sha256`, `contenido_ref`, `subido_en` |
+| `sources` | `id`, `assessment_id`, `tipo` (`terraform`\|`ansible`\|`documents`), `ruta`, `sha256` (un `Source` por adaptador, no por archivo — docs/09 §11) |
 | `evidence_definitions` | `id`, `version`, `descripcion`, `schema jsonb`, `estado`, `publicado_en` (catálogo, no por evaluación) |
 | `evidence` | `id`, `assessment_id`, `type_id`, `type_version`, `subject_type`, `subject_ref`, `scope`, `value jsonb`, `source_id`, `locator jsonb`, `observed_at`, `modality`, `limitations`, `created_by` |
 | `criteria_catalog` | `id`, `version`, `titulo`, `tipo`, `funcion`, `categorias[]`, `subcategorias[]`, `peso`, `ai_adjustable`, `regla jsonb`, `recomendacion`, `estado` |
@@ -137,7 +137,7 @@ porque toca el modelo de evidencias.
 | `score_aggregates` | `id`, `assessment_id`, `nivel` (`subcategoria`\|`categoria`\|`funcion`\|`global`), `ref`, `score`, `base_score`, `cobertura`, `conteo_estados jsonb` |
 | `tier_estimates` | `id`, `assessment_id`, `tier`, `provisional bool`, `justificacion`, `faltantes jsonb` |
 | `findings` | `id`, `assessment_id`, `criterion_id`, `tipo` (`brecha`\|`contradiccion`\|`limitacion`), `titulo`, `detalle`, `severidad`, `evidence_ids[]` |
-| `plans` | `id`, `org_id`, `incident_id?`, `assessment_id?`, `origen` (`criterio`\|`evento`), `titulo`, `prioridad`, `pasos jsonb`, `verificacion`, `estado` (`pendiente`\|`en_progreso`\|`hecho`, **seguimiento, no puntaje** — docs/05 §4.4), `generado_por` |
+| `plans` | `id`, `incident_id?`, `assessment_id?`, `criterion_id`, `origen` (`criterio`\|`evento`), `titulo`, `prioridad`, `pasos jsonb`, `verificacion`, `estado` (`pendiente`\|`en_progreso`\|`hecho`, **seguimiento, no puntaje** — docs/05 §4.4), `generado_por` |
 | `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id` |
 | `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `evidence_id` |
 | `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `pattern_ids[]`, `criterios[]`, `timeline jsonb`, `creado_en`, `actualizado_en` |
@@ -185,19 +185,18 @@ evidencia y recalcular solo los criterios afectados.
 |---|---|---|
 | `POST` | `/auth/login` | Login (usuario/contraseña) → token + usuario. Público. |
 | `GET` | `/auth/me` | Usuario de la sesión actual. |
-| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario). |
+| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). |
+| `GET` | `/assessments` | Lista de evaluaciones de la organización (cada una con su resumen/Tier). |
 | `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
-| `POST` | `/assessments/{id}/sources` | Sube archivos (multipart, tipo declarado). |
-| `POST` | `/assessments/{id}/run` | Encola el pipeline completo. Devuelve `job_id`. |
-| `GET` | `/assessments/{id}/jobs/{job_id}` | Estado y progreso. |
-| `GET` | `/assessments/{id}/scores` | Desglose función → categoría → subcategoría. |
+| `GET` | `/jobs/{job_id}` | Estado y progreso de cualquier trabajo (`assessment_run`/`event_ingest`). |
 | `GET` | `/assessments/{id}/criteria` | Resultados por criterio con explicación y evidencias. |
 | `GET` | `/assessments/{id}/evidence` | Evidencias con procedencia y limitaciones (filtrable). |
-| `GET` | `/assessments/{id}/findings` | Brechas, contradicciones y limitaciones. |
+| `GET` | `/assessments/{id}/findings` | Brechas (contradicciones/limitaciones pendientes, docs/11 OP-04). |
 | `GET` | `/assessments/{id}/plans` | Planes con pasos, prioridad, verificación y estado de seguimiento. |
+| `POST` | `/assessments/{id}/plans` | Genera/recalcula los planes (`?use_ai=true` para U3, sujeto al guard de costo). |
 | `PATCH` | `/assessments/{id}/plans/{plan_id}` | Cambia el estado de seguimiento del plan (`pendiente`\|`en_progreso`\|`hecho`). No afecta el puntaje (docs/05 §4.4). |
+| `GET` | `/orgs` | Organización de la sesión (solo la propia). |
 | `POST` | `/orgs/{org_id}/events` | Carga eventos al stream de la organización (JSONL); encola `log_ingest`. |
-| `POST` | `/assessments/{id}/events` | Atajo de demo: carga eventos al stream de la organización de la evaluación. |
 | `GET` | `/orgs/{org_id}/incidents` | Lista incidentes operativos (filtrable por estado/severidad). |
 | `GET` | `/incidents/{id}` | Detalle, timeline y hechos del incidente. |
 | `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |
@@ -206,6 +205,10 @@ evidencia y recalcular solo los criterios afectados.
 | `GET` | `/assessments/{id}/compare/{other_id}` | Diferencias de puntajes, cobertura y hallazgos. |
 | `GET` | `/methodology` | Catálogo de criterios y tipos de evidencia vigentes. |
 | `GET` | `/health` | Liveness/readiness. |
+
+> Pendientes de implementar (docs/11 §E): `POST /assessments/{id}/sources` y `POST
+> /assessments/{id}/run` como pasos separados (API-01), y `GET /assessments/{id}/scores` explícito
+> (API-02, hoy plegado en `GET /assessments/{id}`).
 
 Convenciones:
 

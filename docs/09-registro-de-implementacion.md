@@ -27,9 +27,10 @@ quedan las decisiones que importan para seguir construyendo.
 | Ajuste de IA (U2) | Fórmula B/A/D/α → S acotada, con todas las reglas J1–J7/R3–R6 | Hecho |
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
-| Pruebas | 183 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API | Hecho |
-| API REST (doc 04 §6) | FastAPI sobre el mismo `assessment_service`; crear+subir+ejecutar fusionados (sin cola) | Hecho |
-| Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api reales; sin `worker-core`/`worker-logs` todavía | Hecho |
+| Multitenancy + auth (doc 10) | Login con token, tabla `users`, aislamiento por `org_id` en toda la API | Hecho |
+| Pruebas | 223 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
+| API REST (doc 04 §6) | FastAPI + colas: crear/reevaluar/ingerir son asíncronos (202 + `GET /jobs/{id}`) | Hecho |
+| Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api + `worker-core`/`worker-logs` + frontend (7 servicios) | Hecho |
 
 Comando de referencia para ver todo esto funcionando:
 
