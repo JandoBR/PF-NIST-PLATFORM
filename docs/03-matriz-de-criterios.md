@@ -34,10 +34,7 @@ Resumen de cobertura del catálogo:
 | **Total** | **23** | **16** | **2** |
 
 > **Estado de implementación:** **23 de 23** criterios implementados (CR-01…CR-04, docs/11 §C).
-> Detalle del código en `09-registro-de-implementacion.md §31–§33`.
->
-> **Convención:** si la línea *Evidencias* de un criterio difiere de lo implementado, se anota entre
-> paréntesis qué se consume **hoy** y qué queda **pendiente** (el detalle está en docs/09 §31–§33).
+> Detalle del código en `09-registro-de-implementacion.md §31–§34`.
 
 ---
 
@@ -104,7 +101,7 @@ Resumen de cobertura del catálogo:
 
 ### CRI-ID-02 — Priorización de activos por criticidad
 - **Subcategorías:** ID.AM-05 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** sí
-- **Evidencias:** `doc.claim(tipo=data_inventory)` (campo `contenido.criticidad`) *(`ctx.profile` pendiente: docs/11 OP-01, docs/12 §3)*
+- **Evidencias:** `doc.claim(tipo=data_inventory)`, `ctx.profile(activos_criticos)`
 - **Regla:**
   - 100: clasificación de criticidad documentada y consistente con los activos críticos declarados en contexto.
   - 50: clasificación mencionada sin criterios.
@@ -147,7 +144,7 @@ Resumen de cobertura del catálogo:
 
 ### CRI-PR-02 — Backups configurados y protegidos
 - **Subcategorías:** PR.DS-11 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí
-- **Evidencias:** `tf.backup.config` (retención) *(implementado; sin `doc.claim` el tope es 75)*, `doc.claim(tipo=backup_policy)` *(pendiente)*
+- **Evidencias:** `tf.backup.config` (retención), `doc.claim(tipo=backup_policy)`
 - **Regla:**
   - 100: retención configurada ≥ política documentada y backups con cifrado.
   - 75: retención configurada ≥ 7 días sin otros detalles.
@@ -158,7 +155,7 @@ Resumen de cobertura del catálogo:
 
 ### CRI-PR-03 — Acceso administrativo restringido
 - **Subcategorías:** PR.AA-05, PR.IR-01 · **Tipo:** Técnico · **Peso:** 4 · **IA:** no · **MVP:** sí · **Privacidad:** Protect-P
-- **Evidencias:** `tf.security_group.rules` *(no usa Ansible: decisión de alcance, docs/09 §7)*
+- **Evidencias:** `tf.security_group.rules`
 - **Regla:**
   - 100: sin reglas que expongan SSH (22) o RDP (3389) desde `0.0.0.0/0` o `::/0`, y SSH con acceso restringido.
   - 25: cualquier regla que exponga administración a Internet.
@@ -239,7 +236,7 @@ Resumen de cobertura del catálogo:
 
 ### CRI-RS-01 — Plan de respuesta con clasificación y escalamiento
 - **Subcategorías:** RS.MA-01, RS.MA-02, RS.MA-03, RS.MA-04 · **Tipo:** Mixto · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Tier:** T3 · **Privacidad:** Protect-P + apoyo Respond
-- **Evidencias:** `log.pattern(escalation_done|incident_declared)` *(implementado; tope 75)*, `doc.claim(tipo=process_defined)` y `doc.claim(tipo=escalation_path)` *(pendientes)*
+- **Evidencias:** `doc.claim(tipo=process_defined)`, `doc.claim(tipo=escalation_path)`, `log.pattern(escalation_done|incident_declared)`
 - **Regla:**
   - 100: plan documentado con triaje, categorización, priorización y escalamiento + evidencia operativa de escalamiento en el escenario.
   - 75: plan completo sin evidencia operativa.
@@ -250,7 +247,7 @@ Resumen de cobertura del catálogo:
 
 ### CRI-RS-02 — Análisis de incidentes y preservación de evidencia
 - **Subcategorías:** RS.AN-03, RS.AN-07 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T4
-- **Evidencias:** `log.pattern(incident_declared)` *(implementado; tope 75)*, `doc.claim(tipo=process_defined)` *(pendiente)*
+- **Evidencias:** `doc.claim(tipo=process_defined)`, `log.pattern(incident_declared)`
 - **Regla:**
   - 100: proceso de análisis de causa raíz y conservación de evidencia documentado y evidenciado en el escenario.
   - 75: documentado sin evidencia operativa.
@@ -282,7 +279,7 @@ Resumen de cobertura del catálogo:
 
 ### CRI-RC-02 — Verificación de integridad de backups
 - **Subcategorías:** RC.RP-03 · **Tipo:** Mixto · **Peso:** 4 · **IA:** sí · **MVP:** sí · **Tier:** T3
-- **Evidencias:** `log.pattern(restore_exercise_run|restore_verified)` *(implementado)*, `doc.claim(tipo=backup_policy)` *(pendiente)*
+- **Evidencias:** `doc.claim(tipo=backup_policy)`, `log.pattern(restore_exercise_run|restore_verified)`
 - **Regla:**
   - 100: política exige verificación de integridad + evidencia operativa de restauración verificada.
   - 75: verificación documentada sin evidencia operativa reciente.
@@ -292,7 +289,7 @@ Resumen de cobertura del catálogo:
 
 ### CRI-RC-03 — Restauración verificada y comunicación de recuperación
 - **Subcategorías:** RC.RP-05, RC.CO-03 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** parcial · **Tier:** T4
-- **Evidencias:** `log.pattern(restore_verified)`, `log.pattern(recovery_communicated)` *(implementado)*, `doc.claim(tipo=notification_list)` *(pendiente)*
+- **Evidencias:** `log.pattern(restore_verified)`, `doc.claim(tipo=notification_list)`
 - **Regla:**
   - 100: restauración confirmada en el escenario + comunicación a stakeholders definida/evidenciada.
   - 75: restauración verificada sin comunicación.

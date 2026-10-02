@@ -130,12 +130,16 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   Hecho (docs/09 §32); la vista de privacidad ya los muestra.
 - [x] CR-04 · `DE-02` incorpora `doc.claim(process_defined)` y llega a 100 cuando hay criterios de
   declaración + evidencia operativa. Hecho (docs/09 §33).
+- [x] CR-05 · Los criterios operativos restantes alcanzan 100 con `doc.claim`: `PR-02` (política de
+  backups), `RS-01` (plan de respuesta + escalamiento), `RC-02` (verificación de integridad) y
+  `RC-03` (notificación documentada). Hecho (docs/09 §34). `criteria.yml` v5. (`RS-02` ya lo hacía
+  desde CR-03.)
 
 > Nota transversal: los criterios con componente **documental** (`GV-02/03/04`, `ID-02/03/04`,
 > `RC-01`, `RS-02/03`) dependen de `doc.claim` extraído por U1; sin IA quedan
-> `evidencia_insuficiente` (igual que `GV-01`). Los **mixtos** (`ID-01`, `DE-01`, `DE-02`, `DE-03`)
-> tienen además una parte determinística (Terraform/Ansible/logs) que puntúa sin IA, aunque su tope
-> alto suele exigir el `doc.claim`.
+> `evidencia_insuficiente` (igual que `GV-01`). Los **mixtos** (`ID-01`, `DE-01`, `DE-02`, `DE-03`,
+> `PR-02`, `RS-01`, `RS-02`, `RC-02`, `RC-03`) tienen además una parte determinística
+> (Terraform/Ansible/logs) que puntúa sin IA, aunque su tope alto suele exigir el `doc.claim`.
 
 ## D. Simplificaciones activas (docs/09 §11) — pendientes del prototipo
 

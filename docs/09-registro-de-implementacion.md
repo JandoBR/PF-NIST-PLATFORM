@@ -1163,3 +1163,30 @@ inexistente (`CRI-XX-99`): ya no queda ningún criterio del catálogo sin regla.
 
 **Verificación:** backend **260 tests** + `ruff` limpio (DE-03 en `test_surveillance_criteria.py`;
 caso documental de DE-02; `test_methodology_loader` a 23 criterios).
+
+## 34. CR-05: los criterios operativos alcanzan 100 con `doc.claim`
+
+Cierra la deriva entre el diseño (`docs/03`) y la implementación: cuatro reglas topaban en 75 por no
+consumir la evidencia documental. `criteria.yml` pasa a **v5**.
+
+- **PR-02** (`pr02_backup`): lee `doc.claim(backup_policy)`; si la retención configurada cumple la de
+  la política (días parseados de texto libre) → 100; por debajo de la política → 50; sin política,
+  tope 75.
+- **RS-01** (`rs01_response_plan`): plan documentado (`process_defined` de respuesta y/o
+  `escalation_path`) + `escalation_done`: plan completo → 100, parcial → 75; sin evidencia operativa,
+  75/50; se mantiene la justicia (`incident_declared` sin escalar en ventana completa → 0).
+- **RC-02** (`rc02_backup_verification`): `backup_policy.verificacion_integridad` + `restore_verified`
+  → 100; política sin ventana → 75; `restore_exercise_run` fallido sigue prevaleciendo → 0.
+- **RC-03** (`rc03_recovery_communication`): `restore_verified` + `recovery_communicated` **o**
+  `notification_list` documentada → 100.
+
+**Extracción:** `escalation_path` agregado a `extraction._CONTENT_FIELDS`; `tipos_afirmacion` en las
+reglas de `PR-02`, `RS-01`, `RC-02` y `RC-03` para que U1 pida esos claims. (`RS-02` ya consumía
+`process_defined` desde CR-03.)
+
+**Diseño (`docs/03`):** además de la deriva, correcciones de coherencia interna: `RS-02` → **Tipo:
+Mixto** (usa `log.pattern`), se quita el "Tier: T3" huérfano de `PR-02`, `PR-06`/`DE-01` declaran
+`an.service.state` y `PR-03` deja de listar Ansible (lo cubre `PR-04`).
+
+**Verificación:** backend **272 tests** + `ruff` limpio (`test_cr05_docclaim_criteria.py` cubre los 4;
+`criteria.yml` v5).

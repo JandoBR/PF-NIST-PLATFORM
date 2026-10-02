@@ -7,7 +7,8 @@
 # v2: CR-01 agrega los 7 criterios MVP que faltaban (GV-02/03, ID-01/02/03, DE-01, RC-01).
 # v3: CR-02/CR-03 agregan el resto salvo DE-03 (GV-04, ID-04, RS-02, RS-03).
 # v4: DE-03 cierra el catalogo (23/23) y DE-02 incorpora doc.claim (CR-04).
-version: 4
+# v5: PR-02, RS-01, RC-02 y RC-03 consumen doc.claim (CR-05).
+version: 5
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -158,6 +159,7 @@ criterios:
     regla:
       tipo: umbral_retencion
       umbrales: { retencion_minima_dias: 7 }
+      tipos_afirmacion: [backup_policy]
 
   - id: CRI-PR-03
     version: 1
@@ -279,6 +281,7 @@ criterios:
       tipo: patron_con_justicia
       patrones_positivos: [escalation_done]
       patron_oportunidad: incident_declared
+      tipos_afirmacion: [process_defined, escalation_path]
 
   - id: CRI-RS-02
     version: 1
@@ -338,6 +341,7 @@ criterios:
     recomendacion: "Verificar integridad de backups antes de restaurar y registrar la prueba."
     regla:
       tipo: restauracion_verificada
+      tipos_afirmacion: [backup_policy]
 
   - id: CRI-RC-03
     version: 1
@@ -352,3 +356,4 @@ criterios:
     recomendacion: "Confirmar operacion normal tras restaurar y comunicar el estado a los interesados."
     regla:
       tipo: comunicacion_recuperacion
+      tipos_afirmacion: [notification_list]

@@ -47,6 +47,7 @@ _CONTENT_FIELDS: dict[str, str] = {
     "notification_list": (
         "destinatarios (lista), criterios (string|null), plazos (string|null)"
     ),
+    "escalation_path": "niveles (string), criterios (string|null)",
 }
 
 

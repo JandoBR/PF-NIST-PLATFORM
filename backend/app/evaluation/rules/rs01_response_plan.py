@@ -1,13 +1,13 @@
 """CRI-RS-01 — Plan de respuesta con clasificacion y escalamiento (docs/03 §5).
 
-Simplificado a `log.pattern`/`log.window` (sin `doc.claim` todavia: tope 75 sin plan
-documentado). `incident_declared` sin `escalation_done` en una ventana completa es exactamente
-la condicion del disparador D3 (docs/08 §5) — aqui alimenta madurez, no abre un incidente.
+Mixto: plan documentado (`process_defined` de respuesta y/o `escalation_path`) mas evidencia
+operativa (`log.pattern(escalation_done)`). La regla de justicia (docs/06 §5) se mantiene:
+`incident_declared` sin `escalation_done` en una ventana completa es falla de respuesta.
 """
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import by_type
+from app.evaluation.rules._common import best_found, by_type, doc_claims, result
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -22,48 +22,85 @@ def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance |
     return None
 
 
-def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    ventana = by_type(evidence, "log.window")
-    if not ventana or not ventana[0].value["completo"]:
-        return CriterionResult(
-            criterion_id=CRITERION_ID,
-            criterion_version=CRITERION_VERSION,
-            estado=Estado.EVIDENCIA_INSUFICIENTE,
-            explanation="Sin ventana de observacion completa: no se puede concluir.",
-        )
+def _es_de_respuesta(claim: EvidenceInstance) -> bool:
+    proceso = str((claim.value.get("contenido") or {}).get("proceso", "")).lower()
+    return any(p in proceso for p in ("respuesta", "response", "escalamiento", "escalation"))
 
+
+def _ventana_completa(evidence: list[EvidenceInstance]) -> bool:
+    ventana = by_type(evidence, "log.window")
+    return bool(ventana and ventana[0].value["completo"])
+
+
+def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
+    plan = best_found(
+        [c for c in doc_claims(evidence, "process_defined") if _es_de_respuesta(c)]
+    )
+    escalation = best_found(doc_claims(evidence, "escalation_path"))
     escalado = _patron(evidence, "escalation_done")
     declarado = _patron(evidence, "incident_declared")
+    completa = _ventana_completa(evidence)
 
-    if escalado:
-        return CriterionResult(
-            criterion_id=CRITERION_ID,
-            criterion_version=CRITERION_VERSION,
-            estado=Estado.EVALUADO,
-            base_score=75,
-            final_score=75,
-            explanation="Evidencia operativa de escalamiento en la ventana (sin plan"
-            " documentado aun): puntaje maximo 75.",
-            evidence_ids=[ventana[0].id, escalado.id],
+    if plan is None and escalation is None:
+        if escalado is not None:
+            ventana = by_type(evidence, "log.window")
+            ids = [e.id for e in (ventana[0], escalado) if e is not None]
+            return result(
+                CRITERION_ID,
+                Estado.EVALUADO,
+                75,
+                "Evidencia operativa de escalamiento sin plan de respuesta documentado: puntaje"
+                " maximo 75.",
+                ids,
+            )
+        if completa and declarado is not None:
+            ventana = by_type(evidence, "log.window")
+            return result(
+                CRITERION_ID,
+                Estado.EVALUADO,
+                0,
+                "Incidente declarado sin plan/escalamiento dentro de la ventana observada: falla"
+                " de respuesta (docs/06 §5).",
+                [ventana[0].id, declarado.id],
+            )
+        return result(
+            CRITERION_ID,
+            Estado.EVIDENCIA_INSUFICIENTE,
+            None,
+            "Sin plan de respuesta documentado ni evidencia operativa suficiente.",
         )
 
-    if declarado:
-        return CriterionResult(
-            criterion_id=CRITERION_ID,
-            criterion_version=CRITERION_VERSION,
-            estado=Estado.EVALUADO,
-            base_score=0,
-            final_score=0,
-            explanation="Incidente declarado sin escalamiento dentro de la ventana observada:"
-            " falla de respuesta con ventana completa (docs/06 §5).",
-            evidence_ids=[ventana[0].id, declarado.id],
+    contenido = plan.value.get("contenido", {}) if plan is not None else {}
+    completo = bool(plan is not None and contenido.get("pasos") and contenido.get("responsables"))
+    ids = [e.id for e in (plan, escalation, escalado, declarado) if e is not None]
+
+    if escalado is not None:
+        score = 100 if completo else 75
+        detalle = "plan documentado completo" if completo else "plan documentado parcial"
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            score,
+            f"Evidencia operativa de escalamiento; {detalle}.",
+            ids + [escalado.id],
         )
 
-    return CriterionResult(
-        criterion_id=CRITERION_ID,
-        criterion_version=CRITERION_VERSION,
-        estado=Estado.EVIDENCIA_INSUFICIENTE,
-        explanation="Ventana completa sin ningun patron aplicable: sin oportunidad, no se"
-        " penaliza (docs/06 §5).",
-        evidence_ids=[ventana[0].id],
+    if completa and declarado is not None:
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            0,
+            "Incidente declarado sin escalamiento dentro de la ventana observada: falla de"
+            " respuesta (docs/06 §5).",
+            ids + [declarado.id],
+        )
+
+    score = 75 if completo else 50
+    nota = "" if completa else " (sin ventana completa: evaluacion documental)"
+    return result(
+        CRITERION_ID,
+        Estado.EVALUADO,
+        score,
+        f"Plan de respuesta documentado sin evidencia operativa reciente{nota}.",
+        ids,
     )
