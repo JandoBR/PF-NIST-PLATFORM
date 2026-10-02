@@ -129,6 +129,39 @@ def test_generate_and_list_plans(api_client, db_session, methodology, fake_redis
     assert len(fetched.json()) == len(generated.json())
 
 
+def test_plan_follow_up_state_is_persisted(api_client, db_session, methodology, fake_redis):
+    """El estado de seguimiento del plan se guarda y NO toca el puntaje (docs/11 UI-08)."""
+
+    created = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
+    assessment_id = created["id"]
+    plans = api_client.get(f"/assessments/{assessment_id}/plans").json()
+    plan_id = plans[0]["id"]
+    assert plans[0]["estado"] == "pendiente"
+
+    before_score = api_client.get(f"/assessments/{assessment_id}").json()["score_global"]
+
+    response = api_client.patch(
+        f"/assessments/{assessment_id}/plans/{plan_id}", json={"estado": "en_progreso"}
+    )
+    assert response.status_code == 200
+    assert response.json()["estado"] == "en_progreso"
+
+    updated = api_client.get(f"/assessments/{assessment_id}/plans").json()
+    assert next(p for p in updated if p["id"] == plan_id)["estado"] == "en_progreso"
+    # El score no cambia: el seguimiento no es evidencia.
+    assert api_client.get(f"/assessments/{assessment_id}").json()["score_global"] == before_score
+
+
+def test_plan_follow_up_invalid_state_is_422(api_client, db_session, methodology, fake_redis):
+    created = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
+    plan_id = api_client.get(f"/assessments/{created['id']}/plans").json()[0]["id"]
+
+    response = api_client.patch(
+        f"/assessments/{created['id']}/plans/{plan_id}", json={"estado": "inventado"}
+    )
+    assert response.status_code == 422
+
+
 def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
     api_client, db_session, methodology, fake_redis
 ):

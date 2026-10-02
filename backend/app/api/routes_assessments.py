@@ -29,16 +29,18 @@ from app.api.schemas import (
     AssessmentDetail,
     ComparisonDiffOut,
     ComparisonOut,
+    PlanUpdate,
 )
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
 from app.core.queue import QUEUE_CORE, enqueue
+from app.core.repository import row_to_plan
 from app.evaluation import aggregation, tier
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
 from app.models.tables import Assessment, User
 from app.recommendations.findings import Finding, derive_findings
-from app.recommendations.plans import Plan
+from app.recommendations.plans import PLAN_ESTADOS, Plan
 from app.schemas.evidence import EvidenceInstance
 
 router = APIRouter(tags=["assessments"])
@@ -240,6 +242,29 @@ def create_plans(
 
     svc.generate_plans(session, methodology, assessment_id, ai_client=client)
     return svc.load_plans(session, assessment_id)
+
+
+@router.patch("/assessments/{assessment_id}/plans/{plan_id}", response_model=Plan)
+def update_plan_estado(
+    assessment_id: str,
+    plan_id: str,
+    payload: PlanUpdate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Plan:
+    """Estado de *seguimiento* del plan (docs/05 §4.4): no toca el puntaje del criterio."""
+    _require_assessment(session, assessment_id, user)
+    if payload.estado not in PLAN_ESTADOS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Estado {payload.estado!r} invalido. Validos: {', '.join(PLAN_ESTADOS)}.",
+        )
+    row = svc.set_plan_estado(session, assessment_id, plan_id, payload.estado)
+    if row is None:
+        raise HTTPException(
+            status_code=404, detail=f"No existe el plan {plan_id!r} en esta evaluación."
+        )
+    return row_to_plan(row)
 
 
 @router.post(

@@ -383,11 +383,38 @@ def generate_plans(
     results = load_criterion_results(session, assessment_id)
     plans = recommendations_plans.generate_plans(methodology, results, client=ai_client)
 
+    # Regenerar (p.ej. con IA) no debe perder el seguimiento ya hecho por el usuario (docs/05
+    # §4.4): se conserva el `estado` de cada criterio que ya tenia plan.
+    estados_previos = {
+        row.criterion_id: row.estado
+        for row in session.query(PlanRow).filter_by(assessment_id=assessment_id).all()
+    }
     session.query(PlanRow).filter_by(assessment_id=assessment_id).delete()
     rows = [plan_to_row(plan, assessment_id=assessment_id) for plan in plans]
+    for row in rows:
+        if row.criterion_id in estados_previos:
+            row.estado = estados_previos[row.criterion_id]
     session.add_all(rows)
     session.commit()
     return rows
+
+
+def set_plan_estado(
+    session: Session, assessment_id: str, plan_id: str, estado: str
+) -> PlanRow | None:
+    """Cambia el estado de *seguimiento* de un plan (docs/05 §4.4, docs/11 UI-08). `None` si el
+    plan no existe o no pertenece a ese assessment (la ruta ya valida el assessment/org)."""
+
+    row = (
+        session.query(PlanRow)
+        .filter_by(id=plan_id, assessment_id=assessment_id)
+        .one_or_none()
+    )
+    if row is None:
+        return None
+    row.estado = estado
+    session.commit()
+    return row
 
 
 def load_plans(session: Session, assessment_id: str) -> list[Plan]:

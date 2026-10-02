@@ -65,6 +65,13 @@ class IncidentUpdate(BaseModel):
     estado: str
 
 
+class PlanUpdate(BaseModel):
+    """`PATCH /assessments/{id}/plans/{plan_id}`: estado de seguimiento del plan (docs/05 §4.4).
+    No afecta el puntaje del criterio (docs/11 UI-08)."""
+
+    estado: str
+
+
 class ComparisonDiffOut(BaseModel):
     criterion_id: str
     titulo: str

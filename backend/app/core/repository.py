@@ -89,6 +89,7 @@ def plan_to_row(
         verificacion=plan.verificacion,
         dependencias=plan.dependencias,
         generado_por=plan.generado_por,
+        estado=plan.estado,
         diagnostico_observable=plan.diagnostico_observable,
         hipotesis=plan.hipotesis,
         comprobaciones_seguras=plan.comprobaciones_seguras,
@@ -98,6 +99,7 @@ def plan_to_row(
 
 def row_to_plan(row: PlanRow) -> Plan:
     return Plan(
+        id=row.id,
         criterion_id=row.criterion_id,
         origen=row.origen,
         titulo=row.titulo,
@@ -107,6 +109,7 @@ def row_to_plan(row: PlanRow) -> Plan:
         verificacion=row.verificacion,
         dependencias=row.dependencias,
         generado_por=row.generado_por,
+        estado=row.estado,
         diagnostico_observable=row.diagnostico_observable,
         hipotesis=row.hipotesis,
         comprobaciones_seguras=row.comprobaciones_seguras,

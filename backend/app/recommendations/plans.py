@@ -17,8 +17,15 @@ from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
 from app.recommendations.findings import Finding, derive_findings
 
+#: Estado de seguimiento de un plan (docs/05 §4.4, docs/11 UI-08). Es puramente informativo para el
+#: usuario y NO afecta el puntaje: un criterio se considera implementado por su evidencia.
+PLAN_ESTADOS = ("pendiente", "en_progreso", "hecho")
+
 
 class Plan(BaseModel):
+    #: `id`/`estado` solo existen una vez persistido el plan; `None`/"pendiente" para uno recien
+    #: generado en memoria (docs/05 §4.4).
+    id: str | None = None
     criterion_id: str
     titulo: str
     prioridad: str
@@ -27,6 +34,7 @@ class Plan(BaseModel):
     verificacion: str
     dependencias: list[str]
     generado_por: str
+    estado: str = "pendiente"
     #: Solo presentes en planes de incidente (docs/08 §7); vacios/None en planes de criterio.
     origen: str = "criterio"
     diagnostico_observable: str | None = None

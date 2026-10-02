@@ -157,7 +157,10 @@ class PlanRow(Base):
     verificacion: Mapped[str] = mapped_column(Text)
     dependencias: Mapped[list[str]] = mapped_column(JSON, default=list)
     generado_por: Mapped[str] = mapped_column(String)
-    estado: Mapped[str] = mapped_column(String, default="abierto")
+    #: Estado de *seguimiento* del plan (docs/05 §4.4): pendiente | en_progreso | hecho. NUNCA
+    #: afecta el puntaje de un criterio -- eso lo determina la evidencia, no una afirmacion del
+    #: usuario (docs/00 §7, principios 1/3/4).
+    estado: Mapped[str] = mapped_column(String, default="pendiente")
     diagnostico_observable: Mapped[str | None] = mapped_column(Text, nullable=True)
     hipotesis: Mapped[list[str]] = mapped_column(JSON, default=list)
     comprobaciones_seguras: Mapped[list[str]] = mapped_column(JSON, default=list)
