@@ -155,6 +155,15 @@ no dispara. La evaluación hereda el estado de seguimiento (docs/05 §4.4).
 pertenecen a una evaluación: se ingieren y consultan aunque nunca se haya evaluado. Si no hay una
 evaluación completada previa, simplemente no hay nada que refrescar.
 
+**Simplificación del refresco (gap conocido).** Hoy el refresco **re-corre todo el pipeline**
+(adaptadores + motor) sobre las mismas fuentes y **sin IA**, en vez de "recalcular SOLO los criterios
+afectados" como describe el diagrama de arriba. Consecuencia: si la evaluación previa usó IA (U1 para
+documentos y/o U2 para el ajuste de puntajes), el refresco determinista **puede diferir en los
+criterios documentales** (sin `doc.claim`), los puntajes vuelven a su base determinista y los planes
+se regeneran con plantilla. El **estado de seguimiento sí se hereda** por `criterion_id` (docs/05
+§4.4). Reusar la evidencia/resultados previos y recalcular solo lo operativo es la evolución pendiente
+(docs/11 FN-06).
+
 ## 7. Recomendaciones Generadas por Eventos
 
 El motor operativo (doc 08) convierte patrones anómalos o fallos en un **plan de asesoría por

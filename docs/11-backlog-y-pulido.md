@@ -21,6 +21,8 @@ alcance.
 - **Hecho:** en vez de una tarjeta aparte, es una vista alternativa (**Criterios / Privacidad**) dentro
   de la sección de criterios; muestra relación PF/CSF, score/cobertura del cruce y la nota de alcance.
   Los criterios del cruce implementados aparecen solos; `ID-04`, `RS-03`, `RC-01` se sumarán con CR-03.
+- **Detalle desplegable:** cada fila se expande para ver la explicación completa (antes se truncaba
+  sin forma de leer el resto) + score base/final y evidencias.
 
 ### [x] UI-02 · "Regenerar" en Recomendaciones (P2)
 El botón de regenerar plantilla no tiene una función clara y hoy es redundante (los planes ya se
@@ -87,10 +89,10 @@ sin una evaluación. Deben funcionar con la organización de la **sesión**.
 - **Hecho:** la pestaña usa `user.org_id`/`user.org_nombre` y se puede abrir sin evaluación. Backend
   ya era independiente (`/orgs/{id}/events`, `/orgs/{id}/incidents`).
 
-### [ ] UI-10 · Revisar el botón "Reevaluar" (P2)
+### [x] UI-10 · Quitar el botón "Reevaluar" (P2)
 Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo input ⇒ mismo resultado).
-Decidir: quitarlo, o dejarlo solo con una etiqueta clara y cuando haya motivo (fuentes cambiadas en
-disco). Pendiente de confirmar con el usuario.
+- **Hecho:** se quitó del Resumen de Madurez. El endpoint `POST /assessments/{id}/reevaluate` se
+  conserva porque lo usa el refresco automático (y la CLI).
 
 ## B. Funcionalidad pendiente (lo que reportó Claude)
 
@@ -105,6 +107,11 @@ disco). Pendiente de confirmar con el usuario.
   reevaluación de la última evaluación completada del `org`+`scope` cuando la ingesta suma al menos
   `vigilancia.refresco_min_patrones_nuevos` patrones nuevos (default 3). No pide nada al usuario;
   no dispara sin evaluación previa, con evaluación en vuelo, ni bajo el umbral (docs/08 §8).
+- [ ] FN-06 · **Refresco selectivo** (P1, gap de diseño vs. implementación): docs/06 §6 dice "recalcular
+  SOLO los criterios afectados", pero hoy el refresco re-corre todo el pipeline sin IA. Si la
+  evaluación previa usó IA (U1 documentos / U2 ajuste), el refresco puede diferir en criterios
+  documentales y los planes vuelven a plantilla. Reusar evidencia/resultados previos y recalcular
+  solo lo operativo (más el estado de seguimiento heredado).
 
 ## C. Cobertura de criterios y Tier (P0)
 

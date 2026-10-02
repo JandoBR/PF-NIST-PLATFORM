@@ -1011,3 +1011,31 @@ automático su valor es marginal (docs/11 UI-10).
 **Verificación:** backend **222 tests** + `ruff` limpio (tres tests nuevos en `test_workers_logs.py`:
 dispara sobre el umbral, no dispara debajo, no dispara sin evaluación previa; fixture
 `incidentes_demo.jsonl`). Frontend `typecheck`/`lint`/`build` limpios.
+
+## 28. Pulido: detalle de privacidad y retiro de "Reevaluar"
+
+**Privacidad — detalle desplegable (UI-01).** En la vista de privacidad del Resumen de Madurez, cada
+fila se expande (chevron) para mostrar la **explicación completa** más score base/final y cantidad de
+evidencias. Antes el detalle se truncaba sin forma de leer el resto.
+
+**Botón "Reevaluar" retirado (UI-10).** Se quitó del dashboard (`MaturityDashboard` ya no recibe
+`onReevaluate`/`reevaluating`; `App` ya no importa `reevaluateAssessment`/`getAssessment`/`pollJob`).
+El endpoint `POST /assessments/{id}/reevaluate` **sigue existiendo**: lo usa el refresco automático
+(FN-05) y la CLI. FN-04 (toggle de IA en Reevaluar) queda sin efecto al no haber botón.
+
+**Aclaración del comportamiento del refresco (para el usuario).**
+- **¿Por qué sin IA?** Porque no la necesita: el puntaje base es determinista y la IA es aumento
+  opcional (U1/U2), no requisito; y porque no debe gastar créditos sin pedido explícito. Ver docs/08
+  §8.
+- **¿Reusa la última evaluación con IA?** **No.** El refresco vuelve a correr el pipeline completo
+  sobre las mismas fuentes, **sin IA**: no copia `criterion_results`, ni evidencias documentales
+  derivadas de IA (U1), ni el ajuste U2, ni el texto de los planes generados por IA (vuelven a
+  plantilla). Lo único que hereda es el **estado de seguimiento** del plan por `criterion_id`
+  (docs/05 §4.4). Si la evaluación previa no usó IA, el refresco es equivalente salvo por la
+  evidencia operativa nueva. Cerrar este gap (recalcular solo lo afectado reusando la evaluación
+  previa) es **FN-06** (docs/06 §6).
+- **¿La IA ve los logs?** No las líneas: la IA (solo al redactar planes, U3) recibe un JSON
+  estructurado del criterio y del disparador (`id`, `título`, `recomendación`, `severidad`, `score`,
+  `evidence_ids`). El filtrado de ruido es determinístico (patrones → disparadores) y ocurre antes.
+
+**Verificación:** frontend `typecheck`/`lint`/`build` limpios; backend sin cambios (222 tests).

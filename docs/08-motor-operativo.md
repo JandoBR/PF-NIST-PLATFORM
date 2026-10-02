@@ -156,6 +156,12 @@ a una evaluación: se ingieren y se ven aunque no se haya evaluado nunca. El ref
 consecuencia *opcional* (solo si hay evaluación previa), no un requisito para operar el flujo
 operativo.
 
+**La reevaluación automática corre sin IA a propósito:** (1) el puntaje base es determinista y no la
+necesita — la IA es aumento opcional (U1/U2), no requisito; y (2) no debe gastar créditos sin que el
+usuario lo pida. La IA, cuando se usa, solo ve datos estructurados del criterio/disparador (nunca las
+líneas de log) y solo para redactar el plan (docs/05 §4). Hoy el refresco re-corre todo sin IA, así que
+una evaluación previa con IA puede diferir al refrescarse (gap: docs/06 §6, docs/11 FN-06).
+
 ## 9. Escenarios Esperados
 
 | Escenario | Disparador esperado | Incidente | Plan generado |
