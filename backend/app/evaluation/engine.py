@@ -13,14 +13,21 @@ from typing import Any
 from app.ai.adjustment import adjust
 from app.ai.client import AIClient
 from app.evaluation.rules import (
+    de01_monitoring,
     de02_event_analysis,
     gv01_policy,
+    gv02_roles,
+    gv03_risk_tolerance,
+    id01_asset_inventory,
+    id02_asset_criticality,
+    id03_risk_assessment,
     pr01_encryption,
     pr02_backup,
     pr03_admin_access,
     pr04_ssh_hardening,
     pr05_public_access,
     pr06_logging,
+    rc01_recovery_procedure,
     rc02_backup_verification,
     rc03_recovery_communication,
     rs01_response_plan,
@@ -33,6 +40,12 @@ RuleFn = Callable[[list[EvidenceInstance]], CriterionResult]
 
 _RULES: dict[str, RuleFn] = {
     gv01_policy.CRITERION_ID: gv01_policy.evaluate,
+    gv02_roles.CRITERION_ID: gv02_roles.evaluate,
+    gv03_risk_tolerance.CRITERION_ID: gv03_risk_tolerance.evaluate,
+    id01_asset_inventory.CRITERION_ID: id01_asset_inventory.evaluate,
+    id02_asset_criticality.CRITERION_ID: id02_asset_criticality.evaluate,
+    id03_risk_assessment.CRITERION_ID: id03_risk_assessment.evaluate,
+    de01_monitoring.CRITERION_ID: de01_monitoring.evaluate,
     pr01_encryption.CRITERION_ID: pr01_encryption.evaluate,
     pr02_backup.CRITERION_ID: pr02_backup.evaluate,
     pr03_admin_access.CRITERION_ID: pr03_admin_access.evaluate,
@@ -41,6 +54,7 @@ _RULES: dict[str, RuleFn] = {
     pr06_logging.CRITERION_ID: pr06_logging.evaluate,
     de02_event_analysis.CRITERION_ID: de02_event_analysis.evaluate,
     rs01_response_plan.CRITERION_ID: rs01_response_plan.evaluate,
+    rc01_recovery_procedure.CRITERION_ID: rc01_recovery_procedure.evaluate,
     rc02_backup_verification.CRITERION_ID: rc02_backup_verification.evaluate,
     rc03_recovery_communication.CRITERION_ID: rc03_recovery_communication.evaluate,
 }

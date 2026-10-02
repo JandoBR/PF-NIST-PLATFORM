@@ -20,11 +20,45 @@ _PROMPT_PATH = Path(__file__).parent / "prompts" / f"{PROMPT_VERSION}.txt"
 _SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
 
+#: Campos esperados en `contenido` por tipo de afirmacion. Las reglas de cada criterio leen estas
+#: claves (docs/03); declararlas aca evita que la IA invente nombres de campo distintos.
+_CONTENT_FIELDS: dict[str, str] = {
+    "policy_exists": "nombre (string), aprobada_por (string|null)",
+    "policy_review": (
+        "frecuencia (mensual|trimestral|semestral|anual), ultima_revision (YYYY-MM-DD|null)"
+    ),
+    "role_assigned": "roles: lista de {rol, responsable, autoridad}",
+    "risk_tolerance": (
+        "objetivos_riesgo (string), tolerancia (string|null), responsable (string|null)"
+    ),
+    "data_inventory": (
+        "activos (lista de recursos), tipos_datos (lista), clasificacion (string|null),"
+        " criticidad (lista de {activo, nivel}|null)"
+    ),
+    "process_defined": (
+        "proceso (riesgos|recuperacion|otro), pasos (string), responsables (string|null),"
+        " criterios_activacion (string|null), registro_riesgos (bool|null),"
+        " priorizacion (bool|null)"
+    ),
+    "backup_policy": (
+        "respaldo (bool), verificacion_integridad (bool|null), retencion (string|null)"
+    ),
+}
+
+
+def _contenido_esperado(tipos: list[str]) -> str:
+    return "\n".join(
+        f"- {tipo}: {_CONTENT_FIELDS.get(tipo, 'campos que describan la afirmacion')}"
+        for tipo in tipos
+    )
+
+
 def _build_user_prompt(chunk_text: str, tipos_solicitados: list[str], doc_id: str) -> str:
     tipos = ", ".join(tipos_solicitados)
     return (
         f'<documento id="{doc_id}">\n{chunk_text}\n</documento>\n\n'
         f"Tipos de afirmacion a buscar en este fragmento: {tipos}.\n"
+        f"Para 'contenido', usa estos campos por tipo:\n{_contenido_esperado(tipos_solicitados)}\n"
         "Responde en JSON con el esquema indicado."
     )
 

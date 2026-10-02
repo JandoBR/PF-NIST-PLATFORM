@@ -4,7 +4,8 @@
 # RC-02/RC-03 son Mixto pero simplificados a solo `log.pattern` (docs/06): sin doc.claim todavia,
 # el tope sin evidencia documental es 75, igual que CRI-PR-02 sin politica.
 # Ampliar este archivo y agregar su modulo en app/evaluation/rules van siempre juntos (D5).
-version: 1
+# v2: CR-01 agrega los 7 criterios MVP que faltaban (GV-02/03, ID-01/02/03, DE-01, RC-01).
+version: 2
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -20,6 +21,81 @@ criterios:
     regla:
       tipo: politica_documental
       tipos_afirmacion: [policy_exists, policy_review]
+
+  - id: CRI-GV-02
+    version: 1
+    titulo: "Roles y responsabilidades definidos"
+    tipo: proceso
+    funcion: GV
+    categorias: [GV.RR]
+    subcategorias: [GV.RR-01, GV.RR-02]
+    peso: 5
+    ai_adjustable: true
+    evidencias: [doc.claim@1]
+    recomendacion: "Designar responsable de seguridad y duenos de activos con responsabilidades y autoridad explicitas."
+    regla:
+      tipo: roles_documental
+      tipos_afirmacion: [role_assigned]
+
+  - id: CRI-GV-03
+    version: 1
+    titulo: "Objetivos de riesgo y tolerancia establecidos"
+    tipo: proceso
+    funcion: GV
+    categorias: [GV.RM]
+    subcategorias: [GV.RM-01, GV.RM-02]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [doc.claim@1]
+    recomendacion: "Documentar objetivos de riesgo y una declaracion de tolerancia usada en decisiones operativas."
+    regla:
+      tipo: tolerancia_documental
+      tipos_afirmacion: [risk_tolerance]
+
+  - id: CRI-ID-01
+    version: 1
+    titulo: "Inventario de activos"
+    tipo: mixto
+    funcion: ID
+    categorias: [ID.AM]
+    subcategorias: [ID.AM-01, ID.AM-02]
+    peso: 4
+    ai_adjustable: false
+    evidencias: [tf.resource.present@1, doc.claim@1]
+    recomendacion: "Mantener un inventario de activos que incluya los recursos desplegados y su responsable."
+    regla:
+      tipo: inventario_documental
+      tipos_afirmacion: [data_inventory]
+
+  - id: CRI-ID-02
+    version: 1
+    titulo: "Priorizacion de activos por criticidad"
+    tipo: proceso
+    funcion: ID
+    categorias: [ID.AM]
+    subcategorias: [ID.AM-05]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [doc.claim@1]
+    recomendacion: "Clasificar activos por criticidad y usarlo para priorizar controles y esfuerzo."
+    regla:
+      tipo: criticidad_documental
+      tipos_afirmacion: [data_inventory]
+
+  - id: CRI-ID-03
+    version: 1
+    titulo: "Identificacion y evaluacion de riesgos"
+    tipo: proceso
+    funcion: ID
+    categorias: [ID.RA]
+    subcategorias: [ID.RA-01, ID.RA-05]
+    peso: 4
+    ai_adjustable: true
+    evidencias: [doc.claim@1]
+    recomendacion: "Establecer una evaluacion de riesgos repetible con registro y priorizacion."
+    regla:
+      tipo: proceso_riesgos
+      tipos_afirmacion: [process_defined]
 
   - id: CRI-PR-01
     version: 1
@@ -109,6 +185,21 @@ criterios:
     regla:
       tipo: cloudtrail_multiregion
 
+  - id: CRI-DE-01
+    version: 1
+    titulo: "Monitoreo de red y computo"
+    tipo: mixto
+    funcion: DE
+    categorias: [DE.CM]
+    subcategorias: [DE.CM-01, DE.CM-09]
+    peso: 5
+    ai_adjustable: false
+    evidencias: [tf.logging.config@1, an.service.state@1, log.window@1]
+    recomendacion: "Centralizar logs y definir fuentes minimas de monitoreo (red, sistema, nube)."
+    regla:
+      tipo: monitoreo
+      tipos_afirmacion: []
+
   - id: CRI-DE-02
     version: 1
     titulo: "Analisis de eventos y declaracion de incidentes"
@@ -140,6 +231,21 @@ criterios:
       tipo: patron_con_justicia
       patrones_positivos: [escalation_done]
       patron_oportunidad: incident_declared
+
+  - id: CRI-RC-01
+    version: 1
+    titulo: "Procedimiento de recuperacion definido y ejecutable"
+    tipo: proceso
+    funcion: RC
+    categorias: [RC.RP]
+    subcategorias: [RC.RP-01, RC.RP-02]
+    peso: 5
+    ai_adjustable: true
+    evidencias: [doc.claim@1]
+    recomendacion: "Documentar el procedimiento de recuperacion con responsables y criterios de inicio."
+    regla:
+      tipo: procedimiento_recuperacion
+      tipos_afirmacion: [process_defined, backup_policy]
 
   - id: CRI-RC-02
     version: 1

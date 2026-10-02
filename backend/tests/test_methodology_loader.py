@@ -12,14 +12,21 @@ def test_loads_expected_criteria():
 
     assert set(methodology.criterios) == {
         "CRI-GV-01",
+        "CRI-GV-02",
+        "CRI-GV-03",
+        "CRI-ID-01",
+        "CRI-ID-02",
+        "CRI-ID-03",
         "CRI-PR-01",
         "CRI-PR-02",
         "CRI-PR-03",
         "CRI-PR-04",
         "CRI-PR-05",
         "CRI-PR-06",
+        "CRI-DE-01",
         "CRI-DE-02",
         "CRI-RS-01",
+        "CRI-RC-01",
         "CRI-RC-02",
         "CRI-RC-03",
     }
