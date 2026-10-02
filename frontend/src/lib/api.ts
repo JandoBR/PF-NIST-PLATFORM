@@ -39,7 +39,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function send(path: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   const token = getToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
@@ -67,10 +67,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(response.status, detail);
   }
+  return response;
+}
 
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await send(path, init);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
+
+/** Descarga un PDF (informes, AMP-02). Va por `fetch` y no por un `<a href>` porque la API exige
+ * el token en la cabecera `Authorization`. */
+export async function downloadPdf(path: string, filename: string): Promise<void> {
+  const blob = await (await send(path)).blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export const downloadExecutiveReport = (assessmentId: string) =>
+  downloadPdf(`/assessments/${assessmentId}/report.pdf`, `informe-ejecutivo-${assessmentId.slice(0, 8)}.pdf`);
+
+export const downloadComparisonReport = (idA: string, idB: string) =>
+  downloadPdf(
+    `/assessments/${idA}/compare/${idB}/report.pdf`,
+    `comparacion-${idA.slice(0, 8)}-${idB.slice(0, 8)}.pdf`
+  );
 
 function json(body: unknown): RequestInit {
   return {

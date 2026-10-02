@@ -1465,3 +1465,32 @@ ajustar el prompt `extract_v1` (y subir `PROMPT_VERSION`).
 
 **Verificación:** backend **381 tests** (`test_ai_golden.py`: 11) + `ruff check` limpio.
 
+## 44. AMP-02: informes en PDF
+
+El informe ejecutivo y la comparación se pueden descargar como PDF. Es la forma de entregar los
+resultados a quien no usa la plataforma (separa el acceso a la herramienta del acceso a los resultados).
+
+- **Endpoints:** `GET /assessments/{id}/report.pdf` y `GET /assessments/{id}/compare/{other_id}/report.pdf`
+  (`attachment`). Mismas reglas que el resto: sesión, 404 si el assessment es de otra organización,
+  **409 si la evaluación no está `completada`** (no hay informe de algo a medias).
+- **Contenido del informe ejecutivo:** organización, alcance, fecha y versión de la metodología; puntaje
+  global, cobertura y Tier (con la advertencia de *provisional* y lo que falta para el siguiente nivel);
+  madurez por función; hallazgos prioritarios por severidad y contradicciones entre fuentes; plan de
+  acción (los 10 abiertos de mayor prioridad; los `hecho` no aparecen); resultados por criterio; notas
+  sobre cómo leer los puntajes y si participó la IA. La comparación muestra puntaje global y Tier de
+  ambas evaluaciones y solo los criterios que cambiaron.
+- **Solo presenta:** `app/reports/pdf.py` recibe datos ya calculados (los mismos objetos que sirve la API)
+  y no puntúa ni decide nada, así que el PDF no puede diferir de la UI. Se generó con `reportlab` (puro
+  Python, fuentes estándar: sin dependencias del sistema, funciona en el contenedor tal cual). Se
+  descartó imprimir desde el navegador: el resultado dependería del navegador y no habría un archivo
+  entregable.
+- **UI:** botón "Informe PDF" en el tablero (deshabilitado hasta que la evaluación termina) y
+  "Comparación PDF" en la vista de comparación. La descarga va por `fetch` con el token, no por un
+  enlace, porque la API exige `Authorization`.
+- **Límites:** solo español y fuentes Latin-1 (los textos evitan símbolos fuera de ese rango); el
+  informe es de texto y tablas, sin gráficos.
+
+**Verificación:** backend **389 tests** (`test_api_report_pdf.py`: 8, leyendo el texto del PDF generado;
+incluye 404 de otra organización, 409, 401 y que un plan `hecho` no aparece) + `ruff check` limpio;
+frontend `typecheck`, `lint` y `build` limpios. Se revisó el render de ambos PDF a mano.
+

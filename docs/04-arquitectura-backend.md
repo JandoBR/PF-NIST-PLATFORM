@@ -59,6 +59,7 @@ De ese mismo stream cuelgan dos consumidores: **madurez** (evidencia por ventana
 | Parsing TF | `python-hcl2` | Solo bloques y valores; expresiones → unknown. |
 | Parsing Ansible | `PyYAML` + inspección de estructura | Sin ejecutar nada. |
 | PDF/texto | `pypdf` + `markdown` | Solo documentos con capa de texto. |
+| Informes PDF | `reportlab` | Informe ejecutivo y comparación (`app/reports/pdf.py`, docs/09 §44); fuentes estándar, sin dependencias del sistema. |
 | IA | SDK `openai` apuntando a DeepSeek | Ver doc 05. |
 | Tests | pytest + fixtures/golden | Ver doc 07. |
 
@@ -191,6 +192,8 @@ evidencia y recalcular solo los criterios afectados.
 | `GET` | `/assessments/{id}/criteria` | Resultados por criterio con explicación y evidencias. |
 | `GET` | `/assessments/{id}/evidence` | Evidencias con procedencia y limitaciones (filtrable). |
 | `GET` | `/assessments/{id}/findings` | Hallazgos. Tipos `brecha` y `contradiccion` (docs/09 §38); `limitacion` queda como opcional (docs/11 OP-04). Los hallazgos no se persisten: se derivan al consultar, con la evidencia. |
+| `GET` | `/assessments/{id}/report.pdf` | Informe ejecutivo en PDF (AMP-02): resumen, madurez por función, hallazgos, plan y criterios. 409 si la evaluación no está `completada`. |
+| `GET` | `/assessments/{id}/compare/{other_id}/report.pdf` | Comparación de dos evaluaciones en PDF. |
 | `GET` | `/assessments/{id}/plans` | Planes con pasos, prioridad, verificación y estado de seguimiento. |
 | `POST` | `/assessments/{id}/plans` | Genera/recalcula los planes (`?use_ai=true` para U3, sujeto al guard de costo). |
 | `PATCH` | `/assessments/{id}/plans/{plan_id}` | Cambia el estado de seguimiento del plan (`pendiente`\|`en_progreso`\|`hecho`). No afecta el puntaje (docs/05 §4.4). |

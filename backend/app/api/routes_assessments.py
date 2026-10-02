@@ -18,7 +18,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import redis
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.ai.client import build_default_client
@@ -42,6 +42,7 @@ from app.methodology.loader import Methodology
 from app.models.tables import Assessment, User
 from app.recommendations.findings import Finding, derive_findings
 from app.recommendations.plans import PLAN_ESTADOS, Plan
+from app.reports import pdf
 from app.schemas.evidence import EvidenceInstance
 
 router = APIRouter(tags=["assessments"])
@@ -58,6 +59,22 @@ def _require_assessment(session: Session, assessment_id: str, user: User) -> Ass
     if assessment is None or assessment.org_id != user.org_id:
         raise HTTPException(status_code=404, detail=f"No existe el assessment {assessment_id!r}.")
     return assessment
+
+
+def _require_completed(assessment: Assessment) -> None:
+    if assessment.estado != "completada":
+        raise HTTPException(
+            status_code=409,
+            detail=f"El assessment {assessment.id!r} esta {assessment.estado!r}: no hay informe.",
+        )
+
+
+def _pdf_response(content: bytes, filename: str) -> Response:
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _assessment_detail(
@@ -311,17 +328,7 @@ def reevaluate_assessment(
     )
 
 
-@router.get("/assessments/{assessment_id}/compare/{other_id}", response_model=ComparisonOut)
-def compare_assessments(
-    assessment_id: str,
-    other_id: str,
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-    methodology: Methodology = Depends(get_methodology),
-) -> ComparisonOut:
-    _require_assessment(session, assessment_id, user)
-    _require_assessment(session, other_id, user)
-    report = svc.compare(session, methodology, assessment_id, other_id)
+def _comparison_out(report: svc.ComparisonReport) -> ComparisonOut:
     return ComparisonOut(
         assessment_id_a=report.assessment_id_a,
         assessment_id_b=report.assessment_id_b,
@@ -340,3 +347,63 @@ def compare_assessments(
         global_antes=report.global_antes,
         global_despues=report.global_despues,
     )
+
+
+@router.get("/assessments/{assessment_id}/compare/{other_id}", response_model=ComparisonOut)
+def compare_assessments(
+    assessment_id: str,
+    other_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    methodology: Methodology = Depends(get_methodology),
+) -> ComparisonOut:
+    _require_assessment(session, assessment_id, user)
+    _require_assessment(session, other_id, user)
+    return _comparison_out(svc.compare(session, methodology, assessment_id, other_id))
+
+
+@router.get("/assessments/{assessment_id}/report.pdf", response_class=Response)
+def get_executive_report(
+    assessment_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    methodology: Methodology = Depends(get_methodology),
+) -> Response:
+    """Informe ejecutivo en PDF (docs/11 AMP-02): los mismos datos que la API y la UI."""
+
+    assessment = _require_assessment(session, assessment_id, user)
+    _require_completed(assessment)
+    detail = _assessment_detail(session, methodology, assessment)
+    results = svc.load_criterion_results(session, assessment_id)
+    findings = derive_findings(methodology, results, svc.load_evidence(session, assessment_id))
+    content = pdf.build_executive_report(
+        detail,
+        results,
+        {cid: c.titulo for cid, c in methodology.criterios.items()},
+        findings,
+        svc.load_plans(session, assessment_id),
+    )
+    return _pdf_response(content, f"informe-ejecutivo-{assessment_id[:8]}.pdf")
+
+
+@router.get("/assessments/{assessment_id}/compare/{other_id}/report.pdf", response_class=Response)
+def get_comparison_report(
+    assessment_id: str,
+    other_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+    methodology: Methodology = Depends(get_methodology),
+) -> Response:
+    """Comparacion de dos evaluaciones en PDF (docs/11 AMP-02, UI-07)."""
+
+    antes = _require_assessment(session, assessment_id, user)
+    despues = _require_assessment(session, other_id, user)
+    _require_completed(antes)
+    _require_completed(despues)
+    report = svc.compare(session, methodology, assessment_id, other_id)
+    content = pdf.build_comparison_report(
+        _comparison_out(report),
+        _assessment_detail(session, methodology, antes),
+        _assessment_detail(session, methodology, despues),
+    )
+    return _pdf_response(content, f"comparacion-{assessment_id[:8]}-{other_id[:8]}.pdf")

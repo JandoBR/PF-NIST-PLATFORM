@@ -43,7 +43,7 @@ evidencia y escenarios **sin cambiar los contratos**.
 - [ ] Comparación visual de evaluaciones (React).
 - [ ] Más tipos de recursos Terraform (IAM, VPC, RDS snapshots).
 - [ ] Recuperación semántica sobre el catálogo NIST (embeddings). *(descartado del prototipo: docs/12 §5)*
-- [ ] Exportación PDF del informe ejecutivo. *(promovido: AMP-02, docs/11 §G)*
+- [x] Exportación PDF del informe ejecutivo. *(AMP-02, docs/09 §44)*
 
 ### Fuera de alcance (documentar como trabajo futuro)
 

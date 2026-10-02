@@ -9,7 +9,9 @@ import {
   Info,
   Lock,
 } from 'lucide-react';
+import { downloadExecutiveReport } from '@/lib/api';
 import type { AssessmentDetail, CriterionResult, Estado } from '@/lib/types';
+import { DownloadPdfButton } from '@/components/DownloadPdfButton';
 import { FUNCTION_NAMES, FUNCTION_ORDER, TIER_LABELS } from '@/lib/types';
 import {
   ESTADO_META,
@@ -72,21 +74,29 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
 
   return (
     <div className="space-y-6">
-      <p className="text-xs text-slate-500">
-        {assessment.estado === 'en_progreso' || assessment.estado === 'pendiente'
-          ? 'Evaluación en curso…'
-          : `Evaluación ${assessment.estado}`}
-        {assessment.reproducibility && (
-          <span className="ml-2 text-slate-600">
-            ·{' '}
-            {assessment.reproducibility.ai
-              ? `IA: ${Object.entries(assessment.reproducibility.ai)
-                  .map(([k, v]) => (k === 'modelo' ? v : `${k} ${v}`))
-                  .join(' · ')}`
-              : 'Sin IA (determinista)'}
-          </span>
-        )}
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-xs text-slate-500">
+          {assessment.estado === 'en_progreso' || assessment.estado === 'pendiente'
+            ? 'Evaluación en curso…'
+            : `Evaluación ${assessment.estado}`}
+          {assessment.reproducibility && (
+            <span className="ml-2 text-slate-600">
+              ·{' '}
+              {assessment.reproducibility.ai
+                ? `IA: ${Object.entries(assessment.reproducibility.ai)
+                    .map(([k, v]) => (k === 'modelo' ? v : `${k} ${v}`))
+                    .join(' · ')}`
+                : 'Sin IA (determinista)'}
+            </span>
+          )}
+        </p>
+        <DownloadPdfButton
+          label="Informe PDF"
+          onDownload={() => downloadExecutiveReport(assessment.id)}
+          disabled={assessment.estado !== 'completada'}
+          disabledReason="El informe está disponible cuando la evaluación termina."
+        />
+      </div>
 
       {/* Tarjetas de resumen */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

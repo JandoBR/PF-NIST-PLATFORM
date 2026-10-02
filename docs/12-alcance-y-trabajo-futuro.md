@@ -83,8 +83,8 @@ estas medidas no tienen superficie real aquí.
 | AMP-04 | Cobertura de implementación del producto (subcategorías con criterio / total CSF) expuesta en API/UI | Métrica de producto, no de evaluación; no altera puntajes. | docs/01 §7 |
 | AMP-06 | Niveles por función A/B/C/D (Consolidado/Gestionado/…) | El diseño lo marca opcional y no-NIST. | docs/01 §8.4 |
 
-*(AMP-02, exportación PDF, se promovió al prototipo: separa el acceso a la herramienta del acceso a
-los resultados y da oficialidad al informe — ver `docs/11 §G`.)*
+*(AMP-02, exportación PDF, se promovió al prototipo y está hecha: separa el acceso a la herramienta
+del acceso a los resultados y da oficialidad al informe — ver `docs/11 §G`, docs/09 §44.)*
 
 ## 6. Obsoleto / no aplica
 

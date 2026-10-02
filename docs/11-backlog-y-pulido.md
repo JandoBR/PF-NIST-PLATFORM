@@ -203,9 +203,9 @@ registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototi
 
 ## G. Ampliaciones (docs/07)
 
-- [ ] AMP-02 · (P1) **Exportación PDF del informe ejecutivo** (y de la comparación, UI-07). Se promueve al
-  prototipo: da oficialidad al informe y **separa el acceso a la herramienta del acceso a los
-  resultados** (común en entornos corporativos).
+- [x] AMP-02 · **Exportación PDF del informe ejecutivo** y de la comparación (UI-07). Hecho (docs/09 §44):
+  `GET /assessments/{id}/report.pdf` y `GET /assessments/{id}/compare/{other_id}/report.pdf`, con botón
+  en la UI. Separa el acceso a la herramienta del acceso a los resultados.
 - [x] AMP-05 · **Puntaje "provisional" con cobertura baja**. Hecho (docs/09 §36): `Aggregate.provisional`
   cuando la cobertura < `cobertura.umbral_provisional` (0.5, `settings.yml`); la UI lo marca en el
   score global y por función.
@@ -236,6 +236,6 @@ demostrable.
    y motivo de cierre), **OP-15** (líneas), **OP-13** (`schema_version`), **API-04** (problem+json) y
    la decisión de **CR-07**.
 
-> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
-> incidente de OP-04. Ver docs/09 §23–§43.
+> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, AMP-02, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
+> incidente de OP-04. Ver docs/09 §23–§44.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).

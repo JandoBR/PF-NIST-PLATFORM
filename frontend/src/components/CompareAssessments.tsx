@@ -10,7 +10,8 @@ import {
   TrendingUp,
   TrendingDown,
 } from 'lucide-react';
-import { compareAssessments, listAssessments } from '@/lib/api';
+import { compareAssessments, downloadComparisonReport, listAssessments } from '@/lib/api';
+import { DownloadPdfButton } from '@/components/DownloadPdfButton';
 import type { AssessmentDetail, ComparisonDiff, ComparisonOut } from '@/lib/types';
 import { FUNCTION_NAMES, FUNCTION_ORDER } from '@/lib/types';
 import { FUNCTION_ACCENTS } from '@/lib/ui';
@@ -200,6 +201,15 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
 
       {comparison && summary && (
         <>
+          <div className="flex justify-end">
+            <DownloadPdfButton
+              label="Comparación PDF"
+              onDownload={() =>
+                downloadComparisonReport(comparison.assessment_id_a, comparison.assessment_id_b)
+              }
+            />
+          </div>
+
           {/* Resumen del cambio */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <DeltaCard
