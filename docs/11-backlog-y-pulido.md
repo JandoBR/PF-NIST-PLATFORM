@@ -8,7 +8,7 @@ IDs estables para referenciarlos en commits/PRs.
 
 ## A. UI / UX (pulido)
 
-### [ ] UI-01 · Privacidad visible (P1)
+### [x] UI-01 · Privacidad visible (P1)
 Hoy la dimensión de privacidad (secundaria) casi no aparece en la UI, pese a estar en el diseño
 (docs/00 §6, docs/03 §7). Objetivo: que se vea como parte del producto, con su aclaración de
 alcance.
@@ -19,12 +19,12 @@ alcance.
   personales; no es una evaluación integral de privacidad", docs/00 §6).
 - Depende de implementar `ID-04` y `RS-03` (ver CR-01).
 
-### [ ] UI-02 · "Regenerar" en Recomendaciones (P2)
+### [x] UI-02 · "Regenerar" en Recomendaciones (P2)
 El botón de regenerar plantilla no tiene una función clara y hoy es redundante (los planes ya se
 generan desde la plantilla). Decidir: quitarlo, o dejarlo solo cuando no hay planes, o renombrarlo
 y explicar qué hace. Criterio: que ningún botón exista sin efecto perceptible.
 
-### [ ] UI-03 · Toggles de IA momentáneos (P1)
+### [x] UI-03 · Toggles de IA momentáneos (P1)
 Los checkboxes de IA (U1/U2) son **por corrida**: existen para no gastar tokens, no son una
 preferencia persistente. Hoy su estado sobrevive al cerrar/abrir el modal, lo que da a entender lo
 contrario.
@@ -32,18 +32,18 @@ contrario.
 - Texto explícito: "solo aplica a esta evaluación; se resetea".
 - (Opcional) tooltip con el costo estimado / que sin `DEEPSEEK_API_KEY` no tiene efecto.
 
-### [ ] UI-04 · Hallazgo → plan inline (P1)
+### [x] UI-04 · Hallazgo → plan inline (P1)
 En Recomendaciones, tocar un hallazgo debería **desplegar su plan de acción** en el lugar (como hace
 Simulación de Amenazas con sus incidentes), en vez de tener un botón que salta a otra sección.
 - Acordeón por hallazgo: pasos, verificación, prioridad, `generado_por`.
 - Si no hay plan generado para el hallazgo, ofrecer "generar plan" desde ahí.
 
-### [ ] UI-05 · Renombrar "Simulación de Amenazas" (P1)
+### [x] UI-05 · Renombrar "Simulación de Amenazas" (P1)
 No es una simulación: son **eventos/amenazas reales** ingestados. Renombrar la pestaña y sus textos
 (p. ej. "Vigilancia Operativa" o "Eventos e Incidentes"), y quitar la palabra "simulación" de la UI
 (el nombre del fixture puede quedar interno).
 
-### [ ] UI-06 · Incidentes: reemplazo/archivo e historial (P1)
+### [ ] UI-06 · Incidentes: reemplazo/archivo e historial (P1) — bloqueado por OP-04
 Al ingerir otro log ("Con incidentes" → "Flujo correcto") los incidentes anteriores no desaparecen
 ni se reemplazan; al marcar un incidente como completado tampoco sale de la lista. Objetivo: que la
 pestaña refleje el estado actual y conserve un historial.
@@ -53,7 +53,7 @@ pestaña refleje el estado actual y conserve un historial.
 - Requiere que el backend permita cambiar el estado de un incidente (hoy es de solo lectura desde la
   API): ver OP-04.
 
-### [ ] UI-07 · Comparación más explícita + gráficos (P1)
+### [x] UI-07 · Comparación más explícita + gráficos (P1)
 La pestaña de comparación debería explicar *qué* cambió, no solo listarlo.
 - Vista tipo Resumen de Madurez, enfocada en el diff: función/categoría con score y cobertura,
   delta (↑/↓), criterios que cambiaron y por qué (dirección del cambio).

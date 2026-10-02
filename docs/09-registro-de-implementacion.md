@@ -826,3 +826,45 @@ Postgres, `create_all` ya no corre.
 
 **Lección operativa:** en Postgres, nunca correr `create_all` junto a Alembic. El atajo de `create_all`
 es cómodo para el SQLite local y los tests, no para el stack real (docs/04 §11, regla C2).
+
+## 23. Pulido de UI (docs/11 §A)
+
+Se atacaron primero los puntos de UI/UX del backlog (docs/11), que no dependen de cambios de backend.
+Solo presentación y comportamiento de la SPA: no se tocó el contrato de la API.
+
+**UI-01 · Privacidad visible.** El cruce con privacidad (docs/03 §7, docs/00 §6) existía en el diseño
+pero no en pantalla. Se agregó una sección **"Privacidad relacionada con ciberseguridad"** en el
+Resumen de Madurez (score promedio, cobertura, criterios y su estado), un badge **"Privacidad"** en
+cada criterio del cruce dentro de la tabla, y la nota de alcance obligatoria. Los criterios del cruce
+viven en `PRIVACY_CRITERIA` (`frontend/src/lib/ui.ts`); hoy se muestran los 7 implementados
+(`CRI-PR-01/03/05`, `CRI-DE-02`, `CRI-RS-01`, `CRI-RC-02/03`); `CRI-ID-04`, `CRI-RS-03` y `CRI-RC-01`
+aparecerán solos cuando se implementen (CR-03).
+
+**UI-02 · Botón "Regenerar".** No se quitó (sí recalcula: `POST /assessments/{id}/plans` reemplaza el
+plan), pero se aclaró su efecto: `title` explicativo, etiqueta que distingue "Generar" de "Regenerar"
+y una nota visible cuando ya hay plan ("Regenerar reemplaza el plan actual…"). Ningún botón queda sin
+efecto perceptible.
+
+**UI-03 · Toggles de IA momentáneos.** Los checkboxes U1/U2 son por corrida; `resetAndClose` en
+`ContextSelector` ahora los vuelve a `false` al cerrar/enviar, y el texto dice explícitamente
+"Solo aplica a esta evaluación: se restablece al cerrar o enviar el modal".
+
+**UI-04 · Hallazgo → plan inline.** En Recomendaciones, cada hallazgo es un acordeón que despliega su
+plan de acción en el lugar (reutiliza `PlanBody`, compartido con la vista "Plan de Acción"); si el
+hallazgo aún no tiene plan, ofrece generarlo desde ahí. Se eliminó el salto implícito a otra sección.
+
+**UI-05 · Renombrar "Simulación de Amenazas".** La pestaña pasó a **"Eventos e Incidentes"** (no es una
+simulación: son eventos reales ingestados) y se ajustó el subtítulo de la ingesta. La palabra
+"simulación" desapareció de la UI (el nombre de los fixtures `.jsonl` queda interno).
+
+**UI-07 · Comparación explícita + gráficos.** La pestaña Comparar ahora muestra un **resumen** (score
+global con delta, criterios mejorados/degradados/sin cambio), **barras antes/después** del score global
+y **por función CSF**, y el detalle por criterio con **dirección** del cambio (↑ mejora / ↓ retroceso /
+→ cambio sin score / = sin cambio). `FUNCTION_ACCENTS` se movió a `lib/ui.ts` para compartirlo con el
+dashboard.
+
+**WIP · UI-06 (incidentes: reemplazo/archivo e historial).** No se abordó: requiere que la API exponga
+transiciones de estado de incidente (OP-04), hoy de solo lectura. Queda pendiente junto con OP-04.
+
+**Verificación:** frontend `typecheck`, `lint` y `build` limpios. Sin cambios de backend (no afecta los
+212 tests).
