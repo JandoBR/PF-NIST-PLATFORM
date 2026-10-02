@@ -38,7 +38,7 @@ from app.core.repository import (
     row_to_plan,
     row_to_result,
 )
-from app.evaluation import aggregation, engine
+from app.evaluation import aggregation, contradictions, engine
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
 from app.models.tables import (
@@ -223,6 +223,27 @@ def create_pending_assessment(
     return assessment
 
 
+def _cap_contradicted(
+    session: Session,
+    assessment: Assessment,
+    results: list[CriterionResult],
+    evidence: list[EvidenceInstance],
+) -> list[CriterionResult]:
+    """Un criterio con contradiccion sin resolver no puede subir el puntaje respecto a la
+    evaluacion anterior del mismo org+scope (docs/02 §5, docs/09 §42)."""
+
+    previous_id = assessment.previous_assessment_id
+    if previous_id is None:
+        return results
+    current = contradictions.detect(evidence)
+    if not current:
+        return results
+    previous_scores = {
+        r.criterion_id: r.final_score for r in load_criterion_results(session, previous_id)
+    }
+    return contradictions.cap_contradicted(results, current, previous_scores)
+
+
 def run_pending_assessment(
     session: Session,
     methodology: Methodology,
@@ -271,6 +292,7 @@ def run_pending_assessment(
             results = engine.apply_ai_adjustments(
                 methodology, results, evidence, ai_client, context or {}
             )
+        results = _cap_contradicted(session, assessment, results, evidence)
 
         for source in sources:
             source.assessment_id = assessment.id

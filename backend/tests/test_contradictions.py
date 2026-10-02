@@ -8,6 +8,7 @@ import pytest
 from app.ai.client import FakeAIClient
 from app.core import assessment_service as svc
 from app.evaluation import engine
+from app.evaluation.contradictions import Contradiction, cap_contradicted
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.loader import load_methodology
 from app.recommendations.contradictions import detect_contradictions
@@ -342,3 +343,105 @@ def test_no_contradiction_leaves_evaluation_untouched(methodology):
     evidence = [_backup(14), _encryption()]
     with_engine = engine.evaluate_all(methodology, evidence)
     assert all("Contradiccion" not in r.explanation for r in with_engine)
+
+
+# -- tope mientras una contradiccion siga sin resolverse -------------------------
+
+
+def _result_for(criterion_id: str, score: float | None) -> CriterionResult:
+    return CriterionResult(
+        criterion_id=criterion_id,
+        criterion_version=1,
+        estado=Estado.EVALUADO if score is not None else Estado.EVIDENCIA_INSUFICIENTE,
+        base_score=score,
+        final_score=score,
+        explanation="x",
+    )
+
+
+def _contradiction(criterion_id="CRI-PR-02", titulo="t") -> Contradiction:
+    return Contradiction(
+        criterion_id=criterion_id,
+        titulo=titulo,
+        severidad="media",
+        detalle="d",
+        evidence_ids=[],
+        excluded_claim_ids=[],
+    )
+
+
+def test_contradiction_cannot_raise_the_score():
+    (r,) = cap_contradicted([_result_for("CRI-PR-02", 75)], [_contradiction()], {"CRI-PR-02": 50})
+    assert (r.final_score, r.base_score) == (50, 75)  # base intacto; lo que cuenta es final
+    assert "no puede superar el de la evaluacion anterior (50)" in r.explanation
+
+
+def test_contradiction_can_still_lower_the_score():
+    (r,) = cap_contradicted([_result_for("CRI-PR-02", 25)], [_contradiction()], {"CRI-PR-02": 50})
+    assert r.final_score == 25 and "no puede superar" not in r.explanation
+
+
+def test_no_previous_score_or_other_criterion_is_untouched():
+    hay = [_contradiction()]
+    sin_anterior = cap_contradicted([_result_for("CRI-PR-02", 75)], hay, {})
+    assert sin_anterior[0].final_score == 75
+    distinto = cap_contradicted([_result_for("CRI-PR-01", 90)], hay, {"CRI-PR-01": 10})
+    assert distinto[0].final_score == 90
+
+
+def test_no_contradiction_means_no_cap():
+    (r,) = cap_contradicted([_result_for("CRI-PR-02", 75)], [], {"CRI-PR-02": 50})
+    assert r.final_score == 75
+
+
+def test_cap_holds_until_the_contradiction_is_resolved(db_session, methodology, tmp_path):
+    tf = tmp_path / "main.tf"
+    docs = FIXTURES / "documents" / "politica-seguridad.md"
+    politica_30 = FakeAIClient(
+        {
+            "Direccion General": {
+                "afirmaciones": [
+                    {
+                        "tipo": "backup_policy",
+                        "encontrado": True,
+                        "contenido": {"respaldo": True, "retencion": "30 dias"},
+                        "cita": {"fragmento": "aprobada por la Direccion General"},
+                        "confianza": 0.9,
+                    }
+                ]
+            }
+        }
+    )
+
+    def run(retencion: int, **extra):
+        tf.write_text(
+            'resource "aws_db_instance" "db" {\n'
+            f"  storage_encrypted = true\n  backup_retention_period = {retencion}\n}}\n"
+        )
+        assessment = svc.run_assessment(
+            db_session,
+            methodology,
+            org_name="Tope",
+            scope=SCOPE,
+            terraform_path=tmp_path,
+            **extra,
+        )
+        results = svc.load_criterion_results(db_session, assessment.id)
+        return next(r for r in results if r.criterion_id == "CRI-PR-02")
+
+    primera = run(3)  # sin politica, retencion 3 (< 7): 50
+    assert primera.final_score == 50
+
+    # El usuario corrige la retencion Y aparece una contradiccion nueva (14 < 30 de la politica):
+    # lo tecnico valdria 75, pero el tope lo deja en el puntaje anterior.
+    segunda = run(14, documents_path=docs, ai_client=politica_30)
+    assert segunda.base_score == 75 and segunda.final_score == 50
+    assert "no puede superar el de la evaluacion anterior (50)" in segunda.explanation
+
+    # La contradiccion persiste: el tope sigue, no se levanta por esperar una evaluacion.
+    tercera = run(14, documents_path=docs, ai_client=politica_30)
+    assert tercera.base_score == 75 and tercera.final_score == 50
+
+    # Se resuelve (retencion >= 30 dias, de acuerdo con la politica): se aplica normalmente.
+    cuarta = run(30, documents_path=docs, ai_client=politica_30)
+    assert cuarta.final_score >= 75 and "no puede superar" not in cuarta.explanation

@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from app.evaluation.rules._common import best_found, by_type, doc_claims
 from app.evaluation.rules.pr02_backup import retencion_politica_dias
+from app.evaluation.schemas import CriterionResult
 from app.schemas.evidence import EvidenceInstance
 
 _PR02 = "CRI-PR-02"
@@ -227,3 +228,45 @@ def exclude_contradicted(
     if not excluidas:
         return evidence, contradicciones
     return [e for e in evidence if e.id not in excluidas], contradicciones
+
+
+def cap_contradicted(
+    results: list[CriterionResult],
+    current: list[Contradiction],
+    previous_scores: dict[str, float | None],
+) -> list[CriterionResult]:
+    """Mientras un criterio tenga una contradiccion, su puntaje no puede subir respecto a la
+    evaluacion anterior: `final_score` queda como maximo en el anterior (puede bajar, nunca subir).
+
+    No penaliza, solo no premia: la mejora tecnica no cuenta hasta que la politica y la
+    infraestructura dejen de contradecirse. Sin puntaje anterior (criterio no evaluado) no hay con
+    que comparar. `base_score` no se toca: es lo que dicen las reglas; `final_score` es lo que
+    cuenta.
+    """
+
+    contradichos = {c.criterion_id for c in current}
+
+    capped = []
+    for r in results:
+        anterior = previous_scores.get(r.criterion_id)
+        if (
+            r.criterion_id not in contradichos
+            or anterior is None
+            or r.final_score is None
+            or r.final_score <= anterior
+        ):
+            capped.append(r)
+            continue
+        capped.append(
+            r.model_copy(
+                update={
+                    "final_score": anterior,
+                    "explanation": (
+                        f"{r.explanation} Contradiccion sin resolver: el puntaje no puede superar"
+                        f" el de la evaluacion anterior ({anterior:g}) hasta que la politica y la"
+                        " infraestructura dejen de contradecirse."
+                    ),
+                }
+            )
+        )
+    return capped
