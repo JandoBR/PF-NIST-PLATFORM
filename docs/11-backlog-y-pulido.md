@@ -1,0 +1,136 @@
+# 11 — Backlog y Pulido
+
+Lista de trabajo viva. No es un changelog: cuando algo se implementa, se registra en
+`docs/09-registro-de-implementacion.md` y se marca aquí como hecho (o se borra).
+
+Prioridades: **P0** bloquea valor central · **P1** importante · **P2** deseable.
+IDs estables para referenciarlos en commits/PRs.
+
+## A. UI / UX (pulido)
+
+### [ ] UI-01 · Privacidad visible (P1)
+Hoy la dimensión de privacidad (secundaria) casi no aparece en la UI, pese a estar en el diseño
+(docs/00 §6, docs/03 §7). Objetivo: que se vea como parte del producto, con su aclaración de
+alcance.
+- Añadir una sección "Privacidad relacionada con ciberseguridad" en el Resumen de Madurez, armada
+  con los criterios del cruce (`ID-04`, `PR-01/03/05`, `DE-02`, `RS-01/03`, `RC-01/02/03`).
+- Marcar esos criterios con un badge "privacidad" en la tabla de criterios.
+- Mostrar en el reporte la nota de alcance ("cubre eventos de ciberseguridad que afectan datos
+  personales; no es una evaluación integral de privacidad", docs/00 §6).
+- Depende de implementar `ID-04` y `RS-03` (ver CR-01).
+
+### [ ] UI-02 · "Regenerar" en Recomendaciones (P2)
+El botón de regenerar plantilla no tiene una función clara y hoy es redundante (los planes ya se
+generan desde la plantilla). Decidir: quitarlo, o dejarlo solo cuando no hay planes, o renombrarlo
+y explicar qué hace. Criterio: que ningún botón exista sin efecto perceptible.
+
+### [ ] UI-03 · Toggles de IA momentáneos (P1)
+Los checkboxes de IA (U1/U2) son **por corrida**: existen para no gastar tokens, no son una
+preferencia persistente. Hoy su estado sobrevive al cerrar/abrir el modal, lo que da a entender lo
+contrario.
+- Volver a `false` al cerrar/enviar el modal (o al completarse la corrida).
+- Texto explícito: "solo aplica a esta evaluación; se resetea".
+- (Opcional) tooltip con el costo estimado / que sin `DEEPSEEK_API_KEY` no tiene efecto.
+
+### [ ] UI-04 · Hallazgo → plan inline (P1)
+En Recomendaciones, tocar un hallazgo debería **desplegar su plan de acción** en el lugar (como hace
+Simulación de Amenazas con sus incidentes), en vez de tener un botón que salta a otra sección.
+- Acordeón por hallazgo: pasos, verificación, prioridad, `generado_por`.
+- Si no hay plan generado para el hallazgo, ofrecer "generar plan" desde ahí.
+
+### [ ] UI-05 · Renombrar "Simulación de Amenazas" (P1)
+No es una simulación: son **eventos/amenazas reales** ingestados. Renombrar la pestaña y sus textos
+(p. ej. "Vigilancia Operativa" o "Eventos e Incidentes"), y quitar la palabra "simulación" de la UI
+(el nombre del fixture puede quedar interno).
+
+### [ ] UI-06 · Incidentes: reemplazo/archivo e historial (P1)
+Al ingerir otro log ("Con incidentes" → "Flujo correcto") los incidentes anteriores no desaparecen
+ni se reemplazan; al marcar un incidente como completado tampoco sale de la lista. Objetivo: que la
+pestaña refleje el estado actual y conserve un historial.
+- Al ingerir un log nuevo, refrescar/reemplazar la vista según el resultado de esa ingesta.
+- Cerrar un incidente ("completado") lo mueve a un **historial de incidentes** dentro de la misma
+  pestaña (pestañas o filtro activos/historial).
+- Requiere que el backend permita cambiar el estado de un incidente (hoy es de solo lectura desde la
+  API): ver OP-04.
+
+### [ ] UI-07 · Comparación más explícita + gráficos (P1)
+La pestaña de comparación debería explicar *qué* cambió, no solo listarlo.
+- Vista tipo Resumen de Madurez, enfocada en el diff: función/categoría con score y cobertura,
+  delta (↑/↓), criterios que cambiaron y por qué (dirección del cambio).
+- Gráfico de cambios: score global y cobertura global (barras antes/después), y selector para ver el
+  cambio por función/categoría.
+- (Opcional) exportar la comparación.
+
+## B. Funcionalidad pendiente (lo que reportó Claude)
+
+- [ ] FN-01 · **Historial de jobs** (P1): no hay `GET /jobs` (listado) ni UI; hoy solo `GET /jobs/{id}`.
+  Sin esto no se puede ver qué corrió ni reintentar un job fallido sin reenviar todo.
+- [ ] FN-02 · **`Job.progreso` incremental** (P2): hoy es 0→100 cosmético; no hay barra real.
+- [ ] FN-03 · **Ingesta "nuevos vs actualizados"** (P2): la conversión a async perdió ese detalle
+  (la API devuelve solo `job_id`); recuperarlo en la respuesta o en el resultado del job.
+- [ ] FN-04 · **Toggle de IA en "Reevaluar"** (P2): la API lo soporta (`ai_adjust`), el botón del
+  dashboard no lo pregunta.
+
+## C. Cobertura de criterios y Tier (P0)
+
+El catálogo implementa **11 de los 23** criterios de docs/03. Faltan 12, de los cuales **7 son MVP**.
+Consecuencia grave: el **Tier no puede pasar de Tier 1** (Tier 2 exige `GV-02` e `ID-03`, que no
+existen), así que una funcionalidad central del producto queda inutilizable.
+
+- [ ] CR-01 · Implementar los **7 MVP faltantes** (P0), en este orden por impacto:
+  - `GV-02` Roles y responsabilidades (documental) · `ID-03` Identificación/evaluación de riesgos
+    (documental) → **desbloquean Tier 2**.
+  - `RC-01` Procedimiento de recuperación (documental) · `DE-01` Monitoreo de red/cómputo (mixto).
+  - `GV-03` Tolerancia al riesgo · `ID-01` Inventario de activos · `ID-02` Priorización por criticidad.
+- [ ] CR-02 · Completar Tier 3/4: `GV-04`, `DE-02` (ya está), `RS-01` (ya está), `RC-01/02` (falta
+  RC-01), `RS-02`, `RC-03`, `ID-04`.
+- [ ] CR-03 · `ID-04` (inventario de datos) y `RS-03` (notificación) para dar sustancia a la
+  privacidad (ver UI-01).
+- [ ] CR-04 · Revisar `DE-02` (hoy "parcial"): incorporar `doc.claim` para llegar a 100, no topar en 75.
+
+## D. Simplificaciones activas (docs/09 §11) — siguen abiertas
+
+- [ ] OP-01 · `ctx.profile` / criticidad de activo para la fórmula de prioridad de planes (docs/05 §4.2).
+- [ ] OP-02 · Persistir la auditoría de ajustes de IA (tabla `ai_adjustments`: modelo, prompt_version,
+  propuesta, justificación) en vez de solo el texto en `explanation`.
+- [ ] OP-03 · Persistir `findings`/`score_aggregates`/`tier_estimates` si recalcular se vuelve costoso.
+- [ ] OP-04 · Hallazgos `contradiccion` (docs/02 §5) y `limitacion` además de `brecha`; y transiciones
+  de estado de incidente (`open→…→closed`) expuestas por la API (habilita UI-06).
+- [ ] OP-05 · Trigger D2 (`alert_raised` sin `incident_triaged`).
+- [ ] OP-06 · Cooldown / rate-limit real de incidentes (O4), no solo idempotencia por `correlation_key`.
+- [ ] OP-07 · Ventanas deslizantes (hoy "una ventana = un lote ingerido").
+- [ ] OP-08 · Consumidores `log_ingest`/`log_aggregate` separados (hoy un solo job `event_ingest`).
+- [ ] OP-09 · Modelar `ctx.*` como evidencia (contexto del formulario → criterios).
+- [ ] OP-10 · Ciclo de vida completo del job (docs/01 §5): `creada→ingestando→analizando→…` (hoy solo
+  `pendiente/en_progreso/completado/fallido`).
+
+## E. API / contratos faltantes (docs/04 §6)
+
+- [ ] API-01 · `POST /assessments/{id}/sources` y `POST /assessments/{id}/run` como pasos separados
+  (hoy `POST /assessments` fusiona subir+crear+encolar).
+- [ ] API-02 · `GET /assessments/{id}/scores` explícito (hoy se pliega en `GET /assessments/{id}`).
+- [ ] API-03 · `GET /jobs` (listado, filtrable por estado/org) — habilita FN-01.
+
+## F. Seguridad / endurecimiento
+
+- [ ] SEC-01 · `SECRET_KEY` obligatoria en despliegues reales (hoy default inseguro de demo).
+- [ ] SEC-02 · Evaluar cookie `HttpOnly`+`SameSite` en vez de token en `localStorage` (mitiga XSS).
+- [ ] SEC-03 · Decidir visibilidad de `/docs`, `/redoc`, `/openapi.json` (hoy públicos).
+- [ ] SEC-04 · Rate limiting / bloqueo por intentos en `/auth/login`.
+- [ ] SEC-05 · Registro/administración de cuentas fuera del seed (CLI o panel admin mínimo).
+- [ ] SEC-06 · Quitar/rotar las contraseñas de demo antes de cualquier uso real.
+
+## G. Ampliaciones (docs/07)
+
+- [ ] AMP-01 · Recuperación semántica (embeddings) sobre el catálogo NIST.
+- [ ] AMP-02 · Exportación PDF del informe ejecutivo (y de la comparación, UI-07).
+- [ ] AMP-03 · Criterios por debajo de los MVP (`GV-04`, `DE-03`, `RS-02`, `ID-04`) — se solapa con CR.
+
+## Priorización sugerida
+
+1. **CR-01** (`GV-02`, `ID-03`, `RC-01`, `DE-01`): desbloquea el Tier y sube la cobertura de forma
+   real. Es lo de mayor valor con menor superficie de UI.
+2. **UI-01/UI-03/UI-04/UI-05/UI-06**: deja la app coherente para una demo (privacidad visible, toggles
+   claros, hallazgos→plan, naming correcto, incidentes con historial).
+3. **UI-07 + FN-01**: comparación con gráficos e historial de jobs.
+4. **OP/SEC/AMP**: endurecimiento y ampliaciones, según tiempo.
