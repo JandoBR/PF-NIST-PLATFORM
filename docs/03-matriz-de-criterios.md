@@ -177,11 +177,13 @@ Resumen de cobertura del catálogo:
 
 ### CRI-PR-05 — Almacenamiento protegido contra acceso público
 - **Subcategorías:** PR.DS-01 · **Tipo:** Técnico · **Peso:** 3 · **IA:** no · **MVP:** sí · **Privacidad:** Protect-P
-- **Evidencias:** `tf.public_access.config`, `tf.versioning.config`
+- **Evidencias:** `tf.public_access.config`, `tf.versioning.config` (informativa), `tf.db_exposure.config`
 - **Regla:**
   - 100: bloqueo de acceso público en los 4 modos (ACL, política, ignorar, restringir) declarado.
   - 50: bloqueo parcial (alguno de los 4).
-  - 0: `block_public_acls = false` o equivalente explícito.
+  - 0: `block_public_acls = false` o equivalente explícito, **o** una base de datos con
+    `publicly_accessible = true` (exposición explícita; prevalece sobre una política que diga lo contrario).
+  - Solo bases de datos, todas no públicas → 100; sin buckets ni bases → no aplicable.
   - `unknown` → insuficiente.
 - **Recomendación:** habilitar `aws_s3_bucket_public_access_block` completo.
 

@@ -2,12 +2,17 @@
 
 Distingue "no hay buckets" (no_aplicable) de "hay buckets sin `public_access_block` declarado"
 (evidencia_insuficiente) cruzando contra `tf.resource.present`.
+
+Tambien mira `tf.db_exposure.config` (`publicly_accessible` de RDS): una base de datos declarada
+publica es una exposicion explicita de datos almacenados y puntua 0, igual que un bucket sin
+bloqueo; si todas las bases son privadas no resta ni suma. Una politica documental que diga lo
+contrario no cambia el puntaje (D7): se reporta como contradiccion (`recommendations`).
 """
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import by_type, noting_unresolved
-from app.evaluation.schemas import CriterionResult, Estado
+from app.evaluation.rules._common import by_type, noting_unresolved, result
+from app.evaluation.schemas import SCORING_STATES, CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-PR-05"
@@ -28,7 +33,51 @@ def _versioning_note(evidence: list[EvidenceInstance]) -> str:
     )
 
 
+def _with_database_exposure(
+    evidence: list[EvidenceInstance], resultado: CriterionResult
+) -> CriterionResult:
+    dbs = by_type(evidence, "tf.db_exposure.config")
+    publicas = [e for e in dbs if e.value["publico"] is True]
+    privadas = [e for e in dbs if e.value["publico"] is False]
+
+    if publicas:
+        texto = (
+            "Base(s) de datos publicamente accesible(s) (publicly_accessible = true): "
+            + ", ".join(e.subject_ref for e in publicas)
+            + "."
+        )
+        if resultado.estado in SCORING_STATES:
+            texto += f" {resultado.explanation}"
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            0,
+            texto,
+            [*(e.id for e in publicas), *resultado.evidence_ids],
+        )
+    if not privadas:
+        return resultado
+    nombres = ", ".join(e.subject_ref for e in privadas)
+    if resultado.estado == Estado.NO_APLICABLE:
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            100,
+            f"Ninguna base de datos es publicamente accesible: {nombres}.",
+            [e.id for e in privadas],
+        )
+    if resultado.estado == Estado.EVALUADO:
+        return resultado.model_copy(
+            update={
+                "explanation": f"{resultado.explanation} Bases de datos no publicas: {nombres}.",
+                "evidence_ids": [*resultado.evidence_ids, *(e.id for e in privadas)],
+            }
+        )
+    return resultado
+
+
 @noting_unresolved({
+    "publicly_accessible",
     "block_public_acls",
     "block_public_policy",
     "ignore_public_acls",
@@ -36,7 +85,7 @@ def _versioning_note(evidence: list[EvidenceInstance]) -> str:
     "bucket",
 })
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    resultado = _evaluate_public_access(evidence)
+    resultado = _with_database_exposure(evidence, _evaluate_public_access(evidence))
     nota = _versioning_note(evidence)
     if not nota or resultado.estado == Estado.NO_APLICABLE:
         return resultado

@@ -133,9 +133,10 @@
       "criterion_id": "CRI-PR-05",
       "estado": "evaluado",
       "evidence": [
+        "tf.db_exposure.config|aws_db_instance.legacy",
         "tf.public_access.config|aws_s3_bucket.backups"
       ],
-      "explanation": "sin bloqueo (block_public_acls = false explicito): aws_s3_bucket.backups.",
+      "explanation": "Base(s) de datos publicamente accesible(s) (publicly_accessible = true): aws_db_instance.legacy. sin bloqueo (block_public_acls = false explicito): aws_s3_bucket.backups.",
       "final_score": 0.0
     },
     {

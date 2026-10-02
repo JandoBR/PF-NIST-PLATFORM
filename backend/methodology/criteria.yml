@@ -10,7 +10,8 @@
 # v5: PR-02, RS-01, RC-02 y RC-03 consumen doc.claim (CR-05).
 # v6: CR-06 - PR-01/02/03/04/05/06 y DE-01 consumen la evidencia declarada que ignoraban y
 #     declaran las expresiones Terraform sin resolver (tf.expression.unresolved).
-version: 6
+# v7: PR-05 consume tf.db_exposure.config y pide exposure_policy (contradiccion docs/02 §5).
+version: 7
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -203,10 +204,11 @@ criterios:
     subcategorias: [PR.DS-01]
     peso: 3
     ai_adjustable: false
-    evidencias: [tf.public_access.config@1, tf.versioning.config@1]
+    evidencias: [tf.public_access.config@1, tf.versioning.config@1, tf.db_exposure.config@1]
     recomendacion: "Habilitar aws_s3_bucket_public_access_block completo."
     regla:
       tipo: bloqueo_publico_4_modos
+      tipos_afirmacion: [exposure_policy]
 
   - id: CRI-PR-06
     version: 1

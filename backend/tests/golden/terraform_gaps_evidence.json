@@ -27,6 +27,22 @@
     "scope": "entorno:produccion",
     "subject_ref": "aws_db_instance.legacy",
     "subject_type": "aws_db_instance",
+    "type_id": "tf.db_exposure.config",
+    "type_version": 1,
+    "value": {
+      "publico": true
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf"
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_db_instance.legacy",
+    "subject_type": "aws_db_instance",
     "type_id": "tf.encryption.config",
     "type_version": 1,
     "value": {

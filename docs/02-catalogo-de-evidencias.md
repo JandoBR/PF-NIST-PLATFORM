@@ -67,6 +67,7 @@ notas: >
 | `tf.attr.value` | `{ recurso, atributo, valor\|unknown, motivo_unknown? }` | Atributos literales o resolubles (no expresiones). |
 | `tf.encryption.config` | `{ estado, mecanismo?, llave? }` | Cifrado en reposo (RDS, S3). |
 | `tf.public_access.config` | `{ bloqueo_publico: bool\|unknown, nivel? }` | Acceso público a almacenamiento (S3). |
+| `tf.db_exposure.config` | `{ publico: bool\|unknown }` | Accesibilidad pública de bases de datos (`publicly_accessible`); ausente o expresión → `unknown`. |
 | `tf.backup.config` | `{ retencion_dias?: int, habilitado?: bool, ventana? }` | Retención de backups (RDS). |
 | `tf.logging.config` | `{ habilitado: bool\|unknown, multi_region?, destino? }` | CloudTrail / logging declarado. |
 | `tf.security_group.rules` | reglas normalizadas (ver §2) | Exposición de red de grupos de seguridad. |
@@ -166,9 +167,9 @@ cuando ambas hablan del mismo recurso, propiedad y alcance.**
 Las contradicciones se registran como **hallazgos** con ambos lados citados (evidencia + locator).
 No penalizan doble: el hallazgo referencia el criterio afectado una sola vez.
 
-Implementado en `app/recommendations/contradictions.py` (docs/09 §38): backup de la política vs
-`tf.backup.config`, y dos documentos con retención o frecuencia de revisión distintas. Otras
-propiedades (p. ej. "BD no pública") aún no tienen una afirmación documental estructurada que comparar.
+Implementado en `app/recommendations/contradictions.py` (docs/09 §38, §40): backup de la política vs
+`tf.backup.config`, "BD no pública" (`doc.claim(exposure_policy)`) vs `tf.db_exposure.config`, y dos
+documentos con retención o frecuencia de revisión distintas.
 
 ## 6. Versionado e Inmutabilidad en la Práctica
 

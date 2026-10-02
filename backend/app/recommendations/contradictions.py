@@ -22,6 +22,7 @@ from app.schemas.evidence import EvidenceInstance
 
 _PR02 = "CRI-PR-02"
 _GV01 = "CRI-GV-01"
+_PR05 = "CRI-PR-05"
 
 
 def _finding(
@@ -95,6 +96,33 @@ def _backup_vs_policy(evidence: list[EvidenceInstance]) -> list[Finding]:
     return findings
 
 
+def _database_exposure_vs_policy(evidence: list[EvidenceInstance]) -> list[Finding]:
+    """La politica prohibe bases de datos publicas y Terraform declara `publicly_accessible = true`
+    (el ejemplo canonico de docs/02 §5). Prevalece Terraform: PR-05 ya puntua 0."""
+
+    politicas = [
+        c
+        for c in doc_claims(evidence, "exposure_policy")
+        if c.value.get("encontrado")
+        and (c.value.get("contenido") or {}).get("bases_publicas_permitidas") is False
+    ]
+    publicas = [e for e in by_type(evidence, "tf.db_exposure.config") if e.value["publico"] is True]
+    pares = [(p, d) for p in politicas for d in publicas if p.scope == d.scope]
+    if not pares:
+        return []
+    recursos = ", ".join(sorted({d.subject_ref for _, d in pares}))
+    return [
+        _finding(
+            _PR05,
+            "La politica prohibe bases de datos publicas pero Terraform las expone",
+            "alta",
+            f"La politica documental no permite bases de datos accesibles desde Internet;"
+            f" {recursos} declara publicly_accessible = true. Prevalece lo tecnico (D7).",
+            _unique(e.id for par in pares for e in par),
+        )
+    ]
+
+
 def _documents_disagree(
     evidence: list[EvidenceInstance],
     tipo: str,
@@ -147,6 +175,7 @@ def _unique(ids: Iterable[str]) -> list[str]:
 def detect_contradictions(evidence: list[EvidenceInstance]) -> list[Finding]:
     return [
         *_backup_vs_policy(evidence),
+        *_database_exposure_vs_policy(evidence),
         *_documents_disagree(
             evidence,
             "backup_policy",

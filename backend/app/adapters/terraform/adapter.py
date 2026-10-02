@@ -55,6 +55,7 @@ _WATCHED_ATTRS: dict[str, set[str]] = {
         "kms_key_id",
         "backup_retention_period",
         "backup_window",
+        "publicly_accessible",
     },
     "aws_s3_bucket_server_side_encryption_configuration": {
         "sse_algorithm",
@@ -122,7 +123,8 @@ def _strip_meta(block: dict) -> dict:
 
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
 #: v2: emite tf.expression.unresolved y no convierte expresiones en valores (CR-06).
-ADAPTER_VERSION = "2"
+#: v3: emite tf.db_exposure.config (publicly_accessible).
+ADAPTER_VERSION = "3"
 
 
 class TerraformAdapter:
@@ -204,6 +206,7 @@ class TerraformAdapter:
             return [
                 *self._rds_encryption(file_path, subject_ref, attrs),
                 *self._rds_backup(file_path, subject_ref, attrs),
+                self._rds_exposure(file_path, subject_ref, attrs),
                 *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
             ]
 
@@ -328,6 +331,29 @@ class TerraformAdapter:
                 limitations=limitations,
             )
         ]
+
+    def _rds_exposure(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
+        accesible = attrs.get("publicly_accessible")
+        if accesible is True:
+            publico: Any = True
+        elif accesible is False:
+            publico = False
+        else:
+            publico = "unknown"
+        if _is_expression(accesible):
+            limitations: str | None = "expresion_no_resuelta: publicly_accessible"
+        elif accesible is None:
+            limitations = "atributo_ausente: publicly_accessible"
+        else:
+            limitations = None
+        return self._make_evidence(
+            type_id="tf.db_exposure.config",
+            subject_type="aws_db_instance",
+            subject_ref=subject_ref,
+            value={"publico": publico},
+            file_path=file_path,
+            limitations=limitations,
+        )
 
     def _rds_backup(
         self, file_path: Path, subject_ref: str, attrs: dict

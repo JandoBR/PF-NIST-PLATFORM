@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from app.adapters.terraform.adapter import ADAPTER_VERSION as TERRAFORM_ADAPTER_VERSION
 from tests.conftest import run_pending_jobs
 
 TERRAFORM_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "terraform"
@@ -282,5 +283,5 @@ def test_live_ai_guard_blocks_ai_adjust_with_a_real_key(api_client, monkeypatch)
 def test_detail_exposes_reproducibility(api_client, db_session, methodology, fake_redis):
     detail = _create_and_complete(api_client, db_session, methodology, fake_redis, "good")
     info = detail["reproducibility"]
-    assert info["adapters"]["terraform"]["adapter"] == "2"
+    assert info["adapters"]["terraform"]["adapter"] == TERRAFORM_ADAPTER_VERSION
     assert info["ai"] is None

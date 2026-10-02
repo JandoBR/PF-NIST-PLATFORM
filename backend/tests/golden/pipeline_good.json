@@ -137,9 +137,10 @@
       "criterion_id": "CRI-PR-05",
       "estado": "evaluado",
       "evidence": [
+        "tf.db_exposure.config|aws_db_instance.principal",
         "tf.public_access.config|aws_s3_bucket.documentos"
       ],
-      "explanation": "bloqueo completo en los 4 modos: aws_s3_bucket.documentos.",
+      "explanation": "bloqueo completo en los 4 modos: aws_s3_bucket.documentos. Bases de datos no publicas: aws_db_instance.principal.",
       "final_score": 100.0
     },
     {

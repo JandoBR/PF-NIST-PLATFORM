@@ -28,7 +28,7 @@ quedan las decisiones que importan para seguir construyendo.
 | Planes (U3) | Hallazgos → planes priorizados, alcance simplificado (sin criticidad de activo) | Hecho |
 | Motor operativo (docs 06/08) | Eventos → patrones (flujo A) + disparadores → incidentes → planes (flujo B) | Hecho |
 | Multitenancy + auth (doc 10) | Login con token, tabla `users`, aislamiento por `org_id` en toda la API | Hecho |
-| Pruebas | 343 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
+| Pruebas | 357 tests (`pytest`) + `ruff` limpio; E2E de documentos, guarda de migraciones, API y workers | Hecho |
 | API REST (doc 04 §6) | FastAPI + colas: crear/reevaluar/ingerir son asíncronos (202 + `GET /jobs/{id}`) | Hecho |
 | Docker/Redis (doc 04 §11) | `docker compose up`: Postgres + Redis + migrate + api + `worker-core`/`worker-logs` + frontend (7 servicios) | Hecho |
 
@@ -1325,9 +1325,8 @@ recibe la evidencia de forma opcional; `GET /assessments/{id}/findings` la pasa,
 frontend muestra las contradicciones en una tarjeta aparte en Recomendaciones y deja la lista de
 brechas intacta.
 
-**Límite conocido:** hoy solo hay dos propiedades con ambos lados estructurados. Otros ejemplos de
-docs/02 (p. ej. "BD no pública" vs `publicly_accessible`) requieren que U1 extraiga esa afirmación y
-que el adaptador de Terraform emita el atributo; no se hizo para no inventar contratos.
+**Límite que había aquí:** solo dos propiedades tenían ambos lados estructurados; el ejemplo "BD no
+pública" vs `publicly_accessible` se cerró en §40.
 
 **Verificación:** backend **336 tests** + `ruff` limpio (`test_contradictions.py`: 15 casos, incluido
 un E2E con el fixture `gaps` y una política extraída). Frontend `typecheck`/`lint` limpios.
@@ -1351,7 +1350,33 @@ determinista" en una prueba de regresión sobre entradas reales, no solo sobre e
   `main.tf` (cifrado `false` → `PR-01`=25, retención 0 → `PR-02`=25, 22/3389 abiertos → `PR-03`=25,
   `block_public_acls=false` → `PR-05`=0) y su score global (21.25) coincide con el medido a mano en
   §16. Se comprobó que alterar un valor del golden hace fallar el test.
-- **Observación:** `publicly_accessible = true` está en el fixture `gaps` pero ningún adaptador lo emite
-  (es el ejemplo de contradicción de docs/02 §5 que quedó sin contrato; ver §38).
+- **Observación (resuelta en §40):** `publicly_accessible = true` estaba en el fixture `gaps` pero ningún
+  adaptador lo emitía.
 
 **Verificación:** backend **343 tests** + `ruff` limpio.
+
+## 40. `publicly_accessible`: evidencia, puntaje y contradicción
+
+Cierra el hueco que dejaron §38 y §39: el fixture `gaps` declaraba `publicly_accessible = true` y nada
+lo leía, justo el ejemplo canónico de docs/02 §5. Un atributo declarado sin consumidor es lo que CR-06
+quería evitar, así que se cableó completo.
+
+- **Evidencia:** nuevo tipo `tf.db_exposure.config` v1 (`{publico: true|false|"unknown"}`),
+  `evidence_types.yml` v2 (un tipo publicado no se modifica, por eso no se reutilizó
+  `tf.public_access.config`, que es de S3). Ausente o expresión sin resolver → `unknown` (y
+  `tf.expression.unresolved`), nunca el default del proveedor. `ADAPTER_VERSION` de Terraform pasa a `3`.
+- **Puntaje (`CRI-PR-05`, `criteria.yml` v7):** una base pública puntúa **0**, igual que un bucket sin
+  bloqueo; la explicación conserva el estado de los buckets. Con solo bases y todas no públicas → 100;
+  sin buckets ni bases → `no_aplicable`. Es la decisión que más cambia: PR-05 deja de ser solo S3.
+- **Política:** nuevo tipo de afirmación `exposure_policy` (`bases_publicas_permitidas`), que U1 pide
+  vía `PR-05.regla.tipos_afirmacion`. Nunca eleva el puntaje (D7).
+- **Contradicción:** política que prohíbe bases públicas + `publicly_accessible = true` del mismo
+  `scope` → hallazgo `contradiccion` de severidad alta sobre `CRI-PR-05`, citando ambos lados.
+- **Goldens:** se regeneraron y se revisó el diff: solo la evidencia nueva y el texto de
+  explicación de `PR-05`; ningún puntaje cambió (`gaps` ya daba 0, `good` sigue en 100).
+
+**Efecto en costo:** pedir `exposure_policy` cambia el prompt de U1, así que los chunks cacheados en
+`.cache/ai_extraction` se vuelven a pagar una vez.
+
+**Verificación:** backend **357 tests** + `ruff` limpio (`test_db_exposure.py`, con un E2E sobre
+`gaps`).
