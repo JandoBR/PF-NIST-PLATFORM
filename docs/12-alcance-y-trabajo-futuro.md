@@ -30,6 +30,8 @@ job separados; a esta escala no aporta.
 | API-01 | `POST /sources` + `/run` separados | El flujo es de un solo disparo desde la UI; las subidas ya quedan persistentes. | docs/09 §12/§16 |
 | API-02 | `GET /assessments/{id}/scores` explícito | Redundante: los puntajes ya se pliegan en `GET /assessments/{id}` y ningún consumidor lo pide. | docs/04 §6 |
 | OP-16 | Reintento automático de jobs huérfanos | `fail_if_stale` solo los marca `fallido`; reintentar automáticamente abre la puerta a duplicados y no hace falta en local. | docs/09 §20 |
+| API-04 (parte) | Paginación por cursor y filtros en listados | Volúmenes mínimos y uso local. (`problem+json` y `methodology_version` siguen en docs/11.) | docs/04 §6 |
+| TS-04 | Cobertura extra: handlers de la CLI, `test_methodology_loader`, ingesta con solape parcial | No protege ningún comportamiento crítico. | docs/09 §13/§25 |
 | DEP-01 | Despliegue real (nginx + dominio, `VITE_API_BASE_URL`, `CORS_ORIGINS`) | El prototipo corre solo en local con Compose. | docs/09 §19 |
 
 ## 2. Persistencia de datos derivados
@@ -43,12 +45,14 @@ de verdad y bugs de invalidación.
 | OP-02 | Tabla `ai_adjustments` (modelo, prompt_version, propuesta, justificación) | La justificación ya queda en `explanation` y los tests verifican las cotas; la tabla solo agrega consultabilidad. | `ai/adjustment.py` |
 | OP-17 | Persistir `log.window` (hoy se recalcula desde `Event`) | Mismo patrón que OP-03: recálculo barato y sin segunda fuente de verdad. | docs/09 §11 |
 | OP-18 | `Source` por archivo (hoy uno por adaptador) | Solo se necesita si se quiere trazabilidad por archivo individual. | docs/09 §11 |
+| OP-13 (resto) | Tablas `evidence_definitions`/`criteria_catalog`, `incidents.pattern_ids`, `log_patterns.evidence_id` | La metodología es YAML-only por diseño (D5, criterios fijos); lo demás es pureza de modelo sin consumidor. (`schema_version` de la cola sigue en docs/11.) | docs/04 §3.1/§4 |
 
 ## 3. Contexto y tailoring
 
 | ID | Qué es | Por qué no en el prototipo | Detalle |
 |---|---|---|---|
-| OP-09 | `ctx.profile`/`ctx.exclusions` como evidencia (sector, tamaño, activos críticos, datos, nube, exclusiones → `no_aplicable`) | Pipeline de contexto completo con efecto en el puntaje: investigación. El prototipo **no** prioriza por criticidad todavía: la prioridad de un plan sale de la severidad del hallazgo; la versión fina (OP-01) sigue pendiente en docs/11 §D. | docs/02 §3.5, docs/05 §4.2 |
+| OP-09 | `ctx.profile`/`ctx.exclusions` como evidencia (sector, tamaño, activos críticos, datos, nube, exclusiones → `no_aplicable`) | Pipeline de contexto completo con efecto en el puntaje: investigación. El prototipo **no** prioriza por criticidad: la prioridad de un plan sale de la severidad del hallazgo. | docs/02 §3.5, docs/05 §4.2 |
+| OP-01 | Prioridad de planes por criticidad de activo (incluso la "versión fina" de un campo) | Necesita una fuente de datos de criticidad, es decir el pipeline `ctx.*` (OP-09); sin él sería un campo arbitrario. | docs/05 §4.2 |
 
 ## 4. Seguridad para despliegue real
 

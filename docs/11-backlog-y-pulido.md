@@ -118,7 +118,7 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 - [ ] FN-07 · **Origen del evento** (P2): `RawEvent.fuente` se parsea pero se descarta; la evidencia
   operativa usa `source_id="events:{ruta}"` en vez del origen por evento (docs/06 §2). Propagar
   `fuente` a `source_id`.
-- [ ] FN-08 · **Patrones sin consumidor** (P2): `incident_triaged` y `containment_done` figuran como
+- [ ] FN-08 · **Patrones sin consumidor** (P2; junto con OP-05): `incident_triaged` y `containment_done` figuran como
   tipos de evento pero no tienen patrón ni criterio/disparador que los use (docs/06 §2/§3). Definir
   patrón y consumo, o documentar que son solo contexto. Amplía OP-05.
 
@@ -142,12 +142,13 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   backups), `RS-01` (plan de respuesta + escalamiento), `RC-02` (verificación de integridad) y
   `RC-03` (notificación documentada). Hecho (docs/09 §34). `criteria.yml` v5. (`RS-02` ya lo hacía
   desde CR-03.)
-- [ ] CR-06 · **Evidencia declarada sin consumir**: reglas que listan evidencia en docs/03 que hoy no
+- [ ] CR-06 · (P1) **Evidencia declarada sin consumir**: reglas que listan evidencia en docs/03 que hoy no
   leen: `PR-01` (`doc.claim(policy_exists)` + `tipos_afirmacion`), `PR-02` (cifrado de backups para
   100), `PR-04` (`an.file.permissions`), `PR-05` (`tf.versioning.config`), `DE-01` (`log.window`)
-  (P2). Incluye **emitir `tf.expression.unresolved`**: el tipo existe en `evidence_types.yml` pero el
+  Incluye **emitir `tf.expression.unresolved`** (clave: una expresión que el parser no resuelve debe
+  dar `unknown`, no un puntaje confiado): el tipo existe en `evidence_types.yml` pero el
   adaptador de Terraform nunca lo produce.
-- [ ] CR-07 · **Tipos de evidencia sin productor**: `tf.attr.value`, `doc.source.info` (marcador
+- [ ] CR-07 · (P2) **Tipos de evidencia sin productor** (es sobre todo una decisión, no código): `tf.attr.value`, `doc.source.info` (marcador
   "documento analizado", docs/05 §2.3 E6) y `log.event` figuran en docs/02 y no existen. Definir
   contrato y productor, o declararlos fuera de alcance (P2).
 
@@ -159,25 +160,26 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 
 ## D. Simplificaciones activas (docs/09 §11) — pendientes del prototipo
 
-- [ ] OP-01 · **Prioridad de planes por criticidad de activo** (versión fina, un campo): hoy
-  `prioridad = finding.severidad` (`recommendations/plans.py`); la fórmula completa de docs/05 §4.2
-  depende del pipeline `ctx.*` (OP-09, fuera de alcance, docs/12 §3).
-- [~] OP-04 · **Transiciones de estado de incidente: hecho** (`PATCH /incidents/{id}`, ver docs/09
+- [~] OP-04 · (P1) **Transiciones de estado de incidente: hecho** (`PATCH /incidents/{id}`, ver docs/09
   §24; habilita UI-06). Siguen pendientes los hallazgos `contradiccion` (docs/02 §5) y `limitacion`
   además de `brecha`.
-- [ ] OP-05 · Trigger D2 (`alert_raised` sin `incident_triaged`).
-- [ ] OP-11 · **Plan/incidente**: `brecha_ref` (disparador) en el plan, "condición de cierre",
+- [ ] OP-05 · (P2) Trigger D2 (`alert_raised` sin `incident_triaged`). Va junto con FN-08: requiere
+  definir el patrón `incident_triaged`.
+- [ ] OP-11 · (P2) **Plan/incidente** (lo útil: validar transiciones y registrar motivo de cierre;
+  `brecha_ref` y "condición de cierre" son opcionales): `brecha_ref` (disparador) en el plan, "condición de cierre",
   registrar motivo/verificación al cerrar un incidente y validar las **transiciones de estado**
   (`PATCH` hoy permite cualquier estado→cualquier estado) (docs/05 §4.3, docs/08 §4/§7).
-- [ ] OP-12 · **Contratos de IA**: validación de formatos (docs/05 §2.3 E5), reintento con backoff
+- [ ] OP-12 · (P1) **Contratos de IA**: validación de formatos (docs/05 §2.3 E5), reintento con backoff
   (hoy `continue` sin espera), registro por llamada (`prompt_version`, `criterion_id`, duración,
   resultado) y `max_criterios_ajustados_por_evaluacion` en `settings.yml`.
-- [ ] OP-13 · **Modelo/persistencia**: `evidence_definitions`/`criteria_catalog` (o declarar
-  YAML-only), `incidents.pattern_ids`, `log_patterns.evidence_id`, `Source` por archivo y
-  `schema_version` en el contrato de mensaje de la cola (docs/04 §3.1/§4).
-- [ ] OP-14 · **Reproducibilidad**: persistir versión de adaptador/parser y de prompt/modelo de IA por
+- [ ] OP-13 · **`schema_version` en el contrato de mensaje de la cola** (P2): protege la
+  compatibilidad cuando `api` y workers se despliegan por separado (docs/04 §3.1). El resto de OP-13
+  (`evidence_definitions`/`criteria_catalog`, `incidents.pattern_ids`, `log_patterns.evidence_id`,
+  `Source` por archivo) pasó a docs/12 §2.
+- [ ] OP-14 · (P1) **Reproducibilidad**: persistir versión de adaptador/parser y de prompt/modelo de IA por
   evaluación (docs/01 §10); hoy solo `methodology_version` (OP-02 cubre la tabla de ajustes).
-- [ ] OP-15 · **Contrato menor de evidencia**: llenar `Locator.line_start/line_end`, registrar
+- [ ] OP-15 · **Contrato menor de evidencia** (P2; lo útil es `line_start/line_end`, el resto es
+  cosmético): llenar `Locator.line_start/line_end`, registrar
   `resuelto_por: parser`, registrar la limitación de recursos Terraform no soportados y alinear
   `created_by` (docs/01 §2/§5, docs/02 §4).
 
@@ -186,9 +188,9 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 ## E. API / contratos faltantes (docs/04 §6)
 
 - [ ] API-03 · `GET /jobs` (listado, filtrable por estado/org) — habilita FN-01.
-- [ ] API-04 · **Convenciones**: paginación por cursor y filtros en listados (hoy "(filtrable)" en
-  docs/04 §6 no tiene query params), `application/problem+json` para **todos** los errores (no solo
-  assessments) y `methodology_version` en las respuestas que docs/04 promete.
+- [ ] API-04 · (P2) **Convenciones**: `application/problem+json` para **todos** los errores (no solo
+  assessments) y `methodology_version` en las respuestas que docs/04 promete. La paginación por
+  cursor y los filtros en listados pasaron a docs/12 §1 (volúmenes mínimos, uso local).
 
 > Descartados para el prototipo (API-01 `sources`+`run` separados, API-02 `GET /scores`): ver **docs/12 §1**.
 
@@ -199,10 +201,10 @@ registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototi
 
 ## G. Ampliaciones (docs/07)
 
-- [ ] AMP-02 · **Exportación PDF del informe ejecutivo** (y de la comparación, UI-07). Se promueve al
+- [ ] AMP-02 · (P1) **Exportación PDF del informe ejecutivo** (y de la comparación, UI-07). Se promueve al
   prototipo: da oficialidad al informe y **separa el acceso a la herramienta del acceso a los
   resultados** (común en entornos corporativos).
-- [ ] AMP-05 · **Puntaje "provisional" con cobertura baja**: marcar el score como provisional cuando la
+- [ ] AMP-05 · (P1) **Puntaje "provisional" con cobertura baja**: marcar el score como provisional cuando la
   cobertura de evidencia es baja (docs/01 §7); hoy "provisional" solo aplica al Tier.
 - [x] AMP-03 · Último criterio no-MVP: `DE-03` (información de eventos a personal/herramientas).
   Hecho (docs/09 §33): catálogo completo 23/23.
@@ -211,19 +213,24 @@ registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototi
 
 ## H. Testing / validación (docs/07 §3)
 
-- [ ] TS-01 · **Golden files**: resultados esperados anotados para Terraform/Ansible (docs/07 §3).
-- [ ] TS-02 · **Golden set de IA**: documentos anotados + script de métricas (≥ 90 % de afirmaciones,
+- [ ] TS-01 · (P1) **Golden files**: resultados esperados anotados para Terraform/Ansible (docs/07 §3).
+- [ ] TS-02 · (P1) **Golden set de IA**: documentos anotados + script de métricas (≥ 90 % de afirmaciones,
   0 invenciones, citas localizables).
-- [ ] TS-03 · **Test de contradicción** técnico-vs-documental (se cierra junto con OP-04).
-- [ ] TS-04 · Cobertura opcional: handlers de la CLI, `test_methodology_loader` e ingesta con solape
-  parcial (docs/09 §25).
+- [ ] TS-03 · (P1) **Test de contradicción** técnico-vs-documental (se cierra junto con OP-04).
 
 ## Priorización sugerida
 
-1. **FN-03 + OP-05** (baratos y con valor real): detalle de la ingesta y disparador D2.
-2. **FN-01 + API-03** (`GET /jobs`): ver qué corrió y reintentar; hoy solo hay `GET /jobs/{id}`.
-3. **OP-04** (hallazgos `contradiccion`/`limitacion`) y **AMP-02** (PDF), según tiempo.
-4. **OP-01** (prioridad por criticidad, versión fina).
+Criterio: primero lo que hace el motor más honesto y reproducible, luego la capa de IA, luego lo
+demostrable.
+
+1. **CR-06** (incluye `tf.expression.unresolved`) y **AMP-05**: el puntaje no debe parecer más
+   sólido de lo que es la evidencia.
+2. **OP-12** y **OP-14**: capa de IA acotada, auditable y reproducible.
+3. **OP-04 (contradicciones) + TS-03**, **TS-01**, **TS-02** y **AMP-02**: lo más demostrable y lo
+   que respalda las afirmaciones del diseño.
+4. Pulido barato: **FN-03**, **FN-07**, **FN-01 + API-03**, **OP-05 + FN-08**, **OP-11** (transiciones
+   y motivo de cierre), **OP-15** (líneas), **OP-13** (`schema_version`), **API-04** (problem+json) y
+   la decisión de **CR-07**.
 
 > **Hecho:** catálogo completo (CR-01…CR-05), UI-01…UI-10, FN-05, FN-06 y la parte de estado de
 > incidente de OP-04. Ver docs/09 §23–§34.

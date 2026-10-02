@@ -138,7 +138,7 @@ S = 0.75·60 + 0.25·80 = 65
 | R4 | La IA no convierte `evidencia_insuficiente` en `evaluado` ni sube desde ese estado. |
 | R5 | Si la respuesta es inválida o vacía: ajuste = 0, criterio marcado `degradado`, evaluación continúa. |
 | R6 | Los parámetros `D` y `α` pertenecen a la metodología versionada; la IA no los elige. |
-| R7 | El contexto de negocio (p. ej. criticidad) puede matizar el **ajuste de IA (U2, docs/05 §3)**, pero no decide por sí solo la **prioridad** de un plan: hoy la prioridad sale de la severidad del hallazgo (OP-01, docs/11 §D). |
+| R7 | El contexto de negocio (p. ej. criticidad) puede matizar el **ajuste de IA (U2, docs/05 §3)**, pero no decide por sí solo la **prioridad** de un plan: hoy la prioridad sale de la severidad del hallazgo (OP-01, docs/12 §3). |
 | R8 | Todo ajuste queda registrado con modelo, versión de prompt, entrada y salida. |
 
 ## 6. Agregación Jerárquica

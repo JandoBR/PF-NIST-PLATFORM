@@ -145,7 +145,7 @@ la severidad del disparador). U3 solo redacta objetivo/pasos/verificación; su c
 **no** incluye `prioridad` (`ai/schemas.py`).
 
 La fórmula completa de diseño —`prioridad = impacto(criticidad del activo) × estado de la brecha
-(falla = 1.0, parcial = 0.6) + ajuste por contexto`— queda como ampliación (OP-01, docs/11 §D; el
+(falla = 1.0, parcial = 0.6) + ajuste por contexto`— queda como ampliación (OP-01, docs/12 §3; el
 pipeline `ctx.*` completo es OP-09, docs/12 §3): hoy no hay criticidad de activo.
 
 - Las plantillas de recomendación del catálogo son el punto de partida; la IA las adapta al caso.

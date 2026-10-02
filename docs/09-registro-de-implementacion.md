@@ -342,7 +342,7 @@ completo, para no tener que releer cada sección arriba:
 
 > **Estado de estas simplificaciones (revisión §35):** este cuadro es el snapshot de cuando se
 > escribió. Hoy la clasificación vive en otros documentos: lo que **sigue pendiente del prototipo**
-> está en `docs/11 §D` (`OP-01`, `OP-04`, `OP-05` = disparador D2, `OP-11`…`OP-15`); lo
+> está en `docs/11 §D` (`OP-04`, `OP-05` = disparador D2, `OP-11`…`OP-15`); lo
 > **descartado deliberadamente** está en `docs/12` (sin tabla `ai_adjustments` = OP-02, `findings`/
 > agregados/`log.window` no persistidos = OP-03/OP-17, `Source` por adaptador = OP-18, cooldown =
 > OP-06, ventanas deslizantes = OP-07, un solo job `event_ingest` = OP-08, sin `sources`/`run`
