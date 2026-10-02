@@ -1,5 +1,5 @@
-"""GET /incidents/{id}, GET /incidents/{id}/plans (docs/04 §6). Exigen sesion (doc 10): un
-incidente de otra organizacion responde 404."""
+"""GET /incidents/{id}, GET /incidents/{id}/plans, PATCH /incidents/{id} (docs/04 §6, docs/11
+UI-06). Exigen sesion (doc 10): un incidente de otra organizacion responde 404."""
 
 from __future__ import annotations
 
@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_session
-from app.api.schemas import IncidentOut
+from app.api.schemas import IncidentOut, IncidentUpdate
 from app.core import assessment_service as svc
 from app.models.tables import User
+from app.ops.incidents import INCIDENT_ESTADOS
 from app.recommendations.plans import Plan
 
 router = APIRouter(tags=["incidents"])
@@ -29,6 +30,24 @@ def get_incident(
     session: Session = Depends(get_session),
 ) -> IncidentOut:
     incident = _require_incident(session, incident_id, user)
+    return IncidentOut.model_validate(incident)
+
+
+@router.patch("/incidents/{incident_id}", response_model=IncidentOut)
+def update_incident(
+    incident_id: str,
+    payload: IncidentUpdate,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> IncidentOut:
+    _require_incident(session, incident_id, user)
+    if payload.estado not in INCIDENT_ESTADOS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Estado {payload.estado!r} invalido. Validos: {', '.join(INCIDENT_ESTADOS)}.",
+        )
+    incident = svc.update_incident_estado(session, incident_id, payload.estado)
+    assert incident is not None  # ya validado por _require_incident
     return IncidentOut.model_validate(incident)
 
 

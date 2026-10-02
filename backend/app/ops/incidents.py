@@ -14,6 +14,10 @@ from sqlalchemy.orm import Session
 from app.models.tables import Incident
 from app.ops.triggers import TriggerMatch
 
+#: Ciclo de vida de un incidente (docs/08 §4). `closed` es el unico estado terminal: la UI lo usa
+#: para separar "activos" de "historial".
+INCIDENT_ESTADOS = ("open", "triaged", "contained", "recovering", "closed")
+
 
 def _timeline_entry(trigger: TriggerMatch) -> dict:
     return {
@@ -57,3 +61,12 @@ def upsert_incident(
     incident.timeline = [*incident.timeline, _timeline_entry(trigger)]
     incident.actualizado_en = datetime.now(UTC)
     return incident, False
+
+
+def set_incident_estado(incident: Incident, estado: str) -> Incident:
+    """Cambia el estado de un incidente (docs/11 UI-06/OP-04). No valida contra `INCIDENT_ESTADOS`
+    aqui: la ruta es la que rechaza un estado desconocido con un 422 antes de llamar."""
+
+    incident.estado = estado
+    incident.actualizado_en = datetime.now(UTC)
+    return incident

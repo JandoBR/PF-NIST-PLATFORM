@@ -58,6 +58,13 @@ class IncidentOut(BaseModel):
     actualizado_en: datetime
 
 
+class IncidentUpdate(BaseModel):
+    """`PATCH /incidents/{id}`: cambiar el estado (docs/11 UI-06/OP-04). Solo el estado: el resto
+    del incidente es observado, no editable desde la API."""
+
+    estado: str
+
+
 class ComparisonDiffOut(BaseModel):
     criterion_id: str
     titulo: str

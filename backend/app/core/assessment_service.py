@@ -48,7 +48,7 @@ from app.models.tables import (
     PlanRow,
     Source,
 )
-from app.ops.incidents import upsert_incident
+from app.ops.incidents import set_incident_estado, upsert_incident
 from app.ops.plans import generate_incident_plan
 from app.ops.triggers import evaluate_triggers
 from app.recommendations import plans as recommendations_plans
@@ -508,6 +508,19 @@ def load_incident_plans(session: Session, incident_id: str) -> list[Plan]:
 
 def get_incident(session: Session, incident_id: str) -> Incident | None:
     return session.get(Incident, incident_id)
+
+
+def update_incident_estado(
+    session: Session, incident_id: str, estado: str
+) -> Incident | None:
+    """Cambia el estado y persiste (docs/11 UI-06/OP-04). `None` si el incidente no existe."""
+
+    incident = session.get(Incident, incident_id)
+    if incident is None:
+        return None
+    set_incident_estado(incident, estado)
+    session.commit()
+    return incident
 
 
 def get_organization(session: Session, org_id: str) -> Organization | None:

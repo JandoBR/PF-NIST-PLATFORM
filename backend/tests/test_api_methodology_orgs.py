@@ -93,3 +93,37 @@ def test_get_incident_and_its_plans(api_client, db_session, methodology, fake_re
 def test_get_unknown_incident_is_404(api_client):
     response = api_client.get("/incidents/no-existe")
     assert response.status_code == 404
+
+
+def test_closing_an_incident_persists_the_state(
+    api_client, db_session, methodology, fake_redis, auth_user
+):
+    with (SCENARIOS / "e1b_fallos_sin_alerta.jsonl").open("rb") as fh:
+        api_client.post(
+            f"/orgs/{auth_user.org_id}/events",
+            files={"file": ("e1b.jsonl", fh, "application/jsonl")},
+        )
+    run_pending_jobs(db_session, methodology, fake_redis)
+    incident_id = api_client.get(f"/orgs/{auth_user.org_id}/incidents").json()[0]["id"]
+
+    response = api_client.patch(f"/incidents/{incident_id}", json={"estado": "closed"})
+    assert response.status_code == 200
+    assert response.json()["estado"] == "closed"
+
+    # Sale de "activos" (la UI filtra estado != closed) pero sigue en el historial.
+    assert api_client.get(f"/incidents/{incident_id}").json()["estado"] == "closed"
+
+
+def test_invalid_incident_state_is_422(
+    api_client, db_session, methodology, fake_redis, auth_user
+):
+    with (SCENARIOS / "e1b_fallos_sin_alerta.jsonl").open("rb") as fh:
+        api_client.post(
+            f"/orgs/{auth_user.org_id}/events",
+            files={"file": ("e1b.jsonl", fh, "application/jsonl")},
+        )
+    run_pending_jobs(db_session, methodology, fake_redis)
+    incident_id = api_client.get(f"/orgs/{auth_user.org_id}/incidents").json()[0]["id"]
+
+    response = api_client.patch(f"/incidents/{incident_id}", json={"estado": "inexistente"})
+    assert response.status_code == 422
