@@ -208,6 +208,25 @@ def test_reevaluate_inherits_plan_follow_up_state(
     assert inherited["estado"] == "en_progreso"
 
 
+def test_new_assessment_inherits_follow_up_from_same_org_scope(
+    api_client, db_session, methodology, fake_redis
+):
+    """Volver a evaluar el mismo org+scope hereda el seguimiento sin usar Reevaluar.
+
+    Ver docs/05 §4.4.
+    """
+
+    first = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
+    target = api_client.get(f"/assessments/{first['id']}/plans").json()[0]
+    api_client.patch(f"/assessments/{first['id']}/plans/{target['id']}", json={"estado": "hecho"})
+
+    second = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
+    assert second["id"] != first["id"]
+    new_plans = api_client.get(f"/assessments/{second['id']}/plans").json()
+    inherited = next(p for p in new_plans if p["criterion_id"] == target["criterion_id"])
+    assert inherited["estado"] == "hecho"
+
+
 def test_reevaluate_after_editing_the_persisted_upload_shows_the_fix(
     api_client, db_session, methodology, fake_redis
 ):

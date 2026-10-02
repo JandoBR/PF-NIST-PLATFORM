@@ -63,8 +63,8 @@ class Assessment(Base):
     estado: Mapped[str] = mapped_column(String, default="creada")
     methodology_version: Mapped[str] = mapped_column(String)
     scope: Mapped[str] = mapped_column(String)
-    #: Solo en una reevaluacion: la evaluacion de la que se heredan fuentes y, al generar planes,
-    #: el estado de seguimiento por criterio (docs/05 §4.4).
+    #: Evaluacion anterior de la que se hereda el estado de seguimiento de los planes por criterio
+    #: (docs/05 §4.4): la de la reevaluacion, o la ultima completada del mismo org+scope.
     previous_assessment_id: Mapped[str | None] = mapped_column(
         ForeignKey("assessments.id"), nullable=True
     )

@@ -192,10 +192,20 @@ def create_pending_assessment(
     ahora encola la ejecucion pesada en vez de correrla en el request). Se usa tanto para una
     evaluacion nueva como, con `create_pending_reevaluation`, para una reevaluacion.
 
-    `previous_assessment_id` solo se setea en una reevaluacion: es la fuente de la herencia del
-    estado de seguimiento de los planes (docs/05 §4.4)."""
+    `previous_assessment_id` es la fuente de la herencia del estado de seguimiento de los planes
+    (docs/05 §4.4). En una reevaluacion lo pasa `create_pending_reevaluation`; en una evaluacion
+    nueva se autodetecta: la ultima evaluacion completada de la misma organizacion y scope, para que
+    volver a evaluar el mismo entorno no pierda el avance. `None` si no hay ninguna previa."""
 
     org = get_or_create_organization(session, org_name)
+    if previous_assessment_id is None:
+        previous = (
+            session.query(Assessment)
+            .filter_by(org_id=org.id, scope=scope, estado="completada")
+            .order_by(Assessment.creado_en.desc())
+            .first()
+        )
+        previous_assessment_id = previous.id if previous is not None else None
     assessment = Assessment(
         org_id=org.id,
         estado="pendiente",
