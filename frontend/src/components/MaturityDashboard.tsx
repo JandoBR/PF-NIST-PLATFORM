@@ -13,7 +13,15 @@ import {
 } from 'lucide-react';
 import type { AssessmentDetail, CriterionResult, Estado } from '@/lib/types';
 import { FUNCTION_NAMES, FUNCTION_ORDER, TIER_LABELS } from '@/lib/types';
-import { ESTADO_META, FUNCTION_ACCENTS, PRIVACY_CRITERIA, PRIVACY_SCOPE_NOTE } from '@/lib/ui';
+import {
+  ESTADO_META,
+  FUNCTION_ACCENTS,
+  PRIVACY_CRITERIA,
+  PRIVACY_RELATION,
+  PRIVACY_SCOPE_NOTE,
+} from '@/lib/ui';
+
+type TableMode = 'criteria' | 'privacy';
 
 interface DashboardProps {
   assessment: AssessmentDetail;
@@ -40,6 +48,7 @@ export function MaturityDashboard({
   const [estadoFilter, setEstadoFilter] = useState<Estado | 'all'>('all');
   const [funcFilter, setFuncFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
+  const [tableMode, setTableMode] = useState<TableMode>('criteria');
 
   const functionScores = useMemo(() => {
     const byRef = new Map(assessment.agregados_funcion.map((a) => [a.ref, a]));
@@ -170,123 +179,173 @@ export function MaturityDashboard({
         </div>
       </div>
 
-      {/* Privacidad relacionada con ciberseguridad (docs/03 §7) */}
-      {privacy.length > 0 && <PrivacySection criteria={privacy} />}
-
-      {/* Tabla de criterios */}
+      {/* Criterios evaluados, con una vista alterna de privacidad (docs/03 §7) */}
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-white/[0.06] p-5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-slate-500" />
-              <h3 className="text-sm font-semibold text-white">Criterios Evaluados</h3>
+              {tableMode === 'criteria' ? (
+                <Filter className="h-4 w-4 text-slate-500" />
+              ) : (
+                <Lock className="h-4 w-4 text-teal-300" />
+              )}
+              <h3 className="text-sm font-semibold text-white">
+                {tableMode === 'criteria' ? 'Criterios Evaluados' : 'Privacidad relacionada con ciberseguridad'}
+              </h3>
             </div>
-            <span className="text-xs text-slate-500">
-              {filtered.length} de {criteria.length}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex flex-wrap gap-1.5">
-              <Chip active={funcFilter === 'all'} onClick={() => setFuncFilter('all')}>
-                Todas las Funciones
-              </Chip>
-              {FUNCTION_ORDER.map((key) => (
-                <Chip
-                  key={key}
-                  active={funcFilter === key}
-                  onClick={() => setFuncFilter(key)}
-                  accent={FUNCTION_ACCENTS[key]}
-                >
-                  {key}
-                </Chip>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-1.5">
-              {FILTERS.map((f) => (
-                <Chip key={f.key} active={estadoFilter === f.key} onClick={() => setEstadoFilter(f.key)}>
-                  {f.label}
-                </Chip>
-              ))}
-            </div>
-
-            <div className="relative ml-auto">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-600" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar criterio..."
-                className="w-44 rounded-lg border border-white/10 bg-ink-900/60 py-1.5 pl-8 pr-3 text-xs text-slate-200 placeholder-slate-600 outline-none focus:border-cyan-500/50 sm:w-56"
-              />
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-500">
+                {tableMode === 'criteria' ? `${filtered.length} de ${criteria.length}` : `${privacy.length} del cruce`}
+              </span>
+              <ViewSwitch mode={tableMode} onChange={setTableMode} />
             </div>
           </div>
-        </div>
 
-        <div className="divide-y divide-white/[0.04]">
-          {filtered.length === 0 ? (
-            <div className="px-5 py-12 text-center text-sm text-slate-500">
-              No hay criterios que coincidan con los filtros actuales.
+          {tableMode === 'criteria' && (
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap gap-1.5">
+                <Chip active={funcFilter === 'all'} onClick={() => setFuncFilter('all')}>
+                  Todas las Funciones
+                </Chip>
+                {FUNCTION_ORDER.map((key) => (
+                  <Chip
+                    key={key}
+                    active={funcFilter === key}
+                    onClick={() => setFuncFilter(key)}
+                    accent={FUNCTION_ACCENTS[key]}
+                  >
+                    {key}
+                  </Chip>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {FILTERS.map((f) => (
+                  <Chip key={f.key} active={estadoFilter === f.key} onClick={() => setEstadoFilter(f.key)}>
+                    {f.label}
+                  </Chip>
+                ))}
+              </div>
+
+              <div className="relative ml-auto">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-600" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Buscar criterio..."
+                  className="w-44 rounded-lg border border-white/10 bg-ink-900/60 py-1.5 pl-8 pr-3 text-xs text-slate-200 placeholder-slate-600 outline-none focus:border-cyan-500/50 sm:w-56"
+                />
+              </div>
             </div>
-          ) : (
-            filtered.map((c) => <CriterionRow key={c.criterion_id} criterion={c} />)
           )}
         </div>
+
+        {tableMode === 'criteria' ? (
+          <div className="divide-y divide-white/[0.04]">
+            {filtered.length === 0 ? (
+              <div className="px-5 py-12 text-center text-sm text-slate-500">
+                No hay criterios que coincidan con los filtros actuales.
+              </div>
+            ) : (
+              filtered.map((c) => <CriterionRow key={c.criterion_id} criterion={c} />)
+            )}
+          </div>
+        ) : (
+          <PrivacyView criteria={privacy} />
+        )}
       </div>
     </div>
   );
 }
 
-function PrivacySection({ criteria }: { criteria: CriterionResult[] }) {
+function ViewSwitch({ mode, onChange }: { mode: TableMode; onChange: (mode: TableMode) => void }) {
+  return (
+    <div className="flex rounded-lg border border-white/[0.06] bg-ink-900/60 p-1">
+      <button
+        onClick={() => onChange('criteria')}
+        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+          mode === 'criteria' ? 'bg-white/[0.08] text-white' : 'text-slate-500 hover:text-slate-300'
+        }`}
+      >
+        Criterios
+      </button>
+      <button
+        onClick={() => onChange('privacy')}
+        className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+          mode === 'privacy' ? 'bg-teal-500/15 text-teal-200' : 'text-slate-500 hover:text-slate-300'
+        }`}
+      >
+        <Lock className="h-3.5 w-3.5" />
+        Privacidad
+      </button>
+    </div>
+  );
+}
+
+/** Vista alterna de la tabla de criterios: el cruce con privacidad (docs/03 §7). No es un filtro:
+ * cambia las columnas para mostrar la relación con el Privacy Framework y la nota de alcance. */
+function PrivacyView({ criteria }: { criteria: CriterionResult[] }) {
   const evaluados = criteria.filter((c) => c.estado === 'evaluado').length;
   const scored = criteria.filter((c) => c.final_score != null);
   const avg = scored.length > 0 ? scored.reduce((n, c) => n + (c.final_score ?? 0), 0) / scored.length : null;
   const cobertura = criteria.length > 0 ? evaluados / criteria.length : null;
 
+  if (criteria.length === 0) {
+    return (
+      <div className="px-5 py-12 text-center text-sm text-slate-500">
+        Ninguno de los criterios del cruce con privacidad está presente en esta evaluación todavía.
+      </div>
+    );
+  }
+
   return (
-    <div className="card p-5">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-500/10 ring-1 ring-teal-500/20">
-            <Lock className="h-5 w-5 text-teal-300" />
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-white">Privacidad relacionada con ciberseguridad</h3>
-            <p className="text-xs text-slate-500">
-              Intersección con el Privacy Framework: eventos de ciberseguridad que afectan datos personales.
-            </p>
-          </div>
-        </div>
+    <>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-white/[0.06] bg-teal-500/[0.03] px-5 py-3.5">
         <div className="flex items-center gap-2">
           <PrivacyStat label="Score" value={avg != null ? `${Math.round(avg)}` : '—'} />
           <PrivacyStat label="Cobertura" value={cobertura != null ? `${Math.round(cobertura * 100)}%` : '—'} />
           <PrivacyStat label="Criterios" value={`${criteria.length}`} />
         </div>
+        <p className="flex min-w-[240px] flex-1 items-start gap-1.5 text-xs text-slate-500">
+          <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-teal-400/70" />
+          {PRIVACY_SCOPE_NOTE}
+        </p>
       </div>
 
-      <div className="divide-y divide-white/[0.04] rounded-lg border border-white/[0.06]">
+      <div className="flex items-center gap-4 border-b border-white/[0.04] px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-slate-600">
+        <span className="w-24 flex-shrink-0">Criterio</span>
+        <span className="w-40 flex-shrink-0">Relación PF/CSF</span>
+        <span className="flex-1">Detalle</span>
+        <span className="w-10 flex-shrink-0 text-right">Score</span>
+        <span className="w-28 flex-shrink-0 text-right">Estado</span>
+      </div>
+      <div className="divide-y divide-white/[0.04]">
         {criteria.map((c) => {
           const meta = ESTADO_META[c.estado];
           return (
-            <div key={c.criterion_id} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="w-24 flex-shrink-0 font-mono text-xs text-slate-400">{c.criterion_id}</span>
-              <span className="min-w-0 flex-1 truncate text-xs text-slate-500" title={c.explanation}>
+            <div key={c.criterion_id} className="flex items-center gap-4 px-5 py-3">
+              <span className="w-24 flex-shrink-0 font-mono text-xs font-semibold text-slate-300">
+                {c.criterion_id}
+              </span>
+              <span className="w-40 flex-shrink-0">
+                <span className="chip border border-teal-500/30 bg-teal-500/10 text-teal-300">
+                  {PRIVACY_RELATION[c.criterion_id] ?? 'Privacidad'}
+                </span>
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-400" title={c.explanation}>
                 {c.explanation}
               </span>
-              <span className="w-8 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
+              <span className="w-10 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
                 {c.final_score != null ? Math.round(c.final_score) : '—'}
               </span>
-              <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
+              <span className="w-28 flex-shrink-0 text-right">
+                <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
+              </span>
             </div>
           );
         })}
       </div>
-
-      <p className="mt-3 flex items-start gap-1.5 text-xs text-slate-600">
-        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-        {PRIVACY_SCOPE_NOTE}
-      </p>
-    </div>
+    </>
   );
 }
 

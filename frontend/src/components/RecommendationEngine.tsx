@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Brain,
   Sparkles,
@@ -15,8 +15,6 @@ import { ApiError, createPlans } from '@/lib/api';
 import type { Finding, Plan } from '@/lib/types';
 import { SEVERITY_META } from '@/lib/ui';
 
-type View = 'findings' | 'plan';
-
 interface Props {
   assessmentId: string;
   findings: Finding[];
@@ -24,8 +22,9 @@ interface Props {
   onPlansUpdated: (plans: Plan[]) => void;
 }
 
+const SEVERITY_ORDER: Finding['severidad'][] = ['alta', 'media', 'baja'];
+
 export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpdated }: Props) {
-  const [view, setView] = useState<View>('findings');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [generating, setGenerating] = useState<'plantilla' | 'ia' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +50,19 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
   }
 
   const hasPlans = plans.length > 0;
-  const roadmap = plans.filter((p) => priorityFilter === 'all' || p.prioridad === priorityFilter);
-  const priorityOrder = ['alta', 'media', 'baja'];
+
+  const orderedFindings = useMemo(
+    () =>
+      [...findings].sort(
+        (a, b) => SEVERITY_ORDER.indexOf(a.severidad) - SEVERITY_ORDER.indexOf(b.severidad)
+      ),
+    [findings]
+  );
+
+  const visibleFindings =
+    priorityFilter === 'all'
+      ? orderedFindings
+      : orderedFindings.filter((f) => f.severidad === priorityFilter);
 
   return (
     <div className="space-y-6">
@@ -70,40 +80,25 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border border-white/[0.06] bg-ink-900/60 p-1">
-              <ToggleBtn active={view === 'findings'} onClick={() => setView('findings')}>
-                <ListChecks className="h-3.5 w-3.5" />
-                Hallazgos
-              </ToggleBtn>
-              <ToggleBtn active={view === 'plan'} onClick={() => setView('plan')}>
-                <Route className="h-3.5 w-3.5" />
-                Plan de Acción
-              </ToggleBtn>
-            </div>
-          </div>
         </div>
 
         {findings.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">
-            <button
-              onClick={() => handleGenerate(false)}
-              disabled={generating !== null}
-              className="btn-ghost border border-white/[0.06] text-xs"
-              title={
-                hasPlans
-                  ? 'Vuelve a calcular el plan desde la plantilla determinista y reemplaza el actual.'
-                  : 'Genera el plan de acción a partir de los hallazgos, sin IA.'
-              }
-            >
-              {generating === 'plantilla' ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Route className="h-3.5 w-3.5" />
-              )}
-              {hasPlans ? 'Regenerar plan (plantilla)' : 'Generar plan (plantilla)'}
-            </button>
+            {!hasPlans && (
+              <button
+                onClick={() => handleGenerate(false)}
+                disabled={generating !== null}
+                className="btn-ghost border border-white/[0.06] text-xs"
+                title="Genera el plan de acción a partir de los hallazgos, sin IA."
+              >
+                {generating === 'plantilla' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Route className="h-3.5 w-3.5" />
+                )}
+                Generar plan (plantilla)
+              </button>
+            )}
             <button
               onClick={() => handleGenerate(true)}
               disabled={generating !== null}
@@ -119,7 +114,7 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
             </button>
             {hasPlans && (
               <span className="text-xs text-slate-600">
-                Regenerar reemplaza el plan actual por uno recalculado con los hallazgos vigentes.
+                Los planes ya se generaron desde la plantilla determinista; regenerar con IA puede cambiarlos.
               </span>
             )}
           </div>
@@ -145,47 +140,36 @@ export function RecommendationEngine({ assessmentId, findings, plans, onPlansUpd
         )}
       </div>
 
-      {view === 'findings' ? (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 text-xs text-slate-500">
+            <ListChecks className="h-3.5 w-3.5" /> Prioridad:
+          </span>
+          {['all', 'alta', 'media', 'baja'].map((p) => (
+            <button
+              key={p}
+              onClick={() => setPriorityFilter(p)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                priorityFilter === p
+                  ? 'bg-white/[0.08] text-white'
+                  : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'
+              }`}
+            >
+              {p === 'all' ? 'Todas' : SEVERITY_META[p as keyof typeof SEVERITY_META].label}
+            </button>
+          ))}
+          <span className="ml-auto text-xs text-slate-600">
+            {visibleFindings.length} de {findings.length} hallazgo(s)
+          </span>
+        </div>
+
         <FindingsList
-          findings={findings}
+          findings={visibleFindings}
           plans={plans}
           generating={generating}
           onGenerate={() => handleGenerate(false)}
         />
-      ) : plans.length === 0 ? (
-        <div className="card px-5 py-12 text-center text-sm text-slate-500">
-          Aún no hay un plan generado. Usa los botones de arriba.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="flex items-center gap-1.5 text-xs text-slate-500">
-              <ListChecks className="h-3.5 w-3.5" /> Filtrar:
-            </span>
-            {['all', 'alta', 'media', 'baja'].map((p) => (
-              <button
-                key={p}
-                onClick={() => setPriorityFilter(p)}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  priorityFilter === p ? 'bg-white/[0.08] text-white' : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'
-                }`}
-              >
-                {p === 'all' ? 'Todas' : SEVERITY_META[p as keyof typeof SEVERITY_META].label}
-              </button>
-            ))}
-          </div>
-
-          {roadmap.length === 0 ? (
-            <div className="card px-5 py-12 text-center text-sm text-slate-500">
-              No hay planes en este nivel de prioridad.
-            </div>
-          ) : (
-            roadmap
-              .sort((a, b) => priorityOrder.indexOf(a.prioridad) - priorityOrder.indexOf(b.prioridad))
-              .map((p, i) => <PlanCard key={p.criterion_id} plan={p} index={i + 1} />)
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -210,7 +194,7 @@ function FindingsList({
         <CheckCircle2 className="mb-3 h-10 w-10 text-emerald-400" />
         <h3 className="text-sm font-semibold text-slate-200">Sin hallazgos</h3>
         <p className="mt-1 max-w-sm text-xs text-slate-500">
-          Ningún criterio evaluado quedó por debajo del umbral de brecha configurado.
+          Ningún criterio coincide con este nivel de prioridad, o no quedó ninguno por debajo del umbral.
         </p>
       </div>
     );
@@ -229,9 +213,17 @@ function FindingsList({
                 onClick={() => setExpanded(open ? null : f.criterion_id)}
                 className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.02]"
               >
+                <ChevronRight
+                  className={`h-4 w-4 flex-shrink-0 text-slate-600 transition-transform ${open ? 'rotate-90' : ''}`}
+                />
                 <ShieldAlert className="h-4 w-4 flex-shrink-0 text-slate-500" />
                 <span className="flex-shrink-0 font-mono text-xs font-semibold text-slate-300">{f.criterion_id}</span>
                 <span className="min-w-0 flex-1 truncate text-sm text-slate-300">{f.titulo}</span>
+                {plan && (
+                  <span className="hidden flex-shrink-0 items-center gap-1 text-xs text-cyan-400/80 sm:flex">
+                    <Route className="h-3 w-3" /> plan
+                  </span>
+                )}
                 <span className="flex items-center gap-1 text-xs text-slate-500">
                   <Link2 className="h-3 w-3" /> {f.evidence_ids.length}
                 </span>
@@ -239,13 +231,10 @@ function FindingsList({
                   {Math.round(f.score)}
                 </span>
                 <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
-                <ChevronRight
-                  className={`h-4 w-4 flex-shrink-0 text-slate-600 transition-transform ${open ? 'rotate-90' : ''}`}
-                />
               </button>
 
               {open && (
-                <div className="animate-fade-in border-t border-white/[0.04] bg-ink-900/30 px-5 py-4">
+                <div className="animate-fade-in border-t border-white/[0.04] bg-ink-900/30 px-5 py-4 pl-14">
                   {plan ? (
                     <PlanBody plan={plan} />
                   ) : (
@@ -277,7 +266,7 @@ function FindingsList({
   );
 }
 
-/** Cuerpo de un plan, compartido por el acordeón de hallazgos y la vista de Plan de Acción. */
+/** Cuerpo de un plan, desplegado inline bajo el hallazgo correspondiente (docs/11 UI-04). */
 function PlanBody({ plan }: { plan: Plan }) {
   const meta = SEVERITY_META[plan.prioridad as keyof typeof SEVERITY_META] ?? SEVERITY_META.media;
   const isAi = plan.generado_por.startsWith('ai:');
@@ -323,41 +312,5 @@ function PlanBody({ plan }: { plan: Plan }) {
         </div>
       )}
     </div>
-  );
-}
-
-function PlanCard({ plan, index }: { plan: Plan; index: number }) {
-  return (
-    <div className="card card-hover animate-slide-up p-5" style={{ animationDelay: `${index * 40}ms` }}>
-      <div className="flex items-start gap-4">
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-sm font-bold text-slate-400">
-          {index}
-        </div>
-        <div className="min-w-0 flex-1">
-          <PlanBody plan={plan} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ToggleBtn({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-        active ? 'bg-white/[0.08] text-white' : 'text-slate-500 hover:text-slate-300'
-      }`}
-    >
-      {children}
-    </button>
   );
 }

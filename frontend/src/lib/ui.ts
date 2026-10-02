@@ -109,6 +109,43 @@ export const PRIVACY_CRITERIA = new Set([
   'CRI-RC-03',
 ]);
 
+/** Relación con el Privacy Framework por criterio del cruce (docs/03 §7). */
+export const PRIVACY_RELATION: Record<string, string> = {
+  'CRI-ID-04': 'Identify-P',
+  'CRI-PR-01': 'Protect-P',
+  'CRI-PR-03': 'Protect-P',
+  'CRI-PR-05': 'Protect-P',
+  'CRI-DE-02': 'Protect-P + Detect',
+  'CRI-RS-01': 'Protect-P + Respond',
+  'CRI-RS-03': 'Protect-P + Respond',
+  'CRI-RC-01': 'Protect-P + Recover',
+  'CRI-RC-02': 'Protect-P + Recover',
+  'CRI-RC-03': 'Protect-P + Recover',
+};
+
 /** Aclaración de alcance obligatoria en todo reporte con la dimensión de privacidad (docs/00 §6). */
 export const PRIVACY_SCOPE_NOTE =
   'Cubre eventos de ciberseguridad que afectan datos personales; no es una evaluación integral de privacidad.';
+
+const INCIDENT_ESTADO_META: Record<string, { label: string; text: string; bg: string; border: string; dot: string }> = {
+  open: { label: 'Abierto', text: 'text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/40', dot: 'bg-rose-400' },
+  triaged: { label: 'Triado', text: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/40', dot: 'bg-amber-400' },
+  contained: { label: 'Contenido', text: 'text-sky-300', bg: 'bg-sky-500/10', border: 'border-sky-500/40', dot: 'bg-sky-400' },
+  recovering: { label: 'Recuperando', text: 'text-indigo-300', bg: 'bg-indigo-500/10', border: 'border-indigo-500/40', dot: 'bg-indigo-400' },
+  closed: { label: 'Cerrado', text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/40', dot: 'bg-emerald-400' },
+};
+
+export function incidentEstadoMeta(estado: string) {
+  return (
+    INCIDENT_ESTADO_META[estado] ?? {
+      label: estado,
+      text: 'text-slate-400',
+      bg: 'bg-white/[0.04]',
+      border: 'border-white/10',
+      dot: 'bg-slate-500',
+    }
+  );
+}
+
+/** Un incidente está en el historial cuando alcanzó el estado terminal `closed` (docs/08 §4). */
+export const isIncidentClosed = (estado: string): boolean => estado === 'closed';

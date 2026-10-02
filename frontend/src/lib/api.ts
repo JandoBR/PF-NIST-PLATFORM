@@ -137,6 +137,13 @@ export const ingestEvents = (
 export const getIncident = (incidentId: string) =>
   request<IncidentOut>(`/incidents/${incidentId}`);
 
+export const updateIncident = (incidentId: string, estado: string) =>
+  request<IncidentOut>(`/incidents/${incidentId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ estado }),
+  });
+
 export const getIncidentPlans = (incidentId: string) =>
   request<Plan[]>(`/incidents/${incidentId}/plans`);
 

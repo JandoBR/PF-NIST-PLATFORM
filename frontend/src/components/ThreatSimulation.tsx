@@ -7,6 +7,7 @@ import {
   Clock,
   X,
   CheckCircle2,
+  CheckCheck,
   UploadCloud,
   Loader2,
   AlertTriangle,
@@ -14,16 +15,19 @@ import {
   Stethoscope,
   FlaskConical,
   Info,
+  History,
 } from 'lucide-react';
 import { DEMO_EVENT_LOGS, fetchAsFile } from '@/data/demo';
-import { ApiError, getIncidentPlans, ingestEvents, listOrgIncidents, pollJob } from '@/lib/api';
+import { ApiError, getIncidentPlans, ingestEvents, listOrgIncidents, pollJob, updateIncident } from '@/lib/api';
 import type { IncidentOut, JobEstado, Plan } from '@/lib/types';
-import { incidentSeverityMeta } from '@/lib/ui';
+import { incidentEstadoMeta, incidentSeverityMeta, isIncidentClosed } from '@/lib/ui';
 
 interface Props {
   orgId: string | null;
   orgNombre: string | null;
 }
+
+type Tab = 'activos' | 'historial';
 
 export function ThreatSimulation({ orgId, orgNombre }: Props) {
   const [incidents, setIncidents] = useState<IncidentOut[]>([]);
@@ -33,6 +37,7 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [lastIngest, setLastIngest] = useState<string | null>(null);
   const [selected, setSelected] = useState<IncidentOut | null>(null);
+  const [tab, setTab] = useState<Tab>('activos');
 
   const refresh = useCallback(async () => {
     if (!orgId) return [] as IncidentOut[];
@@ -53,7 +58,7 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
     void refresh();
   }, [refresh]);
 
-  async function handleIngest(file: File) {
+  async function handleIngest(file: File, label: string) {
     if (!orgId) return;
     setIngesting(true);
     setError(null);
@@ -74,10 +79,11 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
 
       const after = await refresh();
       const nuevos = Math.max(0, after.length - before);
+      setTab('activos');
       setLastIngest(
         nuevos > 0
-          ? `Eventos procesados · ${nuevos} incidente(s) nuevo(s) · ${after.length} en total`
-          : `Eventos procesados · sin incidentes nuevos · ${after.length} en total`
+          ? `"${label}": ${nuevos} incidente(s) nuevo(s) · ${after.length} en total`
+          : `"${label}": sin incidentes nuevos · ${after.length} en total. Los eventos de este log no cumplen los disparadores; los incidentes abiertos siguen en Activos.`
       );
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : err instanceof Error ? err.message : 'Error desconocido.');
@@ -97,6 +103,10 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
       </div>
     );
   }
+
+  const active = incidents.filter((i) => !isIncidentClosed(i.estado));
+  const closed = incidents.filter((i) => isIncidentClosed(i.estado));
+  const shown = tab === 'activos' ? active : closed;
 
   return (
     <div className="space-y-6">
@@ -120,7 +130,7 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
                 key={log.id}
                 title={log.description}
                 disabled={ingesting}
-                onClick={async () => handleIngest(await fetchAsFile(log.file))}
+                onClick={async () => handleIngest(await fetchAsFile(log.file), log.label)}
                 className="btn-ghost border border-white/[0.06] text-xs"
               >
                 {ingesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
@@ -137,48 +147,61 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
                 disabled={ingesting}
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) void handleIngest(file);
+                  if (file) void handleIngest(file, file.name);
                   e.target.value = '';
                 }}
               />
             </label>
           </div>
         </div>
+        <p className="mt-3 text-[11px] text-slate-600">
+          Cada botón sube un log distinto; no son un interruptor. Ingerir un log nunca borra incidentes ya abiertos.
+        </p>
         {ingesting && jobEstado && (
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             {jobEstado === 'pendiente' ? 'En cola…' : 'Procesando eventos…'}
           </p>
         )}
         {lastIngest && (
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-emerald-300">
-            <CheckCircle2 className="h-3.5 w-3.5" /> {lastIngest}
+          <p className="mt-2 flex items-start gap-1.5 text-xs text-emerald-300">
+            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" /> {lastIngest}
           </p>
         )}
         {error && (
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-rose-300">
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-rose-300">
             <AlertTriangle className="h-3.5 w-3.5" /> {error}
           </p>
         )}
       </div>
 
-      {/* Registro de incidentes */}
+      {/* Registro de incidentes: activos e historial */}
       <div className="card overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-white/[0.06] px-5 py-3.5">
-          <Activity className="h-4 w-4 text-slate-500" />
-          <h3 className="text-sm font-semibold text-white">Incidentes</h3>
-          <span className="ml-auto text-xs text-slate-500">
-            {loading ? 'Cargando…' : `${incidents.length} incidente(s)`}
-          </span>
+        <div className="flex items-center gap-1 border-b border-white/[0.06] px-3 pt-2">
+          <TabBtn active={tab === 'activos'} onClick={() => setTab('activos')}>
+            <Activity className="h-4 w-4" />
+            Activos
+            <span className="ml-1 text-slate-500">{active.length}</span>
+          </TabBtn>
+          <TabBtn active={tab === 'historial'} onClick={() => setTab('historial')}>
+            <History className="h-4 w-4" />
+            Historial
+            <span className="ml-1 text-slate-500">{closed.length}</span>
+          </TabBtn>
+          <span className="ml-auto pr-2 text-xs text-slate-500">{loading ? 'Cargando…' : ''}</span>
         </div>
-        {incidents.length === 0 && !loading ? (
+
+        {shown.length === 0 && !loading ? (
           <div className="px-5 py-12 text-center text-sm text-slate-500">
-            Sin incidentes todavía. Ingiere un log de eventos arriba.
+            {tab === 'activos'
+              ? 'Sin incidentes activos. Ingiere un log de eventos arriba.'
+              : 'El historial está vacío: los incidentes aparecen aquí al marcarlos como resueltos.'}
           </div>
         ) : (
           <div className="divide-y divide-white/[0.04]">
-            {incidents.map((incident) => {
-              const meta = incidentSeverityMeta(incident.severidad);
+            {shown.map((incident) => {
+              const sev = incidentSeverityMeta(incident.severidad);
+              const estado = incidentEstadoMeta(incident.estado);
               return (
                 <button
                   key={incident.id}
@@ -188,14 +211,13 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
                   <span className="font-mono text-xs text-slate-600">
                     {new Date(incident.last_event_time).toLocaleString()}
                   </span>
-                  <span className={`h-2 w-2 flex-shrink-0 rounded-full ${meta.dot}`} />
+                  <span className={`h-2 w-2 flex-shrink-0 rounded-full ${sev.dot}`} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-200">{incident.titulo}</p>
-                    <p className="truncate text-xs text-slate-500">
-                      {incident.estado} · {incident.criterios.join(', ')}
-                    </p>
+                    <p className="truncate text-xs text-slate-500">{incident.criterios.join(', ')}</p>
                   </div>
-                  <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
+                  <span className={`chip ${estado.bg} ${estado.text} ${estado.border} border`}>{estado.label}</span>
+                  <span className={`chip ${sev.bg} ${sev.text} ${sev.border} border`}>{sev.label}</span>
                   <ArrowRight className="h-4 w-4 flex-shrink-0 text-slate-600 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-400" />
                 </button>
               );
@@ -204,15 +226,35 @@ export function ThreatSimulation({ orgId, orgNombre }: Props) {
         )}
       </div>
 
-      {selected && <IncidentDrawer incident={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <IncidentDrawer
+          incident={selected}
+          onClose={() => setSelected(null)}
+          onClosed={async () => {
+            setSelected(null);
+            await refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function IncidentDrawer({ incident, onClose }: { incident: IncidentOut; onClose: () => void }) {
+function IncidentDrawer({
+  incident,
+  onClose,
+  onClosed,
+}: {
+  incident: IncidentOut;
+  onClose: () => void;
+  onClosed: () => void | Promise<void>;
+}) {
   const meta = incidentSeverityMeta(incident.severidad);
+  const estado = incidentEstadoMeta(incident.estado);
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -236,6 +278,21 @@ function IncidentDrawer({ incident, onClose }: { incident: IncidentOut; onClose:
     });
 
   const totalSteps = (plans ?? []).reduce((n, p) => n + p.pasos.length, 0);
+  const allDone = totalSteps > 0 && checked.size === totalSteps;
+  const isClosed = isIncidentClosed(incident.estado);
+
+  async function handleClose() {
+    setClosing(true);
+    setCloseError(null);
+    try {
+      await updateIncident(incident.id, 'closed');
+      await onClosed();
+    } catch (err) {
+      setCloseError(err instanceof Error ? err.message : 'No se pudo cerrar el incidente.');
+    } finally {
+      setClosing(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -249,6 +306,7 @@ function IncidentDrawer({ incident, onClose }: { incident: IncidentOut; onClose:
             <div>
               <h3 className="text-base font-semibold text-white">{incident.titulo}</h3>
               <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className={`chip ${estado.bg} ${estado.text} ${estado.border} border`}>{estado.label}</span>
                 <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
                 <span className="flex items-center gap-1 text-xs text-slate-500">
                   <Clock className="h-3 w-3" /> {new Date(incident.last_event_time).toLocaleString()}
@@ -354,7 +412,8 @@ function IncidentDrawer({ incident, onClose }: { incident: IncidentOut; onClose:
                             <button
                               key={key}
                               onClick={() => toggle(key)}
-                              className={`flex w-full items-start gap-3 rounded-lg border p-2.5 text-left transition-all ${
+                              disabled={isClosed}
+                              className={`flex w-full items-start gap-3 rounded-lg border p-2.5 text-left transition-all disabled:opacity-60 ${
                                 done ? 'border-emerald-500/20 bg-emerald-500/[0.04]' : 'border-white/[0.06] bg-ink-900/40 hover:border-white/15'
                               }`}
                             >
@@ -381,16 +440,56 @@ function IncidentDrawer({ incident, onClose }: { incident: IncidentOut; onClose:
         </div>
 
         <div className="border-t border-white/[0.06] p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-slate-500">
-              {checked.size} de {totalSteps} pasos completados
+              {isClosed ? 'Incidente en el historial' : `${checked.size} de ${totalSteps} pasos completados`}
             </span>
-            <button onClick={onClose} className="btn-ghost border border-white/[0.06]">
-              Cerrar
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={onClose} className="btn-ghost border border-white/[0.06]">
+                Cerrar
+              </button>
+              {!isClosed && (
+                <button
+                  onClick={handleClose}
+                  disabled={closing}
+                  className={allDone ? 'btn-primary' : 'btn-ghost border border-emerald-500/30 text-emerald-300'}
+                  title="Marca el incidente como resuelto y lo mueve al historial."
+                >
+                  {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+                  Marcar como resuelto
+                </button>
+              )}
+            </div>
           </div>
+          {closeError && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-rose-300">
+              <AlertTriangle className="h-3.5 w-3.5" /> {closeError}
+            </p>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative flex items-center gap-2 px-3 py-3 text-sm font-medium transition-colors ${
+        active ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+      }`}
+    >
+      {children}
+      {active && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-cyan-400" />}
+    </button>
   );
 }
