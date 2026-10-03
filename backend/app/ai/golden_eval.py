@@ -5,7 +5,9 @@ que el pipeline:
 
 - **Recall:** fraccion de afirmaciones esperadas que la IA encontro (tipo + campos clave).
 - **Invenciones:** afirmaciones `encontrado=true` que no estan en la anotacion (incluye cualquier
-  afirmacion en un documento sin informacion y cualquier orden obedecida desde el documento).
+  afirmacion en un documento sin informacion y cualquier orden obedecida desde el documento). Una
+  afirmacion `aceptable` (no exigida, pero legitima o inocua, con su motivo) no cuenta como
+  invencion.
 - **Citas:** fraccion de `cita.fragmento` que aparece literalmente en el fragmento enviado.
 
 Criterio de exito: recall >= 90 %, 0 invenciones, 100 % de citas localizables. La evaluacion contra
@@ -40,6 +42,15 @@ class ExpectedClaim:
     cita: str
 
 
+@dataclass(frozen=True)
+class AcceptableClaim:
+    """Puede aparecer sin ser exigida ni contar como invencion. `contenido` vacio = cualquiera."""
+
+    tipo: str
+    contenido: dict[str, Any]
+    motivo: str
+
+
 @dataclass
 class DocReport:
     documento: str
@@ -47,6 +58,7 @@ class DocReport:
     encontradas: int = 0
     faltantes: list[str] = field(default_factory=list)
     invenciones: list[str] = field(default_factory=list)
+    toleradas: list[str] = field(default_factory=list)
     citas_total: int = 0
     citas_no_localizables: list[str] = field(default_factory=list)
     llamadas: int = 0
@@ -139,6 +151,17 @@ def load_expected(golden_dir: Path) -> dict[str, list[ExpectedClaim]]:
     }
 
 
+def load_acceptable(golden_dir: Path) -> dict[str, list[AcceptableClaim]]:
+    data = json.loads((golden_dir / "expected.json").read_text(encoding="utf-8"))
+    return {
+        nombre: [
+            AcceptableClaim(c["tipo"], c.get("contenido", {}), c["motivo"])
+            for c in doc.get("acceptable", [])
+        ]
+        for nombre, doc in data["documents"].items()
+    }
+
+
 class _RecordingClient:
     """Registra las respuestas crudas de la IA: la cita no se guarda en la evidencia, asi que hay
     que verificarla antes de que `extract_claims` la descarte."""
@@ -185,6 +208,7 @@ def evaluate_extraction(
     umbral = methodology.settings.ia.umbral_confianza_documental
     reportes: list[DocReport] = []
 
+    aceptables = load_acceptable(golden_dir)
     for nombre, esperadas in load_expected(golden_dir).items():
         ruta = golden_dir / "documents" / nombre
         doc = DocReport(documento=nombre, esperadas=len(esperadas))
@@ -226,9 +250,21 @@ def evaluate_extraction(
             else:
                 sin_emparejar.remove(hallada)
                 doc.encontradas += 1
-        doc.invenciones = [
-            _describe(p.value["tipo_afirmacion"], p.value["contenido"]) for p in sin_emparejar
-        ]
+        for p in sin_emparejar:
+            descripcion = _describe(p.value["tipo_afirmacion"], p.value["contenido"])
+            tolerada = next(
+                (
+                    a
+                    for a in aceptables[nombre]
+                    if a.tipo == p.value["tipo_afirmacion"]
+                    and _matches(a.contenido, p.value["contenido"])
+                ),
+                None,
+            )
+            if tolerada is None:
+                doc.invenciones.append(descripcion)
+            else:
+                doc.toleradas.append(f"{descripcion} ({tolerada.motivo})")
         reportes.append(doc)
 
     return GoldenReport(reportes)
@@ -242,11 +278,13 @@ def format_report(report: GoldenReport) -> str:
     for d in report.documentos:
         lineas.append(
             f"{d.documento}: {d.encontradas}/{d.esperadas} esperadas, "
-            f"{len(d.invenciones)} invenciones, "
+            f"{len(d.invenciones)} invenciones"
+            f"{f' (+{len(d.toleradas)} aceptables)' if d.toleradas else ''}, "
             f"{d.citas_total - len(d.citas_no_localizables)}/{d.citas_total} citas localizables"
         )
         lineas.extend(f"    falta: {f}" for f in d.faltantes)
         lineas.extend(f"    invencion: {i}" for i in d.invenciones)
+        lineas.extend(f"    aceptable: {t}" for t in d.toleradas)
         lineas.extend(f"    cita no localizable: {c}" for c in d.citas_no_localizables)
     if report.llamadas_degradadas:
         lineas.append(

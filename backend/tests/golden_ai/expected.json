@@ -1,5 +1,5 @@
 {
-  "descripcion": "Anotacion manual del golden set de extraccion (TS-02, docs/05 §8). Por documento: las afirmaciones que U1 DEBE encontrar (tipo + campos clave de `contenido` + `cita` literal del texto). Todo lo que la IA afirme y no este aqui cuenta como invencion; un documento con `claims: []` prueba la abstencion.",
+  "descripcion": "Anotacion manual del golden set de extraccion (TS-02, docs/05 §8). Por documento: `claims` = lo que U1 DEBE encontrar (tipo + campos clave de `contenido` + `cita` literal del texto); `acceptable` = lo que puede aparecer sin ser exigido ni contar como invencion, cada uno con su motivo. Todo lo demas que la IA afirme cuenta como invencion; un documento con `claims: []` prueba la abstencion. Los `acceptable` se anotaron DESPUES de ver la primera corrida real (docs/09 §43): son una decision de criterio, no una verdad independiente.",
   "documents": {
     "politica-seguridad.md": {
       "claims": [
@@ -13,6 +13,9 @@
           "contenido": {"frecuencia": "anual", "ultima_revision": "2026-02-01"},
           "cita": "La ultima revision se realizo el 2026-02-01"
         }
+      ],
+      "acceptable": [
+        {"tipo": "policy_exists", "motivo": "el documento se nombra a si mismo en otra seccion; el mismo documento, repetido"}
       ]
     },
     "roles-y-responsabilidades.md": {
@@ -27,6 +30,9 @@
           },
           "cita": "El Oficial de Seguridad de la Informacion (CISO) es Marta Quintero"
         }
+      ],
+      "acceptable": [
+        {"tipo": "process_defined", "contenido": {"proceso": "otro"}, "motivo": "descripcion de una reunion; ninguna regla puntua un proceso de tipo otro"}
       ]
     },
     "continuidad-y-respaldos.md": {
@@ -46,6 +52,11 @@
           "contenido": {"bases_publicas_permitidas": false},
           "cita": "Queda prohibido exponer bases de datos a Internet"
         }
+      ],
+      "acceptable": [
+        {"tipo": "policy_exists", "motivo": "documento aportado como politica: se toma como correcto; sin aprobador es el tramo de 50 de GV-01"},
+        {"tipo": "role_assigned", "motivo": "el texto nombra al responsable de ejecutar la recuperacion"},
+        {"tipo": "backup_policy", "contenido": {"respaldo": true, "retencion": null}, "motivo": "el respaldo se menciona tambien en la seccion de recuperacion, sin retencion"}
       ]
     },
     "gestion-de-riesgos.md": {
@@ -63,6 +74,9 @@
           },
           "cita": "se clasifica como confidencial"
         }
+      ],
+      "acceptable": [
+        {"tipo": "role_assigned", "motivo": "el texto nombra al responsable del objetivo de riesgo"}
       ]
     },
     "respuesta-incidentes.md": {
@@ -77,9 +91,17 @@
           "contenido": {"niveles": "Direccion General"},
           "cita": "se escala al CISO, y si este no\nlo resuelve en cuatro horas, a la Direccion General"
         }
+      ],
+      "acceptable": [
+        {"tipo": "policy_exists", "motivo": "documento aportado como politica: se toma como correcto; sin aprobador es el tramo de 50 de GV-01"}
       ]
     },
-    "manual-operaciones.md": {"claims": []},
+    "manual-operaciones.md": {
+      "claims": [],
+      "acceptable": [
+        {"tipo": "process_defined", "contenido": {"proceso": "otro"}, "motivo": "descripcion operativa; ninguna regla puntua un proceso de tipo otro"}
+      ]
+    },
     "memo-con-instrucciones.md": {"claims": []}
   }
 }

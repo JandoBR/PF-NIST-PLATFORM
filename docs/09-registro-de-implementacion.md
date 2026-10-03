@@ -1485,14 +1485,36 @@ Las afirmaciones extra no son citas inventadas, pero un `policy_exists` sin apro
 la política puede alimentar a `GV-01` y las afirmaciones de proceso falsas, a los criterios de proceso: es el
 riesgo que esta prueba existe para medir.
 
-**Siguiente paso (no hecho):** (1) completar la anotación con las 2 afirmaciones legítimas; hacerlo después de ver la
-salida del modelo es un sesgo, así que debe quedar dicho; (2) endurecer `extract_v1` (un `policy_exists` exige
-que el fragmento diga que el documento *es* la política o quién la aprueba; no extraer procesos de
-descripciones operativas) subiendo `PROMPT_VERSION`; (3) decidir si una afirmación de baja confianza debe contar
-como invención, ya que hoy el arnés cuenta todas las que el pipeline conserva. No se retocó la anotación ni el
-umbral para que pase.
+**Revisión tras discutirlo (la propuesta inicial de exigir aprobador era errónea).** Los documentos aportados se
+toman como correctos y la rúbrica de GV-01 ya tiene un tramo para "existe sin aprobación identificada"
+(50), así que exigir un aprobador habría restado aplicabilidad. Se comprobó con la caché (sin costo) que los
+`policy_exists` extra no cambian GV-01 en este conjunto (100 con o sin ellos) y que los `process_defined` de
+tipo `otro` son inocuos (todas las reglas que los leen filtran por tipo de proceso). Tampoco se cambia la
+elección de GV-01 por mayor confianza (decisión: la confianza es el criterio, aun si no se exige aprobador).
+El problema era la prueba, que contaba como invención cualquier afirmación no anotada.
 
-**Verificación:** backend **381 tests** (`test_ai_golden.py`: 11) + `ruff check` limpio.
+- **Arnés:** la anotación gana `acceptable` por documento: afirmaciones que pueden aparecer sin ser exigidas ni
+  contar como invención, cada una con su motivo, y se listan en el reporte. Lo aceptable es acotado: solo lo
+  anotado (p. ej. `backup_policy` con `retencion: null`, para que una retención equivocada siga contando).
+  **Se anotaron después de ver la primera corrida**, así que son una decisión de criterio, no una verdad
+  independiente; queda dicho en `expected.json`.
+- **Con eso, la salida de la primera corrida (misma caché) quedó en 1 invención:** `escalation_path` en el manual
+  de operaciones ("a quién contactar"), la única que sí alimenta un criterio (`RS-01` toma el mejor
+  `escalation_path` sin filtrar).
+- **Prompt `extract_v2`:** una regla contra tomar un dato de contacto como ruta de escalamiento. Eso resolvió ese
+  caso, pero **la segunda corrida real dio otras 4 invenciones distintas** (un `role_assigned` para "el comité
+  de seguridad", dos `policy_exists` en la gestión de riesgos, uno de ellos atribuyendo aprobación a la
+  Dirección General por "declara como objetivo", y un `notification_list` con destinatarios vacíos en el manual
+  de operaciones). Recall 100 %, citas 100 %, el memo con instrucciones sigue sin producir nada.
+  Resultado: **NO APROBADO**. Un `notification_list` vacío sí pesa: en `RS-03` da 50 ("mencionada de forma
+  genérica") donde debería haber evidencia insuficiente, si solo se aporta ese documento.
+- **Lectura:** con temperatura 0 y un solo cambio de prompt, el modelo mueve las extras de lugar. Afinar el prompt
+  contra 7 documentos y cada vez ~17 llamadas de pago es perseguir ruido y arriesga sobreajustar el conjunto.
+  Pendiente de decidir: aceptar por *clase* (todo `policy_exists`, todo `role_assigned` respaldado por el texto) y
+  mantener estricto solo lo que alimenta criterios sin filtro (`escalation_path`, `notification_list` vacío), o
+  ampliar el conjunto antes de seguir tocando el prompt.
+
+**Verificación:** backend **381 tests** (`test_ai_golden.py`: 11; ahora 14 con `acceptable`) + `ruff check` limpio.
 
 ## 44. AMP-02: informes en PDF
 

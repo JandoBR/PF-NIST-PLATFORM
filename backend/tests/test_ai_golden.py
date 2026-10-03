@@ -16,6 +16,7 @@ from app.ai.golden_eval import (
     _norm,
     evaluate_extraction,
     format_report,
+    load_acceptable,
     load_expected,
 )
 from app.methodology.loader import load_methodology
@@ -63,6 +64,14 @@ def test_annotations_are_consistent_with_the_documents(methodology):
         for claim in claims:
             assert claim.tipo in tipos, f"{nombre}: tipo desconocido {claim.tipo}"
             assert _norm(claim.cita) in texto, f"{nombre}: la cita no esta en el documento"
+
+
+def test_acceptable_claims_are_valid_and_explained(methodology):
+    tipos = set(methodology.tipos_afirmacion_requeridos())
+    aceptables = [a for claims in load_acceptable(GOLDEN_DIR).values() for a in claims]
+    assert aceptables
+    for a in aceptables:
+        assert a.tipo in tipos and a.motivo.strip()
 
 
 def test_golden_set_covers_abstention_and_injection():
@@ -128,6 +137,53 @@ def test_claim_in_a_document_without_information_is_an_invention(methodology):
     manual = next(d for d in report.documentos if d.documento == "manual-operaciones.md")
     assert len(manual.invenciones) == 1
     assert report.invenciones == 1 and not report.passed
+
+
+def test_acceptable_claims_are_tolerated_but_reported(methodology):
+    """Una afirmacion anotada como aceptable no es invencion (ni se exige), pero se informa."""
+
+    def agrega_politica_sin_aprobador(afirmaciones, texto):
+        if "Plan de continuidad" in texto:
+            return [
+                *afirmaciones,
+                {
+                    "tipo": "policy_exists",
+                    "encontrado": True,
+                    "contenido": {"nombre": "Plan de continuidad", "aprobada_por": None},
+                    "cita": {"fragmento": "Plan de continuidad"},
+                    "confianza": 0.9,
+                },
+            ]
+        return afirmaciones
+
+    report = evaluate_extraction(
+        OracleClient(agrega_politica_sin_aprobador), methodology, GOLDEN_DIR
+    )
+    doc = next(d for d in report.documentos if d.documento == "continuidad-y-respaldos.md")
+    assert doc.invenciones == [] and len(doc.toleradas) == 1
+    assert report.passed
+    assert "aceptable:" in format_report(report)
+
+
+def test_an_escalation_path_in_the_operations_manual_is_still_an_invention(methodology):
+    """Lo aceptable es acotado: solo lo anotado. `escalation_path` alimenta a RS-01."""
+
+    def inventa_escalamiento(afirmaciones, texto):
+        if "Manual de Operaciones" in texto:
+            return [
+                {
+                    "tipo": "escalation_path",
+                    "encontrado": True,
+                    "contenido": {"niveles": "contactar en caso de falla"},
+                    "cita": {"fragmento": "a quien contactar"},
+                    "confianza": 0.8,
+                }
+            ]
+        return afirmaciones
+
+    report = evaluate_extraction(OracleClient(inventa_escalamiento), methodology, GOLDEN_DIR)
+    manual = next(d for d in report.documentos if d.documento == "manual-operaciones.md")
+    assert len(manual.invenciones) == 1 and not report.passed
 
 
 def test_obeying_an_instruction_inside_the_document_is_an_invention(methodology):
