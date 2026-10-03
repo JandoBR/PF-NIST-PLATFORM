@@ -156,8 +156,10 @@ def build_executive_report(
     titulos: dict[str, str],
     findings: list[Finding],
     plans: list[Plan],
+    documents: Sequence[dict] = (),
 ) -> bytes:
-    """Informe ejecutivo de una evaluacion: resumen, madurez por funcion, hallazgos y plan."""
+    """Informe ejecutivo de una evaluacion: resumen, madurez por funcion, hallazgos y plan.
+    `documents` son los `value` de `doc.source.info` (documentos analizados, docs/11 CR-07)."""
 
     width = A4[0] - 4 * cm
     story: list = [
@@ -303,6 +305,36 @@ def build_executive_report(
             ]
     else:
         story.append(_p("No hay planes abiertos para esta evaluacion."))
+
+    if documents:
+        story.append(_p("Documentos analizados", _H2))
+        story.append(
+            _table(
+                [
+                    _head("Documento", "Secciones", "Analizadas", "Sin analizar"),
+                    *[
+                        [
+                            _p(d["archivo"], _CELL),
+                            _p(d["secciones"], _CELL),
+                            _p(d["analizadas"], _CELL),
+                            _p(d["omitidas"] + d.get("sin_respuesta", 0), _CELL),
+                        ]
+                        for d in documents
+                    ],
+                ],
+                [width * 0.52, width * 0.16, width * 0.16, width * 0.16],
+                align_right=(1, 2, 3),
+            )
+        )
+        if any(d["omitidas"] or d.get("sin_respuesta") for d in documents):
+            story += [
+                Spacer(1, 3),
+                _p(
+                    "Hay secciones sin analizar (tope por documento o sin respuesta de la IA): "
+                    "lo que digan no esta reflejado en los puntajes.",
+                    _SMALL,
+                ),
+            ]
 
     story += [_p("Resultados por criterio", _H2)]
     filas = [_head("Criterio", "Descripcion", "Estado", "Puntaje")]

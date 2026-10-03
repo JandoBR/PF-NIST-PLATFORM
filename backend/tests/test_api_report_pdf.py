@@ -1,10 +1,13 @@
 """AMP-02: informe ejecutivo y comparacion en PDF."""
 
 from io import BytesIO
+from pathlib import Path
 
 from pypdf import PdfReader
 
 from tests.test_api_assessments import _create_and_complete, _upload_terraform
+
+FIXTURES_DOCS = Path(__file__).resolve().parent / "fixtures" / "documents"
 
 
 def _text(response) -> str:
@@ -137,3 +140,25 @@ def test_executive_report_lists_the_limitations(
 
     assert "Limitaciones del analisis" in text
     assert "storage_encrypted sin resolver" in text
+
+
+def test_executive_report_lists_the_analyzed_documents(
+    api_client, db_session, methodology, fake_redis
+):
+    from app.ai.client import FakeAIClient
+    from app.core import assessment_service as svc
+
+    doc = FIXTURES_DOCS / "politica-seguridad.md"
+    cliente = FakeAIClient({"aprobada por la Direccion General": {"afirmaciones": []}})
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa API Assessments",
+        scope="entorno:produccion",
+        documents_path=doc,
+        ai_client=cliente,
+    )
+
+    text = _norm(_text(api_client.get(f"/assessments/{assessment.id}/report.pdf")))
+
+    assert "Documentos analizados" in text and "politica-seguridad.md" in text

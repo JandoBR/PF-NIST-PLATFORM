@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.adapters.documents.adapter import DocumentAdapter
-from app.ai.client import FakeAIClient
+from app.ai.client import FakeAIClient, NullAIClient
 from app.methodology.loader import load_methodology
 
 METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
@@ -47,10 +47,11 @@ def test_document_adapter_produces_doc_claim_evidence_with_citations():
         FIXTURES / "politica-seguridad.md", tipos_solicitados=["policy_exists", "policy_review"]
     )
 
-    assert len(evidence) == 2
-    tipos = {e.value["tipo_afirmacion"] for e in evidence}
+    claims = [e for e in evidence if e.type_id == "doc.claim"]
+    assert len(claims) == 2
+    tipos = {e.value["tipo_afirmacion"] for e in claims}
     assert tipos == {"policy_exists", "policy_review"}
-    for claim in evidence:
+    for claim in claims:
         assert claim.locator.section is not None
 
 
@@ -85,3 +86,88 @@ def test_chunks_beyond_the_cap_are_skipped_not_sent(tmp_path):
     adapter.parse_path(doc, tipos_solicitados=["policy_exists"])
 
     assert adapter.chunks_omitidos == 3  # 5 secciones - tope de 2
+
+
+# -- doc.source.info: documento analizado (docs/05 §2.3 E6, docs/11 CR-07) -----------------------
+
+
+def _adapter(client, **kwargs):
+    return DocumentAdapter(
+        client,
+        load_methodology(METHODOLOGY_DIR),
+        source_id="test:info",
+        scope="entorno:produccion",
+        **kwargs,
+    )
+
+
+def _info(evidence):
+    return [e for e in evidence if e.type_id == "doc.source.info"]
+
+
+def test_an_analyzed_document_is_marked_even_when_a_section_has_no_claims():
+    """E6: el documento se marca como analizado aunque una seccion no de afirmaciones."""
+
+    evidence = _adapter(FakeAIClient(_FAKE_RESPONSES)).parse_path(
+        FIXTURES / "politica-seguridad.md", tipos_solicitados=["policy_exists", "policy_review"]
+    )
+
+    (info,) = _info(evidence)
+    assert info.subject_ref == "doc:politica-seguridad" and info.modality.value == "documental"
+    assert info.value == {
+        "titulo": "politica-seguridad",
+        "archivo": "politica-seguridad.md",
+        "secciones": 2,
+        "analizadas": 2,
+        "omitidas": 0,
+        "sin_respuesta": 0,
+    }
+
+
+def test_a_document_the_ai_never_answered_is_not_marked_as_analyzed():
+    """Degradar sin inventar: no se dice "se leyo" de lo que no se leyo."""
+
+    evidence = _adapter(NullAIClient()).parse_path(
+        FIXTURES / "politica-seguridad.md", tipos_solicitados=["policy_exists"]
+    )
+
+    assert evidence == []
+
+
+def test_partial_answers_are_counted(tmp_path):
+    doc = tmp_path / "mixto.md"
+    doc.write_text("# A\nmanual de operaciones\n# B\naprobada por la Direccion General\n")
+
+    (info,) = _info(
+        _adapter(FakeAIClient(_FAKE_RESPONSES)).parse_path(doc, tipos_solicitados=["policy_exists"])
+    )
+
+    assert (info.value["secciones"], info.value["analizadas"], info.value["sin_respuesta"]) == (
+        2,
+        1,
+        1,
+    )
+
+
+def test_the_section_cap_is_recorded_as_omitted(tmp_path):
+    doc = tmp_path / "largo.md"
+    secciones = (f"# Seccion {i}\naprobada por la Direccion General {i}" for i in range(5))
+    doc.write_text("\n".join(secciones))
+
+    (info,) = _info(
+        _adapter(FakeAIClient(_FAKE_RESPONSES), max_chunks_per_document=2).parse_path(
+            doc, tipos_solicitados=["policy_exists"]
+        )
+    )
+
+    assert (info.value["secciones"], info.value["analizadas"], info.value["omitidas"]) == (5, 2, 3)
+
+
+def test_a_document_without_text_is_marked_with_zero_sections(tmp_path):
+    vacio = tmp_path / "vacio.txt"
+    vacio.write_text("")
+
+    adapter = _adapter(FakeAIClient(_FAKE_RESPONSES))
+    (info,) = _info(adapter.parse_path(vacio, tipos_solicitados=["policy_exists"]))
+
+    assert info.value["secciones"] == 0  # registrado, pero no habia nada que analizar

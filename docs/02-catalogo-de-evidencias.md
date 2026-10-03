@@ -64,7 +64,7 @@ notas: >
 | ID | value (resumen) | Uso principal |
 |---|---|---|
 | `tf.resource.present` | `{ tipo, nombre, entorno? }` | Inventario y existencia de recursos soportados. |
-| `tf.attr.value` | `{ recurso, atributo, valor\|unknown, motivo_unknown? }` | Atributos literales o resolubles (no expresiones). |
+| `tf.attr.value` | `{ recurso, atributo, valor\|unknown, motivo_unknown? }` | **No se emite** (docs/09 §57): el adaptador produce tipos específicos por tema (cifrado, backup, acceso…) y un volcado genérico de atributos no lo consume ningún criterio. Los atributos no resueltos van en `tf.expression.unresolved`. |
 | `tf.encryption.config` | `{ estado, mecanismo?, llave? }` | Cifrado en reposo (RDS, S3). |
 | `tf.public_access.config` | `{ bloqueo_publico: bool\|unknown, nivel? }` | Acceso público a almacenamiento (S3). |
 | `tf.db_exposure.config` | `{ publico: bool\|unknown }` | Accesibilidad pública de bases de datos (`publicly_accessible`); ausente o expresión → `unknown`. |
@@ -96,7 +96,7 @@ Alcance inicial: módulos `lineinfile`, `copy`, `template` (solo rutas), `file`,
 | ID | value (resumen) | Uso principal |
 |---|---|---|
 | `doc.claim` | `{ tipo_afirmacion, contenido, encontrado, confianza }` | Afirmación estructurada extraída por IA. |
-| `doc.source.info` | `{ titulo, version_documento?, fecha?, paginas }` | Metadatos del documento analizado. |
+| `doc.source.info` | `{ titulo, archivo, secciones, analizadas, omitidas, sin_respuesta }` | Marca de documento analizado (E6): cuántas secciones tenía y cuántas contestó la IA. No se emite si la IA no contestó ninguna. Se muestra en el informe. (`version_documento`/`fecha` no se extraen: el texto del documento no los garantiza.) |
 
 Tipos de afirmación (`tipo_afirmacion`) usados por los criterios:
 
@@ -125,7 +125,7 @@ Reglas de extracción:
 
 | ID | value (resumen) | Uso principal |
 |---|---|---|
-| `log.event` | evento individual normalizado (ver doc 06) | Correlación y patrones. |
+| `log.event` | evento individual normalizado (ver doc 06) | **No se emite como evidencia** (docs/09 §57): los eventos viven en la tabla `events` y las evaluaciones consumen sus ventanas y patrones (`log.window`, `log.pattern`; docs/08 §3). |
 | `log.pattern` | `{ patron, resultado, desde, hasta, conteo }` | Evidencia operativa agregada. |
 | `log.window` | `{ desde, hasta, completo: bool }` | Completitud de la ventana observada. |
 

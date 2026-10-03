@@ -146,9 +146,8 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   limitación; `PR-02` exige cifrado confirmado para el 100; `PR-04` consume `an.file.permissions`;
   `PR-05` informa `tf.versioning.config`; `DE-01` cita `log.window`; `PR-01` cita `policy_exists`
   junto a una brecha sin elevar el puntaje.
-- [ ] CR-07 · (P2) **Tipos de evidencia sin productor** (es sobre todo una decisión, no código): `tf.attr.value`, `doc.source.info` (marcador
-  "documento analizado", docs/05 §2.3 E6) y `log.event` figuran en docs/02 y no existen. Definir
-  contrato y productor, o declararlos fuera de alcance (P2).
+- [x] CR-07 · **Tipos de evidencia sin productor**. Resuelto (docs/09 §57): `doc.source.info` se implementó; `tf.attr.value` y
+  `log.event` se declararon fuera de alcance.
 
 > Nota transversal: los criterios con componente **documental** (`GV-02/03/04`, `ID-02/03/04`,
 > `RC-01`, `RS-02/03`) dependen de `doc.claim` extraído por U1; sin IA quedan
@@ -223,7 +222,7 @@ demostrable.
 3. ~~**OP-04 (contradicciones) + TS-03**~~ (hechos, docs/09 §38); ~~**TS-01**~~ (hecho, docs/09 §39), ~~**TS-02**~~ (hecho, docs/09 §43) y **AMP-02**:
    lo más demostrable y lo que respalda las afirmaciones del diseño.
 4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), ~~OP-05 + FN-08~~ (hechos, docs/09 §53), ~~OP-11~~ (hecho, docs/09 §52), ~~OP-15~~ (hecho, docs/09 §54), ~~OP-13~~ (hecho, docs/09 §49), ~~API-04~~ (hecho, docs/09 §55) y
-   la decisión de **CR-07**.
+   ~~la decisión de CR-07~~ (hecha, docs/09 §57).
 
 > **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, AMP-02, FN-01, FN-09, API-03, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
 > incidente de OP-04. Ver docs/09 §23–§46.

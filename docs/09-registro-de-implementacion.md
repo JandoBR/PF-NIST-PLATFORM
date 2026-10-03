@@ -1797,3 +1797,26 @@ a las brechas y las contradicciones, ni en el informe.
 **Verificación:** backend 7 tests nuevos (`test_limitation_findings.py` y el PDF) + `ruff check` limpio; frontend
 `typecheck`, `lint` y `build` limpios.
 
+## 57. CR-07: tipos de evidencia sin productor
+
+docs/02 listaba tres tipos que nada emitía. Se decidió uno por uno, no en bloque.
+
+- **`doc.source.info` — se implementa.** docs/05 §2.3 E6 pide marcar como analizado el documento aunque ninguna
+  sección dé afirmaciones; hasta ahora un documento revisado sin hallazgos era indistinguible de uno nunca
+  analizado. El adaptador de documentos (v2) emite una marca por documento con `secciones`, `analizadas` (las que
+  la IA contestó), `omitidas` (las que dejó el tope de secciones) y `sin_respuesta`. **No se emite si la IA no
+  contestó ninguna sección**: decir "analizado" de lo que no se leyó sería inventar (la degradación sigue sin
+  producir evidencia). Un documento sin texto extraíble (PDF escaneado) queda con `secciones: 0`. Se agregó al
+  catálogo (tipos v3, que cambia `methodology_version`) y el informe PDF lista los documentos analizados y avisa
+  si hay secciones sin analizar.
+- **`tf.attr.value` — fuera de alcance.** El adaptador emite tipos específicos por tema (cifrado, backup,
+  exposición…) y los atributos no resueltos van en `tf.expression.unresolved`; un volcado genérico de atributos
+  no lo consume ningún criterio. Se declaró en docs/02 como no emitido.
+- **`log.event` — fuera de alcance.** Los eventos viven en la tabla `events` y las evaluaciones consumen sus
+  ventanas y patrones (docs/08 §3); duplicarlos como evidencia crearía una segunda fuente de verdad (misma razón
+  que OP-17 en docs/12).
+- **Consecuencia:** ya no hay tipos documentados sin productor ni sin decisión.
+
+**Verificación:** backend 7 tests nuevos (marca con y sin afirmaciones, sin marca si la IA no contesta, conteo
+parcial, tope, documento vacío, informe PDF) + `ruff check` limpio.
+

@@ -374,13 +374,14 @@ def get_executive_report(
     _require_completed(assessment)
     detail = _assessment_detail(session, methodology, assessment)
     results = svc.load_criterion_results(session, assessment_id)
-    findings = derive_findings(methodology, results, svc.load_evidence(session, assessment_id))
+    evidence = svc.load_evidence(session, assessment_id)
     content = pdf.build_executive_report(
         detail,
         results,
         {cid: c.titulo for cid, c in methodology.criterios.items()},
-        findings,
+        derive_findings(methodology, results, evidence),
         svc.load_plans(session, assessment_id),
+        [e.value for e in evidence if e.type_id == "doc.source.info"],
     )
     return _pdf_response(content, f"informe-ejecutivo-{assessment_id[:8]}.pdf")
 

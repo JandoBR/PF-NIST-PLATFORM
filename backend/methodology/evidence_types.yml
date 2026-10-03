@@ -1,6 +1,7 @@
 # Tipos de evidencia (docs/02-catalogo-de-evidencias.md). Una version publicada no se modifica jamas.
 # v2: tf.db_exposure.config (accesibilidad publica de bases de datos, docs/02 §5).
-version: 2
+# v3: doc.source.info (documento analizado, docs/05 §2.3 E6).
+version: 3
 tipos:
   - id: tf.resource.present
     version: 1
@@ -151,6 +152,30 @@ tipos:
     requiere_locator: true
     estado: published
     publicado: "2026-09-30"
+
+  - id: doc.source.info
+    version: 1
+    descripcion: >
+      Marca de que un documento fue analizado (docs/05 §2.3 E6): cuantas secciones tenia y cuantas
+      contesto la IA. No se emite si la IA no contesto ninguna (el documento no se leyo). Distingue "se analizo y no se encontro nada" de "no se analizo".
+    valor_schema:
+      type: object
+      required: [titulo, archivo, secciones, analizadas, omitidas, sin_respuesta]
+      properties:
+        titulo: { type: string }
+        archivo: { type: string }
+        secciones: { type: integer }
+        analizadas: { type: integer }
+        omitidas: { type: integer }
+        sin_respuesta: { type: integer }
+    modalidad_permitida: [documental]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-10-02"
+    notas: >
+      `secciones: 0` indica un documento sin capa de texto extraible (PDF escaneado): se registro,
+      pero no hay nada que analizar. `omitidas > 0`: el tope de secciones por documento dejo
+      secciones sin enviar.
 
   - id: an.task.config
     version: 1
