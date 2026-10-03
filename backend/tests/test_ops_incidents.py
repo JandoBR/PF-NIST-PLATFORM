@@ -68,3 +68,19 @@ def test_new_event_ids_are_merged_not_replaced(db_session):
     incident, _ = upsert_incident(db_session, org.id, "s", segundo)
 
     assert incident.event_ids == ["e1", "e2", "e3"]
+
+
+def test_ingesting_e1c_opens_a_d2_incident_with_a_triage_plan(db_session, methodology):
+    from pathlib import Path
+
+    from app.core import assessment_service as svc
+
+    escenarios = Path(__file__).resolve().parent / "fixtures" / "scenarios"
+    ruta = escenarios / "e1c_alerta_sin_triaje.jsonl"
+    result = svc.ingest_events(db_session, methodology, "Empresa D2", ruta)
+
+    (incident,) = result.nuevos_incidentes
+    assert incident.titulo == "Alerta sin triaje a tiempo" and incident.criterios == ["CRI-RS-01"]
+    (plan,) = svc.load_incident_plans(db_session, incident.id)
+    assert plan.criterion_id == "CRI-RS-01" and plan.prioridad == "media"
+    assert "alert_raised" in plan.diagnostico_observable

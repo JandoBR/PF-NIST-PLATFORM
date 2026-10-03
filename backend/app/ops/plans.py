@@ -22,6 +22,11 @@ _PLANTILLAS: dict[str, tuple[str, list[str], list[str]]] = {
         ["Regla de deteccion ausente o umbral mal configurado."],
         ["Revisar reglas y umbrales de deteccion sin modificar produccion."],
     ),
+    "D2": (
+        "alert_raised en {recurso} sin incident_triaged dentro del plazo de triaje.",
+        ["Nadie recibio o atendio la alerta, o el triaje no se registra."],
+        ["Revisar quien recibe la alerta y como se registra el triaje, sin tocar produccion."],
+    ),
     "D3": (
         "incident_declared en {recurso} sin escalation_done dentro del plazo documentado.",
         ["Ruta de escalamiento no definida o no seguida."],

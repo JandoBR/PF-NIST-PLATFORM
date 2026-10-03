@@ -77,12 +77,14 @@ class AuthFailuresBurstSettings(BaseModel):
 
 class VigilanciaSettings(BaseModel):
     """Umbrales de disparadores (docs/08 §5: "N, W y plazos vienen de la metodologia, no del
-    modelo"). `auth_failures_burst` alimenta D1; `plazo_escalamiento_minutos` alimenta D3."""
+    modelo"). `auth_failures_burst` alimenta D1; `plazo_triaje_minutos` alimenta D2;
+    `plazo_escalamiento_minutos` alimenta D3."""
 
     auth_failures_burst: AuthFailuresBurstSettings = Field(
         default_factory=AuthFailuresBurstSettings
     )
     plazo_escalamiento_minutos: int = 30
+    plazo_triaje_minutos: int = 30
     #: Cuantos `log.pattern` nuevos (evidencia que consume la madurez) debe agregar una ingesta
     #: para disparar una reevaluacion automatica del org+scope. Reingerir el mismo archivo agrega
     #: 0 y no dispara. Default 3 = "cambio considerable"; configurable en settings.yml.

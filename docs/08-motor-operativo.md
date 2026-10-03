@@ -87,7 +87,7 @@ la madurez.
 | Disparador | Condición | Severidad | Acción | Criterios |
 |---|---|---|---|---|
 | D1 | `auth_failures_burst` ≥ N en ventana W y **sin** `alert_raised` esperado | media | Crear incidente + plan de detección | CRI-DE-02, CRI-DE-03 |
-| D2 | `alert_raised` sin `incident_triaged` dentro de la ventana | media | Crear incidente + plan de triaje | CRI-RS-01 |
+| D2 | `alert_raised` sin `incident_triaged` dentro de `plazo_triaje_minutos` (30) | media | Crear incidente + plan de triaje | CRI-RS-01 |
 | D3 | `incident_declared` sin `escalation_done` dentro del plazo documentado | alta | Crear/actualizar incidente + plan de escalamiento | CRI-RS-01 |
 | D4 | `restore_exercise_run` con resultado `fail` | alta | Crear incidente + plan de recovery | CRI-RC-02, CRI-RC-03 |
 | D5 | `restore_verified` sin `recovery_communicated` | baja | Crear/actualizar incidente + plan de comunicación | CRI-RC-03 |
@@ -179,6 +179,7 @@ refrescarse por eventos.
 |---|---|---|---|
 | E1 (con alerta y triaje) | ninguno (flujo correcto) | no se crea; solo evidencia positiva | ninguno |
 | E1-b (fallos sin alerta) | D1 | `alta`/`media` | Plan de detección |
+| E1-c (alerta sin triaje) | D2 | `media` | Plan de triaje |
 | E2 (con escalamiento y contención) | ninguno | no se crea; evidencia positiva | ninguno |
 | E2-b (declarado sin escalar) | D3 | `alta` | Plan de escalamiento |
 | E3 (restauración ok y verificada) | ninguno; si falta comunicación, D5 | `baja` | Plan de comunicación |

@@ -1,0 +1,6 @@
+{"event_id": "e1c-001", "event_time": "2026-09-21T03:10:00Z", "tipo": "auth_failure", "recurso": "srv-app-01", "scope": "entorno:produccion", "actor": "admin", "detalle": {"intento": 1}}
+{"event_id": "e1c-002", "event_time": "2026-09-21T03:10:10Z", "tipo": "auth_failure", "recurso": "srv-app-01", "scope": "entorno:produccion", "actor": "admin", "detalle": {"intento": 2}}
+{"event_id": "e1c-003", "event_time": "2026-09-21T03:10:20Z", "tipo": "auth_failure", "recurso": "srv-app-01", "scope": "entorno:produccion", "actor": "admin", "detalle": {"intento": 3}}
+{"event_id": "e1c-004", "event_time": "2026-09-21T03:10:30Z", "tipo": "auth_failure", "recurso": "srv-app-01", "scope": "entorno:produccion", "actor": "admin", "detalle": {"intento": 4}}
+{"event_id": "e1c-005", "event_time": "2026-09-21T03:10:40Z", "tipo": "auth_failure", "recurso": "srv-app-01", "scope": "entorno:produccion", "actor": "admin", "detalle": {"intento": 5}}
+{"event_id": "e1c-006", "event_time": "2026-09-21T03:12:00Z", "tipo": "alert_raised", "recurso": "srv-app-01", "scope": "entorno:produccion", "actor": "sistema-deteccion", "detalle": {"regla": "fuerza_bruta_ssh", "severidad": "media"}}

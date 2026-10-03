@@ -1,9 +1,8 @@
 """Disparadores deterministicos (docs/08 §5). La IA nunca decide si se abre un incidente,
 solo sintetiza el plan despues (O1: "deteccion deterministica primero").
 
-D2 (`alert_raised` sin `incident_triaged` dentro de la ventana) queda fuera de este corte:
-ninguno de los 6 escenarios de aceptacion de docs/08 §9 lo ejercita, y sin el es el unico
-disparador que necesitaria un patron de `incident_triaged` que nada mas usaria.
+D2 (`alert_raised` sin `incident_triaged` a tiempo) se agrego despues (docs/11 OP-05, docs/09 §53)
+junto con el patron `incident_triaged` (FN-08).
 """
 
 from __future__ import annotations
@@ -50,6 +49,36 @@ def _d1_sin_alerta(matches: list[PatternMatch], scope: str) -> TriggerMatch | No
         first_event_time=burst.desde,
         last_event_time=burst.hasta,
         event_ids=burst.event_ids,
+    )
+
+
+def _d2_sin_triaje(
+    matches: list[PatternMatch], settings: VigilanciaSettings, scope: str
+) -> TriggerMatch | None:
+    """Hubo una alerta y nadie la triajeo dentro del plazo (`plazo_triaje_minutos`)."""
+
+    alerta = _by_patron(matches, "alert_raised")
+    if alerta is None:
+        return None
+
+    triaje = _by_patron(matches, "incident_triaged")
+    if triaje is not None:
+        delta_segundos = (triaje.desde - alerta.desde).total_seconds()
+        if 0 <= delta_segundos <= settings.plazo_triaje_minutos * 60:
+            return None  # triajeo a tiempo: sin disparador
+
+    recurso = alerta.recurso or scope
+    event_ids = alerta.event_ids + (triaje.event_ids if triaje else [])
+    return TriggerMatch(
+        disparador="D2",
+        correlation_key=f"alert-sin-triaje:{recurso}:{alerta.desde.isoformat()}",
+        severidad="media",
+        criterios=["CRI-RS-01"],
+        titulo="Alerta sin triaje a tiempo",
+        recurso=recurso,
+        first_event_time=alerta.desde,
+        last_event_time=(triaje.hasta if triaje else alerta.hasta),
+        event_ids=event_ids,
     )
 
 
@@ -122,6 +151,7 @@ def evaluate_triggers(
 ) -> list[TriggerMatch]:
     candidatos = (
         _d1_sin_alerta(matches, scope),
+        _d2_sin_triaje(matches, settings, scope),
         _d3_sin_escalar(matches, settings, scope),
         _d4_restauracion_fallida(matches, scope),
         _d5_sin_comunicar(matches, scope),

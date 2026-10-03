@@ -118,9 +118,8 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
   seguimiento. El worker lo dispara con `selective_refresh=True` (docs/06 §6, docs/09 §29).
 - [x] FN-07 · **Origen del evento**. Hecho (docs/09 §50): `fuente` → `events.source_id`, `log_patterns.fuentes` y
   el `source_id` de la evidencia operativa.
-- [ ] FN-08 · **Patrones sin consumidor** (P2; junto con OP-05): `incident_triaged` y `containment_done` figuran como
-  tipos de evento pero no tienen patrón ni criterio/disparador que los use (docs/06 §2/§3). Definir
-  patrón y consumo, o documentar que son solo contexto. Amplía OP-05.
+- [x] FN-08 · **Patrones sin consumidor**. Hecho (docs/09 §53): `incident_triaged` lo consume D2; `containment_done` queda
+  como patrón de solo contexto, documentado.
 
 > `FN-02` (progreso real del job) **descartado** para el prototipo: ver docs/12 §1.
 
@@ -163,8 +162,7 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   **hallazgos `contradiccion`: hecho** (docs/09 §38). Queda solo `limitacion` (P2, opcional): un
   hallazgo por recurso `unknown`/expresión sin resolver; hoy esa información ya está en la
   explicación del criterio (CR-06).
-- [ ] OP-05 · (P2) Trigger D2 (`alert_raised` sin `incident_triaged`). Va junto con FN-08: requiere
-  definir el patrón `incident_triaged`.
+- [x] OP-05 · Trigger D2 (`alert_raised` sin `incident_triaged`). Hecho (docs/09 §53).
 - [x] OP-11 · **Plan/incidente** (lo útil). Hecho (docs/09 §52): transiciones de estado validadas y motivo de cierre
   obligatorio. Quedan fuera, por opcionales, `brecha_ref` en el plan y la "condición de cierre".
 - [x] OP-12 · **Contratos de IA**. Hecho (docs/09 §37): reintento con backoff exponencial (1 s, 2 s),
@@ -229,7 +227,7 @@ demostrable.
 2. ~~**OP-12** y **OP-14**~~ (hechos, docs/09 §37).
 3. ~~**OP-04 (contradicciones) + TS-03**~~ (hechos, docs/09 §38); ~~**TS-01**~~ (hecho, docs/09 §39), ~~**TS-02**~~ (hecho, docs/09 §43) y **AMP-02**:
    lo más demostrable y lo que respalda las afirmaciones del diseño.
-4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), **OP-05 + FN-08**, ~~OP-11~~ (hecho, docs/09 §52), **OP-15** (líneas), ~~OP-13~~ (hecho, docs/09 §49), **API-04** (problem+json) y
+4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), ~~OP-05 + FN-08~~ (hechos, docs/09 §53), ~~OP-11~~ (hecho, docs/09 §52), **OP-15** (líneas), ~~OP-13~~ (hecho, docs/09 §49), **API-04** (problem+json) y
    la decisión de **CR-07**.
 
 > **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, AMP-02, FN-01, FN-09, API-03, UI-01…UI-10, FN-05, FN-06 y la parte de estado de

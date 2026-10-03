@@ -100,3 +100,26 @@ def test_burst_outside_time_window_is_not_detected(vigilancia_settings):
     ]
     matches = detect_patterns(events, vigilancia_settings)
     assert all(m.patron != "auth_failures_burst" for m in matches)
+
+
+def test_e1_detects_the_triage_pattern(vigilancia_settings):
+    """FN-08: `incident_triaged` deja de descartarse; lo consume el disparador D2."""
+
+    patterns = _patterns("e1_flujo_correcto.jsonl", vigilancia_settings)
+    assert patterns["incident_triaged"].conteo == 1
+    assert patterns["incident_triaged"].desde > patterns["alert_raised"].desde
+
+
+def test_containment_done_is_a_context_only_pattern(vigilancia_settings, tmp_path):
+    """FN-08: `containment_done` se registra como patron (evidencia) aunque nada lo consuma aun."""
+
+    evento = (
+        '{"event_id": "c1", "event_time": "2026-09-21T04:00:00Z", "tipo": "containment_done",'
+        ' "recurso": "srv-app-01", "scope": "entorno:produccion"}'
+    )
+    archivo = tmp_path / "c.jsonl"
+    archivo.write_text(evento)
+
+    matches = detect_patterns(load_events_jsonl(archivo), vigilancia_settings)
+
+    assert [m.patron for m in matches] == ["containment_done"]

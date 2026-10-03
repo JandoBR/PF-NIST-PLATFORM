@@ -76,3 +76,61 @@ def test_d3_does_not_fire_when_escalation_is_within_deadline(vigilancia_settings
     events = load_events_jsonl(FIXTURES / "e2_flujo_correcto.jsonl")
     matches = detect_patterns(events, vigilancia_settings)
     assert evaluate_triggers(matches, vigilancia_settings, SCOPE) == []
+
+
+# D2: alert_raised sin incident_triaged a tiempo (docs/08 §5, docs/11 OP-05).
+
+
+def test_e1c_alerta_sin_triaje_dispara_d2(vigilancia_settings):
+    triggers = _triggers("e1c_alerta_sin_triaje.jsonl", vigilancia_settings)
+
+    assert [t.disparador for t in triggers] == ["D2"]  # hay alerta, asi que no es D1
+    assert triggers[0].severidad == "media"
+    assert triggers[0].criterios == ["CRI-RS-01"]
+    assert triggers[0].correlation_key.startswith("alert-sin-triaje:srv-app-01:")
+
+
+def _d2(vigilancia_settings, *, triaje_despues_de_segundos):
+    from datetime import UTC, datetime, timedelta
+
+    from app.surveillance.patterns import PatternMatch
+
+    alerta = datetime(2026, 9, 21, 3, 12, tzinfo=UTC)
+
+    def patron(nombre, momento, event_id):
+        return PatternMatch(nombre, "ok", momento, momento, 1, [event_id], "srv-app-01")
+
+    matches = [patron("alert_raised", alerta, "a")]
+    if triaje_despues_de_segundos is not None:
+        triaje = alerta + timedelta(seconds=triaje_despues_de_segundos)
+        matches.append(patron("incident_triaged", triaje, "t"))
+    return evaluate_triggers(matches, vigilancia_settings, SCOPE)
+
+
+def test_d2_triage_within_the_deadline_does_not_trigger(vigilancia_settings):
+    plazo = vigilancia_settings.plazo_triaje_minutos * 60
+    assert _d2(vigilancia_settings, triaje_despues_de_segundos=60) == []
+    assert _d2(vigilancia_settings, triaje_despues_de_segundos=plazo) == []  # justo en el plazo
+
+
+def test_d2_late_or_missing_triage_triggers(vigilancia_settings):
+    plazo = vigilancia_settings.plazo_triaje_minutos * 60
+
+    tarde = _d2(vigilancia_settings, triaje_despues_de_segundos=plazo + 1)
+    sin_triaje = _d2(vigilancia_settings, triaje_despues_de_segundos=None)
+
+    assert [t.disparador for t in tarde] == ["D2"]
+    assert [t.disparador for t in sin_triaje] == ["D2"]
+    assert set(tarde[0].event_ids) == {"a", "t"}  # cita ambos hechos
+    assert sin_triaje[0].event_ids == ["a"]
+
+
+def test_d2_a_triage_before_the_alert_does_not_count(vigilancia_settings):
+    """Un `incident_triaged` anterior a la alerta no es el triaje de esa alerta."""
+
+    triggers = _d2(vigilancia_settings, triaje_despues_de_segundos=-60)
+    assert [t.disparador for t in triggers] == ["D2"]
+
+
+def test_d2_needs_an_alert(vigilancia_settings):
+    assert evaluate_triggers([], vigilancia_settings, SCOPE) == []

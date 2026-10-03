@@ -1704,3 +1704,27 @@ verificó.
 **Verificación:** backend 19 tests nuevos (`test_incident_transitions.py` y la migración) + `ruff check` limpio;
 frontend `typecheck`, `lint` y `build` limpios.
 
+## 53. OP-05 y FN-08: disparador D2 y los patrones de triaje y contención
+
+D2 (`alert_raised` sin `incident_triaged`) se había dejado fuera (docs/09 §24) porque necesitaba un patrón de
+`incident_triaged` que nada más usaría, y los tipos `incident_triaged` y `containment_done` se parseaban y se
+descartaban. Ahora D2 es el consumidor del primero y el segundo queda documentado como contexto.
+
+- **Patrones** (`surveillance/patterns.py`): `incident_triaged` y `containment_done` pasan a ser patrones de
+  existencia, así que quedan como evidencia `log.pattern` (que además cuenta para el umbral del refresco
+  automático de madurez) en vez de perderse al parsear.
+- **D2** (`ops/triggers._d2_sin_triaje`): hay `alert_raised` y no hay `incident_triaged` dentro de
+  `vigilancia.plazo_triaje_minutos` (30, en `settings.yml`, igual que `plazo_escalamiento_minutos`). Un triaje
+  anterior a la alerta no cuenta como su triaje. Severidad media, criterio `CRI-RS-01`, clave de correlación
+  `alert-sin-triaje:{recurso}:{momento de la alerta}`, plan con plantilla de diagnóstico propia. Si hay ráfaga de
+  fallos *y* alerta no se dispara D1 (hay alerta), sí D2 si nadie la triajea.
+- **`containment_done` es solo contexto:** ningún criterio ni disparador lo consume. Se decidió no sumarlo a
+  `RS-01` por ahora porque cambiaría puntajes sin un caso que lo pida; queda registrado como evidencia y
+  documentado así en docs/06 §3.
+- **Metodología:** `settings.yml` pasa a `version: 2` (nuevo umbral y nuevo disparador cambian resultados, y
+  `methodology_version` debe reflejarlo). El escenario `e1_flujo_correcto` sigue sin crear incidente (hay
+  triaje a los 60 s); `e1c_alerta_sin_triaje.jsonl` es el nuevo escenario de D2.
+
+**Verificación:** backend 12 tests nuevos (D2 dentro/fuera/antes del plazo y sin alerta, el escenario E1-c con su
+plan, los dos patrones) + `ruff check` limpio. Los golden files no cambian.
+

@@ -1,6 +1,6 @@
 # Parametros de metodologia versionada (docs/04 §8). Fuente canonica de los umbrales de Tier;
 # las tablas en docs/01 §8.2 y docs/03 §9 son copias ilustrativas de este archivo.
-version: 1
+version: 2
 ia:
   alpha: 0.25
   divergencia_maxima: 20
@@ -30,6 +30,8 @@ vigilancia:
   # Umbrales de disparadores operativos (docs/08 §5): N, W y plazos son metodologia, no modelo.
   auth_failures_burst: { n: 5, ventana_minutos: 5 }
   plazo_escalamiento_minutos: 30
+  # D2: minutos que pueden pasar entre alert_raised e incident_triaged antes de abrir un incidente.
+  plazo_triaje_minutos: 30
   # Patrones nuevos que debe agregar una ingesta para reevaluar la madurez del org+scope
   # automaticamente (docs/06 §6, docs/08 §8). Reingerir el mismo log no suma y no dispara.
   refresco_min_patrones_nuevos: 3

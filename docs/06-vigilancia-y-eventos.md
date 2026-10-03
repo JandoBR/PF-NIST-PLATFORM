@@ -69,6 +69,8 @@ La capa de vigilancia agrega eventos en `log.pattern`:
 |---|---|---|
 | `auth_failures_burst` | ≥ N fallos del mismo actor/recursos en ventana W | CRI-DE-02 (contexto) |
 | `alert_raised` | Existe `alert_raised` que referencia un evento previo | CRI-DE-02, CRI-DE-03 |
+| `incident_triaged` | Existe `incident_triaged` (triaje de una alerta) | Disparador D2 (docs/08 §5) |
+| `containment_done` | Existe `containment_done` | Solo contexto: ningún criterio ni disparador lo usa todavía |
 | `incident_declared` | Existe `incident_declared` con criterio documentado aplicable | CRI-DE-02, CRI-RS-01 |
 | `escalation_done` | Existe `escalation_done` dentro del plazo declarado | CRI-RS-01 |
 | `restore_exercise_run` | Ejercicio completo con resultado | CRI-RC-02 |
