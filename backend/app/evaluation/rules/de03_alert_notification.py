@@ -6,7 +6,7 @@ alerta (`log.pattern(alert_raised)`).
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, by_type, doc_claims
+from app.evaluation.rules._common import best_found_with, by_type, doc_claims
 from app.evaluation.rules._common import result as build
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
@@ -30,12 +30,9 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Sin destinatarios declarados ni evidencia operativa de alerta.",
         )
 
-    mejor = best_found(claims)
-    destinatarios = (
-        mejor.value.get("contenido", {}).get("destinatarios") if mejor is not None else None
-    )
+    mejor = best_found_with(claims, "destinatarios")
 
-    if destinatarios and alerta is not None:
+    if mejor is not None and alerta is not None:
         return build(
             CRITERION_ID,
             Estado.EVALUADO,
@@ -43,7 +40,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Alertas llegan a destinatarios definidos y el escenario lo evidencia.",
             [mejor.id, alerta.id],
         )
-    if destinatarios:
+    if mejor is not None:
         return build(
             CRITERION_ID,
             Estado.EVALUADO,

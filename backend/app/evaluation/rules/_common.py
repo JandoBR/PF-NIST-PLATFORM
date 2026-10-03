@@ -26,6 +26,18 @@ def doc_claims(
     ]
 
 
+def best_found_with(claims: list[EvidenceInstance], campo: str) -> EvidenceInstance | None:
+    """Como `best_found`, pero solo entre las afirmaciones que traen `contenido[campo]` con algo.
+
+    Una afirmacion encontrada que calla ese dato (p. ej. una `notification_list` sin
+    `destinatarios`) no compite con otra que si lo declara, aunque tenga mas confianza: no dice
+    algo distinto, no dice nada sobre ese campo."""
+
+    return best_found(
+        [c for c in claims if (c.value.get("contenido") or {}).get(campo) not in (None, "", [], {})]
+    )
+
+
 def best_found(claims: list[EvidenceInstance]) -> EvidenceInstance | None:
     """La afirmacion `encontrado=true` con mayor confianza, o `None` si ninguna declara el hecho."""
 

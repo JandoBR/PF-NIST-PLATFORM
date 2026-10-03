@@ -1143,7 +1143,7 @@ PR 6/6, DE 2/3, RS 3/3, RC 3/3.
 - `ID-04`: `data_inventory` con tipos de datos y clasificación (100), solo uno de los dos (50), o
   ninguno (0).
 - `RS-02`: proceso de análisis/causa raíz; 100 con evidencia operativa de declaración, 75 documentado.
-- `RS-03`: `notification_list` con destinatarios y plazos (100), sin plazos (75), genérico (50).
+- `RS-03`: `notification_list` con destinatarios y plazos (100), sin plazos (75), genérico (50; quitado en §47).
 
 **Extracción:** se agregó `notification_list` a los campos esperados del prompt y se extendió
 `process_defined` con `metricas`/`ajustes` (`extraction._CONTENT_FIELDS`). `ID-04` y `RS-03` ya
@@ -1480,11 +1480,9 @@ escalamiento; movió las extras de sitio y no aportó nada (la métrica correcta
 y el prompt volvió a `extract_v1`, idéntico al original. La elección de `GV-01` por mayor confianza se mantiene
 (decisión: la confianza es el criterio, aun si el reclamo no trae aprobador).
 
-**Observación (no es un fallo de la prueba):** una afirmación `encontrado=true` con contenido vacío (visto: un
-`notification_list` con `destinatarios: []` en el manual) cuenta en `RS-03` como "mencionada de forma genérica"
-(50). Es coherente con la rúbrica, pero conviene saberlo.
+**Observación derivada:** una afirmación encontrada sin `destinatarios` daba 50 en `RS-03`; se corrigió en §47.
 
-**Verificación:** backend **412 tests** (`test_ai_golden.py`: 11) + `ruff check` limpio.
+**Verificación:** backend **409 tests** (`test_ai_golden.py`: 11) + `ruff check` limpio.
 
 ## 44. AMP-02: informes en PDF
 
@@ -1580,4 +1578,29 @@ usuario tenía que volver a subir todo. Se registró como **FN-09** (P1) y se hi
 **Verificación:** backend **409 tests** (`test_job_retry.py`: 13; más la migración en `test_migrations.py`)
 + `ruff check` limpio; frontend `typecheck`, `lint` y `build` limpios. Se comprobó que quitar el borrado de
 filas parciales hace fallar el test de duplicados.
+
+## 47. Una afirmación sin destinatarios no puntúa en `RS-03`/`DE-03`
+
+Salió de la primera corrida real del golden set (§43): el manual de operaciones produjo una `notification_list`
+con `destinatarios: []` y `criterios: "falla del servidor principal"`. Citada del texto, así que no es un
+error de extracción (los documentos se toman como correctos), pero al llegar a los criterios daba **50** en
+`RS-03` ("mencionada de forma genérica"), un tramo que **no existe en la matriz** (docs/03 §5: 100 / 75 / 0) y
+que `DE-03`, que lee la misma afirmación, no tiene (sin destinatarios, 0). Con solo ese documento, `RS-03`
+habría dicho que existe una notificación definida a medias.
+
+- **Qué se cambió:** `RS-03` y `DE-03` eligen la mejor afirmación *entre las que traen `destinatarios`*
+  (`_common.best_found_with`), no entre todas. Sin ninguna que lo declare, `RS-03` es 0 ("no declaran a quién
+  se notifica"), como `DE-03` y como la matriz. Se quitó el tramo de 50.
+- **Efecto colateral que también se corrigió:** antes la mejor afirmación se elegía por confianza *antes* de
+  mirar si traía destinatarios, así que una afirmación callada con 0,95 tapaba a otra con la lista completa y
+  0,7. La confianza sigue decidiendo entre afirmaciones que dicen algo sobre el mismo dato; una que lo calla no
+  compite. (No cambia la decisión de `GV-01`: ahí se elige por confianza entre las que declaran la política.)
+- **Lo que no se hizo:** descartar en la extracción toda afirmación con contenido vacío. En la caché real no hay
+  ninguna con el contenido completamente vacío, y `GV-01` usa a propósito una afirmación sin nombre
+  ("mención informal", 25), así que un descarte global rompería esa regla.
+- **Tests:** `RS-03` sin destinatarios (con `{}` y con otros campos) es 0; una afirmación callada no tapa a la que
+  declara destinatarios (`RS-03` y `DE-03`). El test anterior `test_rs03_generico_es_50` se reemplazó.
+
+**Verificación:** backend **411 tests** + `ruff check` limpio. Los golden files no cambian (ningún caso tiene
+documentos).
 

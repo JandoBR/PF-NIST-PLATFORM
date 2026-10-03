@@ -2,11 +2,14 @@
 
 Documental (`doc.claim(tipo=notification_list)`): lista de notificacion con criterios y plazos.
 Alimenta la vista de privacidad (docs/03 §7).
+
+Sin destinatarios no hay lista: una afirmacion que no dice a quien se notifica no puntua (docs/03:
+100 / 75 / 0, igual que `DE-03`). Antes daba 50 por "mencion generica"; ver docs/09 §47.
 """
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result
+from app.evaluation.rules._common import best_found_with, doc_claims, result
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -25,7 +28,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             " interesados.",
         )
 
-    mejor = best_found(claims)
+    mejor = best_found_with(claims, "destinatarios")
     if mejor is None:
         return result(
             CRITERION_ID,
@@ -35,9 +38,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             [c.id for c in claims],
         )
 
-    contenido = mejor.value.get("contenido", {})
-    destinatarios = contenido.get("destinatarios")
-    if destinatarios and contenido.get("plazos"):
+    if mejor.value["contenido"].get("plazos"):
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
@@ -45,18 +46,10 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Lista de notificacion con destinatarios, criterios y plazos.",
             [mejor.id],
         )
-    if destinatarios:
-        return result(
-            CRITERION_ID,
-            Estado.EVALUADO,
-            75,
-            "Lista de notificacion definida, sin plazos.",
-            [mejor.id],
-        )
     return result(
         CRITERION_ID,
         Estado.EVALUADO,
-        50,
-        "Notificacion a interesados mencionada de forma generica.",
+        75,
+        "Lista de notificacion definida, sin plazos.",
         [mejor.id],
     )

@@ -57,7 +57,9 @@ def _pattern(patron: str, resultado: str = "ok") -> EvidenceInstance:
     )
 
 
-def _claim(tipo: str, contenido: dict | None = None) -> EvidenceInstance:
+def _claim(
+    tipo: str, contenido: dict | None = None, confianza: float = 0.9
+) -> EvidenceInstance:
     return EvidenceInstance(
         type_id="doc.claim",
         type_version=1,
@@ -68,7 +70,7 @@ def _claim(tipo: str, contenido: dict | None = None) -> EvidenceInstance:
             "tipo_afirmacion": tipo,
             "contenido": contenido or {},
             "encontrado": True,
-            "confianza": 0.9,
+            "confianza": confianza,
         },
         source_id="src",
         locator=Locator(file="politica.md"),
@@ -124,6 +126,15 @@ def test_de03_destinatarios_y_alerta_scores_100():
 def test_de03_destinatarios_sin_alerta_scores_75():
     evidence = [_claim("notification_list", {"destinatarios": ["soc"]})]
     assert de03_alert_notification.evaluate(evidence).final_score == 75
+
+
+def test_de03_una_afirmacion_callada_no_tapa_a_la_que_declara_destinatarios():
+    callada = _claim("notification_list", {"destinatarios": []}, confianza=0.95)
+    util = _claim("notification_list", {"destinatarios": ["soc"]}, confianza=0.7)
+
+    result = de03_alert_notification.evaluate([callada, util, _pattern("alert_raised")])
+
+    assert result.final_score == 100 and util.id in result.evidence_ids
 
 
 def test_de03_nada_es_insuficiente():

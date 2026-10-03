@@ -14,7 +14,9 @@ from app.evaluation.schemas import Estado
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
 
 
-def _claim(tipo: str, contenido: dict | None = None, encontrado: bool = True):
+def _claim(
+    tipo: str, contenido: dict | None = None, encontrado: bool = True, confianza: float = 0.9
+):
     return EvidenceInstance(
         type_id="doc.claim",
         type_version=1,
@@ -25,7 +27,7 @@ def _claim(tipo: str, contenido: dict | None = None, encontrado: bool = True):
             "tipo_afirmacion": tipo,
             "contenido": contenido or {},
             "encontrado": encontrado,
-            "confianza": 0.9,
+            "confianza": confianza,
         },
         source_id="src",
         locator=Locator(file="politica.md"),
@@ -125,6 +127,20 @@ def test_rs03_sin_plazos_es_75():
     assert rs03_notification.evaluate(evidence).final_score == 75
 
 
-def test_rs03_generico_es_50():
-    evidence = [_claim("notification_list", {})]
-    assert rs03_notification.evaluate(evidence).final_score == 50
+def test_rs03_sin_destinatarios_no_puntua_y_es_0():
+    """Una afirmacion que no dice a quien se notifica no es una lista (docs/03: 100/75/0)."""
+
+    for contenido in ({}, {"destinatarios": [], "criterios": "falla del servidor"}):
+        resultado = rs03_notification.evaluate([_claim("notification_list", contenido)])
+        assert resultado.estado == Estado.NO_IMPLEMENTADO and resultado.final_score == 0
+
+
+def test_rs03_una_afirmacion_callada_no_tapa_a_la_que_declara_destinatarios():
+    """Mas confianza no basta si la afirmacion no trae el dato (p. ej. un manual de operaciones)."""
+
+    callada = _claim("notification_list", {"destinatarios": []}, confianza=0.95)
+    util = _claim("notification_list", {"destinatarios": ["CISO"], "plazos": "72h"}, confianza=0.7)
+
+    resultado = rs03_notification.evaluate([callada, util])
+
+    assert resultado.final_score == 100 and resultado.evidence_ids == [util.id]
