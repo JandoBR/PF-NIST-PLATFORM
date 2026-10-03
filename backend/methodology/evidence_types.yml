@@ -1,7 +1,8 @@
 # Tipos de evidencia (docs/02-catalogo-de-evidencias.md). Una version publicada no se modifica jamas.
 # v2: tf.db_exposure.config (accesibilidad publica de bases de datos, docs/02 §5).
 # v3: doc.source.info (documento analizado, docs/05 §2.3 E6).
-version: 3
+# v4: doc.claim@2 guarda la cita textual (docs/09 §60).
+version: 4
 tipos:
   - id: tf.resource.present
     version: 1
@@ -152,6 +153,28 @@ tipos:
     requiere_locator: true
     estado: published
     publicado: "2026-09-30"
+
+  - id: doc.claim
+    version: 2
+    descripcion: >
+      Afirmacion estructurada extraida por IA de un documento, con su cita textual. La cita se
+      verifica contra el texto enviado: si no aparece, la afirmacion se guarda con una limitacion y
+      no cuenta para puntuar (docs/05 §2.3 E8).
+    valor_schema:
+      type: object
+      required: [tipo_afirmacion, encontrado, confianza]
+      properties:
+        tipo_afirmacion: { type: string }
+        contenido: { type: object }
+        encontrado: { type: boolean }
+        confianza: { type: number }
+        cita: { type: [string, "null"] }
+    modalidad_permitida: [documental]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-10-02"
+    notas: >
+      v2 agrega `cita`. v1 queda para reproducir evaluaciones anteriores.
 
   - id: doc.source.info
     version: 1

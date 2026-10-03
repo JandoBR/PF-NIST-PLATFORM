@@ -33,26 +33,46 @@ def _es_de_declaracion(claim: EvidenceInstance) -> bool:
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    ventana = by_type(evidence, "log.window")
-    if not ventana or not ventana[0].value["completo"]:
-        return build(
-            CRITERION_ID,
-            Estado.EVIDENCIA_INSUFICIENTE,
-            None,
-            "Sin ventana de observacion completa: no se puede concluir.",
-        )
-
-    alerta = _patron(evidence, "alert_raised")
-    declarado = _patron(evidence, "incident_declared")
-    oportunidad = _patron(evidence, "auth_failures_burst")
-    positivo = alerta or declarado
-
     doc = [c for c in doc_claims(evidence, "process_defined") if _es_de_declaracion(c)]
     doc_mejor = best_found(doc)
     tiene_criterios = doc_mejor is not None and doc_mejor.value.get("contenido", {}).get(
         "criterios_declaracion"
     )
     doc_criterios = doc_mejor if tiene_criterios else None
+
+    ventana = by_type(evidence, "log.window")
+    if not ventana or not ventana[0].value["completo"]:
+        # Igual que RC-02: sin eventos se evalua lo documental (docs/09 §60). Antes daba
+        # evidencia_insuficiente aunque los documentos definieran criterios de declaracion.
+        if doc_criterios:
+            return build(
+                CRITERION_ID,
+                Estado.EVALUADO,
+                75,
+                "Criterios de declaracion documentados, sin evidencia operativa (sin ventana"
+                " completa).",
+                [doc_criterios.id],
+            )
+        if doc_mejor is not None:
+            return build(
+                CRITERION_ID,
+                Estado.EVALUADO,
+                50,
+                "Analisis de eventos descrito sin criterios de declaracion concretos (sin ventana"
+                " completa).",
+                [doc_mejor.id],
+            )
+        return build(
+            CRITERION_ID,
+            Estado.EVIDENCIA_INSUFICIENTE,
+            None,
+            "Sin ventana de observacion completa ni criterios de declaracion documentados.",
+        )
+
+    alerta = _patron(evidence, "alert_raised")
+    declarado = _patron(evidence, "incident_declared")
+    oportunidad = _patron(evidence, "auth_failures_burst")
+    positivo = alerta or declarado
 
     if oportunidad and not positivo:
         return build(

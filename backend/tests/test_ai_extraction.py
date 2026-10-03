@@ -32,7 +32,7 @@ def test_extracts_claim_with_valid_citation():
 
     evidence = extract_claims(
         client,
-        chunk_text="... aprobada por la Direccion General ...",
+        chunk_text="... fue aprobada por la Direccion General el 1 de marzo de 2025 ...",
         chunk_locator=LOCATOR,
         tipos_solicitados=["policy_exists", "policy_review"],
         doc_id="politica-seguridad",
@@ -47,6 +47,8 @@ def test_extracts_claim_with_valid_citation():
     assert claim.subject_ref == "doc:politica-seguridad"
     assert claim.value["tipo_afirmacion"] == "policy_exists"
     assert claim.value["contenido"]["aprobada_por"] == "Direccion General"
+    assert claim.value["cita"] == "aprobada por la Direccion General el 1 de marzo de 2025"
+    assert claim.type_version == 2
     assert claim.limitations is None
 
 
@@ -207,3 +209,91 @@ def test_every_process_rule_can_be_reached_from_the_extraction_vocabulary():
     }
     inalcanzables = [cid for cid, f in filtros.items() if not any(f(claim(o)) for o in opciones)]
     assert inalcanzables == []
+
+
+# -- E8: la cita tiene que estar en el texto enviado -------------------------------------------
+
+
+def _one_claim(fragmento: str, chunk_text: str):
+    client = FakeAIClient(
+        {
+            "Direccion": {
+                "afirmaciones": [
+                    {
+                        "tipo": "policy_exists",
+                        "encontrado": True,
+                        "contenido": {"nombre": "Politica", "aprobada_por": "Direccion General"},
+                        "cita": {"fragmento": fragmento},
+                        "confianza": 0.9,
+                    }
+                ]
+            }
+        }
+    )
+    (claim,) = extract_claims(
+        client,
+        chunk_text=chunk_text,
+        chunk_locator=LOCATOR,
+        tipos_solicitados=["policy_exists"],
+        doc_id="politica",
+        source_id="test:doc",
+        scope="entorno:produccion",
+        confianza_minima=0.6,
+    )
+    return claim
+
+
+def test_a_quote_that_is_not_in_the_text_is_kept_but_does_not_score():
+    from app.ai.extraction import CITA_NO_LOCALIZABLE
+    from app.evaluation.rules import gv01_policy
+
+    claim = _one_claim(
+        "aprobada por el Directorio en 2024",  # inventada: el texto dice otra cosa
+        "La politica fue aprobada por la Direccion General el 1 de marzo de 2025.",
+    )
+
+    assert claim.limitations == CITA_NO_LOCALIZABLE
+    assert claim.value["cita"] == "aprobada por el Directorio en 2024"  # queda a la vista
+    resultado = gv01_policy.evaluate([claim])
+    assert resultado.final_score is None  # no cuenta: GV-01 no tiene evidencia utilizable
+
+
+def test_quote_matching_ignores_case_accents_and_spacing():
+    claim = _one_claim(
+        "APROBADA por la   Dirección General",
+        "La politica fue aprobada por la Direccion\nGeneral el 1 de marzo.",
+    )
+
+    assert claim.limitations is None
+
+
+def test_low_confidence_and_unlocatable_quote_are_both_recorded():
+    from app.ai.extraction import CITA_NO_LOCALIZABLE
+
+    client = FakeAIClient(
+        {
+            "Direccion": {
+                "afirmaciones": [
+                    {
+                        "tipo": "policy_exists",
+                        "encontrado": True,
+                        "contenido": {},
+                        "cita": {"fragmento": "texto que no esta"},
+                        "confianza": 0.3,
+                    }
+                ]
+            }
+        }
+    )
+    (claim,) = extract_claims(
+        client,
+        chunk_text="Direccion General",
+        chunk_locator=LOCATOR,
+        tipos_solicitados=["policy_exists"],
+        doc_id="d",
+        source_id="s",
+        scope="e",
+        confianza_minima=0.6,
+    )
+
+    assert "confianza baja" in claim.limitations and CITA_NO_LOCALIZABLE in claim.limitations

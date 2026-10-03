@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from app.ai.calllog import call_context
 from app.ai.client import AIClient
+from app.ai.quotes import quote_in_text
 from app.ai.schemas import ExtractionResponse
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
 
@@ -20,6 +21,9 @@ from app.schemas.evidence import EvidenceInstance, Locator, Modality
 #: opcion el modelo no podia etiquetar un plan de respuesta y `CRI-RS-01` no lo encontraba
 #: (docs/09 §59).
 PROMPT_VERSION = "extract_v2"
+
+#: Limitacion de una afirmacion cuya cita no aparece en el texto analizado (E8).
+CITA_NO_LOCALIZABLE = "cita no localizable en el texto analizado: no cuenta para puntuar"
 _PROMPT_PATH = Path(__file__).parent / "prompts" / f"{PROMPT_VERSION}.txt"
 _SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
@@ -161,9 +165,15 @@ def extract_claims(
         if claim.encontrado and (claim.cita is None or not claim.cita.fragmento.strip()):
             continue  # E2: una afirmacion encontrada sin cita.fragmento se descarta
 
-        limitations = None
+        limitaciones: list[str] = []
         if claim.encontrado and claim.confianza < confianza_minima:
-            limitations = f"confianza baja ({claim.confianza} < {confianza_minima})"  # E3
+            limitaciones.append(f"confianza baja ({claim.confianza} < {confianza_minima})")  # E3
+        if claim.encontrado and not quote_in_text(claim.cita.fragmento, chunk_text):
+            # E8: la cita tiene que estar en el texto enviado. Una cita que no aparece no se puede
+            # verificar: la afirmacion se guarda (queda a la vista) pero no cuenta para puntuar,
+            # igual que una de confianza baja.
+            limitaciones.append(CITA_NO_LOCALIZABLE)
+        limitations = "; ".join(limitaciones) or None
 
         locator = chunk_locator
         if claim.cita is not None:
@@ -178,7 +188,7 @@ def extract_claims(
         evidence.append(
             EvidenceInstance(
                 type_id="doc.claim",
-                type_version=1,
+                type_version=2,
                 subject_type="document",
                 subject_ref=f"doc:{doc_id}",
                 scope=scope,
@@ -187,6 +197,8 @@ def extract_claims(
                     "contenido": _sanitize_content(claim.tipo, claim.contenido),
                     "encontrado": claim.encontrado,
                     "confianza": claim.confianza,
+                    # v2: la cita textual, para poder mostrarla y auditarla despues.
+                    "cita": claim.cita.fragmento if claim.cita is not None else None,
                 },
                 source_id=source_id,
                 locator=locator,

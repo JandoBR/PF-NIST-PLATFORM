@@ -84,7 +84,7 @@ Las instancias **nunca se sobrescriben**. Una nueva recolección crea instancias
 
 Reglas:
 
-- **La ausencia de evidencia no es una falla**: es `evidencia_insuficiente`.
+- **La ausencia de evidencia no es una falla**: es `evidencia_insuficiente`. Esto incluye el **silencio documental**: que los documentos analizados no declaren algo (o el modelo lo marque como no encontrado) no es `no_implementado`, porque la organización puede no haber aportado el documento correspondiente (docs/09 §60).
 - `no_aplicable` exige un motivo explícito y queda auditado.
 - Un estado `error` es visible y no se oculta promediando.
 

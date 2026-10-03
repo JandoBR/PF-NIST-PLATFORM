@@ -7,7 +7,7 @@ afirmacion.
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result
+from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -39,10 +39,8 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     candidatos = [c for c in claims if _es_de_riesgos(c)]
     if not candidatos:
-        return result(
+        return silencio_documental(
             CRITERION_ID,
-            Estado.NO_IMPLEMENTADO,
-            0,
             "Los documentos analizados no declaran un proceso de identificacion/evaluacion de"
             " riesgos.",
             [c.id for c in claims],
@@ -50,10 +48,8 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     mejor = best_found(candidatos)
     if mejor is None:
-        return result(
+        return silencio_documental(
             CRITERION_ID,
-            Estado.NO_IMPLEMENTADO,
-            0,
             "No se declara un proceso de evaluacion de riesgos.",
             [c.id for c in candidatos],
         )

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from app.evaluation.rules._common import by_type
+from app.evaluation.rules._common import by_type, silencio_documental
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -63,14 +63,10 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     encontradas = [c for c in exists_claims if c.value["encontrado"]]
     if not encontradas:
-        return CriterionResult(
-            criterion_id=CRITERION_ID,
-            criterion_version=CRITERION_VERSION,
-            estado=Estado.NO_IMPLEMENTADO,
-            base_score=0,
-            final_score=0,
-            explanation="Los documentos analizados no declaran ninguna politica de ciberseguridad.",
-            evidence_ids=[c.id for c in exists_claims],
+        return silencio_documental(
+            CRITERION_ID,
+            "Los documentos analizados no declaran ninguna politica de ciberseguridad.",
+            [c.id for c in exists_claims],
         )
 
     mejor = max(encontradas, key=lambda c: c.value["confianza"])

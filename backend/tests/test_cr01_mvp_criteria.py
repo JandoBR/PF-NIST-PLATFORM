@@ -105,10 +105,13 @@ def test_gv02_roles_sin_autoridad_es_75():
     assert gv02_roles.evaluate(evidence).final_score == 75
 
 
-def test_gv02_no_declarado_es_0():
+def test_gv02_no_declarado_es_insuficiente_no_0():
+    """Conservador (docs/09 §60): que los documentos callen no prueba que no haya roles."""
+
     evidence = [_claim("role_assigned", {}, encontrado=False)]
     result = gv02_roles.evaluate(evidence)
-    assert (result.estado, result.final_score) == (Estado.NO_IMPLEMENTADO, 0)
+    assert (result.estado, result.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
+    assert "no equivale a 0" in result.explanation
 
 
 # --- CRI-GV-03 ---
@@ -144,10 +147,10 @@ def test_id03_proceso_sin_registro_es_75():
     assert id03_risk_assessment.evaluate(evidence).final_score == 75
 
 
-def test_id03_solo_proceso_de_recuperacion_es_0():
+def test_id03_solo_proceso_de_recuperacion_es_insuficiente():
     evidence = [_claim("process_defined", {"proceso": "recuperacion", "pasos": "x"})]
     result = id03_risk_assessment.evaluate(evidence)
-    assert (result.estado, result.final_score) == (Estado.NO_IMPLEMENTADO, 0)
+    assert (result.estado, result.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
 
 
 # --- CRI-ID-02 ---

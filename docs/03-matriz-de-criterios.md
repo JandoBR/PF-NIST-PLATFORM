@@ -19,6 +19,10 @@ Reglas transversales:
 - La rúbrica genérica de 0/25/50/75/100 está en `01-modelo-de-evaluacion.md §4`.
 - La observación técnica prevalece sobre la documental (D7).
 - `unknown` produce `evidencia_insuficiente` para el recurso afectado, nunca un valor inventado.
+- **Silencio documental:** que los documentos analizados no declaren algo da `evidencia_insuficiente`, no 0
+  (docs/09 §60). Un 0 exige evidencia explícita de ausencia, que en la práctica solo da la configuración
+  técnica (p. ej. cifrado `disabled`) o un escenario de eventos (una falla observada).
+- Una afirmación cuya cita no aparece en el documento no cuenta para ningún criterio (docs/05 §2.3 E8).
 - Las recomendaciones son plantillas; la IA las adapta y explica, sin ejecutar nada.
 
 Resumen de cobertura del catálogo:
@@ -50,7 +54,7 @@ Resumen de cobertura del catálogo:
   - 75: existe y aprobada, sin evidencia de revisión reciente.
   - 50: existe en borrador o sin aprobación identificada.
   - 25: mención informal de “políticas” sin documento concreto.
-  - 0: el documento no declara política alguna (`encontrado: false` en todos los documentos).
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
   - Sin documentos analizados → `evidencia_insuficiente`.
 - **Recomendación:** formalizar/aprobar la política; definir ciclo de revisión (anual sugerido) y registrar la última revisión.
 
@@ -61,7 +65,7 @@ Resumen de cobertura del catálogo:
   - 100: responsables nombrados por rol (CISO/responsable de seguridad, dueños de activos), con responsabilidades y autoridad descritas.
   - 75: responsables definidos sin autoridad explícita.
   - 50: roles genéricos (“el área de TI”) sin asignación.
-  - 0: no se declara.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** designar responsable de seguridad y dueños de activos con responsabilidades y autoridad explícitas.
 
 ### CRI-GV-03 — Objetivos de riesgo y tolerancia establecidos
@@ -71,7 +75,7 @@ Resumen de cobertura del catálogo:
   - 100: objetivos de gestión de riesgo y declaración de tolerancia/apetito documentados y con responsable.
   - 75: objetivos definidos sin tolerancia explícita.
   - 50: declaración genérica de “gestionar riesgos”.
-  - 0: no se declara.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** documentar objetivos de riesgo y una declaración de tolerancia usada en decisiones operativas.
 
 ### CRI-GV-04 — Revisión del desempeño y mejora de la estrategia
@@ -79,10 +83,9 @@ Resumen de cobertura del catálogo:
 - **Evidencias:** `doc.claim(tipo=policy_review)`, `doc.claim(tipo=process_defined)`
 - **Regla:**
   - 100: proceso de revisión (`process_defined` con `proceso` de revisión/mejora/desempeño) con métricas o con evidencia de ajustes realizados.
-  - 75: revisión periódica definida: un proceso de revisión sin métricas ni ajustes, **o** solo una frecuencia de revisión de la política (`policy_review`).
-  - 0: los documentos analizados no declaran revisión.
-  - Sin afirmaciones de revisión ni de proceso → `evidencia_insuficiente`.
-  - (No hay tramo de 50: una mención informal de revisión no se distingue de una revisión definida.)
+  - 75: proceso de revisión definido, sin métricas ni ajustes.
+  - 50: solo la revisión periódica de la política (`policy_review`). Revisar un documento no es revisar la estrategia (GV.OV), y ese mismo claim ya cuenta para GV-01: no debe cubrir dos requisitos de Tier 3 (docs/09 §60).
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** institucionalizar una revisión periódica de la estrategia basada en resultados y registrar los ajustes.
 
 ---
@@ -98,7 +101,7 @@ Resumen de cobertura del catálogo:
   - 75: cubre la mayoría (≥ 75 %).
   - 50: cubre parcialmente (25–74 %).
   - 25: existe mención de inventario sin cobertura verificable.
-  - 0: no existe inventario documentado.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
   - La cobertura se calcula sobre tipos de recurso, y se registra como limitación que solo se evalúan tipos soportados.
 - **Recomendación:** mantener un inventario de activos que incluya los recursos desplegados y su responsable.
 
@@ -108,7 +111,7 @@ Resumen de cobertura del catálogo:
 - **Regla:**
   - 100: clasificación de criticidad documentada y consistente con los activos críticos declarados en contexto.
   - 50: clasificación mencionada sin criterios.
-  - 0: no se declara.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** clasificar activos por criticidad y usarlo para priorizar controles y esfuerzo.
 
 ### CRI-ID-03 — Identificación y evaluación de riesgos
@@ -118,7 +121,7 @@ Resumen de cobertura del catálogo:
   - 100: proceso de evaluación de riesgos documentado, con registro de riesgos y priorización por impacto/probabilidad.
   - 75: proceso definido sin registro de riesgos.
   - 50: evaluación descrita de forma genérica.
-  - 0: no se declara.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** establecer una evaluación de riesgos repetible con registro y priorización.
 
 ### CRI-ID-04 — Inventario de datos y metadatos *(privacidad, secundaria)*
@@ -127,7 +130,7 @@ Resumen de cobertura del catálogo:
 - **Regla:**
   - 100: inventario de datos con tipos, ubicación y clasificación (incluye datos personales).
   - 50: inventario parcial o sin clasificación.
-  - 0: no se declara.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** documentar qué datos existen, dónde residen y su clasificación, incluyendo datos personales.
 
 ---
@@ -220,12 +223,14 @@ Resumen de cobertura del catálogo:
 ### CRI-DE-02 — Análisis de eventos y declaración de incidentes
 - **Subcategorías:** DE.AE-02, DE.AE-08 · **Tipo:** Mixto · **Peso:** 4 · **IA:** sí · **MVP:** parcial · **Privacidad:** Protect-P + apoyo Detect
 - **Evidencias:** `doc.claim(tipo=process_defined)`, `log.pattern(alert_raised|incident_declared)`
-- **Regla** (exige una ventana de eventos completa; sin ella → `evidencia_insuficiente`, aunque haya criterios documentados):
-  - 0: hubo actividad que debía alertar (`auth_failures_burst`) y no hubo alerta ni declaración: falla de detección (docs/06 §5).
-  - 100: criterios de declaración documentados + evidencia operativa de alerta/declaración.
-  - 75: criterios documentados sin evidencia operativa, o evidencia operativa sin criterios documentados.
-  - 50: análisis de eventos descrito sin criterios de declaración concretos.
-  - Ventana completa sin ningún patrón aplicable ni criterios documentados → `evidencia_insuficiente` (sin oportunidad, no se penaliza).
+- **Regla:**
+  - Sin ventana de eventos completa (igual que RC-02): 75 si hay criterios de declaración documentados, 50 si solo se describe el análisis, `evidencia_insuficiente` si no hay nada documentado.
+  - Con ventana completa:
+    - 0: hubo actividad que debía alertar (`auth_failures_burst`) y no hubo alerta ni declaración: falla de detección (docs/06 §5).
+    - 100: criterios de declaración documentados + evidencia operativa de alerta/declaración.
+    - 75: criterios documentados sin evidencia operativa, o evidencia operativa sin criterios documentados.
+    - 50: análisis de eventos descrito sin criterios de declaración concretos.
+    - Ventana completa sin ningún patrón aplicable ni criterios documentados → `evidencia_insuficiente` (sin oportunidad, no se penaliza).
 - **Recomendación:** definir criterios de declaración de incidentes y registrar alertas con su análisis.
 
 ### CRI-DE-03 — Información de eventos a personal y herramientas
@@ -234,7 +239,7 @@ Resumen de cobertura del catálogo:
 - **Regla:**
   - 100: alertas llegan a destinatarios definidos y el escenario lo evidencia.
   - 75: destinatarios definidos sin evidencia operativa.
-  - 0: sin definición ni evidencia.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** definir destinatarios de alertas y verificar la entrega.
 
 ---
@@ -259,7 +264,7 @@ Resumen de cobertura del catálogo:
 - **Regla:**
   - 100: proceso de análisis de causa raíz y conservación de evidencia documentado y evidenciado en el escenario.
   - 75: documentado sin evidencia operativa.
-  - 0: no se declara.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** definir análisis de causa raíz y preservación de evidencia con registros.
 
 ### CRI-RS-03 — Notificación a partes interesadas
@@ -268,7 +273,7 @@ Resumen de cobertura del catálogo:
 - **Regla:**
   - 100: lista de notificación interna/externa con criterios y plazos.
   - 75: lista definida sin plazos.
-  - 0: no se declara.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** definir a quién, cuándo y cómo se notifica un incidente.
 
 ---
@@ -282,7 +287,7 @@ Resumen de cobertura del catálogo:
   - 100: procedimiento de recuperación con pasos, responsables y criterios de activación.
   - 75: procedimiento con pasos, sin criterios de activación o sin responsables.
   - 50: recuperación mencionada de forma genérica (sin pasos), o solo una política de backups sin procedimiento de recuperación.
-  - 0: los documentos analizados no declaran procedimiento de recuperación.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
   - Sin afirmaciones de proceso ni de backups → `evidencia_insuficiente`.
 - **Recomendación:** documentar el procedimiento de recuperación con responsables y criterios de inicio.
 

@@ -15,7 +15,7 @@
       "criterion_id": "CRI-DE-02",
       "estado": "evidencia_insuficiente",
       "evidence": [],
-      "explanation": "Sin ventana de observacion completa: no se puede concluir.",
+      "explanation": "Sin ventana de observacion completa ni criterios de declaracion documentados.",
       "final_score": null
     },
     {

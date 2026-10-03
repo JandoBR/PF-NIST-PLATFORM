@@ -6,7 +6,13 @@ si la hay, evidencia operativa de declaracion (`log.pattern(incident_declared)`)
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, by_type, doc_claims, result
+from app.evaluation.rules._common import (
+    best_found,
+    by_type,
+    doc_claims,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -37,10 +43,8 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     candidatos = [c for c in process if _es_de_analisis(c)]
     mejor = best_found(candidatos)
     if mejor is None:
-        return result(
+        return silencio_documental(
             CRITERION_ID,
-            Estado.NO_IMPLEMENTADO,
-            0,
             "Los documentos analizados no declaran un proceso de analisis de incidentes.",
             [c.id for c in process],
         )

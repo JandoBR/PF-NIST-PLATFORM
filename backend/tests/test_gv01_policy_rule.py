@@ -34,11 +34,14 @@ def test_no_claims_at_all_is_insufficient():
     assert result.estado == Estado.EVIDENCIA_INSUFICIENTE
 
 
-def test_explicit_not_found_is_no_implementado_zero():
+def test_explicit_not_found_is_insufficient_not_zero():
+    """Conservador (docs/09 §60): `encontrado: false` es silencio del documento, no una prueba de
+    que no haya politica. Antes daba 0, y omitir el tipo daba insuficiente: dependia del modelo."""
+
     claims = [_claim("policy_exists", encontrado=False)]
     result = gv01_policy.evaluate(claims)
-    assert result.estado == Estado.NO_IMPLEMENTADO
-    assert result.final_score == 0
+    assert result.estado == Estado.EVIDENCIA_INSUFICIENTE
+    assert result.final_score is None
 
 
 def test_informal_mention_without_name_scores_25():

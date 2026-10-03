@@ -65,15 +65,26 @@ def test_gv04_proceso_con_metricas_es_100():
     assert gv04_strategy_review.evaluate(evidence).final_score == 100
 
 
-def test_gv04_revision_sin_ajustes_es_75():
+def test_gv04_solo_revision_de_la_politica_es_50():
+    """`policy_review` es revisar un documento, no la estrategia (GV.OV): ya cuenta para GV-01 y no
+    debe cubrir tambien el 75 de GV-04, que es requisito de Tier 3 (docs/09 §60)."""
+
     evidence = [_claim("policy_review", {"frecuencia": "anual", "ultima_revision": "2026-01-01"})]
+    assert gv04_strategy_review.evaluate(evidence).final_score == 50
+
+
+def test_gv04_proceso_de_revision_sin_ajustes_es_75():
+    evidence = [
+        _claim("policy_review", {"frecuencia": "anual"}),
+        _claim("process_defined", {"proceso": "revision", "pasos": "comite trimestral"}),
+    ]
     assert gv04_strategy_review.evaluate(evidence).final_score == 75
 
 
-def test_gv04_proceso_ajeno_es_0():
+def test_gv04_proceso_ajeno_es_insuficiente():
     evidence = [_claim("process_defined", {"proceso": "riesgos", "pasos": "x"})]
     result = gv04_strategy_review.evaluate(evidence)
-    assert (result.estado, result.final_score) == (Estado.NO_IMPLEMENTADO, 0)
+    assert (result.estado, result.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
 
 
 # --- CRI-ID-04 ---
@@ -89,9 +100,10 @@ def test_id04_solo_tipos_es_50():
     assert id04_data_inventory.evaluate(evidence).final_score == 50
 
 
-def test_id04_sin_datos_es_0():
+def test_id04_inventario_sin_tipos_de_datos_es_insuficiente():
     evidence = [_claim("data_inventory", {"activos": ["db"]})]
-    assert id04_data_inventory.evaluate(evidence).final_score == 0
+    result = id04_data_inventory.evaluate(evidence)
+    assert (result.estado, result.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
 
 
 # --- CRI-RS-02 ---
@@ -127,12 +139,13 @@ def test_rs03_sin_plazos_es_75():
     assert rs03_notification.evaluate(evidence).final_score == 75
 
 
-def test_rs03_sin_destinatarios_no_puntua_y_es_0():
-    """Una afirmacion que no dice a quien se notifica no es una lista (docs/03: 100/75/0)."""
+def test_rs03_sin_destinatarios_no_puntua():
+    """Una afirmacion que no dice a quien se notifica no es una lista, y que los documentos no lo
+    digan no prueba que no exista: insuficiente, no 0 (docs/09 §60)."""
 
     for contenido in ({}, {"destinatarios": [], "criterios": "falla del servidor"}):
         resultado = rs03_notification.evaluate([_claim("notification_list", contenido)])
-        assert resultado.estado == Estado.NO_IMPLEMENTADO and resultado.final_score == 0
+        assert (resultado.estado, resultado.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
 
 
 def test_rs03_una_afirmacion_callada_no_tapa_a_la_que_declara_destinatarios():

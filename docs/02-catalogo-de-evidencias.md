@@ -95,7 +95,7 @@ Alcance inicial: módulos `lineinfile`, `copy`, `template` (solo rutas), `file`,
 
 | ID | value (resumen) | Uso principal |
 |---|---|---|
-| `doc.claim` | `{ tipo_afirmacion, contenido, encontrado, confianza }` | Afirmación estructurada extraída por IA. |
+| `doc.claim` | `{ tipo_afirmacion, contenido, encontrado, confianza, cita }` | Afirmación estructurada extraída por IA. **v2** guarda la cita textual; si la cita no aparece en el texto analizado, la afirmación se guarda con una limitación y no cuenta para puntuar (docs/05 E8). v1 queda para evaluaciones anteriores. |
 | `doc.source.info` | `{ titulo, archivo, secciones, analizadas, omitidas, sin_respuesta }` | Marca de documento analizado (E6): cuántas secciones tenía y cuántas contestó la IA. No se emite si la IA no contestó ninguna. Se muestra en el informe. (`version_documento`/`fecha` no se extraen: el texto del documento no los garantiza.) |
 
 Tipos de afirmación (`tipo_afirmacion`) usados por los criterios:

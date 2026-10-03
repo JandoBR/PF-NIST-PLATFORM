@@ -11,7 +11,9 @@
 # v6: CR-06 - PR-01/02/03/04/05/06 y DE-01 consumen la evidencia declarada que ignoraban y
 #     declaran las expresiones Terraform sin resolver (tf.expression.unresolved).
 # v7: PR-05 consume tf.db_exposure.config y pide exposure_policy (contradiccion docs/02 §5).
-version: 7
+# v8: los criterios documentales leen doc.claim@2 (cita verificada); silencio documental ->
+#     evidencia_insuficiente; GV-04 y DE-02 cambian tramos (docs/09 §60).
+version: 8
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -22,7 +24,7 @@ criterios:
     subcategorias: [GV.PO-01, GV.PO-02]
     peso: 5
     ai_adjustable: true
-    evidencias: [doc.claim@1]
+    evidencias: [doc.claim@2]
     recomendacion: "Formalizar/aprobar la politica; definir ciclo de revision y registrar la ultima revision."
     regla:
       tipo: politica_documental
@@ -37,7 +39,7 @@ criterios:
     subcategorias: [GV.RR-01, GV.RR-02]
     peso: 5
     ai_adjustable: true
-    evidencias: [doc.claim@1]
+    evidencias: [doc.claim@2]
     recomendacion: "Designar responsable de seguridad y duenos de activos con responsabilidades y autoridad explicitas."
     regla:
       tipo: roles_documental
@@ -52,7 +54,7 @@ criterios:
     subcategorias: [GV.RM-01, GV.RM-02]
     peso: 3
     ai_adjustable: true
-    evidencias: [doc.claim@1]
+    evidencias: [doc.claim@2]
     recomendacion: "Documentar objetivos de riesgo y una declaracion de tolerancia usada en decisiones operativas."
     regla:
       tipo: tolerancia_documental
@@ -67,7 +69,7 @@ criterios:
     subcategorias: [GV.OV-01, GV.OV-03]
     peso: 3
     ai_adjustable: true
-    evidencias: [doc.claim@1]
+    evidencias: [doc.claim@2]
     recomendacion: "Institucionalizar una revision periodica de la estrategia basada en resultados y registrar los ajustes."
     regla:
       tipo: revision_documental
@@ -82,7 +84,7 @@ criterios:
     subcategorias: [ID.AM-01, ID.AM-02]
     peso: 4
     ai_adjustable: false
-    evidencias: [tf.resource.present@1, doc.claim@1]
+    evidencias: [tf.resource.present@1, doc.claim@2]
     recomendacion: "Mantener un inventario de activos que incluya los recursos desplegados y su responsable."
     regla:
       tipo: inventario_documental
@@ -97,7 +99,7 @@ criterios:
     subcategorias: [ID.AM-05]
     peso: 3
     ai_adjustable: true
-    evidencias: [doc.claim@1]
+    evidencias: [doc.claim@2]
     recomendacion: "Clasificar activos por criticidad y usarlo para priorizar controles y esfuerzo."
     regla:
       tipo: criticidad_documental
@@ -112,7 +114,7 @@ criterios:
     subcategorias: [ID.RA-01, ID.RA-05]
     peso: 4
     ai_adjustable: true
-    evidencias: [doc.claim@1]
+    evidencias: [doc.claim@2]
     recomendacion: "Establecer una evaluacion de riesgos repetible con registro y priorizacion."
     regla:
       tipo: proceso_riesgos
@@ -127,7 +129,7 @@ criterios:
     subcategorias: [ID.AM-07]
     peso: 2
     ai_adjustable: true
-    evidencias: [doc.claim@1]
+    evidencias: [doc.claim@2]
     recomendacion: "Documentar que datos existen, donde residen y su clasificacion, incluyendo datos personales."
     regla:
       tipo: inventario_datos
@@ -142,7 +144,7 @@ criterios:
     subcategorias: [PR.DS-01]
     peso: 5
     ai_adjustable: true
-    evidencias: [tf.encryption.config@1, doc.claim@1]
+    evidencias: [tf.encryption.config@1, doc.claim@2]
     recomendacion: "Habilitar cifrado gestionado por KMS en RDS y S3; verificar mecanismo y llave."
     regla:
       tipo: umbral_por_recurso
@@ -158,7 +160,7 @@ criterios:
     subcategorias: [PR.DS-11]
     peso: 5
     ai_adjustable: true
-    evidencias: [tf.backup.config@1, doc.claim@1]
+    evidencias: [tf.backup.config@1, doc.claim@2]
     recomendacion: "Alinear retencion de backups con la politica y asegurar su cifrado."
     regla:
       tipo: umbral_retencion
@@ -248,7 +250,7 @@ criterios:
     subcategorias: [DE.AE-02, DE.AE-08]
     peso: 4
     ai_adjustable: true
-    evidencias: [log.pattern@1, log.window@1, doc.claim@1]
+    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
     recomendacion: "Definir criterios de declaracion de incidentes y registrar alertas con su analisis."
     regla:
       tipo: patron_con_justicia
@@ -265,7 +267,7 @@ criterios:
     subcategorias: [DE.AE-06]
     peso: 3
     ai_adjustable: true
-    evidencias: [log.pattern@1, doc.claim@1]
+    evidencias: [log.pattern@1, doc.claim@2]
     recomendacion: "Definir destinatarios de alertas y verificar la entrega."
     regla:
       tipo: notificacion_eventos
@@ -280,7 +282,7 @@ criterios:
     subcategorias: [RS.MA-01, RS.MA-02, RS.MA-03, RS.MA-04]
     peso: 5
     ai_adjustable: true
-    evidencias: [log.pattern@1, log.window@1, doc.claim@1]
+    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
     recomendacion: "Documentar y ensayar el plan de respuesta incluyendo escalamiento y criterios de prioridad."
     regla:
       tipo: patron_con_justicia
@@ -297,7 +299,7 @@ criterios:
     subcategorias: [RS.AN-03, RS.AN-07]
     peso: 3
     ai_adjustable: true
-    evidencias: [doc.claim@1, log.pattern@1]
+    evidencias: [doc.claim@2, log.pattern@1]
     recomendacion: "Definir analisis de causa raiz y preservacion de evidencia con registros."
     regla:
       tipo: analisis_incidentes
@@ -312,7 +314,7 @@ criterios:
     subcategorias: [RS.CO-02]
     peso: 3
     ai_adjustable: true
-    evidencias: [doc.claim@1]
+    evidencias: [doc.claim@2]
     recomendacion: "Definir a quien, cuando y como se notifica un incidente."
     regla:
       tipo: notificacion
@@ -327,7 +329,7 @@ criterios:
     subcategorias: [RC.RP-01, RC.RP-02]
     peso: 5
     ai_adjustable: true
-    evidencias: [doc.claim@1]
+    evidencias: [doc.claim@2]
     recomendacion: "Documentar el procedimiento de recuperacion con responsables y criterios de inicio."
     regla:
       tipo: procedimiento_recuperacion
@@ -342,7 +344,7 @@ criterios:
     subcategorias: [RC.RP-03]
     peso: 4
     ai_adjustable: true
-    evidencias: [log.pattern@1, log.window@1, doc.claim@1]
+    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
     recomendacion: "Verificar integridad de backups antes de restaurar y registrar la prueba."
     regla:
       tipo: restauracion_verificada
@@ -357,7 +359,7 @@ criterios:
     subcategorias: [RC.RP-05, RC.CO-03]
     peso: 3
     ai_adjustable: true
-    evidencias: [log.pattern@1, log.window@1, doc.claim@1]
+    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
     recomendacion: "Confirmar operacion normal tras restaurar y comunicar el estado a los interesados."
     regla:
       tipo: comunicacion_recuperacion

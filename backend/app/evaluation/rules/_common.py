@@ -66,6 +66,30 @@ def result(
     )
 
 
+#: Lo que se agrega a la explicacion cuando los documentos callan (docs/09 §60).
+SILENCIO_DOCUMENTAL = (
+    " Sin una afirmacion explicita no se puede concluir que falte: no equivale a 0."
+)
+
+
+def silencio_documental(
+    criterion_id: str, explicacion: str, evidence_ids: list[str] | None = None
+) -> CriterionResult:
+    """Los documentos analizados no dicen lo que el criterio necesita (o lo marcan como no
+    encontrado). Criterio conservador (docs/09 §60): que el texto calle no prueba que la practica
+    falte -- la organizacion puede no haber subido ese documento --, asi que el resultado es
+    `evidencia_insuficiente`, no 0. Antes daba 0 o insuficiente segun como respondiera el modelo
+    (`encontrado: false` explicito u omitir el tipo). El hallazgo `limitacion` lo hace visible."""
+
+    return result(
+        criterion_id,
+        Estado.EVIDENCIA_INSUFICIENTE,
+        None,
+        explicacion + SILENCIO_DOCUMENTAL,
+        evidence_ids,
+    )
+
+
 def noting_unresolved(atributos: set[str]) -> Callable:
     """Decorador de `evaluate`: si el parser dejo expresiones sin resolver sobre los `atributos`
     que decide el criterio, el resultado lo declara como limitacion y cita esa evidencia

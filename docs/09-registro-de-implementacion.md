@@ -1914,3 +1914,41 @@ sección registra lo que se cambió.
 **Verificación:** backend 491 tests + `ruff check` y `ruff format --check` limpios; frontend `typecheck`,
 `lint` y `build` limpios.
 
+## 60. Citas verificadas, silencio documental conservador, GV-04 y DE-02
+
+Decisiones tomadas tras la revisión de §59.
+
+- **Citas (E8, docs/05 §2.3).** `extract_claims` comprobaba solo que la cita no estuviera vacía y luego la
+  descartaba: una cita inventada ("aprobada por el Directorio en 2024") contaba igual y nadie podía verla. Ahora
+  la cita tiene que aparecer en el texto enviado, con la misma normalización que el golden set
+  (`app/ai/quotes.py`). Si no aparece, la afirmación se guarda con la limitación `CITA_NO_LOCALIZABLE` y, como las
+  de confianza baja, no cuenta para ningún criterio; un hallazgo `limitacion` ("Cita no localizable") la muestra
+  en cada criterio que pedía ese tipo. La cita se guarda en `value.cita`, lo que cambia el esquema: tipo nuevo
+  **`doc.claim@2`** (v1 queda para evaluaciones anteriores), `evidence_types.yml` v4 y `criteria.yml` v8.
+- **Silencio documental conservador.** Comprobado con la caché real: el modelo suele devolver
+  `encontrado: false` para lo que no está, y las reglas lo convertían en 0; si omitía el tipo, el mismo documento
+  daba `evidencia_insuficiente`. Ahora ambos casos dan **`evidencia_insuficiente`**, no 0, en todos los criterios
+  documentales (GV-01/02/03/04, ID-01/02/03/04, RS-02, RS-03, RC-01, DE-03), con un helper común
+  (`rules._common.silencio_documental`). Eso incluye "hay un documento sobre otra cosa" (p. ej. solo un proceso
+  de recuperación para ID-03) y "el inventario existe pero no clasifica" (ID-02/ID-04). Razón: que un documento
+  calle no prueba que la práctica falte; la organización puede no haber aportado ese documento (docs/01 §3). Un 0
+  queda para la evidencia explícita de ausencia: configuración técnica o una falla observada en eventos.
+  Para que no se lea como "no se miró", un hallazgo `limitacion` ("Ningún documento analizado lo declara") lista
+  los documentos analizados (`doc.source.info`) en cada criterio así. Efecto esperable: menos criterios con
+  puntaje, cobertura más baja y Tier "no estimable" más a menudo cuando los documentos no cubren GV/ID.
+- **GV-04.** `policy_review` solo (la política declara su frecuencia de revisión) pasa de 75 a **50**: es revisar
+  un documento, no la estrategia ni el desempeño (GV.OV), y ese mismo claim ya da a GV-01 su tramo de revisión.
+  El 75 exige un proceso de revisión; el 100, además, métricas o ajustes. Sin esto, una frase de la política
+  cubría dos de los siete requisitos de Tier 3.
+- **DE-02 como RC-02.** Sin ventana de eventos, DE-02 evalúa lo documental: 75 con criterios de declaración, 50
+  con el análisis descrito sin criterios, insuficiente sin nada. Antes daba insuficiente aunque los documentos
+  definieran los criterios.
+- **docs/03, 01, 02 y 05** describen todo lo anterior.
+
+**Pendiente:** con `extract_v2` y la verificación de citas, el golden set (§43) debe volver a correrse contra el
+modelo real (cuesta dinero; no se hizo).
+
+**Verificación:** backend 501 tests (nuevos en `test_conservative_documents.py` y `test_ai_extraction.py`; se
+actualizaron los que fijaban el 0 por silencio) + `ruff check` y `ruff format --check` limpios. Los golden de
+pipeline solo cambian el texto de una explicación de DE-02.
+

@@ -23,8 +23,6 @@ fallos.
 from __future__ import annotations
 
 import json
-import re
-import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -32,6 +30,7 @@ from typing import Any
 from app.adapters.documents.extraction_text import chunk_document
 from app.ai.client import AIClient
 from app.ai.extraction import extract_claims
+from app.ai.quotes import normalize
 from app.methodology.loader import Methodology
 from app.schemas.evidence import EvidenceInstance
 
@@ -113,12 +112,8 @@ class GoldenReport:
         )
 
 
-def _norm(text: str) -> str:
-    """Minusculas, sin acentos y con espacios colapsados: una cita no falla por formato."""
-
-    sin_acentos = unicodedata.normalize("NFKD", text)
-    sin_acentos = "".join(c for c in sin_acentos if not unicodedata.combining(c))
-    return re.sub(r"\s+", " ", sin_acentos).strip().lower()
+#: La misma normalizacion que usa la extraccion para verificar citas (`app/ai/quotes.py`).
+_norm = normalize
 
 
 def _matches(esperado: Any, real: Any) -> bool:

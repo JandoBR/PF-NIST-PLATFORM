@@ -1,13 +1,14 @@
 """CRI-GV-04 — Revision del desempeno y mejora de la estrategia (docs/03 §1).
 
-Documental: revision periodica (`doc.claim(tipo=policy_review)`) y/o un proceso definido de
-revision/mejora (`process_defined` con `contenido.proceso` de revision). El 100 exige evidencia de
-metricas/ajustes.
+Documental: un proceso de revision (`process_defined` con `proceso` de revision/mejora/desempeno)
+da 100 con metricas o ajustes y 75 sin ellos. Solo la revision periodica de la politica
+(`policy_review`) da 50: revisar un documento no es revisar la estrategia, y ese mismo claim ya
+cuenta para GV-01 (docs/09 §60).
 """
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result
+from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -41,10 +42,8 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     mejor_review = best_found(review)
 
     if mejor_proc is None and mejor_review is None:
-        return result(
+        return silencio_documental(
             CRITERION_ID,
-            Estado.NO_IMPLEMENTADO,
-            0,
             "Los documentos analizados no declaran un proceso de revision con metricas o ajustes.",
             [c.id for c in (*review, *process)],
         )
@@ -58,11 +57,22 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Proceso de revision con metricas/resultados y evidencia de ajustes.",
             [mejor_proc.id],
         )
-    mejor = mejor_proc or mejor_review
+    if mejor_proc is not None:
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            75,
+            "Proceso de revision periodica definido, sin metricas ni evidencia de ajustes.",
+            [mejor_proc.id],
+        )
+    # Solo la frecuencia de revision de la politica (`policy_review`): eso es revisar un documento,
+    # no la estrategia ni el desempeno (GV.OV). Cuenta como revision mencionada, no definida, y el
+    # mismo claim ya da a GV-01 su tramo de revision: no debe cubrir dos requisitos de Tier 3.
     return result(
         CRITERION_ID,
         Estado.EVALUADO,
-        75,
-        "Revision periodica definida sin evidencia de ajustes realizados.",
-        [mejor.id] if mejor else [],
+        50,
+        "Solo se declara la revision periodica de la politica, no un proceso de revision del"
+        " desempeno o la estrategia.",
+        [mejor_review.id],
     )
