@@ -89,6 +89,20 @@ def get_or_create_organization(session: Session, nombre: str) -> Organization:
     return org
 
 
+def _event_source_id(fuente: str | None, jsonl_path: Path) -> str:
+    """Origen del evento (docs/06 §2): su `fuente` si la declara; si no, el archivo del que vino
+    (solo el nombre, no la ruta del servidor)."""
+
+    return fuente or f"events:{Path(jsonl_path).name}"
+
+
+def _origin_source_id(origenes: set[str] | list[str] | None) -> str:
+    """`source_id` de la evidencia operativa: los origenes distintos, ordenados y unidos con `+`.
+    Sin ninguno conocido (filas anteriores a FN-07) se conserva `surveillance:org`."""
+
+    return "+".join(sorted(set(origenes))) if origenes else "surveillance:org"
+
+
 def _collect_surveillance_evidence(
     session: Session, org_id: str, scope: str
 ) -> list[EvidenceInstance]:
@@ -100,6 +114,7 @@ def _collect_surveillance_evidence(
     events = session.query(Event).filter_by(org_id=org_id, scope=scope).all()
     if not events:
         return []
+    origenes_ventana = {e.source_id for e in events}
 
     desde = min(e.event_time for e in events)
     hasta = max(e.event_time for e in events)
@@ -110,7 +125,7 @@ def _collect_surveillance_evidence(
         subject_ref=scope,
         scope=scope,
         value={"desde": desde.isoformat(), "hasta": hasta.isoformat(), "completo": True},
-        source_id="surveillance:org",
+        source_id=_origin_source_id(origenes_ventana),
         locator=Locator(event_id=f"{desde.isoformat()}..{hasta.isoformat()}"),
         observed_at=hasta,
         modality=Modality.OPERATIVA,
@@ -132,7 +147,7 @@ def _collect_surveillance_evidence(
                 "hasta": p.hasta.isoformat(),
                 "conteo": p.conteo,
             },
-            source_id="surveillance:org",
+            source_id=_origin_source_id(p.fuentes),
             locator=Locator(event_id=p.id),
             observed_at=p.hasta,
             modality=Modality.OPERATIVA,
@@ -808,7 +823,7 @@ def ingest_events(
                     recurso=evento.recurso,
                     actor=evento.actor,
                     detalle=evento.detalle,
-                    source_id=f"events:{jsonl_path}",
+                    source_id=_event_source_id(evento.fuente, jsonl_path),
                 )
             )
         session.flush()
@@ -834,6 +849,14 @@ def ingest_events(
                     desde=match.desde,
                     hasta=match.hasta,
                     conteo=match.conteo,
+                    fuentes=sorted(
+                        {
+                            _event_source_id(e.fuente, jsonl_path)
+                            for e in eventos
+                            if e.event_id in set(match.event_ids)
+                        }
+                    )
+                    or None,
                 )
             )
             agregados += 1

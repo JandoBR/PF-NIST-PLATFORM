@@ -218,6 +218,9 @@ class LogPatternRow(Base):
     desde: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     hasta: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     conteo: Mapped[int] = mapped_column()
+    #: Origenes (`fuente` del evento, o el archivo si no la declara; docs/06 §2) de los eventos que
+    #: forman el patron; `None` en patrones anteriores a FN-07.
+    fuentes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

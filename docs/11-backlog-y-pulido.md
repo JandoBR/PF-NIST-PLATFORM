@@ -116,9 +116,8 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
   resultados y planes de los criterios no operativos (preserva IA: claims U1, ajuste U2, texto de
   planes) y recalcula solo los criterios de vigilancia con los patrones frescos; hereda el estado de
   seguimiento. El worker lo dispara con `selective_refresh=True` (docs/06 §6, docs/09 §29).
-- [ ] FN-07 · **Origen del evento** (P2): `RawEvent.fuente` se parsea pero se descarta; la evidencia
-  operativa usa `source_id="events:{ruta}"` en vez del origen por evento (docs/06 §2). Propagar
-  `fuente` a `source_id`.
+- [x] FN-07 · **Origen del evento**. Hecho (docs/09 §50): `fuente` → `events.source_id`, `log_patterns.fuentes` y
+  el `source_id` de la evidencia operativa.
 - [ ] FN-08 · **Patrones sin consumidor** (P2; junto con OP-05): `incident_triaged` y `containment_done` figuran como
   tipos de evento pero no tienen patrón ni criterio/disparador que los use (docs/06 §2/§3). Definir
   patrón y consumo, o documentar que son solo contexto. Amplía OP-05.
@@ -232,7 +231,7 @@ demostrable.
 2. ~~**OP-12** y **OP-14**~~ (hechos, docs/09 §37).
 3. ~~**OP-04 (contradicciones) + TS-03**~~ (hechos, docs/09 §38); ~~**TS-01**~~ (hecho, docs/09 §39), ~~**TS-02**~~ (hecho, docs/09 §43) y **AMP-02**:
    lo más demostrable y lo que respalda las afirmaciones del diseño.
-4. Pulido barato: **FN-03**, **FN-07**, ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), **OP-05 + FN-08**, **OP-11** (transiciones
+4. Pulido barato: **FN-03**, ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), **OP-05 + FN-08**, **OP-11** (transiciones
    y motivo de cierre), **OP-15** (líneas), ~~OP-13~~ (hecho, docs/09 §49), **API-04** (problem+json) y
    la decisión de **CR-07**.
 

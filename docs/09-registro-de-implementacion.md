@@ -1642,3 +1642,21 @@ worker viejo lo interpretaba a medias: no había forma de saber qué versión lo
 **Verificación:** backend 5 tests nuevos (aceptación de mensajes viejos, rechazo de versiones mayores/inválidas,
 ambos workers fallan el job sin ejecutarlo, la versión viaja en el mensaje y no en el payload).
 
+## 50. FN-07: el origen del evento llega a la evidencia
+
+`RawEvent.fuente` se parseaba y se descartaba: `events.source_id` valía `events:{ruta absoluta del servidor}` y
+la evidencia operativa siempre `surveillance:org`, así que no se podía saber qué sistema (`log:sshd`,
+`cloudtrail`…) respaldaba un patrón (docs/06 §2 dice que `fuente` se persiste como `source_id`).
+
+- **`events.source_id`** es ahora la `fuente` del evento; si no la declara, `events:{nombre del archivo}`
+  (solo el nombre: la ruta del servidor no es un origen y se filtraba a la base de datos).
+- **`log_patterns.fuentes`** (JSON, nullable; migración `e7a1c3d49b52`) guarda los orígenes de los eventos que
+  formaron el patrón. La evidencia `log.pattern` usa `source_id` = esos orígenes ordenados y unidos con `+`
+  (p. ej. `cloudtrail+log:sshd`); la `log.window`, los orígenes de todos los eventos del scope.
+- **Compatibilidad:** los patrones anteriores no tienen `fuentes` y conservan `surveillance:org`. La BD de dev se
+  pone al día sola (§48).
+- **Límite:** `source_id` es un solo texto, por eso los varios orígenes se unen con `+`; si hiciera falta
+  consultarlos por separado habría que pasar a una lista en el contrato de evidencia.
+
+**Verificación:** backend 6 tests nuevos (`test_event_source.py` y la migración) + `ruff check` limpio.
+

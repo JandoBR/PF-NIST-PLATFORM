@@ -66,3 +66,14 @@ def test_migrated_jobs_table_stores_the_retry_payload(tmp_path, monkeypatch):
     columns = {c["name"]: c for c in inspector.get_columns("jobs")}
     # Nullable: los jobs anteriores a FN-09 no tienen entradas guardadas y no son reintentables.
     assert columns["payload"]["nullable"] is True
+
+
+def test_migrated_log_patterns_store_their_event_origins(tmp_path, monkeypatch):
+    db_path = tmp_path / "migrated.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    _upgrade_head()
+
+    inspector = inspect(create_engine(f"sqlite:///{db_path}"))
+    columns = {c["name"]: c for c in inspector.get_columns("log_patterns")}
+    assert columns["fuentes"]["nullable"] is True  # patrones anteriores a FN-07: sin origen
