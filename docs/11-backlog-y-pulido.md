@@ -224,6 +224,6 @@ demostrable.
 4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), ~~OP-05 + FN-08~~ (hechos, docs/09 §53), ~~OP-11~~ (hecho, docs/09 §52), ~~OP-15~~ (hecho, docs/09 §54), ~~OP-13~~ (hecho, docs/09 §49), ~~API-04~~ (hecho, docs/09 §55) y
    ~~la decisión de CR-07~~ (hecha, docs/09 §57).
 
-> **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, AMP-02, FN-01, FN-09, API-03, UI-01…UI-10, FN-05, FN-06 y la parte de estado de
-> incidente de OP-04. Ver docs/09 §23–§46.
+> **Estado:** no queda nada pendiente en este backlog. Solo FN-04 sigue marcado `[~]` y está obsoleto (el botón
+> "Reevaluar" se eliminó, UI-10). Lo hecho está en docs/09 §23–§57; el trabajo que se decidió dejar fuera, en docs/12.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).
