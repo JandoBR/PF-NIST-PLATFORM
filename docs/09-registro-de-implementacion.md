@@ -1604,3 +1604,23 @@ habría dicho que existe una notificación definida a medias.
 **Verificación:** backend **411 tests** + `ruff check` limpio. Los golden files no cambian (ningún caso tiene
 documentos).
 
+## 48. La BD SQLite de dev se pone al día sola
+
+Al agregar `jobs.payload` (§46) se vio que la BD local `backend/.data/pf.db` no tenía esa columna, ni
+`assessments.reproducibility` (OP-14), ni `assessments.previous_assessment_id`. `create_all` solo crea tablas que
+faltan, nunca columnas, y esa BD no tiene `alembic_version` (se creó con `create_all`), así que
+`alembic upgrade head` tampoco servía. Los tests no lo notaron porque cada uno usa una BD nueva; una BD de dev
+vieja fallaba con "no such column" en cuanto el ORM seleccionaba la columna.
+
+- **`db.add_missing_columns`** (llamada desde `ensure_schema`, solo en SQLite): agrega con `ALTER TABLE ADD
+  COLUMN` las columnas **nullable** que el modelo tiene y la tabla no. No toca datos ni tipos. Una columna
+  NOT NULL sin default no se puede agregar a una tabla con filas: solo se avisa en el log (hay que recrear la BD).
+  Es idempotente y devuelve lo agregado. En Postgres sigue mandando Alembic.
+- **Probado** con una BD creada con el esquema viejo (se comprueba que falla sin la mejora, que se agregan las
+  columnas, que los datos viejos quedan intactos y que se puede escribir `payload`) y sobre una copia de la BD
+  de dev real, donde agregó las tres columnas.
+- **Límite:** solo columnas nuevas nullable. Un cambio de tipo, un renombre o una columna NOT NULL siguen
+  pidiendo recrear la BD de dev o, en Postgres, una migración de Alembic.
+
+**Verificación:** backend 4 tests nuevos (`test_db_schema_upgrade.py`) + `ruff check` limpio.
+
