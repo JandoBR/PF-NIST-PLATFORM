@@ -177,8 +177,8 @@ def _strip_meta(block: dict) -> dict:
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
 #: v2: emite tf.expression.unresolved y no convierte expresiones en valores (CR-06).
 #: v3: emite tf.db_exposure.config (publicly_accessible).
-#: v4: el locator trae `line_start`/`line_end` del bloque `resource`, y `tf.resource.present` de un tipo
-#: no soportado declara la limitacion (docs/11 OP-15).
+#: v4: el locator trae `line_start`/`line_end` del bloque `resource`, y `tf.resource.present` de un
+#: tipo no soportado declara la limitacion (docs/11 OP-15).
 ADAPTER_VERSION = "4"
 
 
