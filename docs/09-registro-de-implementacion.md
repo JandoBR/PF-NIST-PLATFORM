@@ -1837,3 +1837,77 @@ parcial, tope, documento vacío, informe PDF) + `ruff check` limpio.
   guardado en la lista. No hay pruebas automáticas de frontend en el proyecto (no hay test runner); se verificó con
   `typecheck`, `lint` y `build`.
 
+## 59. Revisión del estado: lógica de puntaje, mantenibilidad, documentación y demo
+
+Una revisión completa de código, documentación y lógica de negocio (2026-10-02) encontró lo siguiente; esta
+sección registra lo que se cambió.
+
+**Lógica de puntaje (cambia resultados visibles):**
+
+- **Tier "no estimable" (T3) era inalcanzable.** `tier.estimate_tier` contaba como "presente" cualquier
+  indicador con resultado, y todo criterio tiene siempre uno (aunque sea `evidencia_insuficiente`). Ahora un
+  indicador cuenta solo si dio puntaje (`evaluado`/`no_implementado`). Ejemplo: solo Terraform, sin
+  documentos → antes "Tier 1 (Partial), provisional"; ahora "No estimable".
+- **Cobertura global** pasa a ser la fórmula de docs/01 §7 sobre todos los criterios (aplicables con puntaje /
+  aplicables). Antes era el promedio de las seis coberturas por función: en el fixture `gaps`, 11,1 % en vez
+  de 17,4 %. La marca *provisional* del global sale de este número.
+- **CRI-RS-01 no podía encontrar un plan de respuesta en documentos.** La regla busca `proceso` con
+  "respuesta"/"escalamiento", y el prompt de extracción solo ofrecía `riesgos|recuperacion|revision|analisis
+  incidentes|otro`. Con documentos, RS-01 quedaba en 50 como máximo, y RS-01 ≥ 75 es requisito de Tier 3.
+  El vocabulario ofrece ahora `respuesta` (prompt **`extract_v2`**), y un test comprueba que cada regla que
+  filtra por `proceso` es alcanzable desde el vocabulario.
+- **U2** solo acepta como evidencia citada los ids que se le mostraron para ese criterio (antes, cualquier id
+  de la evaluación).
+- Los golden de pipeline se regeneraron: solo cambian Tier y cobertura.
+
+**Mantenibilidad:**
+
+- `core/assessment_service.py` (1.019 líneas) se dividió en `operations.py` (eventos e incidentes),
+  `refresh.py` (refresco de madurez) y `comparison.py`. Queda en 528 líneas.
+- `jobs.fail_linked_assessment` reemplaza tres copias de "marcar fallida la evaluación ligada".
+- `surveillance/evidence.py` no lo importaba nadie (el servicio tenía su propia versión); se eliminó.
+- Las vistas de evaluación y comparación pasan a `app/schemas/assessment.py`: `reports/pdf.py` ya no importa
+  `app.api`.
+- Frontend: se quitó `@supabase/supabase-js`, que no se usaba.
+
+**Documentación:**
+
+- **docs/03** reescrita donde se había separado del código: GV-04, DE-01, DE-02, RS-01, RC-01, RC-02 y RC-03.
+  La matriz declara ahora que describe el código y que una regla que cambia se actualiza allí en el mismo
+  commit.
+- **docs/01:** §6 describe la agregación real (promedio ponderado por criterio en cada nivel, no promedio de
+  promedios; ya lo decía la regla A4); §7 fija la fórmula de la cobertura global; T3 define qué es
+  "evaluar" un requisito.
+- **docs/04:** la estructura de carpetas era la del plan original (`ingestion/`, `adapters/logs/`,
+  `tiers.yml`…); se reemplazó por la real. Se quitó una viñeta de errores duplicada.
+- **README:** estado actualizado (`criteria.yml` v7, nada pendiente en docs/11), cómo probarlo y las
+  comprobaciones antes de confirmar.
+
+**Demo:**
+
+- **Gobernar e Identificar vacíos en la UI.** El paquete "Entorno conforme" no traía documentos, y el de
+  "brechas" solo una política y un manual vacío; ambos dominios son documentales, así que nunca tenían
+  evidencia. Los dos paquetes traen ahora un juego de documentos (completo en uno, débil en el otro), y el
+  diálogo avisa que sin la opción de IA los documentos no se leen.
+- **Los logs de ejemplo empiezan de cero:** nuevo `DELETE /orgs/{id}/events` (borra eventos, patrones,
+  incidentes y sus planes; 409 si hay una ingesta en curso) que los botones de ejemplo llaman antes de
+  ingerir. Subir un `.jsonl` propio sigue sumándose a lo que hay. Efecto a saber: cada clic en un log de
+  ejemplo vuelve a contar sus patrones como nuevos, así que puede disparar el refresco automático de
+  madurez (una evaluación nueva en el historial).
+
+**Pendiente de decisión (no cambiado):**
+
+- `DE-02` exige una ventana de eventos completa: sin eventos da `evidencia_insuficiente` aunque los documentos
+  definan criterios de declaración. `RC-02`, en el caso equivalente, da 75. docs/03 describe ahora el
+  comportamiento actual.
+- `ID-01` compara el inventario documentado con los **tipos** de Terraform buscando el texto del tipo
+  (`aws_db_instance`) en la lista de activos: un inventario en prosa ("la base de datos de clientes") no
+  coincide y queda en 25. Los documentos de demo nombran los tipos para que la demo funcione.
+- "Analizado y sin hallazgos" (`doc.source.info`) sigue sin afectar puntajes, y `GV-04` sigue aceptando un
+  `policy_review` solo para el 75.
+- Con `extract_v2` la caché del golden set (§43) ya no aplica: la próxima corrida de `eval-ai` hace llamadas
+  reales.
+
+**Verificación:** backend 491 tests + `ruff check` y `ruff format --check` limpios; frontend `typecheck`,
+`lint` y `build` limpios.
+

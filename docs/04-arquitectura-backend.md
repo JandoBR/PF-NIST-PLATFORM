@@ -219,58 +219,53 @@ Convenciones:
 - Autenticación por token (doc 10): todas las rutas de datos exigen
   `Authorization: Bearer <token>`; un recurso de otra organización responde **404**, no 403.
 - Respuestas siempre incluyen `puntaje` **y** `cobertura` juntos.
-- Los errores usan `application/problem+json` con `type`, `title`, `detail`, `instance`.
-- Paginación por cursor en listados grandes.
+- Paginación por cursor en listados grandes: fuera del prototipo (docs/12 §1); `GET /jobs` usa `limit`.
 - Toda respuesta lleva la cabecera `X-Methodology-Version` (la `methodology_version` con la que se calcula) para trazabilidad; las evaluaciones además la traen en el cuerpo. Las respuestas 500 que genera el servidor antes del middleware no la llevan.
 - Todo error es `application/problem+json` (`type`, `title`, `status`, `detail`, `instance`); `detail` es siempre un texto y la validación (422) agrega `errors` por campo (docs/09 §55).
 
 ## 7. Estructura de Carpetas
 
+Estructura real del código (revisada el 2026-10-02):
+
 ```text
 backend/
 ├── app/
-│   ├── main.py          # CLI (el entrypoint HTTP es app/api/app.py)
-│   ├── config.py
-│   ├── api/
-│   │   ├── app.py           # instancia FastAPI + routers
+│   ├── main.py              # CLI (el entrypoint HTTP es app/api/app.py)
+│   ├── api/                 # FastAPI: app, dependencias, errores problem+json, esquemas y rutas
+│   │   ├── app.py
 │   │   ├── deps.py
-│   │   ├── schemas.py
 │   │   ├── errors.py
-│   │   ├── routes_assessments.py
-│   │   ├── routes_orgs.py
-│   │   ├── routes_incidents.py
-│   │   ├── routes_jobs.py
-│   │   └── routes_methodology.py
-│   ├── core/            # db, sesión, errores, logging
-│   ├── models/          # SQLAlchemy
-│   ├── schemas/         # Pydantic
-│   ├── methodology/     # loader + validación de YAML
-│   ├── ingestion/
-│   ├── adapters/
-│   │   ├── terraform/
-│   │   ├── ansible/
-│   │   ├── documents/
-│   │   └── logs/
-│   ├── evaluation/      # engine, aggregation, coverage, tier
-│   ├── ai/              # client, extraction, adjustment, plans, prompts/
-│   ├── recommendations/
-│   ├── surveillance/    # pipeline de logs extraíble (ver §3.1)
-│   ├── ops/             # motor operativo: incidentes y disparadores (doc 08)
-│   └── workers/         # consumers de Redis (core, logs, ops)
-├── methodology/          # catálogos versionados en YAML
-│   ├── evidence_types.yml
-│   ├── criteria.yml
-│   ├── tiers.yml
-│   └── settings.yml      # α, D, umbrales, pesos de función
+│   │   ├── schemas.py
+│   │   └── routes_{assessments,auth,incidents,jobs,methodology,orgs}.py
+│   ├── core/                # orquestación y servicios (sin HTTP)
+│   │   ├── assessment_service.py  # crear/correr/reevaluar evaluaciones, planes, consultas
+│   │   ├── operations.py          # flujo B: ingesta de eventos e incidentes
+│   │   ├── refresh.py             # refresco de madurez tras una ingesta (selectivo)
+│   │   ├── comparison.py          # comparación entre dos evaluaciones
+│   │   ├── jobs.py · dispatch.py · queue.py   # jobs en BD, encolado y Redis
+│   │   ├── db.py · repository.py · reproducibility.py
+│   │   └── auth.py · seed.py · uploads.py
+│   ├── models/              # SQLAlchemy (tables.py)
+│   ├── schemas/             # Pydantic compartido: evidencia y vistas de evaluación/comparación
+│   ├── methodology/         # loader + validación de los YAML
+│   ├── adapters/            # terraform/, ansible/, documents/
+│   ├── evaluation/          # engine, aggregation, tier, contradictions, rules/
+│   ├── ai/                  # client, cache, extraction, adjustment, plan_generation, golden_eval, prompts/
+│   ├── recommendations/     # findings (brecha/contradicción/limitación), plans
+│   ├── surveillance/        # eventos y patrones (pipeline de logs, ver §3.1)
+│   ├── ops/                 # motor operativo: disparadores, incidentes, planes de incidente (doc 08)
+│   ├── reports/             # informes PDF
+│   └── workers/             # consumidores de Redis: core.py (evaluaciones) y logs.py (eventos)
+├── methodology/             # criteria.yml, evidence_types.yml, settings.yml
 ├── tests/
-│   ├── fixtures/         # Terraform, Ansible, documentos y logs de ejemplo
-│   └── golden/           # resultados esperados
+│   ├── fixtures/            # Terraform, Ansible, documentos y escenarios de eventos
+│   ├── golden/              # salida esperada de adaptadores y pipeline (TS-01)
+│   └── golden_ai/           # golden set de la extracción con IA (TS-02)
 ├── alembic/
 ├── pyproject.toml
-└── docker/
-    ├── Dockerfile.api
-    ├── Dockerfile.worker
-    └── Dockerfile.frontend
+└── docker/                  # Dockerfile.api, Dockerfile.worker
+
+frontend/                    # React + Vite (Dockerfile propio; datos de ejemplo en public/demo)
 ```
 
 En la raíz del proyecto: `deploy/docker-compose.yml` y `deploy/.env.example` (ver §11).

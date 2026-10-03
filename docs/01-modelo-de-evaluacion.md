@@ -147,11 +147,13 @@ S = 0.75·60 + 0.25·80 = 65
 Criterios ──► Subcategoría ──► Categoría ──► Función ──► Global (opcional)
 ```
 
-- Promedio ponderado con pesos explícitos por criterio (columna `Peso` en la matriz).
-- A nivel de subcategoría se agregan los criterios mapeados a ella.
-- A nivel de categoría, promedio ponderado de sus subcategorías con criterios evaluados.
-- A nivel de función, promedio ponderado de sus categorías.
-- **Global** = promedio ponderado de las 6 funciones (inicial: pesos iguales; configurable).
+- Cada nivel es un **promedio ponderado por criterio**, con el `Peso` de la matriz, de los criterios que
+  pertenecen a ese nivel: una subcategoría promedia los criterios mapeados a ella, una categoría los
+  criterios que la listan y una función todos sus criterios. **No** se promedian promedios (una categoría
+  no es la media de sus subcategorías): así un criterio pesa lo mismo esté donde esté (regla A4), y un
+  criterio que cubre dos subcategorías no cuenta doble dentro de su categoría.
+- **Global** = promedio ponderado de las 6 funciones con puntaje (inicial: pesos iguales; configurable en
+  `settings.yml`).
 
 Reglas de agregación:
 
@@ -181,6 +183,10 @@ Cobertura de evidencia (por evaluación):
   ─────────────────────────────────────────────────────────
   criterios aplicables totales (incluye evidencia_insuficiente y error)
 ```
+
+La cobertura global usa esta misma fórmula sobre **todos** los criterios de la evaluación; no es el promedio
+de las coberturas por función (eso pesaría igual una función de 3 criterios que una de 6). Corregido en
+docs/09 §59.
 
 - `criterios aplicables` = todos menos `no_aplicable`.
 - Un puntaje de 80/100 con cobertura 30% se muestra como **provisional**: `Aggregate.provisional` es
@@ -215,7 +221,7 @@ Cobertura de evidencia (por evaluación):
 |---|---|
 | T1 | Tier estimado = el mayor Tier cuyos requisitos se cumplen plenamente. |
 | T2 | Si un requisito está en `evidencia_insuficiente` o `error`, el Tier es `provisional`. |
-| T3 | Si no se puede evaluar ningún requisito de T2, el Tier se reporta como “no estimable”. |
+| T3 | Si no se puede evaluar ningún requisito de T2, el Tier se reporta como “no estimable”. “Evaluar” significa que el criterio dio puntaje (`evaluado` o `no_implementado`): todo criterio tiene siempre un resultado, así que un requisito en `evidencia_insuficiente`/`error` no cuenta. |
 | T4 | Los umbrales son parámetros de metodología versionada; se recalibran con datos, no con opiniones. |
 | T5 | El informe muestra qué falta para alcanzar el siguiente Tier (ruta de mejora). |
 

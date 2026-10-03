@@ -37,42 +37,56 @@
 | [docs/11-backlog-y-pulido.md](docs/11-backlog-y-pulido.md) | Lista de trabajo viva: pulido de UI, funciones pendientes y gaps vs. el diseño. |
 | [docs/12-alcance-y-trabajo-futuro.md](docs/12-alcance-y-trabajo-futuro.md) | Registro de lo descartado para el prototipo (válido a mayor escala) y trabajo futuro. |
 
-## Stack previsto
+## Stack
 
 - **Backend:** Python 3.12 + FastAPI + SQLAlchemy + PostgreSQL.
 - **Mensajería / caché:** Redis (colas de trabajos reales vía `worker-core`/`worker-logs`; caché de extracción IA aparte, en disco).
 - **Análisis:** parsers HCL (`python-hcl2`), parsing YAML de Ansible (`PyYAML`), validación con Pydantic.
 - **IA:** API de DeepSeek (compatible con SDK de OpenAI), salida JSON validada.
+- **Informes:** PDF con `reportlab`.
 - **Despliegue:** Docker + docker-compose (ver [docs/04 §11](docs/04-arquitectura-backend.md)).
 - **Frontend:** React + Vite + TypeScript + Tailwind, consumiendo la API REST directamente.
 
 ## Estado
 
-Especificación completa. El núcleo determinista, los tres adaptadores (Terraform, Ansible,
-documentos), las tres integraciones de IA (extracción U1, ajuste U2, planes U3), la persistencia
-(`run`/`reevaluate`/`compare`/`plans`), el motor operativo (eventos, patrones, disparadores,
-incidentes y planes — docs 06/08), una API REST (FastAPI) sobre todo lo anterior, workers reales
-consumiendo colas de Redis (`worker-core`/`worker-logs`: `POST /assessments`, `/reevaluate` y
-`POST /orgs/{id}/events` son asíncronos vía `GET /jobs/{id}`), **multitenancy con login** (token de
-sesión y aislamiento por organización — doc 10) y el despliegue completo con Docker Compose
-(Postgres + Redis + los dos workers + frontend; 7 servicios reales) están implementados y probados
-— detalle completo en
-[docs/09-registro-de-implementacion.md](docs/09-registro-de-implementacion.md). El frontend
-(`frontend/`) es funcional: los cuatro paneles (Resumen de Madurez, Recomendaciones, Eventos e
-Incidentes, Comparar) llaman a la API real — asíncrona, con login, sondeo de jobs en vivo,
-historial de evaluaciones, seguimiento de planes, vista de privacidad y refresco automático de
-madurez al ingerir eventos. El catálogo de criterios está completo (23/23, `criteria.yml` v5, doc 03) y el pulido de UI del
-backlog (UI-01…UI-10) está hecho. Lo pendiente del prototipo está en
-[docs/11](docs/11-backlog-y-pulido.md) y lo descartado a propósito en
-[docs/12](docs/12-alcance-y-trabajo-futuro.md); deliberadamente fuera de este corte queda nginx + dominio
-real (`VITE_API_BASE_URL`/`CORS_ORIGINS` ya están pensados para ese cambio — ver doc 09 §19).
+Prototipo completo para su alcance declarado:
 
-Para probarlo sin levantar nada: `cd backend && uv run python -m app.main run --terraform
-tests/fixtures/terraform/gaps --org "Empresa Demo"`, `uv run uvicorn app.api.app:app --reload`
-para la API HTTP, o `docker compose -f deploy/docker-compose.yml up` para todo el stack (API +
-workers + frontend). Para el frontend solo, sin Docker: `cd frontend && cp .env.example .env &&
-npm install && npm run dev` (con la API
-corriendo por separado).
+- **Evaluación:** núcleo determinista con los 23 criterios del catálogo (`criteria.yml` v7, doc 03),
+  adaptadores de Terraform, Ansible y documentos, agregación por función, cobertura de evidencia y Tier
+  estimado (doc 01).
+- **IA (opcional):** extracción documental con cita (U1), ajuste contextual acotado (U2) y redacción de
+  planes (U3), con un golden set que mide la extracción contra el modelo real (doc 05, docs/09 §43).
+- **Motor operativo:** eventos, patrones, disparadores D1–D5, incidentes con transiciones validadas y planes
+  de respuesta (docs 06/08).
+- **Plataforma:** API REST con login y aislamiento por organización (doc 10), workers sobre Redis con
+  historial y reintento de trabajos, informes en PDF, y despliegue completo con Docker Compose.
+- **Frontend:** los paneles de Resumen de Madurez, Recomendaciones, Eventos e Incidentes y Comparar, más la
+  vista de Actividad, todos sobre la API real.
+
+No queda trabajo pendiente en [docs/11](docs/11-backlog-y-pulido.md); lo descartado a propósito está en
+[docs/12](docs/12-alcance-y-trabajo-futuro.md). El detalle de cómo se construyó cada parte está en
+[docs/09](docs/09-registro-de-implementacion.md).
+
+## Cómo probarlo
+
+- **Todo el stack:** `docker compose -f deploy/docker-compose.yml up` (API, workers, Postgres, Redis y
+  frontend).
+- **Solo el backend, sin Docker:** `cd backend && uv run python -m app.main run --terraform
+  tests/fixtures/terraform/gaps --org "Empresa Demo"` para la CLI, o `uv run uvicorn app.api.app:app --reload`
+  para la API.
+- **Solo el frontend:** `cd frontend && cp .env.example .env && npm install && npm run dev`, con la API
+  corriendo aparte.
+- **Datos de ejemplo:** el diálogo "Nueva Evaluación" trae dos paquetes (entorno con brechas y entorno
+  conforme). Sus documentos solo se leen con la opción de IA activada (requiere `DEEPSEEK_API_KEY`); sin
+  ella, Gobernar e Identificar quedan sin evidencia. Los logs de ejemplo de Eventos e Incidentes empiezan de
+  cero cada vez.
+
+## Desarrollo
+
+Antes de confirmar cambios en el backend: `uv run pytest`, `ruff check app tests` y
+`ruff format --check app tests` (en NixOS, `ruff` lo provee `nix develop`). En el frontend:
+`npm run typecheck`, `npm run lint` y `npm run build`. Si cambia una regla de criterio, se actualiza
+doc 03 en el mismo commit.
 
 ## Referencias externas
 

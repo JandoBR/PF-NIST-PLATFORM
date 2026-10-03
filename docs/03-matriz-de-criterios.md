@@ -34,6 +34,8 @@ Resumen de cobertura del catálogo:
 | **Total** | **23** | **16** | **2** |
 
 > **Estado de implementación:** **23 de 23** criterios implementados (CR-01…CR-05, docs/11 §C).
+> **Las reglas de esta matriz describen el código** (`backend/app/evaluation/rules/`): si una regla cambia, se
+> actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-02 (docs/09 §59).
 > Detalle del código en `09-registro-de-implementacion.md §31–§34`.
 
 ---
@@ -76,10 +78,11 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** GV.OV-01, GV.OV-03 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T3/T4
 - **Evidencias:** `doc.claim(tipo=policy_review)`, `doc.claim(tipo=process_defined)`
 - **Regla:**
-  - 100: existe proceso de revisión con métricas/resultados y evidencia de ajustes realizados.
-  - 75: revisión periódica definida sin evidencia de ajustes.
-  - 50: revisión mencionada informalmente.
-  - 0: no se declara.
+  - 100: proceso de revisión (`process_defined` con `proceso` de revisión/mejora/desempeño) con métricas o con evidencia de ajustes realizados.
+  - 75: revisión periódica definida: un proceso de revisión sin métricas ni ajustes, **o** solo una frecuencia de revisión de la política (`policy_review`).
+  - 0: los documentos analizados no declaran revisión.
+  - Sin afirmaciones de revisión ni de proceso → `evidencia_insuficiente`.
+  - (No hay tramo de 50: una mención informal de revisión no se distingue de una revisión definida.)
 - **Recomendación:** institucionalizar una revisión periódica de la estrategia basada en resultados y registrar los ajustes.
 
 ---
@@ -206,22 +209,23 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** DE.CM-01, DE.CM-09 · **Tipo:** Mixto · **Peso:** 5 · **IA:** no · **MVP:** sí · **Tier:** T3 · **Privacidad:** apoyo Detect
 - **Evidencias:** `tf.logging.config`, `an.service.state`, `log.window` (¿hubo actividad observable?)
 - **Regla:**
-  - 100: fuentes de log habilitadas y recolección/centralización declarada.
-  - 75: fuentes habilitadas sin centralización declarada.
-  - 50: parcialmente habilitadas.
-  - 0: sin monitoreo declarado.
-  - Si no existe ventana de observación ni configuración → insuficiente, no 0.
+  - 100: CloudTrail habilitado **con centralización** (multirregión o destino declarado) **y** logs de sistema declarados (servicio de syslog habilitado en Ansible).
+  - 75: alguna fuente habilitada (CloudTrail o logs de sistema) sin la centralización completa.
+  - 0: CloudTrail declarado pero ninguna fuente habilitada.
+  - Sin configuración de monitoreo evaluable → `evidencia_insuficiente`, no 0. Un CloudTrail con estado sin resolver no puntúa.
+  - Si hay ventana de observación (`log.window`) se cita como actividad observable; no cambia el puntaje.
+  - (No hay tramo de 50: "parcialmente habilitadas" cae en 75.)
 - **Recomendación:** centralizar logs y definir fuentes mínimas de monitoreo (red, sistema, nube).
 
 ### CRI-DE-02 — Análisis de eventos y declaración de incidentes
 - **Subcategorías:** DE.AE-02, DE.AE-08 · **Tipo:** Mixto · **Peso:** 4 · **IA:** sí · **MVP:** parcial · **Privacidad:** Protect-P + apoyo Detect
 - **Evidencias:** `doc.claim(tipo=process_defined)`, `log.pattern(alert_raised|incident_declared)`
-- **Regla:**
-  - 100: criterios de declaración documentados + evidencia operativa de alerta/declaración en el escenario.
-  - 75: criterios documentados sin evidencia operativa (o viceversa).
-  - 50: análisis descrito sin criterios de declaración.
-  - 0: no se declara.
-  - Sin regla conocida aplicable al escenario → no se penaliza (ver doc 06 §5).
+- **Regla** (exige una ventana de eventos completa; sin ella → `evidencia_insuficiente`, aunque haya criterios documentados):
+  - 0: hubo actividad que debía alertar (`auth_failures_burst`) y no hubo alerta ni declaración: falla de detección (docs/06 §5).
+  - 100: criterios de declaración documentados + evidencia operativa de alerta/declaración.
+  - 75: criterios documentados sin evidencia operativa, o evidencia operativa sin criterios documentados.
+  - 50: análisis de eventos descrito sin criterios de declaración concretos.
+  - Ventana completa sin ningún patrón aplicable ni criterios documentados → `evidencia_insuficiente` (sin oportunidad, no se penaliza).
 - **Recomendación:** definir criterios de declaración de incidentes y registrar alertas con su análisis.
 
 ### CRI-DE-03 — Información de eventos a personal y herramientas
@@ -241,11 +245,12 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** RS.MA-01, RS.MA-02, RS.MA-03, RS.MA-04 · **Tipo:** Mixto · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Tier:** T3 · **Privacidad:** Protect-P + apoyo Respond
 - **Evidencias:** `doc.claim(tipo=process_defined)`, `doc.claim(tipo=escalation_path)`, `log.pattern(escalation_done|incident_declared)`
 - **Regla:**
-  - 100: plan documentado con triaje, categorización, priorización y escalamiento + evidencia operativa de escalamiento en el escenario.
-  - 75: plan completo sin evidencia operativa.
-  - 50: plan parcial (p. ej. sin escalamiento).
-  - 0: no se declara plan.
-  - Sin escenario operativo disponible → se evalúa solo lo documental y se registra la limitación.
+  - Plan completo = `process_defined` de respuesta con pasos y responsables. El escalamiento documentado (`escalation_path`) cuenta como plan parcial.
+  - 100: plan completo + evidencia operativa de escalamiento (`escalation_done`).
+  - 75: plan completo sin evidencia operativa; o plan parcial con escalamiento observado; o escalamiento observado sin plan documentado (tope 75).
+  - 50: plan parcial sin evidencia operativa.
+  - 0: incidente declarado en una ventana completa sin escalamiento: falla de respuesta (docs/06 §5), con o sin plan.
+  - Sin plan ni evidencia operativa → `evidencia_insuficiente`.
 - **Recomendación:** documentar y ensayar el plan de respuesta incluyendo escalamiento y criterios de prioridad.
 
 ### CRI-RS-02 — Análisis de incidentes y preservación de evidencia
@@ -274,30 +279,34 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** RC.RP-01, RC.RP-02 · **Tipo:** Proceso · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Tier:** T3 · **Privacidad:** Protect-P + apoyo Recover
 - **Evidencias:** `doc.claim(tipo=process_defined)`, `doc.claim(tipo=backup_policy)`
 - **Regla:**
-  - 100: procedimiento con pasos, responsables, prioridades y criterios de activación.
-  - 75: procedimiento definido sin criterios de activación.
-  - 50: recuperación mencionada de forma genérica.
-  - 0: no se declara.
+  - 100: procedimiento de recuperación con pasos, responsables y criterios de activación.
+  - 75: procedimiento con pasos, sin criterios de activación o sin responsables.
+  - 50: recuperación mencionada de forma genérica (sin pasos), o solo una política de backups sin procedimiento de recuperación.
+  - 0: los documentos analizados no declaran procedimiento de recuperación.
+  - Sin afirmaciones de proceso ni de backups → `evidencia_insuficiente`.
 - **Recomendación:** documentar el procedimiento de recuperación con responsables y criterios de inicio.
 
 ### CRI-RC-02 — Verificación de integridad de backups
 - **Subcategorías:** RC.RP-03 · **Tipo:** Mixto · **Peso:** 4 · **IA:** sí · **MVP:** sí · **Tier:** T3
 - **Evidencias:** `doc.claim(tipo=backup_policy)`, `log.pattern(restore_exercise_run|restore_verified)`
 - **Regla:**
-  - 100: política exige verificación de integridad + evidencia operativa de restauración verificada.
-  - 75: verificación documentada sin evidencia operativa reciente.
-  - 50: pruebas de restauración mencionadas sin periodicidad.
-  - 0: no se declara verificación.
+  - Sin ventana de eventos completa: 75 si la política de backups exige verificación de integridad; si no, `evidencia_insuficiente`.
+  - Con ventana completa:
+    - 0: ejercicio de restauración fallido (`restore_exercise_run` con resultado `fail`).
+    - 100: la política exige verificación + restauración verificada (`restore_verified`).
+    - 75: restauración verificada sin política documentada, o política que exige verificación sin evidencia operativa.
+    - 50: ejercicio de restauración exitoso sin verificación final.
+    - Sin ningún patrón aplicable ni política de verificación → `evidencia_insuficiente` (sin oportunidad, no se penaliza).
 - **Recomendación:** verificar integridad de backups antes de restaurar y registrar la prueba.
 
 ### CRI-RC-03 — Restauración verificada y comunicación de recuperación
 - **Subcategorías:** RC.RP-05, RC.CO-03 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** parcial · **Tier:** T4
 - **Evidencias:** `log.pattern(restore_verified)`, `doc.claim(tipo=notification_list)`
-- **Regla:**
-  - 100: restauración confirmada en el escenario + comunicación a stakeholders definida/evidenciada.
+- **Regla** (exige una ventana de eventos completa; sin ella → `evidencia_insuficiente`):
+  - 100: restauración verificada en el escenario + comunicación de recuperación observada (`recovery_communicated`) o lista de notificación documentada.
   - 75: restauración verificada sin comunicación.
-  - 50: recuperación ejecutada sin verificación final.
-  - 0: sin evidencia de restauración ni procedimiento.
+  - 50: recuperación ejecutada (ejercicio exitoso) sin verificación final.
+  - Ventana completa sin ningún patrón aplicable → `evidencia_insuficiente` (sin oportunidad, no se penaliza). No hay tramo de 0.
 - **Recomendación:** confirmar operación normal tras restaurar y comunicar el estado a los interesados.
 
 ---
