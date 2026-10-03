@@ -1,6 +1,7 @@
-"""`ensure_schema` pone al dia una BD SQLite de dev creada antes de un cambio de modelo (docs/09 §48):
-`create_all` no agrega columnas, y una BD vieja fallaba con "no such column" aunque los tests (que usan
-BD nuevas) pasaran."""
+"""`ensure_schema` pone al dia una BD SQLite de dev creada antes de un cambio de modelo (§48).
+
+`create_all` no agrega columnas, y una BD vieja fallaba con "no such column" aunque los tests (que
+usan BD nuevas) pasaran."""
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
@@ -22,7 +23,8 @@ def _old_database(tmp_path):
         conn.execute(
             text(
                 "INSERT INTO jobs (id, tipo, estado, progreso, org_id, creado_en, actualizado_en)"
-                " VALUES ('j1', 'event_ingest', 'completado', 100, 'o1', '2026-01-01', '2026-01-01')"
+                " VALUES ('j1', 'event_ingest', 'completado', 100, 'o1', '2026-01-01',"
+                " '2026-01-01')"
             )
         )
     return engine
