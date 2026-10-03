@@ -117,9 +117,7 @@ def _stale_message(estado: str) -> str:
     )
 
 
-def _is_stale(
-    job: Job, stale_timeout_seconds: int, pending_timeout_seconds: int
-) -> bool:
+def _is_stale(job: Job, stale_timeout_seconds: int, pending_timeout_seconds: int) -> bool:
     """`pendiente` se mide desde `creado_en`; `en_progreso` desde `tomado_en`."""
 
     now = datetime.now(UTC)

@@ -419,9 +419,7 @@ class TerraformAdapter:
             limitations=limitations,
         )
 
-    def _rds_backup(
-        self, file_path: Path, subject_ref: str, attrs: dict
-    ) -> list[EvidenceInstance]:
+    def _rds_backup(self, file_path: Path, subject_ref: str, attrs: dict) -> list[EvidenceInstance]:
         retencion = attrs.get("backup_retention_period")
         backup_window = attrs.get("backup_window")
         if not isinstance(retencion, int):
@@ -502,9 +500,7 @@ class TerraformAdapter:
             bloqueo_publico = "unknown"
             nivel = None
         limitations = (
-            None
-            if all(f is not None for f in flags)
-            else "atributo_ausente: public_access_block"
+            None if all(f is not None for f in flags) else "atributo_ausente: public_access_block"
         )
         return self._make_evidence(
             type_id="tf.public_access.config",

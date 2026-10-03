@@ -36,7 +36,5 @@ def safe_filename(name: str | None, *, tipo: str = "default") -> str:
     suffix = Path(base).suffix.lower()
     allowed = ALLOWED_SUFFIXES.get(tipo, ALLOWED_SUFFIXES["default"])
     if suffix not in allowed:
-        raise ValueError(
-            f"Extension no permitida para '{tipo}': {suffix or '(sin extension)'}."
-        )
+        raise ValueError(f"Extension no permitida para '{tipo}': {suffix or '(sin extension)'}.")
     return base

@@ -47,9 +47,7 @@ def update_incident(
             detail=f"Estado {payload.estado!r} invalido. Validos: {', '.join(INCIDENT_ESTADOS)}.",
         )
     try:
-        incident = svc.update_incident_estado(
-            session, incident_id, payload.estado, payload.motivo
-        )
+        incident = svc.update_incident_estado(session, incident_id, payload.estado, payload.motivo)
     except InvalidTransition as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     assert incident is not None  # ya validado por _require_incident

@@ -195,4 +195,3 @@ def test_content_matching_rules():
     assert not _matches(["CISO", "auditoria"], ["CISO"])
     assert _matches({"roles": [{"rol": "Jefe"}]}, {"roles": [{"rol": "Jefe de TI", "x": 1}]})
     assert not _matches({"falta": "x"}, {"otra": "x"})
-

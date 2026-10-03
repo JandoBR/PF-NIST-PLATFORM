@@ -199,9 +199,7 @@ def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
     assert compare.json()["diffs"]  # el mismo criterio aparece en ambos lados, sin cambio
 
 
-def test_reevaluate_inherits_plan_follow_up_state(
-    api_client, db_session, methodology, fake_redis
-):
+def test_reevaluate_inherits_plan_follow_up_state(api_client, db_session, methodology, fake_redis):
     """Una reevaluacion hereda el seguimiento desde la evaluacion anterior (docs/05 §4.4)."""
 
     before = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")

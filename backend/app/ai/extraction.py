@@ -45,9 +45,7 @@ _CONTENT_FIELDS: dict[str, str] = {
     "backup_policy": (
         "respaldo (bool), verificacion_integridad (bool|null), retencion (string|null)"
     ),
-    "notification_list": (
-        "destinatarios (lista), criterios (string|null), plazos (string|null)"
-    ),
+    "notification_list": ("destinatarios (lista), criterios (string|null), plazos (string|null)"),
     "escalation_path": "niveles (string), criterios (string|null)",
     "exposure_policy": (
         "bases_publicas_permitidas (bool|null: false si la politica prohibe bases de datos"

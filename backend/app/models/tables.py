@@ -278,9 +278,7 @@ class Job(Base):
     #: Resumen de lo que hizo el job al terminar (FN-03): hoy, la ingesta de eventos (nuevos vs ya
     #: existentes). `None` mientras corre, si falla o si el tipo de job no reporta resultado.
     resultado: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    assessment_id: Mapped[str | None] = mapped_column(
-        ForeignKey("assessments.id"), nullable=True
-    )
+    assessment_id: Mapped[str | None] = mapped_column(ForeignKey("assessments.id"), nullable=True)
     org_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)

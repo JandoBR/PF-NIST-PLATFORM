@@ -45,9 +45,7 @@ def _check_level(
     return presente, cumple, insuficiente, faltantes
 
 
-def estimate_tier(
-    tier_settings: TierSettings, results: list[CriterionResult]
-) -> TierEstimate:
+def estimate_tier(tier_settings: TierSettings, results: list[CriterionResult]) -> TierEstimate:
     results_by_id = {r.criterion_id: r for r in results}
 
     t2_presente, _, _, _ = _check_level(tier_settings.t2, results_by_id)
@@ -79,9 +77,7 @@ def estimate_tier(
         f"Tier {achieved} ({_NOMBRES[achieved]}): mayor nivel cuyos requisitos se cumplen."
     )
     if provisional:
-        justificacion += (
-            " Marcado provisional: algun indicador tiene evidencia insuficiente (T2)."
-        )
+        justificacion += " Marcado provisional: algun indicador tiene evidencia insuficiente (T2)."
 
     return TierEstimate(
         tier=achieved,

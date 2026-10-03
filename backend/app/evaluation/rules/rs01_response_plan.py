@@ -33,9 +33,7 @@ def _ventana_completa(evidence: list[EvidenceInstance]) -> bool:
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    plan = best_found(
-        [c for c in doc_claims(evidence, "process_defined") if _es_de_respuesta(c)]
-    )
+    plan = best_found([c for c in doc_claims(evidence, "process_defined") if _es_de_respuesta(c)])
     escalation = best_found(doc_claims(evidence, "escalation_path"))
     escalado = _patron(evidence, "escalation_done")
     declarado = _patron(evidence, "incident_declared")

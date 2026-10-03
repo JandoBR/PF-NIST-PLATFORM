@@ -15,7 +15,6 @@ Vive en `evaluation` (no en `recommendations`) porque el motor la necesita antes
 hallazgos (`recommendations/contradictions.py`) solo la presentan.
 """
 
-
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable

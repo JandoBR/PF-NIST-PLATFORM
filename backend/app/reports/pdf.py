@@ -435,9 +435,7 @@ def build_comparison_report(
         for d in cambios:
             antes_s, despues_s = d.score_antes, d.score_despues
             variacion = (
-                "N/D"
-                if antes_s is None or despues_s is None
-                else f"{despues_s - antes_s:+g}"
+                "N/D" if antes_s is None or despues_s is None else f"{despues_s - antes_s:+g}"
             )
             filas.append(
                 [

@@ -5,9 +5,7 @@ from tests.conftest import TEST_ORG_NAME, TEST_PASSWORD, TEST_USERNAME
 
 
 def _login(client, password: str = TEST_PASSWORD) -> str:
-    response = client.post(
-        "/auth/login", json={"username": TEST_USERNAME, "password": password}
-    )
+    response = client.post("/auth/login", json={"username": TEST_USERNAME, "password": password})
     assert response.status_code == 200
     return response.json()["token"]
 
@@ -35,17 +33,13 @@ def test_login_with_wrong_password_is_401(anon_client, auth_user):
 
 
 def test_login_unknown_user_is_401(anon_client):
-    response = anon_client.post(
-        "/auth/login", json={"username": "fantasma", "password": "x"}
-    )
+    response = anon_client.post("/auth/login", json={"username": "fantasma", "password": "x"})
     assert response.status_code == 401
 
 
 def test_valid_token_grants_access(anon_client, auth_user):
     token = _login(anon_client)
-    response = anon_client.get(
-        "/assessments", headers={"Authorization": f"Bearer {token}"}
-    )
+    response = anon_client.get("/assessments", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 200
     assert response.json() == []
 
@@ -58,7 +52,5 @@ def test_me_returns_current_user(anon_client, auth_user):
 
 
 def test_invalid_token_is_401(anon_client):
-    response = anon_client.get(
-        "/assessments", headers={"Authorization": "Bearer token-invalido"}
-    )
+    response = anon_client.get("/assessments", headers={"Authorization": "Bearer token-invalido"})
     assert response.status_code == 401

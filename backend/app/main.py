@@ -60,8 +60,7 @@ def _print_report(methodology: Methodology, results: list[CriterionResult]) -> N
     for result in sorted(results, key=lambda r: r.criterion_id):
         titulo = methodology.criterios[result.criterion_id].titulo
         print(
-            f"  {result.criterion_id} [{result.estado.value:24s}] "
-            f"{result.final_score} — {titulo}"
+            f"  {result.criterion_id} [{result.estado.value:24s}] {result.final_score} — {titulo}"
         )
         print(f"      {result.explanation}")
 
@@ -158,9 +157,7 @@ def cmd_reevaluate(args: argparse.Namespace) -> None:
     session = _open_session()
 
     tiene_documentos = (
-        session.query(Source)
-        .filter_by(assessment_id=args.assessment_id, tipo="documents")
-        .first()
+        session.query(Source).filter_by(assessment_id=args.assessment_id, tipo="documents").first()
         is not None
     )
     ai_requested = tiene_documentos or args.ai_adjust
@@ -332,9 +329,7 @@ def main() -> None:
     eval_parser = subparsers.add_parser(
         "eval-ai", help="Evalua la extraccion de IA contra el golden set (cuesta dinero)"
     )
-    eval_parser.add_argument(
-        "--golden-dir", type=Path, default=REPO_ROOT / "tests" / "golden_ai"
-    )
+    eval_parser.add_argument("--golden-dir", type=Path, default=REPO_ROOT / "tests" / "golden_ai")
     eval_parser.add_argument("--confirm-live-ai", action="store_true")
     eval_parser.set_defaults(func=cmd_eval_ai)
 
@@ -377,9 +372,7 @@ def main() -> None:
         "incidents", help="Lista incidentes de una organizacion"
     )
     incidents_parser.add_argument("org", help="Nombre de la organizacion")
-    incidents_parser.add_argument(
-        "--plans", action="store_true", help="Mostrar tambien sus planes"
-    )
+    incidents_parser.add_argument("--plans", action="store_true", help="Mostrar tambien sus planes")
     incidents_parser.set_defaults(func=cmd_incidents)
 
     compare_parser = subparsers.add_parser("compare", help="Diferencia entre dos evaluaciones")

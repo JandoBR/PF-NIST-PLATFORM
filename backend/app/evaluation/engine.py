@@ -164,9 +164,9 @@ def _criterios_a_ajustar(methodology: Methodology, results: list[CriterionResult
     ]
     tope = methodology.settings.ia.max_criterios_ajustados_por_evaluacion
     if tope is not None and len(candidatos) > tope:
-        candidatos = sorted(
-            candidatos, key=lambda cid: (-methodology.criterios[cid].peso, cid)
-        )[: max(tope, 0)]
+        candidatos = sorted(candidatos, key=lambda cid: (-methodology.criterios[cid].peso, cid))[
+            : max(tope, 0)
+        ]
     return set(candidatos)
 
 

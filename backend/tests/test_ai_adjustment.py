@@ -146,9 +146,7 @@ def test_proposal_beyond_divergence_is_clamped():
 def test_no_implementado_is_never_adjusted_upward():
     methodology = _methodology()
     criterion = methodology.criterios["CRI-GV-01"]
-    result = _result(
-        criterion_id="CRI-GV-01", estado=Estado.NO_IMPLEMENTADO, base_score=0.0
-    )
+    result = _result(criterion_id="CRI-GV-01", estado=Estado.NO_IMPLEMENTADO, base_score=0.0)
     # La IA propone subirlo a 60; J2 lo recorta a 0 antes de aplicar la formula.
     client = FakeAIClient(
         {"CRI-GV-01": _fake_response(criterion_id="CRI-GV-01", puntaje_propuesto=60)}

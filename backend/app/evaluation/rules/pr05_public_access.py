@@ -27,9 +27,7 @@ def _versioning_note(evidence: list[EvidenceInstance]) -> str:
     if not sin_versionado:
         return ""
     return (
-        " Sin versionado habilitado o desconocido (informativo): "
-        + ", ".join(sin_versionado)
-        + "."
+        " Sin versionado habilitado o desconocido (informativo): " + ", ".join(sin_versionado) + "."
     )
 
 
@@ -76,14 +74,16 @@ def _with_database_exposure(
     return resultado
 
 
-@noting_unresolved({
-    "publicly_accessible",
-    "block_public_acls",
-    "block_public_policy",
-    "ignore_public_acls",
-    "restrict_public_buckets",
-    "bucket",
-})
+@noting_unresolved(
+    {
+        "publicly_accessible",
+        "block_public_acls",
+        "block_public_policy",
+        "ignore_public_acls",
+        "restrict_public_buckets",
+        "bucket",
+    }
+)
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     resultado = _with_database_exposure(evidence, _evaluate_public_access(evidence))
     nota = _versioning_note(evidence)

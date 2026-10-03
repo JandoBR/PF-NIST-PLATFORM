@@ -110,9 +110,7 @@ def test_executive_report_lists_open_plans_and_skips_done_ones(
     detail = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
     plans = api_client.post(f"/assessments/{detail['id']}/plans").json()
     hecho = next(p for p in plans if p["criterion_id"] == "CRI-PR-05")
-    api_client.patch(
-        f"/assessments/{detail['id']}/plans/{hecho['id']}", json={"estado": "hecho"}
-    )
+    api_client.patch(f"/assessments/{detail['id']}/plans/{hecho['id']}", json={"estado": "hecho"})
 
     text = _norm(_text(api_client.get(f"/assessments/{detail['id']}/report.pdf")))
 

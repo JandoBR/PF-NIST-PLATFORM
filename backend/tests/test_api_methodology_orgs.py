@@ -118,9 +118,7 @@ def test_closing_an_incident_persists_the_state(
     assert api_client.get(f"/incidents/{incident_id}").json()["estado"] == "closed"
 
 
-def test_invalid_incident_state_is_422(
-    api_client, db_session, methodology, fake_redis, auth_user
-):
+def test_invalid_incident_state_is_422(api_client, db_session, methodology, fake_redis, auth_user):
     with (SCENARIOS / "e1b_fallos_sin_alerta.jsonl").open("rb") as fh:
         api_client.post(
             f"/orgs/{auth_user.org_id}/events",

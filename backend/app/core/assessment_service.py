@@ -413,9 +413,7 @@ def reevaluate(
     """Atajo sincronico (CLI, tests): crea una nueva evaluacion re-leyendo las mismas rutas que
     la anterior, sin pasar por la cola."""
 
-    assessment, paths = create_pending_reevaluation(
-        session, methodology, previous_assessment_id
-    )
+    assessment, paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
     return run_pending_assessment(
         session,
         methodology,
@@ -514,9 +512,7 @@ def enqueue_surveillance_refresh(
     worker corre `run_surveillance_refresh` (reusa lo previo, recalcula solo lo operativo) en vez
     del pipeline completo y sin IA."""
 
-    assessment, _paths = create_pending_reevaluation(
-        session, methodology, previous_assessment_id
-    )
+    assessment, _paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
     job = dispatch_job(
         session,
         redis_client,
@@ -540,9 +536,7 @@ SURVEILLANCE_EVIDENCE_TYPES = frozenset({"log.pattern", "log.window"})
 
 
 def _criterion_uses_surveillance(criterion) -> bool:
-    return any(
-        ev.split("@", 1)[0] in SURVEILLANCE_EVIDENCE_TYPES for ev in criterion.evidencias
-    )
+    return any(ev.split("@", 1)[0] in SURVEILLANCE_EVIDENCE_TYPES for ev in criterion.evidencias)
 
 
 def run_surveillance_refresh(
@@ -751,11 +745,7 @@ def set_plan_estado(
     """Cambia el estado de *seguimiento* de un plan (docs/05 §4.4, docs/11 UI-08). `None` si el
     plan no existe o no pertenece a ese assessment (la ruta ya valida el assessment/org)."""
 
-    row = (
-        session.query(PlanRow)
-        .filter_by(id=plan_id, assessment_id=assessment_id)
-        .one_or_none()
-    )
+    row = session.query(PlanRow).filter_by(id=plan_id, assessment_id=assessment_id).one_or_none()
     if row is None:
         return None
     row.estado = estado

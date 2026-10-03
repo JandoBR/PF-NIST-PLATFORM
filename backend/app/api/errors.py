@@ -99,6 +99,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _unexpected(request: Request, exc: Exception) -> JSONResponse:
         # El detalle va al log, no al cliente: un traceback o un mensaje interno es informacion.
         logger.exception("Error no controlado en %s", request.url)
-        return _problem(
-            500, _title(500), "Error interno del servidor.", str(request.url)
-        )
+        return _problem(500, _title(500), "Error interno del servidor.", str(request.url))

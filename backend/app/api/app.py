@@ -86,6 +86,7 @@ async def add_methodology_version(request: Request, call_next):
     response.headers["X-Methodology-Version"] = get_methodology().methodology_version
     return response
 
+
 register_exception_handlers(app)
 
 app.include_router(routes_auth.router)

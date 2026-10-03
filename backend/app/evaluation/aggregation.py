@@ -107,9 +107,7 @@ def aggregate_by_funcion(
     ]
 
 
-def aggregate_global(
-    methodology: Methodology, funcion_aggregates: list[Aggregate]
-) -> Aggregate:
+def aggregate_global(methodology: Methodology, funcion_aggregates: list[Aggregate]) -> Aggregate:
     """Global = promedio ponderado de las funciones con puntaje (A6: sin ninguna, es None)."""
 
     pesos = methodology.settings.funciones

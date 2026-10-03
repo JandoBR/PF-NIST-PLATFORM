@@ -45,9 +45,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         if notificacion is not None:
             ids.append(notificacion.id)
         fuente = (
-            "evidenciada en la ventana"
-            if comunicado is not None
-            else "definida en la politica"
+            "evidenciada en la ventana" if comunicado is not None else "definida en la politica"
         )
         return result(
             CRITERION_ID,

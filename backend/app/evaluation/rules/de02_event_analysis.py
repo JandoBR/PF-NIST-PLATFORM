@@ -49,9 +49,8 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     doc = [c for c in doc_claims(evidence, "process_defined") if _es_de_declaracion(c)]
     doc_mejor = best_found(doc)
-    tiene_criterios = (
-        doc_mejor is not None
-        and doc_mejor.value.get("contenido", {}).get("criterios_declaracion")
+    tiene_criterios = doc_mejor is not None and doc_mejor.value.get("contenido", {}).get(
+        "criterios_declaracion"
     )
     doc_criterios = doc_mejor if tiene_criterios else None
 

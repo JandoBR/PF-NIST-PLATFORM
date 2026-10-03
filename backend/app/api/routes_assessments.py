@@ -138,8 +138,7 @@ async def create_assessment(
         raise HTTPException(
             status_code=422,
             detail=(
-                "Se requiere al menos un archivo: terraform_files, ansible_files o"
-                " document_files."
+                "Se requiere al menos un archivo: terraform_files, ansible_files o document_files."
             ),
         )
 

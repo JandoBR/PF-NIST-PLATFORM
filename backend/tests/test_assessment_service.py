@@ -32,6 +32,7 @@ class _EchoAdjustingClient:
             "confianza": 0.9,
         }
 
+
 METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "terraform"
 ANSIBLE_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "ansible"
@@ -152,9 +153,7 @@ def test_reevaluate_rereads_the_same_path_and_picks_up_fixes(db_session, methodo
     before = svc.run_assessment(
         db_session, methodology, org_name="Empresa Mejora", scope="s", terraform_path=workdir
     )
-    before_results = {
-        r.criterion_id: r for r in svc.load_criterion_results(db_session, before.id)
-    }
+    before_results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, before.id)}
     assert before_results["CRI-PR-01"].final_score == 25  # cifrado deshabilitado
 
     main_tf = workdir / "main.tf"
@@ -239,9 +238,7 @@ def test_generate_plans_unknown_assessment_raises(db_session, methodology):
         svc.generate_plans(db_session, methodology, "no-existe")
 
 
-def test_surveillance_refresh_reuses_unaffected_and_recomputes_operational(
-    db_session, methodology
-):
+def test_surveillance_refresh_reuses_unaffected_and_recomputes_operational(db_session, methodology):
     """Refresco selectivo (docs/06 §6, FN-06): conserva lo no operativo (incluida la IA) y
     recalcula solo los criterios de vigilancia."""
 

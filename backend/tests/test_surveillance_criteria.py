@@ -57,9 +57,7 @@ def _pattern(patron: str, resultado: str = "ok") -> EvidenceInstance:
     )
 
 
-def _claim(
-    tipo: str, contenido: dict | None = None, confianza: float = 0.9
-) -> EvidenceInstance:
+def _claim(tipo: str, contenido: dict | None = None, confianza: float = 0.9) -> EvidenceInstance:
     return EvidenceInstance(
         type_id="doc.claim",
         type_version=1,

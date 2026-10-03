@@ -13,9 +13,7 @@ def by_type(evidence: list[EvidenceInstance], type_id: str) -> list[EvidenceInst
     return [e for e in evidence if e.type_id == type_id]
 
 
-def doc_claims(
-    evidence: list[EvidenceInstance], tipo_afirmacion: str
-) -> list[EvidenceInstance]:
+def doc_claims(evidence: list[EvidenceInstance], tipo_afirmacion: str) -> list[EvidenceInstance]:
     """`doc.claim` de un `tipo_afirmacion`, excluyendo los de confianza baja (E3, docs/05 §2.3):
     una confianza baja no cuenta como evidencia suficiente."""
 
