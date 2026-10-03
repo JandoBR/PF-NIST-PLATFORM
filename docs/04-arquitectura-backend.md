@@ -201,6 +201,7 @@ evidencia y recalcular solo los criterios afectados.
 | `PATCH` | `/assessments/{id}/plans/{plan_id}` | Cambia el estado de seguimiento del plan (`pendiente`\|`en_progreso`\|`hecho`). No afecta el puntaje (docs/05 §4.4). |
 | `GET` | `/orgs` | Organización de la sesión (solo la propia). |
 | `POST` | `/orgs/{org_id}/events` | Carga eventos al stream de la organización (JSONL); encola `event_ingest`. |
+| `DELETE` | `/orgs/{id}/events` | Borra eventos, patrones e incidentes (con sus planes) de la organización. Lo usan los logs de ejemplo de la UI para empezar de cero; las evaluaciones ya hechas no cambian. 409 si hay una ingesta en curso (docs/09 §59). |
 | `GET` | `/orgs/{org_id}/incidents` | Lista incidentes operativos (filtrable por estado/severidad). |
 | `GET` | `/incidents/{id}` | Detalle, timeline y hechos del incidente. |
 | `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |

@@ -129,3 +129,69 @@ def test_invalid_incident_state_is_422(api_client, db_session, methodology, fake
 
     response = api_client.patch(f"/incidents/{incident_id}", json={"estado": "inexistente"})
     assert response.status_code == 422
+
+
+# -- DELETE /orgs/{id}/events: limpiar para los logs de ejemplo ------------------------------------
+
+
+def _ingest(api_client, db_session, methodology, fake_redis, auth_user, escenario):
+    with (SCENARIOS / escenario).open("rb") as fh:
+        api_client.post(
+            f"/orgs/{auth_user.org_id}/events",
+            files={"file": (escenario, fh, "application/jsonl")},
+        )
+    run_pending_jobs(db_session, methodology, fake_redis)
+
+
+def test_clearing_events_removes_events_patterns_incidents_and_their_plans(
+    api_client, db_session, methodology, fake_redis, auth_user
+):
+    from app.models.tables import Event, Incident, LogPatternRow, PlanRow
+
+    _ingest(
+        api_client, db_session, methodology, fake_redis, auth_user, "e1b_fallos_sin_alerta.jsonl"
+    )
+    assert api_client.get(f"/orgs/{auth_user.org_id}/incidents").json()
+
+    response = api_client.delete(f"/orgs/{auth_user.org_id}/events")
+
+    assert response.status_code == 200
+    borrado = response.json()
+    assert borrado["eventos"] == 6 and borrado["incidentes"] == 1 and borrado["planes"] == 1
+    assert api_client.get(f"/orgs/{auth_user.org_id}/incidents").json() == []
+    org = auth_user.org_id
+    assert db_session.query(Event).filter_by(org_id=org).count() == 0
+    assert db_session.query(LogPatternRow).filter_by(org_id=org).count() == 0
+    assert db_session.query(Incident).filter_by(org_id=org).count() == 0
+    assert db_session.query(PlanRow).filter(PlanRow.incident_id.isnot(None)).count() == 0
+
+
+def test_after_clearing_the_same_log_opens_its_incident_again(
+    api_client, db_session, methodology, fake_redis, auth_user
+):
+    """Sin limpiar, reingerir el mismo log no abre nada nuevo (dedup); limpiando, si."""
+
+    _ingest(
+        api_client, db_session, methodology, fake_redis, auth_user, "e1b_fallos_sin_alerta.jsonl"
+    )
+    api_client.delete(f"/orgs/{auth_user.org_id}/events")
+    _ingest(
+        api_client, db_session, methodology, fake_redis, auth_user, "e1b_fallos_sin_alerta.jsonl"
+    )
+
+    (incident,) = api_client.get(f"/orgs/{auth_user.org_id}/incidents").json()
+    assert incident["estado"] == "open"
+
+
+def test_clearing_is_refused_while_an_ingest_is_running(api_client, db_session, auth_user):
+    from app.core import jobs as job_service
+
+    job_service.create_job(db_session, "event_ingest", org_id=auth_user.org_id)
+
+    response = api_client.delete(f"/orgs/{auth_user.org_id}/events")
+
+    assert response.status_code == 409 and "en curso" in response.json()["detail"]
+
+
+def test_clearing_another_organizations_events_is_forbidden(api_client):
+    assert api_client.delete("/orgs/otra-org/events").status_code in (403, 404)

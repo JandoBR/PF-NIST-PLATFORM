@@ -163,6 +163,13 @@ export const ingestEvents = (
 
 // --- Incidentes ----------------------------------------------------------------------------
 
+/** Borra eventos, patrones e incidentes de la organización: los logs de ejemplo empiezan de cero. */
+export const clearOrgEvents = (orgId: string) =>
+  request<{ eventos: number; patrones: number; incidentes: number; planes: number }>(
+    `/orgs/${orgId}/events`,
+    { method: 'DELETE' }
+  );
+
 export const getIncident = (incidentId: string) =>
   request<IncidentOut>(`/incidents/${incidentId}`);
 

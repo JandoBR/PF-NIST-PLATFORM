@@ -19,13 +19,14 @@ from sqlalchemy.orm import Session
 
 from app.ai.guard import check_live_ai_guard
 from app.api.deps import get_current_user, get_methodology, get_redis, get_session, require_same_org
-from app.api.schemas import EventsAccepted, IncidentOut, OrganizationOut
+from app.api.schemas import EventsAccepted, EventsCleared, IncidentOut, OrganizationOut
 from app.core import assessment_service as svc
+from app.core import jobs as job_service
 from app.core import operations
 from app.core.dispatch import dispatch_job
 from app.core.uploads import safe_filename
 from app.methodology.loader import Methodology
-from app.models.tables import User
+from app.models.tables import Job, User
 
 router = APIRouter(tags=["orgs"])
 
@@ -89,6 +90,29 @@ async def ingest_events(
     )
 
     return EventsAccepted(org_id=org.id, job_id=job.id)
+
+
+@router.delete("/orgs/{org_id}/events", response_model=EventsCleared)
+def clear_events(
+    org_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> EventsCleared:
+    """Borra eventos, patrones e incidentes de la organizacion (logs de ejemplo, docs/09 §59).
+    409 si hay una ingesta en curso: borrar en medio dejaria la ingesta a medias."""
+
+    org = _require_org(session, org_id, user)
+    en_curso = (
+        job_service.org_jobs_query(session, org.id)
+        .filter(Job.tipo == "event_ingest", Job.estado.in_(["pendiente", "en_progreso"]))
+        .count()
+    )
+    if en_curso:
+        raise HTTPException(
+            status_code=409,
+            detail="Hay una ingesta de eventos en curso; espera a que termine antes de limpiar.",
+        )
+    return EventsCleared(**operations.clear_operational_data(session, org.id))
 
 
 @router.get("/orgs/{org_id}/incidents", response_model=list[IncidentOut])

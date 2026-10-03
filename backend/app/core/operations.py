@@ -218,3 +218,26 @@ def update_incident_estado(
     set_incident_estado(incident, estado, motivo)
     session.commit()
     return incident
+
+
+def clear_operational_data(session: Session, org_id: str) -> dict[str, int]:
+    """Borra los eventos, patrones e incidentes (con sus planes) de una organizacion.
+
+    Pensado para los logs de ejemplo de la UI: cada boton muestra un escenario desde cero, sin
+    arrastrar incidentes del anterior. Las evaluaciones ya hechas no cambian: guardan su propia
+    copia de la evidencia operativa (son instantaneas, docs/00 §7)."""
+
+    incidentes = [i.id for i in session.query(Incident.id).filter_by(org_id=org_id).all()]
+    planes = (
+        session.query(PlanRow).filter(PlanRow.incident_id.in_(incidentes)).delete()
+        if incidentes
+        else 0
+    )
+    borrado = {
+        "planes": planes,
+        "incidentes": session.query(Incident).filter_by(org_id=org_id).delete(),
+        "patrones": session.query(LogPatternRow).filter_by(org_id=org_id).delete(),
+        "eventos": session.query(Event).filter_by(org_id=org_id).delete(),
+    }
+    session.commit()
+    return borrado

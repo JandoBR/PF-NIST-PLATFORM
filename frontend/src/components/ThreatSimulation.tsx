@@ -18,7 +18,15 @@ import {
   History,
 } from 'lucide-react';
 import { DEMO_EVENT_LOGS, fetchAsFile } from '@/data/demo';
-import { ApiError, getIncidentPlans, ingestEvents, listOrgIncidents, pollJob, updateIncident } from '@/lib/api';
+import {
+  ApiError,
+  clearOrgEvents,
+  getIncidentPlans,
+  ingestEvents,
+  listOrgIncidents,
+  pollJob,
+  updateIncident,
+} from '@/lib/api';
 import type { IncidentOut, JobEstado, Plan } from '@/lib/types';
 import { describeIngest, incidentEstadoMeta, incidentSeverityMeta, isIncidentClosed } from '@/lib/ui';
 
@@ -61,13 +69,19 @@ export function ThreatSimulation({ orgId, orgNombre, onIngested }: Props) {
     void refresh();
   }, [refresh]);
 
-  async function handleIngest(file: File, label: string) {
+  // `fresh`: los logs de ejemplo muestran un escenario desde cero, sin los incidentes del anterior.
+  async function handleIngest(file: File, label: string, fresh = false) {
     if (!orgId) return;
     setIngesting(true);
     setError(null);
     setLastIngest(null);
     setJobEstado(null);
     try {
+      if (fresh) {
+        await clearOrgEvents(orgId);
+        setSelected(null);
+        await refresh();
+      }
       // POST /orgs/{id}/events encola en worker-logs y devuelve de inmediato (docs/09 §16):
       // hay que sondear el job, y luego refrescar la lista -- ya no hay un payload sincronico
       // con "nuevos vs actualizados": lo informa `job.resultado` (FN-03).
@@ -134,7 +148,7 @@ export function ThreatSimulation({ orgId, orgNombre, onIngested }: Props) {
                 key={log.id}
                 title={log.description}
                 disabled={ingesting}
-                onClick={async () => handleIngest(await fetchAsFile(log.file), log.label)}
+                onClick={async () => handleIngest(await fetchAsFile(log.file), log.label, true)}
                 className="btn-ghost border border-white/[0.06] text-xs"
               >
                 {ingesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
@@ -159,7 +173,7 @@ export function ThreatSimulation({ orgId, orgNombre, onIngested }: Props) {
           </div>
         </div>
         <p className="mt-3 text-[11px] text-slate-600">
-          Cada botón sube un log distinto; no son un interruptor. Ingerir un log nunca borra incidentes ya abiertos.
+          Los logs de ejemplo empiezan de cero: borran los eventos e incidentes anteriores de la organización. Subir un .jsonl propio los conserva y se suma a lo que ya hay.
         </p>
         {ingesting && jobEstado && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">

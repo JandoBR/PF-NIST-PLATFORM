@@ -107,6 +107,15 @@ class AssessmentAccepted(BaseModel):
     job_id: str
 
 
+class EventsCleared(BaseModel):
+    """`DELETE /orgs/{org_id}/events`: cuanto se borro."""
+
+    eventos: int
+    patrones: int
+    incidentes: int
+    planes: int
+
+
 class EventsAccepted(BaseModel):
     """Igual que `AssessmentAccepted`, para `POST /orgs/{org_id}/events`."""
 
