@@ -24,6 +24,28 @@ QUEUE_CORE = "pf:jobs:core"
 QUEUE_LOGS = "pf:jobs:logs"
 
 
+#: Version del contrato del mensaje (docs/04 §3.1, docs/11 OP-13). Se sube cuando un campo cambia de
+#: significado o se vuelve obligatorio; agregar un campo opcional no la sube. Protege el caso en que
+#: `api` y los workers se despliegan por separado: un worker viejo que recibe un mensaje de una
+#: version que no entiende debe fallar el job con un motivo claro, no interpretarlo a medias.
+MESSAGE_SCHEMA_VERSION = 1
+
+
+def message_version_error(message: dict[str, Any]) -> str | None:
+    """Motivo por el que este worker no debe procesar el mensaje, o `None` si puede.
+
+    Un mensaje sin `schema_version` es de antes de OP-13 (version 1): se acepta."""
+
+    version = message.get("schema_version", 1)
+    es_entero = isinstance(version, int) and not isinstance(version, bool)
+    if es_entero and 1 <= version <= MESSAGE_SCHEMA_VERSION:
+        return None
+    return (
+        f"El mensaje del job usa schema_version={version!r} y este worker solo entiende hasta"
+        f" {MESSAGE_SCHEMA_VERSION}. Actualiza el worker y reintenta el job."
+    )
+
+
 def get_redis_url() -> str:
     return os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 

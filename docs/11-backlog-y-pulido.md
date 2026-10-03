@@ -174,8 +174,7 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   registro JSON por llamada (`app.ai.calls`: paso, `prompt_version`, `criterion_id`/`doc_id`,
   resultado, intentos, duración, tokens), validación E5 de fechas/frecuencias/roles y
   `ia.max_criterios_ajustados_por_evaluacion` en `settings.yml` (desactivado por defecto).
-- [ ] OP-13 · **`schema_version` en el contrato de mensaje de la cola** (P2): protege la
-  compatibilidad cuando `api` y workers se despliegan por separado (docs/04 §3.1). El resto de OP-13
+- [x] OP-13 · **`schema_version` en el contrato de mensaje de la cola**. Hecho (docs/09 §49). El resto de OP-13
   (`evidence_definitions`/`criteria_catalog`, `incidents.pattern_ids`, `log_patterns.evidence_id`,
   `Source` por archivo) pasó a docs/12 §2.
 - [x] OP-14 · **Reproducibilidad**. Hecho (docs/09 §37): `assessments.reproducibility` guarda
@@ -234,7 +233,7 @@ demostrable.
 3. ~~**OP-04 (contradicciones) + TS-03**~~ (hechos, docs/09 §38); ~~**TS-01**~~ (hecho, docs/09 §39), ~~**TS-02**~~ (hecho, docs/09 §43) y **AMP-02**:
    lo más demostrable y lo que respalda las afirmaciones del diseño.
 4. Pulido barato: **FN-03**, **FN-07**, ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), **OP-05 + FN-08**, **OP-11** (transiciones
-   y motivo de cierre), **OP-15** (líneas), **OP-13** (`schema_version`), **API-04** (problem+json) y
+   y motivo de cierre), **OP-15** (líneas), ~~OP-13~~ (hecho, docs/09 §49), **API-04** (problem+json) y
    la decisión de **CR-07**.
 
 > **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, AMP-02, FN-01, FN-09, API-03, UI-01…UI-10, FN-05, FN-06 y la parte de estado de

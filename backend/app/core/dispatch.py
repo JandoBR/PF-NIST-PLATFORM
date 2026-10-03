@@ -15,7 +15,7 @@ import redis
 from sqlalchemy.orm import Session
 
 from app.core import jobs as job_service
-from app.core.queue import QUEUE_CORE, QUEUE_LOGS, enqueue
+from app.core.queue import MESSAGE_SCHEMA_VERSION, QUEUE_CORE, QUEUE_LOGS, enqueue
 from app.models.tables import Assessment, CriterionResultRow, EvidenceRow, Job, PlanRow, Source
 
 QUEUE_BY_TIPO = {"assessment_run": QUEUE_CORE, "event_ingest": QUEUE_LOGS}
@@ -42,7 +42,13 @@ def dispatch_job(
     job = job_service.create_job(
         session, tipo, assessment_id=assessment_id, org_id=org_id, payload=payload
     )
-    enqueue(redis_client, QUEUE_BY_TIPO[tipo], {"job_id": job.id, **payload})
+    # La version viaja en el mensaje, no en `Job.payload`: un reintento se encola con la version
+    # vigente de este codigo, no con la del intento original.
+    enqueue(
+        redis_client,
+        QUEUE_BY_TIPO[tipo],
+        {"schema_version": MESSAGE_SCHEMA_VERSION, "job_id": job.id, **payload},
+    )
     return job
 
 

@@ -142,3 +142,44 @@ def test_reap_stale_jobs_leaves_a_completed_assessment_alone(db_session, methodo
 
     db_session.refresh(assessment)
     assert assessment.estado == "completada"
+
+
+def test_worker_fails_a_job_whose_message_version_it_does_not_understand(db_session, methodology):
+    """OP-13: api y workers pueden desplegarse por separado; no se interpreta a medias."""
+
+    assessment = svc.create_pending_assessment(
+        db_session, methodology, org_name="Empresa Version", scope="entorno:produccion"
+    )
+    job = job_service.create_job(db_session, "assessment_run", assessment_id=assessment.id)
+
+    worker_core.process_message(
+        db_session,
+        methodology,
+        {
+            "schema_version": 99,
+            "job_id": job.id,
+            "assessment_id": assessment.id,
+            "terraform_path": str(FIXTURES / "good"),
+        },
+    )
+
+    db_session.refresh(assessment)
+    db_session.refresh(job)
+    assert job.estado == "fallido" and "schema_version=99" in job.error
+    assert job.tomado_en is None  # no se llego a tomar ni a ejecutar
+    assert assessment.estado == "fallida" and assessment.error == job.error
+    assert svc.load_criterion_results(db_session, assessment.id) == []
+
+
+def test_dispatched_messages_carry_the_current_schema_version(db_session, fake_redis):
+
+    from app.core.dispatch import dispatch_job
+    from app.core.queue import MESSAGE_SCHEMA_VERSION, QUEUE_LOGS
+
+    job = dispatch_job(
+        db_session, fake_redis, "event_ingest", {"org_nombre": "x", "jsonl_path": "x"}, org_id=None
+    )
+
+    (message,) = fake_redis.drain(QUEUE_LOGS)
+    assert message["schema_version"] == MESSAGE_SCHEMA_VERSION and message["job_id"] == job.id
+    assert "schema_version" not in job.payload  # el payload guardado no la lleva (reintento)

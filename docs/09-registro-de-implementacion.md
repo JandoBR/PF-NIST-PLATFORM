@@ -1624,3 +1624,21 @@ vieja fallaba con "no such column" en cuanto el ORM seleccionaba la columna.
 
 **Verificación:** backend 4 tests nuevos (`test_db_schema_upgrade.py`) + `ruff check` limpio.
 
+## 49. OP-13: `schema_version` en el mensaje de la cola
+
+`api` y los workers pueden desplegarse por separado (docs/04 §3.1). Si cambiaba el contrato del mensaje, un
+worker viejo lo interpretaba a medias: no había forma de saber qué versión lo produjo.
+
+- **Contrato:** todo mensaje encolado lleva `schema_version` (`queue.MESSAGE_SCHEMA_VERSION`, hoy 1), añadido en
+  `dispatch_job`, el único punto que encola. Se sube cuando un campo cambia de significado o pasa a ser
+  obligatorio; añadir un campo opcional no la sube.
+- **Worker:** `queue.message_version_error` decide si el mensaje se puede procesar. Un mensaje **sin** versión es
+  de antes de OP-13 y se acepta (versión 1), para no romper lo que haya en vuelo. Una versión mayor, no
+  entera o inválida hace que el worker **falle el job** (y la evaluación ligada, en `worker-core`) con el motivo
+  ("este worker solo entiende hasta N; actualiza el worker y reintenta") antes de tomarlo ni ejecutar nada.
+- **Reintento (§46):** la versión no se guarda en `Job.payload` sino que se añade al encolar, así que un job
+  reintentado se encola con la versión vigente y, tras actualizar el worker, el reintento funciona.
+
+**Verificación:** backend 5 tests nuevos (aceptación de mensajes viejos, rechazo de versiones mayores/inválidas,
+ambos workers fallan el job sin ejecutarlo, la versión viaja en el mensaje y no en el payload).
+

@@ -154,3 +154,17 @@ def test_process_message_marks_job_failed_on_bad_path(db_session, methodology):
     db_session.refresh(job)
     assert job.estado == "fallido"
     assert job.error
+
+
+def test_logs_worker_fails_a_job_with_a_newer_message_version(db_session, methodology):
+    job = job_service.create_job(db_session, "event_ingest")
+
+    worker_logs.process_message(
+        db_session,
+        methodology,
+        {"schema_version": 99, "job_id": job.id, "org_nombre": "x", "jsonl_path": "no-importa"},
+    )
+
+    db_session.refresh(job)
+    assert job.estado == "fallido" and "schema_version=99" in job.error
+    assert job.tomado_en is None

@@ -19,7 +19,7 @@ from app.ai.client import build_default_client, describe_client
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
 from app.core.db import build_engine, build_session_factory, ensure_schema
-from app.core.queue import QUEUE_CORE, build_redis_client, dequeue_blocking
+from app.core.queue import QUEUE_CORE, build_redis_client, dequeue_blocking, message_version_error
 from app.methodology.loader import Methodology, load_methodology
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -56,6 +56,17 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
     job = job_service.get_job(session, message["job_id"])
     if job is None:
         logger.warning("Job %s no existe (perdido o ya limpiado); se descarta.", message["job_id"])
+        return
+
+    version_error = message_version_error(message)
+    if version_error is not None:
+        logger.error("Job %s: %s", job.id, version_error)
+        job_service.mark_failed(session, job, version_error)
+        assessment = svc.get_assessment(session, message.get("assessment_id", ""))
+        if assessment is not None and assessment.estado in ("pendiente", "en_progreso"):
+            assessment.estado = "fallida"
+            assessment.error = version_error
+            session.commit()
         return
 
     job_service.mark_taken(session, job)
