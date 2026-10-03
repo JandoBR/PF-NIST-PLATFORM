@@ -1820,3 +1820,20 @@ docs/02 listaba tres tipos que nada emitía. Se decidió uno por uno, no en bloq
 **Verificación:** backend 7 tests nuevos (marca con y sin afirmaciones, sin marca si la IA no contesta, conteo
 parcial, tope, documento vacío, informe PDF) + `ruff check` limpio.
 
+## 58. `ruff format` y la evaluación activa que termina
+
+- **`ruff format`:** el código solo se había pasado por `ruff check`; `ruff format --check` fallaba en 30 archivos
+  (los registros anteriores que decían "ruff limpio" se referían a `check`). Se sospechó que era la diferencia de
+  versión (el flake trae 0.16.8; el lockfile pide 0.16.9). No lo era: se ejecutó el binario 0.16.9 del
+  entorno virtual (en NixOS, vía el cargador de glibc de la tienda de Nix) y daba el mismo resultado. Se formateó
+  todo el backend y **0.16.8 y 0.16.9 coinciden** en el código ya formateado, así que no hace falta fijar el flake.
+  Convención desde ahora: `ruff format app tests` antes de confirmar, y `ruff format --check` + `ruff check`
+  deben pasar.
+- **Evaluación en curso que termina (UI):** al elegir en el historial una evaluación que aún corría, la UI cargaba
+  el detalle del *historial* (sin puntajes) y nada lo volvía a pedir al terminar el job; los criterios sí
+  aparecían porque se piden aparte. Ahora, mientras la evaluación activa está `pendiente`/`en_progreso`, `App`
+  la consulta cada 3 s y, al pasar a un estado terminal, recarga todo (resumen, criterios, hallazgos, planes) y
+  refresca el historial. Elegir una evaluación del historial pide además su detalle actual en vez de usar el
+  guardado en la lista. No hay pruebas automáticas de frontend en el proyecto (no hay test runner); se verificó con
+  `typecheck`, `lint` y `build`.
+

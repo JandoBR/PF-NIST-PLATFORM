@@ -18,6 +18,7 @@ import { ThreatSimulation } from '@/components/ThreatSimulation';
 import { CompareAssessments } from '@/components/CompareAssessments';
 import { JobHistory } from '@/components/JobHistory';
 import {
+  getAssessment,
   getCriteria,
   getFindings,
   getMe,
@@ -40,6 +41,10 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 
 //: Id de la evaluación activa, para que al recargar la página se restaure en vez de perderse.
 const ACTIVE_KEY = 'pf.activeAssessmentId';
+
+//: Estados no terminales de una evaluación y cada cuánto se consulta la activa mientras dura.
+const IN_PROGRESS = ['pendiente', 'en_progreso'];
+const ACTIVE_POLL_MS = 3000;
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -154,12 +159,44 @@ function App() {
     await refreshHistory();
   }
 
+  // Mientras la evaluación activa está en curso (se eligió del historial o se acaba de crear), se
+  // consulta hasta que termine y entonces se recarga TODO: puntajes, criterios, hallazgos y
+  // planes. Antes solo se pedían los criterios, y el resumen se quedaba con los datos de cuando
+  // la evaluación aún no tenía resultados.
+  useEffect(() => {
+    if (!assessment || !IN_PROGRESS.includes(assessment.estado)) return;
+    const { id, estado } = assessment;
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const fresh = await getAssessment(id);
+        if (cancelled || fresh.estado === estado) return;
+        if (IN_PROGRESS.includes(fresh.estado)) {
+          setAssessment(fresh); // pasó de pendiente a en_progreso
+          return;
+        }
+        window.clearInterval(timer);
+        await loadAssessmentDetails(fresh);
+        void refreshHistory();
+      } catch {
+        // un fallo de red puntual no debe parar el sondeo; se reintenta en el siguiente ciclo
+      }
+    }, ACTIVE_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [assessment, loadAssessmentDetails, refreshHistory]);
+
   async function selectAssessment(id: string) {
     const chosen = history.find((a) => a.id === id);
     if (!chosen) return;
     setDetailError(null);
     setTab('dashboard');
-    await loadAssessmentDetails(chosen);
+    // El historial puede estar desactualizado (una evaluación en curso aparece sin puntajes):
+    // se pide el detalle actual y, si falla, se usa el que ya hay.
+    const fresh = await getAssessment(id).catch(() => chosen);
+    await loadAssessmentDetails(fresh);
   }
 
   function handleLogout() {
