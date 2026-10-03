@@ -1903,8 +1903,11 @@ sección registra lo que se cambió.
 - `ID-01` compara el inventario documentado con los **tipos** de Terraform buscando el texto del tipo
   (`aws_db_instance`) en la lista de activos: un inventario en prosa ("la base de datos de clientes") no
   coincide y queda en 25. Los documentos de demo nombran los tipos para que la demo funcione.
-- "Analizado y sin hallazgos" (`doc.source.info`) sigue sin afectar puntajes, y `GV-04` sigue aceptando un
-  `policy_review` solo para el 75.
+- **"Analizado y sin hallazgos" no es determinista.** Al revisarlo con la caché real se vio que el modelo
+  suele devolver afirmaciones `encontrado: false` (105 frente a 39 encontradas en 40 respuestas), y las reglas
+  las convierten en 0 ("no se declara"). Si el modelo omite el tipo en vez de marcarlo, el mismo documento da
+  `evidencia_insuficiente`. Hay que elegir una de las dos lecturas y aplicarla sin depender del modelo
+  (`doc.source.info` permite hacerlo). `GV-04` sigue aceptando un `policy_review` solo para el 75.
 - Con `extract_v2` la caché del golden set (§43) ya no aplica: la próxima corrida de `eval-ai` hace llamadas
   reales.
 
