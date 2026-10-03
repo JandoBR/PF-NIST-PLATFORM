@@ -95,7 +95,7 @@ def process_message(
         # Antes de marcar el job como completado: que la evaluacion refrescada ya exista cuando el
         # cliente que sondea vea "completado" (asi aparece en el historial enseguida).
         _maybe_refresh_maturity(session, methodology, redis_client, result)
-        job_service.mark_done(session, job)
+        job_service.mark_done(session, job, result.summary())
     except Exception as exc:  # noqa: BLE001
         logger.exception("Job %s (org %s) fallo", job.id, message.get("org_id"))
         job_service.mark_failed(session, job, str(exc))

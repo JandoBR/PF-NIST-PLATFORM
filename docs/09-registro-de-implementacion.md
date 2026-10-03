@@ -1660,3 +1660,22 @@ la evidencia operativa siempre `surveillance:org`, así que no se podía saber q
 
 **Verificación:** backend 6 tests nuevos (`test_event_source.py` y la migración) + `ruff check` limpio.
 
+## 51. FN-03: la ingesta informa eventos nuevos vs ya existentes
+
+Al volverse asíncrona la ingesta (§16), `POST /orgs/{id}/events` devuelve solo `job_id` y la UI perdió el
+detalle de cuánto era nuevo; lo aproximaba comparando el total de incidentes antes y después.
+
+- **`jobs.resultado`** (JSON, nullable; migración `f1b6d2a85c37`): resumen de lo que hizo el job al terminar.
+  Hoy lo llena `worker-logs` con `IngestResult.summary()`: `eventos_leidos`, `eventos_nuevos`,
+  `eventos_existentes` (mismo `event_id` en el mismo scope = ya estaba, no se duplica), `patrones_nuevos`,
+  `incidentes_nuevos` e `incidentes_actualizados`. `None` mientras corre, si falla, y en `assessment_run`.
+  `JobOut` lo expone en `GET /jobs/{id}` y `GET /jobs`.
+- **UI:** el mensaje tras ingerir sale de `job.resultado` ("6 eventos nuevos · 1 incidente nuevo", o "0 eventos
+  nuevos · 6 ya existían" al reingerir el mismo archivo); la vista Actividad muestra el mismo resumen en cada
+  ingesta completada. La CLI imprime "N nuevos, M ya existían".
+- **Por qué en el job y no en la respuesta del POST:** el POST encola y responde antes de que haya algo que
+  contar; el resultado solo existe cuando el worker termina, y el job es lo que el cliente ya sondea.
+
+**Verificación:** backend 4 tests nuevos (resumen de la ingesta y de la reingesta, resultado en el job, job
+fallido sin resultado, API, migración) + `ruff check` limpio; frontend `typecheck`, `lint` y `build` limpios.
+

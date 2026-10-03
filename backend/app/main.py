@@ -237,7 +237,10 @@ def cmd_events(args: argparse.Namespace) -> None:
     client = _build_ai_client_if_needed(args.ai)
     result = svc.ingest_events(session, methodology, args.org, args.jsonl, ai_client=client)
 
-    print(f"Eventos leidos: {result.eventos_ingeridos}")
+    print(
+        f"Eventos leidos: {result.eventos_ingeridos} "
+        f"({result.eventos_nuevos} nuevos, {result.eventos_existentes} ya existian)"
+    )
     if not result.nuevos_incidentes and not result.incidentes_actualizados:
         print("Sin disparadores: ningun incidente nuevo ni actualizado.")
         return

@@ -42,6 +42,15 @@ def test_process_message_ingests_events_and_opens_an_incident(db_session, method
 
     db_session.refresh(job)
     assert job.estado == "completado"
+    # FN-03: el job guarda que hizo (nuevos vs ya existentes), ya que la API devuelve solo `job_id`.
+    assert job.resultado == {
+        "eventos_leidos": 6,
+        "eventos_nuevos": 6,
+        "eventos_existentes": 0,
+        "patrones_nuevos": 1,
+        "incidentes_nuevos": 1,
+        "incidentes_actualizados": 0,
+    }
 
     incidents = svc.list_incidents(db_session, org.nombre)
     assert len(incidents) == 1
@@ -168,3 +177,34 @@ def test_logs_worker_fails_a_job_with_a_newer_message_version(db_session, method
     db_session.refresh(job)
     assert job.estado == "fallido" and "schema_version=99" in job.error
     assert job.tomado_en is None
+
+
+def test_reingesting_reports_zero_new_events_in_the_job_result(db_session, methodology):
+    org = svc.get_or_create_organization(db_session, "Empresa Reingesta")
+    db_session.commit()
+    mensaje = {
+        "org_id": org.id,
+        "org_nombre": org.nombre,
+        "jsonl_path": str(SCENARIOS / "e1b_fallos_sin_alerta.jsonl"),
+        "ai_requested": False,
+    }
+    for _ in range(2):
+        job = job_service.create_job(db_session, "event_ingest", org_id=org.id)
+        worker_logs.process_message(db_session, methodology, {"job_id": job.id, **mensaje})
+
+    db_session.refresh(job)
+    assert job.resultado["eventos_nuevos"] == 0 and job.resultado["eventos_existentes"] == 6
+    assert job.resultado["patrones_nuevos"] == 0 and job.resultado["incidentes_nuevos"] == 0
+
+
+def test_a_failed_ingest_has_no_result(db_session, methodology):
+    job = job_service.create_job(db_session, "event_ingest")
+
+    worker_logs.process_message(
+        db_session,
+        methodology,
+        {"job_id": job.id, "org_nombre": "x", "jsonl_path": "/no/existe.jsonl"},
+    )
+
+    db_session.refresh(job)
+    assert job.estado == "fallido" and job.resultado is None

@@ -152,3 +152,14 @@ def test_list_jobs_reaps_stale_jobs_and_fails_the_linked_assessment(
 
 def test_list_jobs_requires_a_session(anon_client):
     assert anon_client.get("/jobs").status_code == 401
+
+
+def test_job_result_is_exposed_by_the_api(db_session, api_client, auth_user):
+    job = job_service.create_job(db_session, "event_ingest", org_id=auth_user.org_id)
+    job_service.mark_done(db_session, job, {"eventos_nuevos": 4, "eventos_existentes": 2})
+
+    assert api_client.get(f"/jobs/{job.id}").json()["resultado"] == {
+        "eventos_nuevos": 4,
+        "eventos_existentes": 2,
+    }
+    assert api_client.get("/jobs").json()[0]["resultado"]["eventos_nuevos"] == 4

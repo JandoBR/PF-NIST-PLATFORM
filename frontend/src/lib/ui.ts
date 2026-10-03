@@ -1,4 +1,4 @@
-import type { Estado, JobEstado } from '@/lib/types';
+import type { Estado, IngestJobResult, JobEstado } from '@/lib/types';
 
 type Severity = 'alta' | 'media' | 'baja';
 
@@ -189,3 +189,17 @@ export const JOB_TIPO_LABEL: Record<string, string> = {
   assessment_run: 'Evaluación',
   event_ingest: 'Ingesta de eventos',
 };
+
+/** Resumen de una ingesta de eventos (FN-03): "6 eventos nuevos · 1 incidente nuevo". */
+export function describeIngest(r: IngestJobResult): string {
+  const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+  const partes = [
+    plural(r.eventos_nuevos, 'evento nuevo', 'eventos nuevos'),
+    r.eventos_existentes > 0 ? `${r.eventos_existentes} ya existían` : null,
+    r.incidentes_nuevos > 0 ? plural(r.incidentes_nuevos, 'incidente nuevo', 'incidentes nuevos') : null,
+    r.incidentes_actualizados > 0
+      ? plural(r.incidentes_actualizados, 'incidente actualizado', 'incidentes actualizados')
+      : null,
+  ];
+  return partes.filter(Boolean).join(' · ');
+}

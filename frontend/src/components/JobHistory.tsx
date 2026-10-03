@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, ArrowLeft, ExternalLink, Loader2, RefreshCw, RotateCcw } from 'lucide-react';
 import { listJobs, retryJob } from '@/lib/api';
 import type { JobEstado, JobOut } from '@/lib/types';
-import { JOB_ESTADO_META, JOB_TIPO_LABEL } from '@/lib/ui';
+import { JOB_ESTADO_META, JOB_TIPO_LABEL, describeIngest } from '@/lib/ui';
 
 interface Props {
   onClose: () => void;
@@ -136,7 +136,12 @@ export function JobHistory({ onClose, onOpenAssessment, openableIds }: Props) {
                     {meta.label}
                     {job.estado === 'en_progreso' ? ` · ${job.progreso}%` : ''}
                   </span>
-                  <div className="min-w-0 flex-1 text-xs text-rose-300">{job.error}</div>
+                  <div className="min-w-0 flex-1 text-xs">
+                    {job.error && <span className="text-rose-300">{job.error}</span>}
+                    {!job.error && job.resultado && (
+                      <span className="text-slate-400">{describeIngest(job.resultado)}</span>
+                    )}
+                  </div>
                   {job.reintentable && (
                     <button
                       onClick={() => void handleRetry(job)}

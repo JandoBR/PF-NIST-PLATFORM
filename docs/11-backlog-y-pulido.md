@@ -104,8 +104,8 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 - [x] FN-01 · **Historial de jobs**. Hecho (docs/09 §45): `GET /jobs` y vista "Actividad" (botón en la cabecera, en lugar del indicador de la API).
 - [x] FN-09 · **Reintentar un job fallido** (P1). Hecho (docs/09 §46): `POST /jobs/{id}/retry` y botón
   "Reintentar". Para poder hacerlo, los jobs ahora guardan sus entradas (`jobs.payload`).
-- [ ] FN-03 · **Ingesta "nuevos vs actualizados"** (P2): la conversión a async perdió ese detalle
-  (la API devuelve solo `job_id`); recuperarlo en la respuesta o en el resultado del job.
+- [x] FN-03 · **Ingesta "nuevos vs actualizados"**. Hecho (docs/09 §51): `jobs.resultado` con eventos nuevos vs
+  ya existentes, patrones e incidentes; lo muestran la UI y la CLI.
 - [~] FN-04 · **Toggle de IA en "Reevaluar"** (P2): **obsoleto** — el botón "Reevaluar" se eliminó
   (UI-10); ya no hay dónde preguntarlo. El endpoint sigue aceptando `ai_adjust`.
 - [x] FN-05 · **Refresco automático de madurez al ingerir** (P1): `worker-logs` encola una
@@ -231,7 +231,7 @@ demostrable.
 2. ~~**OP-12** y **OP-14**~~ (hechos, docs/09 §37).
 3. ~~**OP-04 (contradicciones) + TS-03**~~ (hechos, docs/09 §38); ~~**TS-01**~~ (hecho, docs/09 §39), ~~**TS-02**~~ (hecho, docs/09 §43) y **AMP-02**:
    lo más demostrable y lo que respalda las afirmaciones del diseño.
-4. Pulido barato: **FN-03**, ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), **OP-05 + FN-08**, **OP-11** (transiciones
+4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), **OP-05 + FN-08**, **OP-11** (transiciones
    y motivo de cierre), **OP-15** (líneas), ~~OP-13~~ (hecho, docs/09 §49), **API-04** (problem+json) y
    la decisión de **CR-07**.
 

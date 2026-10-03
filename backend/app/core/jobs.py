@@ -79,8 +79,9 @@ def mark_taken(session: Session, job: Job) -> None:
     session.commit()
 
 
-def mark_done(session: Session, job: Job) -> None:
+def mark_done(session: Session, job: Job, resultado: dict | None = None) -> None:
     job.estado = "completado"
+    job.resultado = resultado
     job.progreso = 100
     job.actualizado_en = datetime.now(UTC)
     session.commit()

@@ -22,6 +22,7 @@ def test_ingesting_e1b_opens_one_incident_with_a_plan(db_session, methodology):
     )
 
     assert result.eventos_ingeridos == 6
+    assert (result.eventos_nuevos, result.eventos_existentes) == (6, 0)
     assert len(result.nuevos_incidentes) == 1
     incident = result.nuevos_incidentes[0]
     assert incident.severidad == "media"
@@ -47,6 +48,15 @@ def test_reingesting_the_same_file_does_not_duplicate_events_or_incidents(db_ses
     second = svc.ingest_events(db_session, methodology, "Empresa Repetida", path)
 
     assert second.eventos_ingeridos == 6  # el parser siempre reporta lo leido del archivo
+    assert (second.eventos_nuevos, second.eventos_existentes) == (0, 6)
+    assert second.summary() == {
+        "eventos_leidos": 6,
+        "eventos_nuevos": 0,
+        "eventos_existentes": 6,
+        "patrones_nuevos": 0,
+        "incidentes_nuevos": 0,
+        "incidentes_actualizados": 1,
+    }
     assert db_session.query(Event).filter_by(org_id=first.org_id).count() == 6  # pero no se duplica
     assert db_session.query(Incident).filter_by(org_id=first.org_id).count() == 1
     assert db_session.query(LogPatternRow).filter_by(org_id=first.org_id).count() == 1

@@ -107,6 +107,8 @@ class JobOut(BaseModel):
     creado_en: datetime
     tomado_en: datetime | None
     actualizado_en: datetime
+    #: Que hizo el job al terminar, si lo reporta: la ingesta de eventos da nuevos vs existentes.
+    resultado: dict | None = None
     #: Fallido y con las entradas guardadas (`POST /jobs/{id}/retry`, docs/11 FN-09).
     reintentable: bool = False
     #: El reintento volveria a llamar a la IA real (cuesta dinero).

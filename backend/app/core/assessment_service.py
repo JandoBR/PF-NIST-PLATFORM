@@ -771,12 +771,31 @@ def load_plans(session: Session, assessment_id: str) -> list[Plan]:
 @dataclass
 class IngestResult:
     org_id: str
+    #: Eventos leidos del archivo (nuevos + los que ya estaban).
     eventos_ingeridos: int
     nuevos_incidentes: list[Incident]
     incidentes_actualizados: list[Incident]
+    #: Eventos que no estaban ya guardados (mismo `event_id` en el mismo scope = ya existia).
+    eventos_nuevos: int = 0
     #: Patrones (`log.pattern`) realmente nuevos por scope, es decir la evidencia que consume la
     #: madurez. Reingerir el mismo archivo da 0. Alimenta el refresco automatico (docs/08 §8).
     patrones_nuevos_por_scope: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def eventos_existentes(self) -> int:
+        return self.eventos_ingeridos - self.eventos_nuevos
+
+    def summary(self) -> dict[str, int]:
+        """Resumen para `Job.resultado` (docs/11 FN-03): nuevos vs ya existentes."""
+
+        return {
+            "eventos_leidos": self.eventos_ingeridos,
+            "eventos_nuevos": self.eventos_nuevos,
+            "eventos_existentes": self.eventos_existentes,
+            "patrones_nuevos": sum(self.patrones_nuevos_por_scope.values()),
+            "incidentes_nuevos": len(self.nuevos_incidentes),
+            "incidentes_actualizados": len(self.incidentes_actualizados),
+        }
 
 
 def ingest_events(
@@ -804,6 +823,7 @@ def ingest_events(
     nuevos: list[Incident] = []
     actualizados: list[Incident] = []
     patrones_nuevos_por_scope: dict[str, int] = {}
+    eventos_nuevos = 0
 
     for scope, eventos in por_scope.items():
         ya_ingeridos = {
@@ -813,6 +833,7 @@ def ingest_events(
         for evento in eventos:
             if evento.event_id in ya_ingeridos:
                 continue  # mismo archivo reingerido: no duplicar filas append-only
+            eventos_nuevos += 1
             session.add(
                 Event(
                     org_id=org.id,
@@ -876,6 +897,7 @@ def ingest_events(
     return IngestResult(
         org_id=org.id,
         eventos_ingeridos=len(raw_events),
+        eventos_nuevos=eventos_nuevos,
         nuevos_incidentes=nuevos,
         incidentes_actualizados=actualizados,
         patrones_nuevos_por_scope=patrones_nuevos_por_scope,

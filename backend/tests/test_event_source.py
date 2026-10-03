@@ -1,4 +1,4 @@
-"""FN-07: el origen (`fuente`) de cada evento llega a `events.source_id` y a la evidencia operativa."""
+"""FN-07: el origen (`fuente`) de cada evento llega a `events.source_id` y a la evidencia."""
 
 import json
 

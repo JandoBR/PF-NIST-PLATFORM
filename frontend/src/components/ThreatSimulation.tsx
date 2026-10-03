@@ -20,7 +20,7 @@ import {
 import { DEMO_EVENT_LOGS, fetchAsFile } from '@/data/demo';
 import { ApiError, getIncidentPlans, ingestEvents, listOrgIncidents, pollJob, updateIncident } from '@/lib/api';
 import type { IncidentOut, JobEstado, Plan } from '@/lib/types';
-import { incidentEstadoMeta, incidentSeverityMeta, isIncidentClosed } from '@/lib/ui';
+import { describeIngest, incidentEstadoMeta, incidentSeverityMeta, isIncidentClosed } from '@/lib/ui';
 
 interface Props {
   orgId: string | null;
@@ -67,11 +67,10 @@ export function ThreatSimulation({ orgId, orgNombre, onIngested }: Props) {
     setError(null);
     setLastIngest(null);
     setJobEstado(null);
-    const before = incidents.length;
     try {
       // POST /orgs/{id}/events encola en worker-logs y devuelve de inmediato (docs/09 §16):
       // hay que sondear el job, y luego refrescar la lista -- ya no hay un payload sincronico
-      // con "nuevos vs actualizados", asi que se aproxima comparando el total antes/despues.
+      // con "nuevos vs actualizados": lo informa `job.resultado` (FN-03).
       const accepted = await ingestEvents(orgId, file);
       const job = await pollJob(accepted.job_id, { onTick: (j) => setJobEstado(j.estado) });
 
@@ -81,12 +80,13 @@ export function ThreatSimulation({ orgId, orgNombre, onIngested }: Props) {
       }
 
       const after = await refresh();
-      const nuevos = Math.max(0, after.length - before);
       setTab('activos');
+      // El worker informa nuevos vs ya existentes en el resultado del job (FN-03).
+      const detalle = job.resultado ? describeIngest(job.resultado) : null;
       setLastIngest(
-        nuevos > 0
-          ? `"${label}": ${nuevos} incidente(s) nuevo(s) · ${after.length} en total`
-          : `"${label}": sin incidentes nuevos · ${after.length} en total. Los eventos de este log no cumplen los disparadores; los incidentes abiertos siguen en Activos.`
+        job.resultado && job.resultado.incidentes_nuevos + job.resultado.incidentes_actualizados === 0
+          ? `"${label}": ${detalle}. Los eventos de este log no cumplen los disparadores; los incidentes abiertos siguen en Activos.`
+          : `"${label}": ${detalle ?? 'ingesta completada'} · ${after.length} incidente(s) en total`
       );
       onIngested?.();
     } catch (err) {

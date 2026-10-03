@@ -273,6 +273,9 @@ class Job(Base):
     #: Mensaje de la cola sin `job_id` (rutas de archivos, flags de IA, contexto): lo que hace falta
     #: para reencolar un job fallido (docs/11 FN-09). `None` en jobs anteriores a FN-09.
     payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    #: Resumen de lo que hizo el job al terminar (FN-03): hoy, la ingesta de eventos (nuevos vs ya
+    #: existentes). `None` mientras corre, si falla o si el tipo de job no reporta resultado.
+    resultado: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     assessment_id: Mapped[str | None] = mapped_column(
         ForeignKey("assessments.id"), nullable=True
     )

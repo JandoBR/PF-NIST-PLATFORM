@@ -77,3 +77,14 @@ def test_migrated_log_patterns_store_their_event_origins(tmp_path, monkeypatch):
     inspector = inspect(create_engine(f"sqlite:///{db_path}"))
     columns = {c["name"]: c for c in inspector.get_columns("log_patterns")}
     assert columns["fuentes"]["nullable"] is True  # patrones anteriores a FN-07: sin origen
+
+
+def test_migrated_jobs_table_stores_the_result(tmp_path, monkeypatch):
+    db_path = tmp_path / "migrated.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    _upgrade_head()
+
+    inspector = inspect(create_engine(f"sqlite:///{db_path}"))
+    columns = {c["name"]: c for c in inspector.get_columns("jobs")}
+    assert columns["resultado"]["nullable"] is True

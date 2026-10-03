@@ -146,6 +146,15 @@ export interface IncidentOut {
   actualizado_en: string;
 }
 
+export interface IngestJobResult {
+  eventos_leidos: number;
+  eventos_nuevos: number;
+  eventos_existentes: number;
+  patrones_nuevos: number;
+  incidentes_nuevos: number;
+  incidentes_actualizados: number;
+}
+
 export interface IngestEventsResponse {
   org_id: string;
   eventos_ingeridos: number;
@@ -184,6 +193,8 @@ export interface JobOut {
   creado_en: string;
   tomado_en: string | null;
   actualizado_en: string;
+  /** Qué hizo el job al terminar (ingesta de eventos: nuevos vs ya existentes, FN-03). */
+  resultado: IngestJobResult | null;
   /** Fallido y con las entradas guardadas: se puede reintentar (FN-09). */
   reintentable: boolean;
   /** El reintento volvería a llamar a la IA real (cuesta dinero). */
