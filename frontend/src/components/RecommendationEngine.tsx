@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Link2,
   ChevronRight,
+  Info,
 } from 'lucide-react';
 import { ApiError, createPlans, updatePlanEstado } from '@/lib/api';
 import type { Finding, Plan, PlanEstado } from '@/lib/types';
@@ -29,12 +30,14 @@ export function RecommendationEngine({
   plans,
   onPlansUpdated,
 }: Props) {
-  // Las contradicciones (docs/02 §5) no puntúan ni generan plan: se muestran aparte.
-  const findings = useMemo(() => allFindings.filter((f) => f.tipo !== 'contradiccion'), [allFindings]);
+  // Las contradicciones (docs/02 §5) y las limitaciones (OP-04) no puntúan ni generan plan: se
+  // muestran aparte de las brechas.
+  const findings = useMemo(() => allFindings.filter((f) => f.tipo === 'brecha'), [allFindings]);
   const contradictions = useMemo(
     () => allFindings.filter((f) => f.tipo === 'contradiccion'),
     [allFindings]
   );
+  const limitations = useMemo(() => allFindings.filter((f) => f.tipo === 'limitacion'), [allFindings]);
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [generating, setGenerating] = useState<'plantilla' | 'ia' | null>(null);
   const [savingPlan, setSavingPlan] = useState<string | null>(null);
@@ -92,6 +95,7 @@ export function RecommendationEngine({
   return (
     <div className="space-y-6">
       {contradictions.length > 0 && <ContradictionsCard items={contradictions} />}
+      {limitations.length > 0 && <LimitationsCard items={limitations} />}
       <div className="card p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -383,6 +387,35 @@ function ContradictionsCard({ items }: { items: Finding[] }) {
             </li>
           );
         })}
+      </ul>
+    </div>
+  );
+}
+
+function LimitationsCard({ items }: { items: Finding[] }) {
+  return (
+    <div className="card border-sky-500/20 p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <Info className="h-4 w-4 text-sky-300" />
+        <h3 className="text-sm font-semibold text-white">Limitaciones del análisis ({items.length})</h3>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        Lo que el análisis no pudo determinar: no son brechas ni cambian el puntaje, pero esos criterios hay que
+        leerlos con cautela. El puntaje solo refleja lo que sí se pudo resolver.
+      </p>
+      <ul className="space-y-2">
+        {items.map((f) => (
+          <li
+            key={`${f.criterion_id}-${f.titulo}`}
+            className="rounded-lg border border-white/[0.06] bg-ink-900/40 p-3"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-200">{f.titulo}</span>
+              <span className="text-[11px] text-slate-600">{f.criterion_id}</span>
+            </div>
+            {f.detalle && <p className="mt-1 text-xs leading-relaxed text-slate-400">{f.detalle}</p>}
+          </li>
+        ))}
       </ul>
     </div>
   );

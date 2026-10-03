@@ -44,6 +44,7 @@ _TIER_LABELS = ["Parcial", "Informado sobre riesgos", "Repetible", "Adaptativo"]
 _SEVERIDAD_ORDEN = {"alta": 0, "media": 1, "baja": 2}
 _PRIORIDAD_ORDEN = {"alta": 0, "media": 1, "baja": 2}
 _MAX_PLANES = 10
+_MAX_LIMITACIONES = 10
 
 _INK = colors.HexColor("#1f2933")
 _MUTED = colors.HexColor("#616e7c")
@@ -254,6 +255,24 @@ def build_executive_report(
         for c in contradicciones:
             story.append(_p(f"{c.criterion_id} ({c.severidad}): {c.detalle or c.titulo}", _BODY))
             story.append(Spacer(1, 3))
+
+    limitaciones = [f for f in findings if f.tipo == "limitacion"]
+    if limitaciones:
+        story += [
+            Spacer(1, 8),
+            _p("Limitaciones del analisis", _CELL_BOLD),
+            _p(
+                "Lo que no se pudo determinar. No son brechas ni cambian el puntaje, pero esos "
+                "criterios deben leerse con cautela.",
+                _SMALL,
+            ),
+        ]
+        for f in limitaciones[:_MAX_LIMITACIONES]:
+            story.append(_p(f"{f.criterion_id}: {f.titulo}", _BODY))
+        if len(limitaciones) > _MAX_LIMITACIONES:
+            story.append(
+                _p(f"... y {len(limitaciones) - _MAX_LIMITACIONES} mas en la plataforma.", _SMALL)
+            )
 
     story.append(_p("Plan de accion recomendado", _H2))
     abiertos = sorted(

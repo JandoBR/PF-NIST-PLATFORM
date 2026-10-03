@@ -158,10 +158,8 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 
 ## D. Simplificaciones activas (docs/09 §11) — pendientes del prototipo
 
-- [~] OP-04 · **Transiciones de estado de incidente: hecho** (`PATCH /incidents/{id}`, docs/09 §24) y
-  **hallazgos `contradiccion`: hecho** (docs/09 §38). Queda solo `limitacion` (P2, opcional): un
-  hallazgo por recurso `unknown`/expresión sin resolver; hoy esa información ya está en la
-  explicación del criterio (CR-06).
+- [x] OP-04 · **Transiciones de estado de incidente** (`PATCH /incidents/{id}`, docs/09 §24), **hallazgos
+  `contradiccion`** (docs/09 §38) y **hallazgos `limitacion`** (docs/09 §56). Completo.
 - [x] OP-05 · Trigger D2 (`alert_raised` sin `incident_triaged`). Hecho (docs/09 §53).
 - [x] OP-11 · **Plan/incidente** (lo útil). Hecho (docs/09 §52): transiciones de estado validadas y motivo de cierre
   obligatorio. Quedan fuera, por opcionales, `brecha_ref` en el plan y la "condición de cierre".

@@ -1773,3 +1773,27 @@ FastAPI, y la validación con `detail` como lista de objetos.
 **Verificación:** backend 6 tests nuevos (`test_api_errors.py`: 404, 409, 401, 422, la cabecera en varias rutas y que
 el 500 no filtra) + `ruff check` limpio.
 
+## 56. OP-04 (resto): hallazgos de tipo `limitacion`
+
+Era lo único que quedaba de OP-04. Cuando una expresión de Terraform no se resuelve (`var.x`, funciones, módulos)
+o un atributo falta, el criterio ya lo decía en su explicación (CR-06), pero no era un hallazgo: no aparecía junto
+a las brechas y las contradicciones, ni en el informe.
+
+- **Qué es:** un hallazgo `limitacion` dice **qué parte de un resultado hay que leer con cautela y por qué**. No
+  puntúa (`score: null`), no genera plan y no es una brecha; severidad fija `baja`, porque mide la certeza del
+  análisis y no la gravedad de lo evaluado.
+- **Derivación** (`recommendations/limitations.py`): de la evidencia que el propio criterio citó en su resultado.
+  Una `tf.expression.unresolved` da "{recurso}.{atributo} sin resolver" con la expresión y el motivo; una evidencia
+  `tf.*` con `estado: unknown` da "{recurso}: estado desconocido". Un hallazgo **por (criterio, evidencia)**: la
+  misma expresión puede condicionar a dos criterios (`enable_logging` → `PR-06` y `DE-01`) y cada uno la lee
+  distinto. Un recurso desconocido *porque* una expresión no se resolvió no se repite: ya lo explica la expresión.
+- **Se pide con la evidencia** (`derive_findings(…, evidence)`); la generación de planes no la pasa, así que las
+  limitaciones nunca producen un plan.
+- **UI:** tarjeta "Limitaciones del análisis" en Recomendaciones, aparte de la de contradicciones; las brechas
+  (la lista y los planes) siguen filtrando por `tipo == 'brecha'`. El informe PDF las lista (hasta 10).
+- **No incluido:** documentos escaneados sin capa de texto o chunks omitidos por el tope (`chunks_omitidos`) tampoco
+  son hallazgos todavía; el alcance son las limitaciones del parser de Terraform, que era lo que el backlog pedía.
+
+**Verificación:** backend 7 tests nuevos (`test_limitation_findings.py` y el PDF) + `ruff check` limpio; frontend
+`typecheck`, `lint` y `build` limpios.
+

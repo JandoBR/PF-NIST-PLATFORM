@@ -2,10 +2,11 @@
 evidencia"). No se persisten: son tan baratos de recalcular desde `criterion_results` como los
 agregados y el Tier (misma decision que ahi).
 
-Tipos: `brecha` (score bajo; unica que genera plan) y `contradiccion` (tecnico vs documental o
-documento vs documento, docs/02 §5; ver `contradictions.py`, solo si se pasa la evidencia). La
-`limitacion` queda para una ampliacion posterior. No se calcula criticidad de activo todavia, asi
-que la severidad de una brecha viene solo del score.
+Tipos: `brecha` (score bajo; unica que genera plan), `contradiccion` (tecnico vs documental o
+documento vs documento, docs/02 §5; ver `contradictions.py`) y `limitacion` (expresion sin resolver
+o recurso desconocido que condiciona un criterio; ver `limitations.py`). Las dos ultimas solo se
+derivan si se pasa la evidencia, no puntuan y no generan plan. No se calcula criticidad de activo
+todavia, asi que la severidad de una brecha viene solo del score.
 """
 
 from __future__ import annotations
@@ -69,6 +70,8 @@ def derive_findings(
         )
     if evidence is not None:
         from app.recommendations.contradictions import detect_contradictions  # evita ciclo
+        from app.recommendations.limitations import detect_limitations
 
         findings.extend(detect_contradictions(evidence))
+        findings.extend(detect_limitations(methodology, results, evidence))
     return findings

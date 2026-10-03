@@ -116,3 +116,24 @@ def test_executive_report_lists_open_plans_and_skips_done_ones(
     plan_section = text.split("Plan de accion recomendado")[1].split("Resultados por criterio")[0]
     assert "CRI-PR-01" in plan_section  # abierto
     assert "CRI-PR-05" not in plan_section  # ya hecho
+
+
+def test_executive_report_lists_the_limitations(
+    api_client, db_session, methodology, fake_redis, tmp_path
+):
+    archivo = tmp_path / "main.tf"
+    archivo.write_text('resource "aws_db_instance" "db" {\n  storage_encrypted = var.cifrado\n}\n')
+    with archivo.open("rb") as fh:
+        accepted = api_client.post(
+            "/assessments",
+            data={"scope": "entorno:produccion"},
+            files={"terraform_files": ("main.tf", fh, "text/plain")},
+        ).json()
+    from tests.conftest import run_pending_jobs
+
+    run_pending_jobs(db_session, methodology, fake_redis)
+
+    text = _norm(_text(api_client.get(f"/assessments/{accepted['assessment_id']}/report.pdf")))
+
+    assert "Limitaciones del analisis" in text
+    assert "storage_encrypted sin resolver" in text
