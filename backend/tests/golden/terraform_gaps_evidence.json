@@ -3,7 +3,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 9,
+      "line_start": 1
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -21,7 +23,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 9,
+      "line_start": 1
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -37,7 +41,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 9,
+      "line_start": 1
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -55,7 +61,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 21,
+      "line_start": 15
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -72,7 +80,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 9,
+      "line_start": 1
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -90,7 +100,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 13,
+      "line_start": 11
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -108,7 +120,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 21,
+      "line_start": 15
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -126,7 +140,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 39,
+      "line_start": 23
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -144,7 +160,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 39,
+      "line_start": 23
     },
     "modality": "declarada",
     "scope": "entorno:produccion",

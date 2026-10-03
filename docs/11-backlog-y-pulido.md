@@ -175,10 +175,8 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 - [x] OP-14 · **Reproducibilidad**. Hecho (docs/09 §37): `assessments.reproducibility` guarda
   versión de adaptador y parser por fuente y, si la IA participó, modelo y versión de prompt de
   extracción/ajuste/planes (docs/01 §10). Expuesto en `GET /assessments/{id}`.
-- [ ] OP-15 · **Contrato menor de evidencia** (P2; lo útil es `line_start/line_end`, el resto es
-  cosmético): llenar `Locator.line_start/line_end`, registrar
-  `resuelto_por: parser`, registrar la limitación de recursos Terraform no soportados y alinear
-  `created_by` (docs/01 §2/§5, docs/02 §4).
+- [x] OP-15 · **Contrato menor de evidencia**. Hecho (docs/09 §54): `line_start/line_end` en Terraform y Ansible, limitación
+  de recursos no soportados y `created_by` alineado. `resuelto_por` se descartó (el adaptador no resuelve variables a propósito).
 
 > Descartados para el prototipo (OP-02, OP-03, OP-06…OP-10): ver **docs/12**.
 
@@ -227,7 +225,7 @@ demostrable.
 2. ~~**OP-12** y **OP-14**~~ (hechos, docs/09 §37).
 3. ~~**OP-04 (contradicciones) + TS-03**~~ (hechos, docs/09 §38); ~~**TS-01**~~ (hecho, docs/09 §39), ~~**TS-02**~~ (hecho, docs/09 §43) y **AMP-02**:
    lo más demostrable y lo que respalda las afirmaciones del diseño.
-4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), ~~OP-05 + FN-08~~ (hechos, docs/09 §53), ~~OP-11~~ (hecho, docs/09 §52), **OP-15** (líneas), ~~OP-13~~ (hecho, docs/09 §49), **API-04** (problem+json) y
+4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), ~~OP-05 + FN-08~~ (hechos, docs/09 §53), ~~OP-11~~ (hecho, docs/09 §52), ~~OP-15~~ (hecho, docs/09 §54), ~~OP-13~~ (hecho, docs/09 §49), **API-04** (problem+json) y
    la decisión de **CR-07**.
 
 > **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, AMP-02, FN-01, FN-09, API-03, UI-01…UI-10, FN-05, FN-06 y la parte de estado de

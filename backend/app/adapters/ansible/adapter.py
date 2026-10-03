@@ -61,7 +61,40 @@ def _any_module_key(task: dict) -> str | None:
 
 
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
-ADAPTER_VERSION = "1"
+#: v2: el locator trae `line_start`/`line_end` de la tarea (docs/11 OP-15).
+ADAPTER_VERSION = "2"
+
+
+def _node_lines(node: yaml.Node, lineas: list[str]) -> tuple[int, int]:
+    """Lineas (1-based, inclusivas) que ocupa un nodo YAML.
+
+    PyYAML deja `end_mark` donde empieza el token siguiente, no donde termina el nodo: se retrocede
+    hasta la ultima linea con contenido (sin contar blancos ni comentarios sueltos)."""
+
+    inicio = node.start_mark.line
+    fin = node.end_mark.line
+    antes = lineas[fin][: node.end_mark.column] if fin < len(lineas) else ""
+    if fin >= len(lineas) or not antes.strip():
+        fin -= 1  # el nodo termina antes de la linea donde empieza el siguiente token
+    while fin > inicio and (not lineas[fin].strip() or lineas[fin].lstrip().startswith("#")):
+        fin -= 1
+    return inicio + 1, max(fin, inicio) + 1
+
+
+def _task_nodes(root: yaml.Node | None) -> list[list[yaml.Node]]:
+    """Por cada play (en el orden del documento), los nodos de sus tareas."""
+
+    if not isinstance(root, yaml.SequenceNode):
+        return []
+    plays: list[list[yaml.Node]] = []
+    for play in root.value:
+        tareas: list[yaml.Node] = []
+        if isinstance(play, yaml.MappingNode):
+            for clave, valor in play.value:
+                if clave.value == "tasks" and isinstance(valor, yaml.SequenceNode):
+                    tareas = list(valor.value)
+        plays.append(tareas)
+    return plays
 
 
 class AnsibleAdapter:
@@ -72,6 +105,8 @@ class AnsibleAdapter:
         self.scope = scope
         self.created_by = created_by
         self._observed_at = datetime.now(UTC)
+        #: Lineas de la tarea que se esta procesando; `_make_evidence` las pone en el locator.
+        self._lines: tuple[int, int] | None = None
 
     @staticmethod
     def list_files(path: Path) -> list[Path]:
@@ -87,19 +122,27 @@ class AnsibleAdapter:
         return evidence
 
     def _parse_file(self, file_path: Path) -> list[EvidenceInstance]:
-        with file_path.open("r", encoding="utf-8") as fh:
-            plays = yaml.safe_load(fh)
+        text = file_path.read_text(encoding="utf-8")
+        plays = yaml.safe_load(text)
         if not isinstance(plays, list):
             return []
+        nodos = _task_nodes(yaml.compose(text))
+        lineas = text.splitlines()
 
+        self._lines = None
         evidence = [self._playbook_present(file_path, plays)]
-        for play in plays:
+        for indice, play in enumerate(plays):
             if not isinstance(play, dict):
                 continue
-            for task in play.get("tasks") or []:
+            nodos_play = nodos[indice] if indice < len(nodos) else []
+            tareas = play.get("tasks") or []
+            for posicion, task in enumerate(tareas):
                 if not isinstance(task, dict):
                     continue
+                coincide = posicion < len(nodos_play) and len(nodos_play) == len(tareas)
+                self._lines = _node_lines(nodos_play[posicion], lineas) if coincide else None
                 evidence.extend(self._evidence_for_task(file_path, task))
+        self._lines = None
         return evidence
 
     def _playbook_present(self, file_path: Path, plays: list) -> EvidenceInstance:
@@ -212,7 +255,11 @@ class AnsibleAdapter:
             scope=self.scope,
             value=value,
             source_id=self.source_id,
-            locator=Locator(file=str(file_path)),
+            locator=Locator(
+                file=str(file_path),
+                line_start=self._lines[0] if self._lines else None,
+                line_end=self._lines[1] if self._lines else None,
+            ),
             observed_at=self._observed_at,
             modality=Modality.DECLARADA,
             limitations=limitations,

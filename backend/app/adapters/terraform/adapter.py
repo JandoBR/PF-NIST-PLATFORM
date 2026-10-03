@@ -117,6 +117,59 @@ def _literal_list(value: Any) -> list[Any]:
     return [item for item in value if not _is_expression(item)]
 
 
+_RESOURCE_START = re.compile(r'^\s*resource\s+"([^"]+)"\s+"([^"]+)"\s*\{')
+
+
+def _brace_delta(line: str) -> int:
+    """Llaves abiertas menos cerradas en una linea, sin contar las de strings ni comentarios."""
+
+    delta, in_string, i = 0, False, 0
+    while i < len(line):
+        char = line[i]
+        if in_string:
+            if char == "\\":
+                i += 1
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == "#" or line.startswith("//", i):
+            break
+        elif char == "{":
+            delta += 1
+        elif char == "}":
+            delta -= 1
+        i += 1
+    return delta
+
+
+def resource_line_ranges(text: str) -> dict[tuple[str, str], tuple[int, int]]:
+    """(tipo, nombre) -> (linea inicial, linea final), 1-based, de cada bloque `resource`.
+
+    `python-hcl2` no entrega posiciones, asi que se calculan sobre el texto: el bloque empieza en la
+    linea `resource "tipo" "nombre" {` y termina donde se cierra su llave (docs/11 OP-15)."""
+
+    lineas = text.splitlines()
+    rangos: dict[tuple[str, str], tuple[int, int]] = {}
+    i = 0
+    while i < len(lineas):
+        inicio = _RESOURCE_START.match(lineas[i])
+        if inicio is None:
+            i += 1
+            continue
+        profundidad, fin = 0, i
+        for j in range(i, len(lineas)):
+            profundidad += _brace_delta(lineas[j])
+            if profundidad <= 0:
+                fin = j
+                break
+        else:
+            fin = len(lineas) - 1  # bloque sin cerrar: hasta el final del archivo
+        rangos[(inicio.group(1), inicio.group(2))] = (i + 1, fin + 1)
+        i = fin + 1
+    return rangos
+
+
 def _strip_meta(block: dict) -> dict:
     return {k: v for k, v in block.items() if k != "__is_block__"}
 
@@ -124,7 +177,9 @@ def _strip_meta(block: dict) -> dict:
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
 #: v2: emite tf.expression.unresolved y no convierte expresiones en valores (CR-06).
 #: v3: emite tf.db_exposure.config (publicly_accessible).
-ADAPTER_VERSION = "3"
+#: v4: el locator trae `line_start`/`line_end` del bloque `resource`, y `tf.resource.present` de un tipo
+#: no soportado declara la limitacion (docs/11 OP-15).
+ADAPTER_VERSION = "4"
 
 
 class TerraformAdapter:
@@ -135,6 +190,8 @@ class TerraformAdapter:
         self.scope = scope
         self.created_by = created_by
         self._observed_at = datetime.now(UTC)
+        #: Lineas del recurso que se esta procesando; `_make_evidence` las pone en el locator.
+        self._lines: tuple[int, int] | None = None
 
     @staticmethod
     def list_files(path: Path) -> list[Path]:
@@ -153,13 +210,15 @@ class TerraformAdapter:
 
     def _parse_file(self, file_path: Path) -> list[EvidenceInstance]:
         options = SerializationOptions(strip_string_quotes=True)
-        with file_path.open("r", encoding="utf-8") as fh:
-            raw = hcl2.load(fh, serialization_options=options)
+        text = file_path.read_text(encoding="utf-8")
+        raw = hcl2.loads(text, serialization_options=options)
 
         resources = self._flatten_resources(raw)
+        rangos = resource_line_ranges(text)
         evidence: list[EvidenceInstance] = []
 
         for resource_type, local_name, attrs in resources:
+            self._lines = rangos.get((resource_type, local_name))
             evidence.append(self._resource_present_evidence(file_path, resource_type, local_name))
             if resource_type not in _HANDLED_TYPES:
                 continue
@@ -190,6 +249,11 @@ class TerraformAdapter:
             subject_ref=f"{resource_type}.{local_name}",
             value={"tipo": resource_type, "nombre": local_name, "entorno": None},
             file_path=file_path,
+            limitations=(
+                None
+                if resource_type in _HANDLED_TYPES
+                else "tipo de recurso no soportado: se registra su presencia, no sus atributos"
+            ),
         )
 
     def _evidence_for_resource(
@@ -550,7 +614,11 @@ class TerraformAdapter:
             scope=self.scope,
             value=value,
             source_id=self.source_id,
-            locator=Locator(file=str(file_path)),
+            locator=Locator(
+                file=str(file_path),
+                line_start=self._lines[0] if self._lines else None,
+                line_end=self._lines[1] if self._lines else None,
+            ),
             observed_at=self._observed_at,
             modality=Modality.DECLARADA,
             limitations=limitations,

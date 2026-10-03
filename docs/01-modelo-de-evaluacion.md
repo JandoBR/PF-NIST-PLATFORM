@@ -68,7 +68,7 @@ Cada observación concreta es una instancia con estos campos:
 | `observed_at` | Momento de la observación (o tiempo de evento). |
 | `modality` | `declarada` \| `documental` \| `operativa` \| `contexto`. |
 | `limitations` | Información incompleta, cobertura parcial, expresión no resuelta. |
-| `created_by` | `adapter:terraform` \| `adapter:ansible` \| `ai:extraction` \| `manual`. |
+| `created_by` | `adapter:terraform` \| `adapter:ansible` \| `ai:extraction` \| `surveillance` (evidencia operativa de eventos) \| `manual`. |
 
 Las instancias **nunca se sobrescriben**. Una nueva recolección crea instancias nuevas en una evaluación nueva.
 

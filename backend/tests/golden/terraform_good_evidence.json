@@ -3,7 +3,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 10,
+      "line_start": 1
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -21,7 +23,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 10,
+      "line_start": 1
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -37,7 +41,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 10,
+      "line_start": 1
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -55,7 +61,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 25,
+      "line_start": 16
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -73,7 +81,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 74,
+      "line_start": 69
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -91,7 +101,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 33,
+      "line_start": 27
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -108,7 +120,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 74,
+      "line_start": 69
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -126,7 +140,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 10,
+      "line_start": 1
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -144,7 +160,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 14,
+      "line_start": 12
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -162,7 +180,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 33,
+      "line_start": 27
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -180,7 +200,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 25,
+      "line_start": 16
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -198,7 +220,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 41,
+      "line_start": 35
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -216,7 +240,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 67,
+      "line_start": 43
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -234,7 +260,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 67,
+      "line_start": 43
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -270,7 +298,9 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
-      "file": "main.tf"
+      "file": "main.tf",
+      "line_end": 41,
+      "line_start": 35
     },
     "modality": "declarada",
     "scope": "entorno:produccion",

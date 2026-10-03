@@ -143,7 +143,7 @@ Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_declared`, 
 
 | Situación | Tratamiento |
 |---|---|
-| Atributo con expresión simple resoluble (variable local literal) | Se resuelve y se registra `resuelto_por: parser`. |
+| Atributo con expresión simple resoluble (variable local literal) | **No se resuelve** (decisión deliberada, docs/09 §54): una variable cuenta como expresión no resuelta (fila siguiente) y el criterio decide con `unknown`. Lo único que el adaptador resuelve es la referencia directa de un recurso S3 de configuración a su `aws_s3_bucket` local; la evidencia queda ligada al bucket (`subject_ref`), sin marca aparte. |
 | Atributo con función, `for_each`, `count`, módulo o referencia remota | `unknown` + `tf.expression.unresolved` con motivo (emitido por el adaptador sobre los atributos que deciden un puntaje; docs/09 §36). |
 | Ansible con `command`, `shell`, plantilla compleja, `when` no evaluable | `an.task.uninterpreted`. |
 | Atributo simplemente ausente | **No** se asume `false`; produce `unknown` con motivo `atributo_ausente`, salvo default documentado del proveedor. |

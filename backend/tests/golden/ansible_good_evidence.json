@@ -3,7 +3,9 @@
     "created_by": "adapter:ansible",
     "limitations": null,
     "locator": {
-      "file": "hardening.yml"
+      "file": "hardening.yml",
+      "line_end": 20,
+      "line_start": 16
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -41,7 +43,9 @@
     "created_by": "adapter:ansible",
     "limitations": null,
     "locator": {
-      "file": "hardening.yml"
+      "file": "hardening.yml",
+      "line_end": 26,
+      "line_start": 22
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -58,7 +62,9 @@
     "created_by": "adapter:ansible",
     "limitations": null,
     "locator": {
-      "file": "hardening.yml"
+      "file": "hardening.yml",
+      "line_end": 31,
+      "line_start": 28
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -80,7 +86,9 @@
     "created_by": "adapter:ansible",
     "limitations": null,
     "locator": {
-      "file": "hardening.yml"
+      "file": "hardening.yml",
+      "line_end": 14,
+      "line_start": 10
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -103,7 +111,9 @@
     "created_by": "adapter:ansible",
     "limitations": null,
     "locator": {
-      "file": "hardening.yml"
+      "file": "hardening.yml",
+      "line_end": 8,
+      "line_start": 4
     },
     "modality": "declarada",
     "scope": "entorno:produccion",

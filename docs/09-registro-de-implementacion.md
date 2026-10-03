@@ -1728,3 +1728,28 @@ descartaban. Ahora D2 es el consumidor del primero y el segundo queda documentad
 **Verificación:** backend 12 tests nuevos (D2 dentro/fuera/antes del plazo y sin alerta, el escenario E1-c con su
 plan, los dos patrones) + `ruff check` limpio. Los golden files no cambian.
 
+## 54. OP-15: la evidencia apunta a líneas concretas
+
+`Locator.line_start/line_end` existían y nunca se llenaban: la evidencia de Terraform y Ansible solo decía "en
+este archivo". Ahora indica qué líneas.
+
+- **Terraform** (`resource_line_ranges`): `python-hcl2` no devuelve posiciones (su opción `with_meta` no las
+  entrega en esta versión), así que se calculan sobre el texto: el bloque empieza en `resource "tipo" "nombre" {`
+  y termina donde se cierra su llave, sin contar llaves dentro de strings ni de comentarios. Toda la evidencia de un
+  recurso lleva sus líneas. Adaptador **v4**.
+- **Ansible**: se compone también el árbol de nodos de PyYAML y cada tarea lleva sus líneas. PyYAML deja
+  `end_mark` donde empieza el token siguiente, no donde acaba el nodo, así que se retrocede hasta la última línea
+  con contenido (se vio en los golden: la primera versión solapaba una tarea con la siguiente). Adaptador **v2**.
+  `an.playbook.present` no lleva líneas: es el archivo entero.
+- **Recursos Terraform no soportados:** su `tf.resource.present` ahora trae la limitación "tipo de recurso no
+  soportado: se registra su presencia, no sus atributos" (antes parecía una evidencia completa).
+- **`resuelto_por: parser`: se corrigió la documentación, no el código.** docs/02 §4 prometía resolver variables
+  locales literales; el adaptador no lo hace a propósito (una variable es una expresión no resuelta y el criterio
+  decide con `unknown`, que es más seguro que adivinar). Implementarlo agregaría riesgo sin un caso que lo pida.
+- **`created_by`:** docs/01 no listaba `surveillance`, que usa la evidencia operativa; se agregó.
+- **Golden files:** se regeneraron los de los adaptadores y se revisó el diff: solo cambian los locators y las
+  limitaciones de los tipos no soportados.
+
+**Verificación:** backend 5 tests nuevos (rangos con anidación, strings y comentarios, bloque sin cerrar, líneas de
+Terraform y de Ansible, limitación de lo no soportado) + `ruff check` limpio.
+
