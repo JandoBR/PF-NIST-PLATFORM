@@ -158,7 +158,7 @@ def test_degrades_to_empty_list_when_ai_unavailable():
 
 def test_every_process_rule_can_be_reached_from_the_extraction_vocabulary():
     """Cada regla que filtra `process_defined` por `contenido.proceso` debe poder recibir un valor
-    que el prompt ofrece. Antes no se ofrecia `respuesta` y CRI-RS-01 no encontraba nunca un plan."""
+    que el prompt ofrece. Antes no se ofrecia `respuesta` y CRI-RS-01 no encontraba un plan."""
 
     import re
     from datetime import UTC, datetime

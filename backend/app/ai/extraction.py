@@ -16,8 +16,9 @@ from app.ai.client import AIClient
 from app.ai.schemas import ExtractionResponse
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
 
-#: v2: `process_defined.proceso` ofrece `respuesta` (plan de respuesta a incidentes). Sin esa opcion,
-#: el modelo nunca podia etiquetar un plan de respuesta y `CRI-RS-01` no lo encontraba (docs/09 §59).
+#: v2: `process_defined.proceso` ofrece `respuesta` (plan de respuesta a incidentes). Sin esa
+#: opcion el modelo no podia etiquetar un plan de respuesta y `CRI-RS-01` no lo encontraba
+#: (docs/09 §59).
 PROMPT_VERSION = "extract_v2"
 _PROMPT_PATH = Path(__file__).parent / "prompts" / f"{PROMPT_VERSION}.txt"
 _SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
@@ -39,7 +40,8 @@ _CONTENT_FIELDS: dict[str, str] = {
         " criticidad (lista de {activo, nivel}|null)"
     ),
     "process_defined": (
-        "proceso (riesgos|respuesta|recuperacion|revision|analisis incidentes|otro), pasos (string),"
+        "proceso (riesgos|respuesta|recuperacion|revision|analisis incidentes|otro),"
+        " pasos (string),"
         " responsables (string|null), criterios_activacion (string|null),"
         " criterios_declaracion (bool|null), registro_riesgos (bool|null),"
         " priorizacion (bool|null), metricas (bool|null), ajustes (bool|null)"
