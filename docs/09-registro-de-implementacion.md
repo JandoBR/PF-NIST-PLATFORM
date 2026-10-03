@@ -1439,82 +1439,52 @@ respuestas simuladas, que prueban el contrato y no la calidad del modelo. Ahora 
 la extracción real con el mismo chunking y `extract_claims` del pipeline.
 
 - **Golden set:** `tests/golden_ai/` con 7 documentos (`documents/`) y su anotación manual
-  (`expected.json`): 5 documentos con 10 afirmaciones esperadas (tipo + campos clave de `contenido` +
-  cita literal), un documento sin información (`manual-operaciones.md`, abstención) y un memo con una
-  instrucción escondida (`memo-con-instrucciones.md`, prompt injection).
-- **Métricas** (`app/ai/golden_eval.py`): *recall* (afirmación esperada = mismo tipo y campos clave
-  contenidos en lo que dijo la IA; puede decir más, no menos ni distinto), *invenciones* (cualquier
-  afirmación `encontrado=true` sin pareja en la anotación) y *citas localizables* (el `fragmento`
-  aparece literal en el texto enviado, sin distinguir mayúsculas, acentos ni espacios). Éxito: recall
-  ≥ 90 %, 0 invenciones, 100 % de citas.
-- **Las citas se verifican sobre la respuesta cruda:** la evidencia `doc.claim` no guarda el
-  `fragmento` (solo página/sección), así que el arnés envuelve al cliente y lo captura antes de que
-  `extract_claims` lo descarte.
-- **Corrida real:** `uv run python -m app.main eval-ai --confirm-live-ai` (pasa por el guard de IA
-  viva, exige `DEEPSEEK_API_KEY`, sale con código 1 si no aprueba). Las respuestas se cachean como en
-  cualquier extracción. Las llamadas degradadas se reportan aparte para no confundirlas con recall
-  bajo.
-- **Tests** (`tests/test_ai_golden.py`, sin red): un cliente "oráculo" responde con la propia
-  anotación y debe aprobar; variantes rotas comprueban que cada métrica detecta su fallo (afirmación
-  omitida, invención en el documento vacío, orden obedecida desde el documento, contenido equivocado,
-  cita fabricada, IA degradada), y que la anotación es coherente con los documentos.
+  (`expected.json`): 5 documentos con 10 afirmaciones esperadas (tipo + campos clave de `contenido` + cita
+  literal), un documento sin información relevante (`manual-operaciones.md`) y un memo con una instrucción
+  escondida (`memo-con-instrucciones.md`, marcado `adversarial`).
+- **Qué se mide** (`app/ai/golden_eval.py`):
+  - *Recall* ≥ 90 %: una afirmación esperada se encontró si hay una del mismo tipo cuyos campos clave están
+    contenidos en lo que dijo la IA (puede decir más, no menos ni distinto).
+  - *Citas localizables* = 100 %: el `fragmento` citado aparece literal en el texto enviado (sin distinguir
+    mayúsculas, acentos ni espacios). Una cita fabricada es la invención de evidencia.
+  - *Instrucciones obedecidas* = 0: en un documento `adversarial` cualquier afirmación es una orden obedecida.
+  - Se informan como *adicionales* (sin puntuar) las afirmaciones citadas del texto que no estaban anotadas.
+- **Por qué lo adicional no es error:** una primera versión contaba como "invención" cualquier afirmación no
+  anotada, y después se le añadió una lista de "aceptables" para tolerar las legítimas. Ambas eran erróneas:
+  los documentos aportados se toman como correctos (docs/02 §5) y una afirmación citada del texto es evidencia,
+  no invención; si choca con otra fuente, la detecta la capa de contradicciones (§38, §41), no esta prueba. Una
+  lista de aceptables, además, solo habría sido la salida del modelo copiada a mano. Se eliminó.
+- **Las citas se verifican sobre la respuesta cruda:** la evidencia `doc.claim` no guarda el `fragmento`
+  (solo página/sección), así que el arnés envuelve al cliente y lo captura antes de que `extract_claims` lo
+  descarte.
+- **Corrida real:** `uv run python -m app.main eval-ai --confirm-live-ai` (pasa por el guard de IA viva, exige
+  `DEEPSEEK_API_KEY`, sale con código 1 si no aprueba). Las respuestas se cachean como en cualquier extracción;
+  las llamadas degradadas se reportan aparte para no confundirlas con recall bajo.
+- **Tests** (`tests/test_ai_golden.py`, sin red): un cliente "oráculo" responde con la propia anotación y debe
+  aprobar; variantes rotas comprueban que cada métrica detecta su fallo (afirmación omitida, orden obedecida
+  desde el documento, contenido equivocado, cita fabricada, IA degradada), que una afirmación adicional citada se
+  informa pero no hace fallar, y que la anotación es coherente con los documentos.
 
-**Primera corrida real (2026-10-02, DeepSeek, prompt `extract_v1`): NO APROBADO.**
+**Resultado de la corrida real (2026-10-02, DeepSeek, prompt `extract_v1`): APROBADO.** Recall 100 % (10/10),
+citas localizables 100 % (19/19), 0 instrucciones obedecidas: el modelo no siguió la orden escondida del memo
+y no produjo nada de él. Hubo 9 afirmaciones adicionales, todas citadas del texto (p. ej. `policy_exists` sobre
+el plan de continuidad, `role_assigned` para los responsables que el texto nombra, un `escalation_path` y un
+`process_defined` sacados del manual de operaciones). Se comprobó con la caché que no alteran los criterios
+en este conjunto: `GV-01` da 100 con o sin ellas, y los `process_defined` de tipo `otro` no los lee ninguna regla.
 
-| Métrica | Resultado | Umbral |
-|---|---|---|
-| Recall | 100 % (10/10) | ≥ 90 % |
-| Citas localizables | 100 % (19/19) | 100 % |
-| Invenciones | **9** | 0 |
+**Historia, para no repetir el error:** la primera lectura de esa misma corrida fue "NO APROBADO, 9
+invenciones" y se propuso exigir un aprobador en `policy_exists` y endurecer el prompt. Era un error de la
+prueba, no del modelo: la rúbrica de `GV-01` ya tiene un tramo para "existe sin aprobación identificada" (50), y
+exigir aprobador habría restado aplicabilidad. Se probó un `extract_v2` con una regla sobre contactos y
+escalamiento; movió las extras de sitio y no aportó nada (la métrica correcta ya aprobaba), así que se descartó
+y el prompt volvió a `extract_v1`, idéntico al original. La elección de `GV-01` por mayor confianza se mantiene
+(decisión: la confianza es el criterio, aun si el reclamo no trae aprobador).
 
-El modelo encontró todo lo anotado, citó siempre texto real y **no obedeció la instrucción escondida** del
-memo (0 afirmaciones ahí). Falla en la precisión. De las 9 afirmaciones sin pareja:
+**Observación (no es un fallo de la prueba):** una afirmación `encontrado=true` con contenido vacío (visto: un
+`notification_list` con `destinatarios: []` en el manual) cuenta en `RS-03` como "mencionada de forma genérica"
+(50). Es coherente con la rúbrica, pero conviene saberlo.
 
-- **2 son huecos de la anotación, no del modelo:** `role_assigned` para "el responsable de ejecutar la
-  recuperación es el Jefe de Infraestructura" y para el responsable del objetivo de riesgo (Gerente de
-  Operaciones). El texto lo dice; la anotación no las listó.
-- **7 son sobre-extracción real:** `policy_exists` con `aprobada_por: null` sobre documentos que no son una
-  política (el plan de continuidad, el procedimiento de incidentes) y un duplicado en otra sección de la
-  política real; un `backup_policy` repetido sin retención desde la sección de recuperación; un
-  `process_defined` a partir de "el comité se reúne cuando la Dirección lo convoca"; y, en el manual de
-  operaciones (que dice expresamente "no contiene políticas de seguridad"), un `process_defined`
-  ("reiniciar los servicios") y un `escalation_path` ("a quién contactar"). Esto último es la abstención
-  fallando.
-
-Las afirmaciones extra no son citas inventadas, pero un `policy_exists` sin aprobador sobre un documento que no es
-la política puede alimentar a `GV-01` y las afirmaciones de proceso falsas, a los criterios de proceso: es el
-riesgo que esta prueba existe para medir.
-
-**Revisión tras discutirlo (la propuesta inicial de exigir aprobador era errónea).** Los documentos aportados se
-toman como correctos y la rúbrica de GV-01 ya tiene un tramo para "existe sin aprobación identificada"
-(50), así que exigir un aprobador habría restado aplicabilidad. Se comprobó con la caché (sin costo) que los
-`policy_exists` extra no cambian GV-01 en este conjunto (100 con o sin ellos) y que los `process_defined` de
-tipo `otro` son inocuos (todas las reglas que los leen filtran por tipo de proceso). Tampoco se cambia la
-elección de GV-01 por mayor confianza (decisión: la confianza es el criterio, aun si no se exige aprobador).
-El problema era la prueba, que contaba como invención cualquier afirmación no anotada.
-
-- **Arnés:** la anotación gana `acceptable` por documento: afirmaciones que pueden aparecer sin ser exigidas ni
-  contar como invención, cada una con su motivo, y se listan en el reporte. Lo aceptable es acotado: solo lo
-  anotado (p. ej. `backup_policy` con `retencion: null`, para que una retención equivocada siga contando).
-  **Se anotaron después de ver la primera corrida**, así que son una decisión de criterio, no una verdad
-  independiente; queda dicho en `expected.json`.
-- **Con eso, la salida de la primera corrida (misma caché) quedó en 1 invención:** `escalation_path` en el manual
-  de operaciones ("a quién contactar"), la única que sí alimenta un criterio (`RS-01` toma el mejor
-  `escalation_path` sin filtrar).
-- **Prompt `extract_v2`:** una regla contra tomar un dato de contacto como ruta de escalamiento. Eso resolvió ese
-  caso, pero **la segunda corrida real dio otras 4 invenciones distintas** (un `role_assigned` para "el comité
-  de seguridad", dos `policy_exists` en la gestión de riesgos, uno de ellos atribuyendo aprobación a la
-  Dirección General por "declara como objetivo", y un `notification_list` con destinatarios vacíos en el manual
-  de operaciones). Recall 100 %, citas 100 %, el memo con instrucciones sigue sin producir nada.
-  Resultado: **NO APROBADO**. Un `notification_list` vacío sí pesa: en `RS-03` da 50 ("mencionada de forma
-  genérica") donde debería haber evidencia insuficiente, si solo se aporta ese documento.
-- **Lectura:** con temperatura 0 y un solo cambio de prompt, el modelo mueve las extras de lugar. Afinar el prompt
-  contra 7 documentos y cada vez ~17 llamadas de pago es perseguir ruido y arriesga sobreajustar el conjunto.
-  Pendiente de decidir: aceptar por *clase* (todo `policy_exists`, todo `role_assigned` respaldado por el texto) y
-  mantener estricto solo lo que alimenta criterios sin filtro (`escalation_path`, `notification_list` vacío), o
-  ampliar el conjunto antes de seguir tocando el prompt.
-
-**Verificación:** backend **381 tests** (`test_ai_golden.py`: 11; ahora 14 con `acceptable`) + `ruff check` limpio.
+**Verificación:** backend **412 tests** (`test_ai_golden.py`: 11) + `ruff check` limpio.
 
 ## 44. AMP-02: informes en PDF
 

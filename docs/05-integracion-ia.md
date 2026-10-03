@@ -249,7 +249,7 @@ Usuario (json):
 - Salida por plan con esquema fijo (ver §4.1).
 - Prohibido proponer acciones que ejecuten cambios: los pasos son sugerencias para un humano.
 
-Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v2.txt`,
+Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v1.txt`,
 `adjust_v1.txt`, `plan_v1.txt`). Cambiar un prompt cambia `prompt_version` y se registra en los ajustes.
 
 ## 7. Seguridad
@@ -270,8 +270,8 @@ documental deshabilitada, declarando la limitación.
 
 | Prueba | Método | Criterio de éxito |
 |---|---|---|
-| Extracción correcta | Golden set de documentos anotados manualmente | ≥ 90 % de afirmaciones esperadas, sin invenciones (`python -m app.main eval-ai`, docs/09 §43) |
-| Abstención | Documentos sin la información | No debe afirmar lo que no existe |
+| Extracción correcta | Golden set de documentos anotados manualmente | ≥ 90 % de afirmaciones esperadas; lo adicional citado del texto no es error (`python -m app.main eval-ai`, docs/09 §43) |
+| Abstención | Documentos sin la información | No debe afirmar lo que el texto no dice (citas verificadas; 0 instrucciones incrustadas obedecidas) |
 | Citas | Verificación de fragmentos contra el texto | 100 % de citas localizables |
 | Ajuste dentro de límites | Casos con B/A conocidos | `S` siempre en `[B−D, B+D]` acotado |
 | Justificación válida | Referencias a evidencia real | 100 % de IDs existentes |

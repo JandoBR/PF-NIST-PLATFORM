@@ -220,7 +220,7 @@ registran como trabajo futuro en **docs/12 §4**, no como pendientes del prototi
 - [x] TS-01 · **Golden files** de Terraform/Ansible y del pipeline. Hecho (docs/09 §39,
   `tests/test_golden.py`, `tests/golden/`).
 - [x] TS-02 · **Golden set de IA**. Hecho (docs/09 §43, `tests/golden_ai/`, `app/ai/golden_eval.py`,
-  `python -m app.main eval-ai`). Corridas reales: recall y citas 100 %, pero con invenciones (1.ª: 9; 2.ª con `extract_v2`: 4) → **no aprueba todavía**; ver docs/09 §43.
+  `python -m app.main eval-ai`). Corrida real: **aprobada** (recall 100 %, citas 100 %, 0 instrucciones obedecidas); ver docs/09 §43.
 - [x] TS-03 · **Test de contradicción** técnico-vs-documental. Hecho (docs/09 §38,
   `test_contradictions.py`, incluye un E2E con Terraform real).
 

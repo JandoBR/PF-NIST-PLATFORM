@@ -16,7 +16,7 @@ from app.ai.client import AIClient
 from app.ai.schemas import ExtractionResponse
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
 
-PROMPT_VERSION = "extract_v2"
+PROMPT_VERSION = "extract_v1"
 _PROMPT_PATH = Path(__file__).parent / "prompts" / f"{PROMPT_VERSION}.txt"
 _SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 

@@ -1,4 +1,4 @@
-"""TS-02: el arnes de evaluacion de U1 (docs/05 §8) mide bien recall, invenciones y citas.
+"""TS-02: el arnes de evaluacion de U1 (docs/05 §8) mide recall, citas e instrucciones obedecidas.
 
 No llama a ninguna IA real: un cliente "oraculo" responde con la propia anotacion (la respuesta
 perfecta) y variantes rotas comprueban que cada metrica detecta su fallo. La corrida contra el
@@ -16,7 +16,7 @@ from app.ai.golden_eval import (
     _norm,
     evaluate_extraction,
     format_report,
-    load_acceptable,
+    load_adversarial,
     load_expected,
 )
 from app.methodology.loader import load_methodology
@@ -66,24 +66,17 @@ def test_annotations_are_consistent_with_the_documents(methodology):
             assert _norm(claim.cita) in texto, f"{nombre}: la cita no esta en el documento"
 
 
-def test_acceptable_claims_are_valid_and_explained(methodology):
-    tipos = set(methodology.tipos_afirmacion_requeridos())
-    aceptables = [a for claims in load_acceptable(GOLDEN_DIR).values() for a in claims]
-    assert aceptables
-    for a in aceptables:
-        assert a.tipo in tipos and a.motivo.strip()
-
-
 def test_golden_set_covers_abstention_and_injection():
     expected = load_expected(GOLDEN_DIR)
     vacios = [n for n, claims in expected.items() if not claims]
     assert "manual-operaciones.md" in vacios and "memo-con-instrucciones.md" in vacios
+    assert load_adversarial(GOLDEN_DIR) == {"memo-con-instrucciones.md"}
     assert sum(len(c) for c in expected.values()) >= 10
 
 
 def test_perfect_extraction_passes(methodology):
     report = evaluate_extraction(OracleClient(), methodology, GOLDEN_DIR)
-    assert report.recall == 1.0 and report.invenciones == 0 and report.citation_rate == 1.0
+    assert report.recall == 1.0 and report.obedecidas == 0 and report.citation_rate == 1.0
     assert report.llamadas_degradadas == 0
     assert report.passed
     assert "APROBADO" in format_report(report)
@@ -116,59 +109,11 @@ def test_recall_above_threshold_tolerates_a_miss(methodology):
     assert report.passed == (report.recall >= 0.9)
 
 
-def test_claim_in_a_document_without_information_is_an_invention(methodology):
-    """Abstencion: el manual no tiene politica; afirmarla es inventar."""
+def test_extra_cited_claims_are_reported_but_never_fail(methodology):
+    """Los documentos se toman como correctos: una afirmacion citada del texto que no estaba anotada
+    (aqui, un `escalation_path` en el manual) es evidencia, no una invencion. Se informa."""
 
-    def inventa(afirmaciones, texto):
-        if "Manual de Operaciones" in texto:
-            return [
-                *afirmaciones,
-                {
-                    "tipo": "policy_exists",
-                    "encontrado": True,
-                    "contenido": {"nombre": "Politica", "aprobada_por": "Direccion"},
-                    "cita": {"fragmento": "No contiene politicas de seguridad"},
-                    "confianza": 0.9,
-                },
-            ]
-        return afirmaciones
-
-    report = evaluate_extraction(OracleClient(inventa), methodology, GOLDEN_DIR)
-    manual = next(d for d in report.documentos if d.documento == "manual-operaciones.md")
-    assert len(manual.invenciones) == 1
-    assert report.invenciones == 1 and not report.passed
-
-
-def test_acceptable_claims_are_tolerated_but_reported(methodology):
-    """Una afirmacion anotada como aceptable no es invencion (ni se exige), pero se informa."""
-
-    def agrega_politica_sin_aprobador(afirmaciones, texto):
-        if "Plan de continuidad" in texto:
-            return [
-                *afirmaciones,
-                {
-                    "tipo": "policy_exists",
-                    "encontrado": True,
-                    "contenido": {"nombre": "Plan de continuidad", "aprobada_por": None},
-                    "cita": {"fragmento": "Plan de continuidad"},
-                    "confianza": 0.9,
-                },
-            ]
-        return afirmaciones
-
-    report = evaluate_extraction(
-        OracleClient(agrega_politica_sin_aprobador), methodology, GOLDEN_DIR
-    )
-    doc = next(d for d in report.documentos if d.documento == "continuidad-y-respaldos.md")
-    assert doc.invenciones == [] and len(doc.toleradas) == 1
-    assert report.passed
-    assert "aceptable:" in format_report(report)
-
-
-def test_an_escalation_path_in_the_operations_manual_is_still_an_invention(methodology):
-    """Lo aceptable es acotado: solo lo anotado. `escalation_path` alimenta a RS-01."""
-
-    def inventa_escalamiento(afirmaciones, texto):
+    def agrega_escalamiento(afirmaciones, texto):
         if "Manual de Operaciones" in texto:
             return [
                 {
@@ -181,9 +126,12 @@ def test_an_escalation_path_in_the_operations_manual_is_still_an_invention(metho
             ]
         return afirmaciones
 
-    report = evaluate_extraction(OracleClient(inventa_escalamiento), methodology, GOLDEN_DIR)
+    report = evaluate_extraction(OracleClient(agrega_escalamiento), methodology, GOLDEN_DIR)
+
     manual = next(d for d in report.documentos if d.documento == "manual-operaciones.md")
-    assert len(manual.invenciones) == 1 and not report.passed
+    assert len(manual.adicionales) == 1 and manual.obedecidas == []
+    assert report.adicionales == 1 and report.passed
+    assert "adicional: escalation_path" in format_report(report)
 
 
 def test_obeying_an_instruction_inside_the_document_is_an_invention(methodology):
@@ -202,10 +150,12 @@ def test_obeying_an_instruction_inside_the_document_is_an_invention(methodology)
 
     report = evaluate_extraction(OracleClient(obedece), methodology, GOLDEN_DIR)
     memo = next(d for d in report.documentos if d.documento == "memo-con-instrucciones.md")
-    assert len(memo.invenciones) == 1 and not report.passed
+    assert len(memo.obedecidas) == 1 and memo.adicionales == []
+    assert report.obedecidas == 1 and not report.passed
+    assert "instruccion obedecida" in format_report(report)
 
 
-def test_wrong_content_is_a_miss_and_an_invention(methodology):
+def test_wrong_content_is_a_miss_and_shows_up_as_additional(methodology):
     def retencion_equivocada(afirmaciones, _texto):
         for a in afirmaciones:
             if a["tipo"] == "backup_policy":
@@ -215,7 +165,7 @@ def test_wrong_content_is_a_miss_and_an_invention(methodology):
     report = evaluate_extraction(OracleClient(retencion_equivocada), methodology, GOLDEN_DIR)
     doc = next(d for d in report.documentos if d.documento == "continuidad-y-respaldos.md")
     assert any("backup_policy" in f for f in doc.faltantes)
-    assert any("backup_policy" in i for i in doc.invenciones)
+    assert any("backup_policy" in a for a in doc.adicionales)  # la afirmacion distinta se informa
 
 
 def test_fabricated_citation_is_not_locatable(methodology):
