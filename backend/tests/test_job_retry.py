@@ -6,6 +6,7 @@ import pytest
 
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
+from app.core import operations, refresh
 from app.models.tables import CriterionResultRow, EvidenceRow, Job, Organization, PlanRow
 from tests.conftest import run_pending_jobs
 from tests.test_api_assessments import _upload_terraform
@@ -67,10 +68,10 @@ def test_reevaluation_and_refresh_jobs_store_their_inputs(
     reeval = api_client.post(f"/assessments/{accepted['assessment_id']}/reevaluate").json()
     assert db_session.get(Job, reeval["job_id"]).payload["terraform_path"]
 
-    _, refresh = svc.enqueue_surveillance_refresh(
+    _, refresh_job = refresh.enqueue_surveillance_refresh(
         db_session, methodology, fake_redis, accepted["assessment_id"]
     )
-    assert refresh.payload["selective_refresh"] is True
+    assert refresh_job.payload["selective_refresh"] is True
 
 
 # -- reintento de una evaluacion --------------------------------------------------------------
@@ -144,15 +145,17 @@ def test_retry_clears_partial_results_instead_of_duplicating_them(
 def test_retrying_a_failed_event_ingest_does_not_duplicate_events(
     api_client, db_session, methodology, fake_redis, auth_user, monkeypatch
 ):
-    original = svc.ingest_events
-    monkeypatch.setattr(
-        svc, "ingest_events", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("redis caido"))
-    )
+    original = operations.ingest_events
+
+    def caido(*_args, **_kwargs):
+        raise RuntimeError("redis caido")
+
+    monkeypatch.setattr(operations, "ingest_events", caido)
     accepted = _upload_events(api_client, auth_user)
     run_pending_jobs(db_session, methodology, fake_redis)
     failed = db_session.get(Job, accepted["job_id"])
     assert failed.estado == "fallido"
-    monkeypatch.setattr(svc, "ingest_events", original)
+    monkeypatch.setattr(operations, "ingest_events", original)
 
     new = api_client.post(f"/jobs/{failed.id}/retry")
     assert new.status_code == 202 and new.json()["tipo"] == "event_ingest"

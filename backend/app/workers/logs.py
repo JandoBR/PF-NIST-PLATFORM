@@ -16,8 +16,8 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
 from app.ai.client import build_default_client, describe_client
-from app.core import assessment_service as svc
 from app.core import jobs as job_service
+from app.core import operations, refresh
 from app.core.db import build_engine, build_session_factory, ensure_schema
 from app.core.queue import QUEUE_LOGS, build_redis_client, dequeue_blocking, message_version_error
 from app.methodology.loader import Methodology, load_methodology
@@ -42,7 +42,7 @@ def _maybe_refresh_maturity(
 
     for scope, nuevos in result.patrones_nuevos_por_scope.items():
         try:
-            refreshed = svc.maybe_enqueue_maturity_refresh(
+            refreshed = refresh.maybe_enqueue_maturity_refresh(
                 session,
                 methodology,
                 redis_client,
@@ -85,7 +85,7 @@ def process_message(
         ai_client = build_default_client() if ai_requested else None
         if ai_requested:
             logger.info("Job %s: IA %s", job.id, describe_client(ai_client))
-        result = svc.ingest_events(
+        result = operations.ingest_events(
             session,
             methodology,
             message["org_nombre"],

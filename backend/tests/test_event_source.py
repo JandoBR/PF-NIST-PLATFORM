@@ -3,6 +3,7 @@
 import json
 
 from app.core import assessment_service as svc
+from app.core import operations
 from app.models.tables import Event, LogPatternRow
 
 SCOPE = "entorno:produccion"
@@ -28,7 +29,7 @@ def _fallos(tmp_path, nombre, fuente, n=6, desde=0):
 
 
 def _ingest(db_session, methodology, archivo):
-    return svc.ingest_events(db_session, methodology, "Empresa Origen", archivo)
+    return operations.ingest_events(db_session, methodology, "Empresa Origen", archivo)
 
 
 def test_event_source_id_is_the_declared_fuente(db_session, methodology, tmp_path):
@@ -52,7 +53,7 @@ def test_patterns_and_window_evidence_carry_the_origin(db_session, methodology, 
 
     filas = db_session.query(LogPatternRow).all()
     assert filas and all(p.fuentes == ["log:sshd"] for p in filas)
-    evidence = svc._collect_surveillance_evidence(db_session, org_id, SCOPE)
+    evidence = svc.collect_surveillance_evidence(db_session, org_id, SCOPE)
     assert {e.type_id for e in evidence} == {"log.window", "log.pattern"}
     assert {e.source_id for e in evidence} == {"log:sshd"}
 
@@ -64,7 +65,7 @@ def test_window_lists_every_origin_in_the_scope(db_session, methodology, tmp_pat
 
     window = next(
         e
-        for e in svc._collect_surveillance_evidence(db_session, org_id, SCOPE)
+        for e in svc.collect_surveillance_evidence(db_session, org_id, SCOPE)
         if e.type_id == "log.window"
     )
 
@@ -80,7 +81,7 @@ def test_patterns_before_fn07_keep_the_legacy_source_id(db_session, methodology,
 
     patterns = [
         e
-        for e in svc._collect_surveillance_evidence(db_session, org_id, SCOPE)
+        for e in svc.collect_surveillance_evidence(db_session, org_id, SCOPE)
         if e.type_id == "log.pattern"
     ]
 

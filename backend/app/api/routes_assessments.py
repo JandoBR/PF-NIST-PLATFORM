@@ -32,6 +32,7 @@ from app.api.schemas import (
     PlanUpdate,
 )
 from app.core import assessment_service as svc
+from app.core import comparison
 from app.core.dispatch import dispatch_job
 from app.core.repository import row_to_plan
 from app.core.uploads import safe_filename
@@ -326,7 +327,7 @@ def reevaluate_assessment(
     )
 
 
-def _comparison_out(report: svc.ComparisonReport) -> ComparisonOut:
+def _comparison_out(report: comparison.ComparisonReport) -> ComparisonOut:
     return ComparisonOut(
         assessment_id_a=report.assessment_id_a,
         assessment_id_b=report.assessment_id_b,
@@ -357,7 +358,7 @@ def compare_assessments(
 ) -> ComparisonOut:
     _require_assessment(session, assessment_id, user)
     _require_assessment(session, other_id, user)
-    return _comparison_out(svc.compare(session, methodology, assessment_id, other_id))
+    return _comparison_out(comparison.compare(session, methodology, assessment_id, other_id))
 
 
 @router.get("/assessments/{assessment_id}/report.pdf", response_class=Response)
@@ -399,7 +400,7 @@ def get_comparison_report(
     despues = _require_assessment(session, other_id, user)
     _require_completed(antes)
     _require_completed(despues)
-    report = svc.compare(session, methodology, assessment_id, other_id)
+    report = comparison.compare(session, methodology, assessment_id, other_id)
     content = pdf.build_comparison_report(
         _comparison_out(report),
         _assessment_detail(session, methodology, antes),

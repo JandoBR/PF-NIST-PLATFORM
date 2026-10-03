@@ -7,6 +7,7 @@ from pathlib import Path
 
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
+from app.core import operations
 from app.models.tables import Assessment, Job
 from app.workers import logs as worker_logs
 from tests.conftest import FakeRedis
@@ -52,7 +53,7 @@ def test_process_message_ingests_events_and_opens_an_incident(db_session, method
         "incidentes_actualizados": 0,
     }
 
-    incidents = svc.list_incidents(db_session, org.nombre)
+    incidents = operations.list_incidents(db_session, org.nombre)
     assert len(incidents) == 1
     assert incidents[0].severidad == "media"
 
@@ -139,7 +140,7 @@ def test_ingest_without_previous_assessment_does_not_refresh(db_session, methodo
 
     db_session.refresh(job)
     assert job.estado == "completado"
-    assert len(svc.list_incidents(db_session, org.nombre)) == 3
+    assert len(operations.list_incidents(db_session, org.nombre)) == 3
     assert db_session.query(Job).filter_by(tipo="assessment_run").count() == 0
 
 

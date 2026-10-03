@@ -13,7 +13,7 @@ from app.ai.cache import CachingAIClient
 from app.ai.client import DeepSeekClient, FakeAIClient, NullAIClient
 from app.ai.extraction import extract_claims
 from app.core import assessment_service as svc
-from app.core import reproducibility
+from app.core import refresh, reproducibility
 from app.evaluation import engine
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.loader import load_methodology
@@ -304,6 +304,6 @@ def test_surveillance_refresh_inherits_reproducibility(db_session, methodology):
         scope="entorno:produccion",
         previous_assessment_id=previous.id,
     )
-    svc.run_surveillance_refresh(db_session, methodology, nuevo.id, previous.id)
+    refresh.run_surveillance_refresh(db_session, methodology, nuevo.id, previous.id)
     db_session.refresh(nuevo)
     assert nuevo.reproducibility == previous.reproducibility

@@ -10,8 +10,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from app.evaluation.schemas import Aggregate, TierEstimate
 from app.ops.incidents import allowed_transitions
+from app.schemas.assessment import (  # noqa: F401  (reexportados para las rutas)
+    AssessmentDetail,
+    AssessmentSummary,
+    ComparisonDiffOut,
+    ComparisonOut,
+)
 
 
 class OrganizationOut(BaseModel):
@@ -19,29 +24,6 @@ class OrganizationOut(BaseModel):
 
     id: str
     nombre: str
-
-
-class AssessmentSummary(BaseModel):
-    id: str
-    org_id: str
-    org_nombre: str
-    estado: str
-    scope: str
-    methodology_version: str
-    creado_en: datetime
-    error: str | None = None
-    score_global: float | None = None
-    cobertura_global: float | None = None
-    #: Score global con cobertura baja (docs/01 §7, AMP-05).
-    provisional_global: bool = False
-
-
-class AssessmentDetail(AssessmentSummary):
-    agregados_categoria: list[Aggregate]
-    agregados_funcion: list[Aggregate]
-    tier: TierEstimate
-    #: Versiones de adaptadores/parsers y, si participo, modelo y prompts de IA (OP-14).
-    reproducibility: dict | None = None
 
 
 class IncidentOut(BaseModel):
@@ -85,24 +67,6 @@ class PlanUpdate(BaseModel):
     No afecta el puntaje del criterio (docs/11 UI-08)."""
 
     estado: str
-
-
-class ComparisonDiffOut(BaseModel):
-    criterion_id: str
-    titulo: str
-    estado_antes: str | None
-    estado_despues: str | None
-    score_antes: float | None
-    score_despues: float | None
-    cambio: bool
-
-
-class ComparisonOut(BaseModel):
-    assessment_id_a: str
-    assessment_id_b: str
-    diffs: list[ComparisonDiffOut]
-    global_antes: float | None
-    global_despues: float | None
 
 
 class JobOut(BaseModel):

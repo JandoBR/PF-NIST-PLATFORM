@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.core import assessment_service as svc
+from app.core import comparison, operations, refresh
 from app.evaluation.schemas import Estado
 from app.methodology.loader import load_methodology
 from app.models.tables import Assessment, CriterionResultRow, EvidenceRow, PlanRow, Source
@@ -182,7 +183,7 @@ def test_compare_reports_per_criterion_and_global_change(db_session, methodology
     _fix_rds_encryption(main_tf)
     after = svc.reevaluate(db_session, methodology, before.id)
 
-    report = svc.compare(db_session, methodology, before.id, after.id)
+    report = comparison.compare(db_session, methodology, before.id, after.id)
 
     pr01_diff = next(d for d in report.diffs if d.criterion_id == "CRI-PR-01")
     assert pr01_diff.score_antes == 25
@@ -194,7 +195,7 @@ def test_compare_reports_per_criterion_and_global_change(db_session, methodology
 
 def test_compare_unknown_assessment_raises(db_session, methodology):
     with pytest.raises(svc.AssessmentNotFoundError):
-        svc.compare(db_session, methodology, "a", "b")
+        comparison.compare(db_session, methodology, "a", "b")
 
 
 def test_generate_plans_persists_one_plan_per_finding(db_session, methodology):
@@ -266,10 +267,10 @@ def test_surveillance_refresh_reuses_unaffected_and_recomputes_operational(db_se
     db_session.commit()
 
     # Eventos nuevos: alimentan la evidencia operativa fresca.
-    svc.ingest_events(db_session, methodology, org, SCENARIOS / "incidentes_demo.jsonl")
+    operations.ingest_events(db_session, methodology, org, SCENARIOS / "incidentes_demo.jsonl")
 
     refreshed, _paths = svc.create_pending_reevaluation(db_session, methodology, previous.id)
-    svc.run_surveillance_refresh(db_session, methodology, refreshed.id, previous.id)
+    refresh.run_surveillance_refresh(db_session, methodology, refreshed.id, previous.id)
 
     assert refreshed.estado == "completada"
     results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, refreshed.id)}

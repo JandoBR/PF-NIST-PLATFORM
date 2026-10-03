@@ -54,7 +54,7 @@ def _reap_if_stale(session: Session, job: Job) -> None:
         # El reaper de los workers tambien marca la `Assessment` ligada; aqui se hace lo mismo
         # para que `GET /assessments/{id}` no se quede en `pendiente`/`en_progreso` para siempre
         # cuando no hay worker que lo haga.
-        _fail_linked_assessment(session, job)
+        job_service.fail_linked_assessment(session, job)
 
 
 @router.get("/jobs", response_model=list[JobOut])
@@ -90,16 +90,6 @@ def get_job(
 
     _reap_if_stale(session, job)
     return JobOut.from_job(job)
-
-
-def _fail_linked_assessment(session: Session, job: Job) -> None:
-    if not job.assessment_id:
-        return
-    assessment = svc.get_assessment(session, job.assessment_id)
-    if assessment is not None and assessment.estado in ("pendiente", "en_progreso"):
-        assessment.estado = "fallida"
-        assessment.error = job.error
-        session.commit()
 
 
 @router.post("/jobs/{job_id}/retry", response_model=JobOut, status_code=202)

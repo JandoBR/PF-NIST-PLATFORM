@@ -117,6 +117,22 @@ def test_degrades_when_justification_cites_invented_evidence():
     assert out.degradado is True
 
 
+def test_degrades_when_citing_real_evidence_that_was_not_shown():
+    """La evidencia existe en la evaluacion, pero no se le mostro a la IA para este criterio."""
+
+    methodology = _methodology()
+    criterion = methodology.criterios["CRI-PR-01"]
+    result = _result(evidence_ids=["ev1"])
+    evidencia = {**_evidence_by_id("ev1"), **_evidence_by_id("ev_de_otro_criterio")}
+    client = FakeAIClient(
+        {"CRI-PR-01": _fake_response(evidencias_referenciadas=["ev_de_otro_criterio"])}
+    )
+
+    out = adjust(client, criterion, result, evidencia, {}, ALPHA, D)
+
+    assert out.degradado is True and out.final_score == result.base_score
+
+
 def test_applies_bounded_formula_exactly():
     # B=25, A=45, D=20 -> A_acotado=45 (dentro del margen); S = 0.75*25 + 0.25*45 = 30
     methodology = _methodology()

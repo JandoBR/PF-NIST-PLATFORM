@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.ai.client import build_default_client, describe_client
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
+from app.core import refresh
 from app.core.db import build_engine, build_session_factory, ensure_schema
 from app.core.queue import QUEUE_CORE, build_redis_client, dequeue_blocking, message_version_error
 from app.methodology.loader import Methodology, load_methodology
@@ -62,11 +63,7 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
     if version_error is not None:
         logger.error("Job %s: %s", job.id, version_error)
         job_service.mark_failed(session, job, version_error)
-        assessment = svc.get_assessment(session, message.get("assessment_id", ""))
-        if assessment is not None and assessment.estado in ("pendiente", "en_progreso"):
-            assessment.estado = "fallida"
-            assessment.error = version_error
-            session.commit()
+        job_service.fail_linked_assessment(session, job)
         return
 
     job_service.mark_taken(session, job)
@@ -77,7 +74,7 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
             logger.info("Job %s: IA %s", job.id, describe_client(ai_client))
         if message.get("selective_refresh"):
             # Refresco selectivo (docs/06 §6, FN-06): reusa lo previo, recalcula solo lo operativo.
-            svc.run_surveillance_refresh(
+            refresh.run_surveillance_refresh(
                 session,
                 methodology,
                 message["assessment_id"],
@@ -116,13 +113,7 @@ def reap_stale_jobs(session: Session, timeout_seconds: int = JOB_STALE_TIMEOUT_S
     for job in job_service.reap_stale_jobs(
         session, "assessment_run", timeout_seconds, JOB_PENDING_TIMEOUT_SECONDS
     ):
-        if not job.assessment_id:
-            continue
-        assessment = svc.get_assessment(session, job.assessment_id)
-        if assessment is not None and assessment.estado in ("pendiente", "en_progreso"):
-            assessment.estado = "fallida"
-            assessment.error = job.error
-            session.commit()
+        job_service.fail_linked_assessment(session, job)
 
 
 def main() -> None:

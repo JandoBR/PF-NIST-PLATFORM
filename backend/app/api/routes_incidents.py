@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_session
 from app.api.schemas import IncidentOut, IncidentUpdate
-from app.core import assessment_service as svc
+from app.core import operations
 from app.models.tables import User
 from app.ops.incidents import INCIDENT_ESTADOS, InvalidTransition
 from app.recommendations.plans import Plan
@@ -17,7 +17,7 @@ router = APIRouter(tags=["incidents"])
 
 
 def _require_incident(session: Session, incident_id: str, user: User):
-    incident = svc.get_incident(session, incident_id)
+    incident = operations.get_incident(session, incident_id)
     if incident is None or incident.org_id != user.org_id:
         raise HTTPException(status_code=404, detail=f"No existe el incidente {incident_id!r}.")
     return incident
@@ -47,7 +47,9 @@ def update_incident(
             detail=f"Estado {payload.estado!r} invalido. Validos: {', '.join(INCIDENT_ESTADOS)}.",
         )
     try:
-        incident = svc.update_incident_estado(session, incident_id, payload.estado, payload.motivo)
+        incident = operations.update_incident_estado(
+            session, incident_id, payload.estado, payload.motivo
+        )
     except InvalidTransition as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     assert incident is not None  # ya validado por _require_incident
@@ -61,4 +63,4 @@ def get_incident_plans(
     session: Session = Depends(get_session),
 ) -> list[Plan]:
     _require_incident(session, incident_id, user)
-    return svc.load_incident_plans(session, incident_id)
+    return operations.load_incident_plans(session, incident_id)

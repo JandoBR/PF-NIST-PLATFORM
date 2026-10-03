@@ -106,8 +106,11 @@ def adjust(
 
     if not parsed.evidencias_referenciadas:
         return _degraded(result)  # J5: la justificacion debe citar evidencia existente
-    if any(eid not in evidence_by_id for eid in parsed.evidencias_referenciadas):
-        return _degraded(result)  # evidencia inventada: no existe en lo que se le dio a la IA
+    mostradas = {eid for eid in result.evidence_ids if eid in evidence_by_id}
+    if any(eid not in mostradas for eid in parsed.evidencias_referenciadas):
+        # J5: solo cuenta lo que se le mostro para este criterio. Un id real de la evaluacion que no
+        # estaba en el prompt tambien es una cita inventada.
+        return _degraded(result)
 
     propuesto = parsed.puntaje_propuesto
     if result.estado == Estado.NO_IMPLEMENTADO and propuesto > result.base_score:

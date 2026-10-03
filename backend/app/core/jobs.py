@@ -94,6 +94,20 @@ def mark_failed(session: Session, job: Job, error: str) -> None:
     session.commit()
 
 
+def fail_linked_assessment(session: Session, job: Job) -> None:
+    """Si el job fallido tenia una evaluacion ligada que quedo `pendiente`/`en_progreso`, la marca
+    `fallida` con el mismo error. Sin esto el job se ve fallido pero la evaluacion queda en un
+    estado no terminal para siempre (el worker que murio nunca llego a marcarla)."""
+
+    if not job.assessment_id:
+        return
+    assessment = session.get(Assessment, job.assessment_id)
+    if assessment is not None and assessment.estado in ("pendiente", "en_progreso"):
+        assessment.estado = "fallida"
+        assessment.error = job.error
+        session.commit()
+
+
 def _as_utc(moment: datetime | None) -> datetime | None:
     """SQLite descarta tzinfo al guardar `DateTime(timezone=True)`; siempre se escribe en UTC,
     asi que reponerlo es seguro."""

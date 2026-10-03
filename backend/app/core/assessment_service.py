@@ -15,11 +15,8 @@ lo que una correccion aplicada a esos mismos archivos se refleja en la siguiente
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
@@ -37,7 +34,7 @@ from app.core.repository import (
     row_to_plan,
     row_to_result,
 )
-from app.evaluation import aggregation, contradictions, engine
+from app.evaluation import contradictions, engine
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
 from app.models.tables import (
@@ -45,31 +42,19 @@ from app.models.tables import (
     CriterionResultRow,
     Event,
     EvidenceRow,
-    Incident,
     Job,
     LogPatternRow,
     Organization,
     PlanRow,
     Source,
 )
-from app.ops.incidents import set_incident_estado, upsert_incident
-from app.ops.plans import generate_incident_plan
-from app.ops.triggers import evaluate_triggers
 from app.recommendations import plans as recommendations_plans
 from app.recommendations.plans import Plan
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
-from app.surveillance.events import load_events_jsonl
-from app.surveillance.patterns import detect_patterns
 
 
 class AssessmentNotFoundError(Exception):
     pass
-
-
-def _naive(moment: datetime) -> datetime:
-    """SQLite descarta tzinfo al guardar `DateTime(timezone=True)`; normalizar antes de comparar."""
-
-    return moment.replace(tzinfo=None)
 
 
 def _hash_files(files: list[Path]) -> str:
@@ -89,13 +74,6 @@ def get_or_create_organization(session: Session, nombre: str) -> Organization:
     return org
 
 
-def _event_source_id(fuente: str | None, jsonl_path: Path) -> str:
-    """Origen del evento (docs/06 §2): su `fuente` si la declara; si no, el archivo del que vino
-    (solo el nombre, no la ruta del servidor)."""
-
-    return fuente or f"events:{Path(jsonl_path).name}"
-
-
 def _origin_source_id(origenes: set[str] | list[str] | None) -> str:
     """`source_id` de la evidencia operativa: los origenes distintos, ordenados y unidos con `+`.
     Sin ninguno conocido (filas anteriores a FN-07) se conserva `surveillance:org`."""
@@ -103,7 +81,7 @@ def _origin_source_id(origenes: set[str] | list[str] | None) -> str:
     return "+".join(sorted(set(origenes))) if origenes else "surveillance:org"
 
 
-def _collect_surveillance_evidence(
+def collect_surveillance_evidence(
     session: Session, org_id: str, scope: str
 ) -> list[EvidenceInstance]:
     """Evidencia `log.window`/`log.pattern` desde lo ya ingerido para este org/scope (docs/08 §3:
@@ -168,7 +146,7 @@ def _collect_evidence_and_sources(
     scope: str,
     ai_client: AIClient | None,
 ) -> tuple[list[EvidenceInstance], list[Source]]:
-    evidence: list[EvidenceInstance] = list(_collect_surveillance_evidence(session, org_id, scope))
+    evidence: list[EvidenceInstance] = list(collect_surveillance_evidence(session, org_id, scope))
     sources: list[Source] = []
 
     if terraform_path is not None:
@@ -456,235 +434,6 @@ def enqueue_reevaluation(
     return assessment, job
 
 
-def maybe_enqueue_maturity_refresh(
-    session: Session,
-    methodology: Methodology,
-    redis_client,
-    *,
-    org_id: str,
-    scope: str,
-    nuevos_patrones: int,
-) -> Assessment | None:
-    """Refresco automatico de madurez al ingerir eventos (docs/06 §6, docs/08 §8): si la ingesta
-    agrego suficientes `log.pattern` nuevos para ese scope, encola una reevaluacion de la ultima
-    evaluacion completada del org+scope. `None` si no corresponde.
-
-    No dispara si: no hay evaluacion previa (nada que refrescar), no hay Redis, no se alcanza el
-    umbral (`settings.vigilancia.refresco_min_patrones_nuevos`) o ya hay una evaluacion en vuelo
-    para ese org+scope (evita apilar)."""
-
-    min_patrones = methodology.settings.vigilancia.refresco_min_patrones_nuevos
-    if redis_client is None or nuevos_patrones < min_patrones:
-        return None
-
-    in_flight = (
-        session.query(Assessment)
-        .filter(
-            Assessment.org_id == org_id,
-            Assessment.scope == scope,
-            Assessment.estado.in_(["pendiente", "en_progreso"]),
-        )
-        .first()
-    )
-    if in_flight is not None:
-        return None
-
-    previous = (
-        session.query(Assessment)
-        .filter_by(org_id=org_id, scope=scope, estado="completada")
-        .order_by(Assessment.creado_en.desc())
-        .first()
-    )
-    if previous is None:
-        return None
-
-    assessment, _ = enqueue_surveillance_refresh(session, methodology, redis_client, previous.id)
-    return assessment
-
-
-def enqueue_surveillance_refresh(
-    session: Session,
-    methodology: Methodology,
-    redis_client,
-    previous_assessment_id: str,
-) -> tuple[Assessment, Job]:
-    """Crea una reevaluacion **selectiva** y encola su `assessment_run` (docs/06 §6, FN-06): el
-    worker corre `run_surveillance_refresh` (reusa lo previo, recalcula solo lo operativo) en vez
-    del pipeline completo y sin IA."""
-
-    assessment, _paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
-    job = dispatch_job(
-        session,
-        redis_client,
-        "assessment_run",
-        {
-            "assessment_id": assessment.id,
-            "previous_assessment_id": previous_assessment_id,
-            "selective_refresh": True,
-            "ai_requested": False,
-            "apply_ai_adjustment": False,
-            "context": {},
-        },
-        assessment_id=assessment.id,
-    )
-    return assessment, job
-
-
-#: Tipos de evidencia operativa (vigilancia). El refresco selectivo los recalcula; el resto de la
-#: evidencia y de los resultados se reusa de la evaluacion anterior (docs/06 §6).
-SURVEILLANCE_EVIDENCE_TYPES = frozenset({"log.pattern", "log.window"})
-
-
-def _criterion_uses_surveillance(criterion) -> bool:
-    return any(ev.split("@", 1)[0] in SURVEILLANCE_EVIDENCE_TYPES for ev in criterion.evidencias)
-
-
-def run_surveillance_refresh(
-    session: Session,
-    methodology: Methodology,
-    assessment_id: str,
-    previous_assessment_id: str,
-) -> Assessment:
-    """Refresco selectivo de madurez (docs/06 §6, docs/11 FN-06).
-
-    Reusa evidencia, resultados y planes de la evaluacion anterior y **recalcula solo los criterios
-    que consumen evidencia de vigilancia** (`log.pattern`/`log.window`) con los patrones frescos.
-    Asi se preserva lo derivado de IA (claims U1, ajuste U2, texto de planes) en los criterios no
-    afectados, sin gastar IA ni degradar el resto."""
-
-    assessment = session.get(Assessment, assessment_id)
-    if assessment is None:
-        raise AssessmentNotFoundError(assessment_id)
-    previous = session.get(Assessment, previous_assessment_id)
-    if previous is None:
-        raise AssessmentNotFoundError(previous_assessment_id)
-
-    assessment.estado = "en_progreso"
-    session.commit()
-
-    try:
-        _apply_selective_refresh(session, methodology, assessment, previous)
-        assessment.estado = "completada"
-    except Exception as exc:
-        assessment.estado = "fallida"
-        assessment.error = str(exc)
-        session.commit()
-        raise
-
-    session.commit()
-    return assessment
-
-
-def _remap_result_evidence(result: CriterionResult, remap: dict[str, str]) -> CriterionResult:
-    if not result.evidence_ids:
-        return result
-    return result.model_copy(
-        update={"evidence_ids": [remap.get(ev, ev) for ev in result.evidence_ids]}
-    )
-
-
-def _clone_plan_row(row: PlanRow, assessment_id: str) -> PlanRow:
-    return PlanRow(
-        assessment_id=assessment_id,
-        incident_id=None,
-        criterion_id=row.criterion_id,
-        origen=row.origen,
-        titulo=row.titulo,
-        prioridad=row.prioridad,
-        objetivo=row.objetivo,
-        pasos=row.pasos,
-        verificacion=row.verificacion,
-        dependencias=row.dependencias,
-        generado_por=row.generado_por,
-        estado=row.estado,
-        diagnostico_observable=row.diagnostico_observable,
-        hipotesis=row.hipotesis,
-        comprobaciones_seguras=row.comprobaciones_seguras,
-        advertencia=row.advertencia,
-    )
-
-
-def _apply_selective_refresh(
-    session: Session, methodology: Methodology, assessment: Assessment, previous: Assessment
-) -> None:
-    affected = {
-        cid
-        for cid, criterion in methodology.criterios.items()
-        if _criterion_uses_surveillance(criterion)
-    }
-    # Lo no afectado se reusa tal cual (incluido lo derivado de IA): hereda con que se calculo.
-    assessment.reproducibility = previous.reproducibility
-
-    # 1. Fuentes (trazabilidad) y evidencia base (todo menos vigilancia), con remapeo de ids.
-    for source in previous.sources:
-        session.add(
-            Source(
-                assessment_id=assessment.id,
-                tipo=source.tipo,
-                ruta=source.ruta,
-                sha256=source.sha256,
-            )
-        )
-    remap: dict[str, str] = {}
-    for row in session.query(EvidenceRow).filter_by(assessment_id=previous.id).all():
-        if row.type_id in SURVEILLANCE_EVIDENCE_TYPES:
-            continue
-        new_evidence_id = str(uuid4())
-        remap[row.id] = new_evidence_id
-        session.add(
-            EvidenceRow(
-                id=new_evidence_id,
-                assessment_id=assessment.id,
-                type_id=row.type_id,
-                type_version=row.type_version,
-                subject_type=row.subject_type,
-                subject_ref=row.subject_ref,
-                scope=row.scope,
-                value=row.value,
-                source_id=row.source_id,
-                locator=row.locator,
-                observed_at=row.observed_at,
-                modality=row.modality,
-                limitations=row.limitations,
-                created_by=row.created_by,
-            )
-        )
-    session.flush()
-
-    # 2. Evidencia de vigilancia fresca (los log.pattern/log.window actuales del org+scope).
-    fresh = _collect_surveillance_evidence(session, assessment.org_id, assessment.scope)
-    session.add_all(evidence_to_row(assessment.id, item) for item in fresh)
-    session.flush()
-
-    # 3. Resultados: copiar los NO afectados (remapeando su evidencia) y recalcular los afectados.
-    for result in load_criterion_results(session, previous.id):
-        if result.criterion_id in affected:
-            continue
-        session.add(result_to_row(assessment.id, _remap_result_evidence(result, remap)))
-    session.flush()
-
-    all_evidence = load_evidence(session, assessment.id)
-    recomputed = engine.evaluate_only(methodology, all_evidence, sorted(affected))
-    for result in recomputed:
-        session.add(result_to_row(assessment.id, result))
-    session.flush()
-
-    # 4. Planes: copiar los de criterios NO afectados (conserva texto/estado, incluida la IA) y
-    #    regenerar (plantilla) solo los afectados, preservando su estado de seguimiento.
-    previous_estado: dict[str, str] = {}
-    for row in session.query(PlanRow).filter_by(assessment_id=previous.id).all():
-        previous_estado[row.criterion_id] = row.estado
-        if row.criterion_id in affected:
-            continue
-        session.add(_clone_plan_row(row, assessment.id))
-    for plan in recommendations_plans.generate_plans(methodology, recomputed):
-        new_row = plan_to_row(plan, assessment_id=assessment.id)
-        if new_row.criterion_id in previous_estado:
-            new_row.estado = previous_estado[new_row.criterion_id]
-        session.add(new_row)
-    session.flush()
-
-
 def load_criterion_results(session: Session, assessment_id: str) -> list[CriterionResult]:
     rows = session.query(CriterionResultRow).filter_by(assessment_id=assessment_id).all()
     return [row_to_result(row) for row in rows]
@@ -758,177 +507,6 @@ def load_plans(session: Session, assessment_id: str) -> list[Plan]:
     return [row_to_plan(row) for row in rows]
 
 
-@dataclass
-class IngestResult:
-    org_id: str
-    #: Eventos leidos del archivo (nuevos + los que ya estaban).
-    eventos_ingeridos: int
-    nuevos_incidentes: list[Incident]
-    incidentes_actualizados: list[Incident]
-    #: Eventos que no estaban ya guardados (mismo `event_id` en el mismo scope = ya existia).
-    eventos_nuevos: int = 0
-    #: Patrones (`log.pattern`) realmente nuevos por scope, es decir la evidencia que consume la
-    #: madurez. Reingerir el mismo archivo da 0. Alimenta el refresco automatico (docs/08 §8).
-    patrones_nuevos_por_scope: dict[str, int] = field(default_factory=dict)
-
-    @property
-    def eventos_existentes(self) -> int:
-        return self.eventos_ingeridos - self.eventos_nuevos
-
-    def summary(self) -> dict[str, int]:
-        """Resumen para `Job.resultado` (docs/11 FN-03): nuevos vs ya existentes."""
-
-        return {
-            "eventos_leidos": self.eventos_ingeridos,
-            "eventos_nuevos": self.eventos_nuevos,
-            "eventos_existentes": self.eventos_existentes,
-            "patrones_nuevos": sum(self.patrones_nuevos_por_scope.values()),
-            "incidentes_nuevos": len(self.nuevos_incidentes),
-            "incidentes_actualizados": len(self.incidentes_actualizados),
-        }
-
-
-def ingest_events(
-    session: Session,
-    methodology: Methodology,
-    org_name: str,
-    jsonl_path: Path,
-    ai_client: AIClient | None = None,
-) -> IngestResult:
-    """Flujo B completo (docs/08 §1): eventos -> patrones -> disparadores -> incidentes -> planes.
-
-    El flujo A (evidencia de madurez) no se recalcula aqui: la proxima vez que se corra
-    `run_assessment` para este org/scope, `_collect_surveillance_evidence` ya vera los
-    `log_patterns` persistidos ahora (docs/06 §6: "recalcular SOLO los criterios afectados" se
-    logra simplemente evaluando una nueva assessment, nunca mutando una anterior).
-    """
-
-    org = get_or_create_organization(session, org_name)
-    raw_events = load_events_jsonl(jsonl_path)
-
-    por_scope: dict[str, list] = {}
-    for evento in raw_events:
-        por_scope.setdefault(evento.scope, []).append(evento)
-
-    nuevos: list[Incident] = []
-    actualizados: list[Incident] = []
-    patrones_nuevos_por_scope: dict[str, int] = {}
-    eventos_nuevos = 0
-
-    for scope, eventos in por_scope.items():
-        ya_ingeridos = {
-            row.event_id
-            for row in session.query(Event.event_id).filter_by(org_id=org.id, scope=scope).all()
-        }
-        for evento in eventos:
-            if evento.event_id in ya_ingeridos:
-                continue  # mismo archivo reingerido: no duplicar filas append-only
-            eventos_nuevos += 1
-            session.add(
-                Event(
-                    org_id=org.id,
-                    scope=scope,
-                    event_id=evento.event_id,
-                    event_time=evento.event_time,
-                    tipo=evento.tipo,
-                    recurso=evento.recurso,
-                    actor=evento.actor,
-                    detalle=evento.detalle,
-                    source_id=_event_source_id(evento.fuente, jsonl_path),
-                )
-            )
-        session.flush()
-
-        matches = detect_patterns(eventos, methodology.settings.vigilancia)
-        # SQLite no conserva tzinfo en DateTime(timezone=True): se compara en naive UTC para
-        # que el dedup no falle silenciosamente por un desajuste de tipo, no de valor.
-        patrones_existentes = {
-            (row.patron, _naive(row.desde), _naive(row.hasta), row.conteo)
-            for row in session.query(LogPatternRow).filter_by(org_id=org.id, scope=scope).all()
-        }
-        agregados = 0
-        for match in matches:
-            clave = (match.patron, _naive(match.desde), _naive(match.hasta), match.conteo)
-            if clave in patrones_existentes:
-                continue  # mismo archivo reingerido: no duplicar el patron ya detectado
-            session.add(
-                LogPatternRow(
-                    org_id=org.id,
-                    scope=scope,
-                    patron=match.patron,
-                    resultado=match.resultado,
-                    desde=match.desde,
-                    hasta=match.hasta,
-                    conteo=match.conteo,
-                    fuentes=sorted(
-                        {
-                            _event_source_id(e.fuente, jsonl_path)
-                            for e in eventos
-                            if e.event_id in set(match.event_ids)
-                        }
-                    )
-                    or None,
-                )
-            )
-            agregados += 1
-        patrones_nuevos_por_scope[scope] = agregados
-        session.flush()
-
-        triggers = evaluate_triggers(matches, methodology.settings.vigilancia, scope)
-        for trigger in triggers:
-            incident, es_nuevo = upsert_incident(session, org.id, scope, trigger)
-            (nuevos if es_nuevo else actualizados).append(incident)
-
-            plan = generate_incident_plan(methodology, trigger, client=ai_client)
-            session.query(PlanRow).filter_by(incident_id=incident.id).delete()
-            session.add(plan_to_row(plan, incident_id=incident.id))
-
-    session.commit()
-    return IngestResult(
-        org_id=org.id,
-        eventos_ingeridos=len(raw_events),
-        eventos_nuevos=eventos_nuevos,
-        nuevos_incidentes=nuevos,
-        incidentes_actualizados=actualizados,
-        patrones_nuevos_por_scope=patrones_nuevos_por_scope,
-    )
-
-
-def list_incidents(session: Session, org_name: str) -> list[Incident]:
-    org = session.query(Organization).filter_by(nombre=org_name).one_or_none()
-    if org is None:
-        return []
-    return (
-        session.query(Incident)
-        .filter_by(org_id=org.id)
-        .order_by(Incident.actualizado_en.desc())
-        .all()
-    )
-
-
-def load_incident_plans(session: Session, incident_id: str) -> list[Plan]:
-    rows = session.query(PlanRow).filter_by(incident_id=incident_id).all()
-    return [row_to_plan(row) for row in rows]
-
-
-def get_incident(session: Session, incident_id: str) -> Incident | None:
-    return session.get(Incident, incident_id)
-
-
-def update_incident_estado(
-    session: Session, incident_id: str, estado: str, motivo: str | None = None
-) -> Incident | None:
-    """Cambia el estado y persiste (docs/11 UI-06/OP-04/OP-11). `None` si el incidente no existe;
-    lanza `InvalidTransition` si el cambio no esta permitido o falta el motivo al cerrar."""
-
-    incident = session.get(Incident, incident_id)
-    if incident is None:
-        return None
-    set_incident_estado(incident, estado, motivo)
-    session.commit()
-    return incident
-
-
 def get_organization(session: Session, org_id: str) -> Organization | None:
     return session.get(Organization, org_id)
 
@@ -948,72 +526,3 @@ def list_assessments(session: Session, *, org_id: str | None = None) -> list[Ass
     if org_id is not None:
         query = query.filter_by(org_id=org_id)
     return query.order_by(Assessment.creado_en.desc()).all()
-
-
-@dataclass
-class CriterionDiff:
-    criterion_id: str
-    titulo: str
-    estado_antes: str | None
-    estado_despues: str | None
-    score_antes: float | None
-    score_despues: float | None
-
-    @property
-    def cambio(self) -> bool:
-        return (self.estado_antes, self.score_antes) != (self.estado_despues, self.score_despues)
-
-
-@dataclass
-class ComparisonReport:
-    assessment_id_a: str
-    assessment_id_b: str
-    diffs: list[CriterionDiff]
-    global_antes: float | None
-    global_despues: float | None
-
-    @property
-    def cambios(self) -> list[CriterionDiff]:
-        return [d for d in self.diffs if d.cambio]
-
-
-def compare(
-    session: Session, methodology: Methodology, assessment_id_a: str, assessment_id_b: str
-) -> ComparisonReport:
-    for assessment_id in (assessment_id_a, assessment_id_b):
-        if session.get(Assessment, assessment_id) is None:
-            raise AssessmentNotFoundError(assessment_id)
-
-    results_a = {r.criterion_id: r for r in load_criterion_results(session, assessment_id_a)}
-    results_b = {r.criterion_id: r for r in load_criterion_results(session, assessment_id_b)}
-
-    diffs = []
-    for criterion_id in sorted(set(results_a) | set(results_b)):
-        ra, rb = results_a.get(criterion_id), results_b.get(criterion_id)
-        criterio = methodology.criterios.get(criterion_id)
-        diffs.append(
-            CriterionDiff(
-                criterion_id=criterion_id,
-                titulo=criterio.titulo if criterio else criterion_id,
-                estado_antes=ra.estado.value if ra else None,
-                estado_despues=rb.estado.value if rb else None,
-                score_antes=ra.final_score if ra else None,
-                score_despues=rb.final_score if rb else None,
-            )
-        )
-
-    global_antes = _global_score(methodology, list(results_a.values()))
-    global_despues = _global_score(methodology, list(results_b.values()))
-
-    return ComparisonReport(
-        assessment_id_a=assessment_id_a,
-        assessment_id_b=assessment_id_b,
-        diffs=diffs,
-        global_antes=global_antes,
-        global_despues=global_despues,
-    )
-
-
-def _global_score(methodology: Methodology, results: list[CriterionResult]) -> float | None:
-    funciones = aggregation.aggregate_by_funcion(methodology, results)
-    return aggregation.aggregate_global(methodology, funciones).score

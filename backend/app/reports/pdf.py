@@ -26,10 +26,10 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.api.schemas import AssessmentDetail, ComparisonOut
 from app.evaluation.schemas import CriterionResult
 from app.recommendations.findings import Finding
 from app.recommendations.plans import Plan
+from app.schemas.assessment import AssessmentDetail, ComparisonOut
 
 FUNCTION_NAMES = {
     "GV": "Gobernar",

@@ -34,6 +34,7 @@ from app.ai.client import build_default_client
 from app.ai.golden_eval import evaluate_extraction, format_report
 from app.ai.guard import check_live_ai_guard
 from app.core import assessment_service as svc
+from app.core import comparison, operations
 from app.core.db import build_engine, build_session_factory, ensure_schema
 from app.evaluation import aggregation, tier
 from app.evaluation.schemas import CriterionResult
@@ -232,7 +233,7 @@ def cmd_events(args: argparse.Namespace) -> None:
         _abort(guard_error)
 
     client = _build_ai_client_if_needed(args.ai)
-    result = svc.ingest_events(session, methodology, args.org, args.jsonl, ai_client=client)
+    result = operations.ingest_events(session, methodology, args.org, args.jsonl, ai_client=client)
 
     print(
         f"Eventos leidos: {result.eventos_ingeridos} "
@@ -251,7 +252,7 @@ def cmd_events(args: argparse.Namespace) -> None:
 
 
 def _print_incident_plans(session: Session, incident_id: str) -> None:
-    for plan in svc.load_incident_plans(session, incident_id):
+    for plan in operations.load_incident_plans(session, incident_id):
         print(f"  Plan: {plan.titulo} ({plan.generado_por})")
         print(f"    Diagnostico: {plan.diagnostico_observable}")
         print(f"    Hipotesis: {'; '.join(plan.hipotesis)}")
@@ -265,7 +266,7 @@ def _print_incident_plans(session: Session, incident_id: str) -> None:
 
 def cmd_incidents(args: argparse.Namespace) -> None:
     session = _open_session()
-    incidents = svc.list_incidents(session, args.org)
+    incidents = operations.list_incidents(session, args.org)
     if not incidents:
         print(f"Sin incidentes para {args.org!r}. Usa 'events' primero.")
         return
@@ -284,7 +285,7 @@ def cmd_compare(args: argparse.Namespace) -> None:
     session = _open_session()
 
     try:
-        report = svc.compare(session, methodology, args.assessment_a, args.assessment_b)
+        report = comparison.compare(session, methodology, args.assessment_a, args.assessment_b)
     except svc.AssessmentNotFoundError as exc:
         _abort(f"No existe un assessment con id {exc!s}.")
         return
