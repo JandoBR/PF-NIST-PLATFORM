@@ -166,11 +166,12 @@ export const ingestEvents = (
 export const getIncident = (incidentId: string) =>
   request<IncidentOut>(`/incidents/${incidentId}`);
 
-export const updateIncident = (incidentId: string, estado: string) =>
+/** Cambia el estado del incidente. Cerrar exige `motivo` (OP-11). */
+export const updateIncident = (incidentId: string, estado: string, motivo?: string) =>
   request<IncidentOut>(`/incidents/${incidentId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ estado }),
+    body: JSON.stringify({ estado, motivo }),
   });
 
 export const getIncidentPlans = (incidentId: string) =>

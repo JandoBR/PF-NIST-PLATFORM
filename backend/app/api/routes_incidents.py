@@ -10,7 +10,7 @@ from app.api.deps import get_current_user, get_session
 from app.api.schemas import IncidentOut, IncidentUpdate
 from app.core import assessment_service as svc
 from app.models.tables import User
-from app.ops.incidents import INCIDENT_ESTADOS
+from app.ops.incidents import INCIDENT_ESTADOS, InvalidTransition
 from app.recommendations.plans import Plan
 
 router = APIRouter(tags=["incidents"])
@@ -46,7 +46,12 @@ def update_incident(
             status_code=422,
             detail=f"Estado {payload.estado!r} invalido. Validos: {', '.join(INCIDENT_ESTADOS)}.",
         )
-    incident = svc.update_incident_estado(session, incident_id, payload.estado)
+    try:
+        incident = svc.update_incident_estado(
+            session, incident_id, payload.estado, payload.motivo
+        )
+    except InvalidTransition as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     assert incident is not None  # ya validado por _require_incident
     return IncidentOut.model_validate(incident)
 

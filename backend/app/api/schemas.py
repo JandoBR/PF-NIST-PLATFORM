@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from app.evaluation.schemas import Aggregate, TierEstimate
+from app.ops.incidents import allowed_transitions
 
 
 class OrganizationOut(BaseModel):
@@ -58,15 +59,25 @@ class IncidentOut(BaseModel):
     event_ids: list[str]
     criterios: list[str]
     timeline: list[dict]
+    motivo_cierre: str | None = None
     creado_en: datetime
     actualizado_en: datetime
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def transiciones(self) -> list[str]:
+        """Estados a los que puede pasar ahora (docs/11 OP-11); vacio si esta cerrado."""
+
+        return allowed_transitions(self.estado)
+
 
 class IncidentUpdate(BaseModel):
-    """`PATCH /incidents/{id}`: cambiar el estado (docs/11 UI-06/OP-04). Solo el estado: el resto
-    del incidente es observado, no editable desde la API."""
+    """`PATCH /incidents/{id}`: cambiar el estado (docs/11 UI-06/OP-04/OP-11). Solo el estado y, al
+    cerrar, el motivo: el resto del incidente es observado, no editable desde la API."""
 
     estado: str
+    #: Obligatorio al cerrar: como se verifico, o por que se descarta (falso positivo).
+    motivo: str | None = None
 
 
 class PlanUpdate(BaseModel):

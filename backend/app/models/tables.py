@@ -244,6 +244,8 @@ class Incident(Base):
     event_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     criterios: Mapped[list[str]] = mapped_column(JSON, default=list)
     timeline: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    #: Como se verifico o por que se descarto, registrado al cerrar (docs/11 OP-11).
+    motivo_cierre: Mapped[str | None] = mapped_column(Text, nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

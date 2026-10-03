@@ -19,6 +19,33 @@ from app.ops.triggers import TriggerMatch
 INCIDENT_ESTADOS = ("open", "triaged", "contained", "recovering", "closed")
 
 
+#: Siguiente paso del ciclo de vida: se avanza de uno en uno (docs/08 §4).
+_SIGUIENTE = {
+    "open": "triaged",
+    "triaged": "contained",
+    "contained": "recovering",
+    "recovering": "closed",
+}
+
+
+class InvalidTransition(ValueError):
+    """El cambio de estado no esta permitido; el mensaje dice desde donde y a donde se puede ir."""
+
+
+def allowed_transitions(estado: str) -> list[str]:
+    """Estados a los que se puede pasar desde `estado` (docs/11 OP-11).
+
+    Se avanza un paso por vez y no se retrocede. `closed` es terminal, y es el unico estado al que
+    se puede saltar desde cualquier estado abierto: cerrar un falso positivo (el diagrama de
+    docs/08 §4 lo muestra desde `open`) o un incidente resuelto sin pasar por todo el ciclo, siempre
+    con el motivo registrado."""
+
+    siguiente = _SIGUIENTE.get(estado)
+    if siguiente is None:
+        return []
+    return [siguiente] if siguiente == "closed" else [siguiente, "closed"]
+
+
 def _timeline_entry(trigger: TriggerMatch) -> dict:
     return {
         "disparador": trigger.disparador,
@@ -63,10 +90,34 @@ def upsert_incident(
     return incident, False
 
 
-def set_incident_estado(incident: Incident, estado: str) -> Incident:
-    """Cambia el estado de un incidente (docs/11 UI-06/OP-04). No valida contra `INCIDENT_ESTADOS`
-    aqui: la ruta es la que rechaza un estado desconocido con un 422 antes de llamar."""
+def set_incident_estado(incident: Incident, estado: str, motivo: str | None = None) -> Incident:
+    """Cambia el estado de un incidente validando la transicion (docs/11 UI-06/OP-04/OP-11).
 
+    Cerrar exige `motivo` (como se verifico o por que se descarta) y lo guarda en
+    `motivo_cierre`; toda transicion queda en la linea de tiempo. No valida que `estado` exista en
+    `INCIDENT_ESTADOS`: la ruta rechaza un estado desconocido con un 422 antes de llamar."""
+
+    permitidas = allowed_transitions(incident.estado)
+    if estado not in permitidas:
+        desde = (
+            "esta cerrado (estado terminal)"
+            if not permitidas
+            else f"esta {incident.estado!r}; puede pasar a: {', '.join(permitidas)}"
+        )
+        raise InvalidTransition(f"El incidente {desde}, no a {estado!r}.")
+    motivo = (motivo or "").strip() or None
+    if estado == "closed":
+        if motivo is None:
+            raise InvalidTransition(
+                "Cerrar un incidente exige registrar el motivo o como se verifico."
+            )
+        incident.motivo_cierre = motivo
+
+    ahora = datetime.now(UTC)
+    entrada = {"transicion": f"{incident.estado}->{estado}", "momento": ahora.isoformat()}
+    if motivo is not None:
+        entrada["motivo"] = motivo
+    incident.timeline = [*incident.timeline, entrada]
     incident.estado = estado
-    incident.actualizado_en = datetime.now(UTC)
+    incident.actualizado_en = ahora
     return incident

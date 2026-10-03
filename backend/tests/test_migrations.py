@@ -88,3 +88,14 @@ def test_migrated_jobs_table_stores_the_result(tmp_path, monkeypatch):
     inspector = inspect(create_engine(f"sqlite:///{db_path}"))
     columns = {c["name"]: c for c in inspector.get_columns("jobs")}
     assert columns["resultado"]["nullable"] is True
+
+
+def test_migrated_incidents_store_the_closing_reason(tmp_path, monkeypatch):
+    db_path = tmp_path / "migrated.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    _upgrade_head()
+
+    inspector = inspect(create_engine(f"sqlite:///{db_path}"))
+    columns = {c["name"]: c for c in inspector.get_columns("incidents")}
+    assert columns["motivo_cierre"]["nullable"] is True

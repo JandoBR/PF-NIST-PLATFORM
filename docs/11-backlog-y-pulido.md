@@ -165,10 +165,8 @@ GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
   explicación del criterio (CR-06).
 - [ ] OP-05 · (P2) Trigger D2 (`alert_raised` sin `incident_triaged`). Va junto con FN-08: requiere
   definir el patrón `incident_triaged`.
-- [ ] OP-11 · (P2) **Plan/incidente** (lo útil: validar transiciones y registrar motivo de cierre;
-  `brecha_ref` y "condición de cierre" son opcionales): `brecha_ref` (disparador) en el plan, "condición de cierre",
-  registrar motivo/verificación al cerrar un incidente y validar las **transiciones de estado**
-  (`PATCH` hoy permite cualquier estado→cualquier estado) (docs/05 §4.3, docs/08 §4/§7).
+- [x] OP-11 · **Plan/incidente** (lo útil). Hecho (docs/09 §52): transiciones de estado validadas y motivo de cierre
+  obligatorio. Quedan fuera, por opcionales, `brecha_ref` en el plan y la "condición de cierre".
 - [x] OP-12 · **Contratos de IA**. Hecho (docs/09 §37): reintento con backoff exponencial (1 s, 2 s),
   registro JSON por llamada (`app.ai.calls`: paso, `prompt_version`, `criterion_id`/`doc_id`,
   resultado, intentos, duración, tokens), validación E5 de fechas/frecuencias/roles y
@@ -231,8 +229,7 @@ demostrable.
 2. ~~**OP-12** y **OP-14**~~ (hechos, docs/09 §37).
 3. ~~**OP-04 (contradicciones) + TS-03**~~ (hechos, docs/09 §38); ~~**TS-01**~~ (hecho, docs/09 §39), ~~**TS-02**~~ (hecho, docs/09 §43) y **AMP-02**:
    lo más demostrable y lo que respalda las afirmaciones del diseño.
-4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), **OP-05 + FN-08**, **OP-11** (transiciones
-   y motivo de cierre), **OP-15** (líneas), ~~OP-13~~ (hecho, docs/09 §49), **API-04** (problem+json) y
+4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), **OP-05 + FN-08**, ~~OP-11~~ (hecho, docs/09 §52), **OP-15** (líneas), ~~OP-13~~ (hecho, docs/09 §49), **API-04** (problem+json) y
    la decisión de **CR-07**.
 
 > **Hecho:** catálogo completo (CR-01…CR-06), AMP-05, OP-12, OP-14, OP-04 (contradicciones), TS-03, TS-01, TS-02, AMP-02, FN-01, FN-09, API-03, UI-01…UI-10, FN-05, FN-06 y la parte de estado de

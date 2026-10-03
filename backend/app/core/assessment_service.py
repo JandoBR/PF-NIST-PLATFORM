@@ -926,14 +926,15 @@ def get_incident(session: Session, incident_id: str) -> Incident | None:
 
 
 def update_incident_estado(
-    session: Session, incident_id: str, estado: str
+    session: Session, incident_id: str, estado: str, motivo: str | None = None
 ) -> Incident | None:
-    """Cambia el estado y persiste (docs/11 UI-06/OP-04). `None` si el incidente no existe."""
+    """Cambia el estado y persiste (docs/11 UI-06/OP-04/OP-11). `None` si el incidente no existe;
+    lanza `InvalidTransition` si el cambio no esta permitido o falta el motivo al cerrar."""
 
     incident = session.get(Incident, incident_id)
     if incident is None:
         return None
-    set_incident_estado(incident, estado)
+    set_incident_estado(incident, estado, motivo)
     session.commit()
     return incident
 

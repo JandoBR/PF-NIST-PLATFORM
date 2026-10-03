@@ -1679,3 +1679,28 @@ detalle de cuánto era nuevo; lo aproximaba comparando el total de incidentes an
 **Verificación:** backend 4 tests nuevos (resumen de la ingesta y de la reingesta, resultado en el job, job
 fallido sin resultado, API, migración) + `ruff check` limpio; frontend `typecheck`, `lint` y `build` limpios.
 
+## 52. OP-11: transiciones validadas y motivo de cierre del incidente
+
+`PATCH /incidents/{id}` aceptaba cualquier estado desde cualquier estado (se podía reabrir un incidente cerrado o
+saltar de `open` a `recovering`) y cerrar no dejaba rastro de por qué. docs/08 §4 pide que se registre cómo se
+verificó.
+
+- **Transiciones** (`ops/incidents.allowed_transitions`): un paso por vez (`open → triaged → contained →
+  recovering → closed`), sin retroceder. `closed` es terminal y es el único estado al que se puede saltar, desde
+  cualquier estado abierto. Es una decisión propia: el diagrama de docs/08 §4 solo muestra `open → closed`
+  (falso positivo), pero la UI ya cerraba incidentes en cualquier punto y obligar a recorrer todo el ciclo para
+  cerrar uno resuelto habría sido peor; el motivo obligatorio distingue un caso del otro.
+- **Motivo:** cerrar exige `motivo` (texto no vacío) y se guarda en `incidents.motivo_cierre` (migración
+  `a9d4e6b1c280`). Toda transición, cierre o no, agrega a la línea de tiempo
+  `{transicion: "open->triaged", momento, motivo?}` (docs/08: "hechos observados, con la transición").
+- **API:** transición inválida o cierre sin motivo → **409** con el motivo y los estados permitidos; estado
+  desconocido sigue siendo 422. `IncidentOut` gana `motivo_cierre` y `transiciones` (los estados a los que puede
+  pasar ahora; vacío si está cerrado), de modo que la UI no repite la regla.
+- **UI:** el cajón del incidente ofrece "Pasar a …" para el siguiente paso y "Cerrar incidente…", que pide el
+  motivo antes de confirmar; el motivo se muestra en los incidentes cerrados y las transiciones en la línea de
+  tiempo.
+- **Pendiente (opcional en el backlog):** `brecha_ref` del plan y "condición de cierre".
+
+**Verificación:** backend 19 tests nuevos (`test_incident_transitions.py` y la migración) + `ruff check` limpio;
+frontend `typecheck`, `lint` y `build` limpios.
+

@@ -106,9 +106,13 @@ def test_closing_an_incident_persists_the_state(
     run_pending_jobs(db_session, methodology, fake_redis)
     incident_id = api_client.get(f"/orgs/{auth_user.org_id}/incidents").json()[0]["id"]
 
-    response = api_client.patch(f"/incidents/{incident_id}", json={"estado": "closed"})
+    response = api_client.patch(
+        f"/incidents/{incident_id}",
+        json={"estado": "closed", "motivo": "Falso positivo: pruebas de un administrador."},
+    )
     assert response.status_code == 200
     assert response.json()["estado"] == "closed"
+    assert response.json()["motivo_cierre"] == "Falso positivo: pruebas de un administrador."
 
     # Sale de "activos" (la UI filtra estado != closed) pero sigue en el historial.
     assert api_client.get(f"/incidents/{incident_id}").json()["estado"] == "closed"

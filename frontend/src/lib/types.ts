@@ -142,6 +142,10 @@ export interface IncidentOut {
   event_ids: string[];
   criterios: string[];
   timeline: Record<string, unknown>[];
+  /** Cómo se verificó o por qué se descartó, registrado al cerrar (OP-11). */
+  motivo_cierre: string | null;
+  /** Estados a los que puede pasar ahora; vacío si está cerrado (OP-11). */
+  transiciones: string[];
   creado_en: string;
   actualizado_en: string;
 }

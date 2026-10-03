@@ -204,7 +204,7 @@ evidencia y recalcular solo los criterios afectados.
 | `GET` | `/orgs/{org_id}/incidents` | Lista incidentes operativos (filtrable por estado/severidad). |
 | `GET` | `/incidents/{id}` | Detalle, timeline y hechos del incidente. |
 | `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |
-| `PATCH` | `/incidents/{id}` | Cambia el estado del incidente (`open`…`closed`); `closed` lo mueve al historial (docs/08 §4). |
+| `PATCH` | `/incidents/{id}` | Cambia el estado del incidente (`open`…`closed`). Un paso por vez, sin retroceder; `closed` (terminal, desde cualquier estado abierto) exige `motivo` y lo mueve al historial. Transición inválida o sin motivo → 409 (docs/08 §4, docs/09 §52). |
 | `POST` | `/assessments/{id}/reevaluate` | Crea nueva evaluación heredando fuentes. |
 | `GET` | `/assessments/{id}/compare/{other_id}` | Diferencias de puntajes, cobertura y hallazgos. |
 | `GET` | `/methodology` | Catálogo de criterios y tipos de evidencia vigentes. |

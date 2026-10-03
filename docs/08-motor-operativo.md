@@ -75,6 +75,9 @@ Reglas:
 - Un `incident` se **crea** por un disparador y se **actualiza** por hechos posteriores.
 - El motor **observa** hechos operativos; **no los fabrica** (no inventa un escalamiento porque exista un plan).
 - Cerrar un incidente es una decisión basada en criterios; nunca automática por ausencia de eventos.
+- Las transiciones se validan (docs/09 §52): se avanza un paso por vez y no se retrocede; `closed` es terminal y
+  se alcanza desde cualquier estado abierto (falso positivo o resuelto), **siempre con un motivo** que queda en
+  `motivo_cierre` y en la línea de tiempo.
 
 ## 5. Disparadores Determinísticos
 

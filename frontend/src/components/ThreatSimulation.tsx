@@ -238,6 +238,10 @@ export function ThreatSimulation({ orgId, orgNombre, onIngested }: Props) {
             setSelected(null);
             await refresh();
           }}
+          onUpdated={async (updated) => {
+            setSelected(updated);
+            await refresh();
+          }}
         />
       )}
     </div>
@@ -248,10 +252,12 @@ function IncidentDrawer({
   incident,
   onClose,
   onClosed,
+  onUpdated,
 }: {
   incident: IncidentOut;
   onClose: () => void;
   onClosed: () => void | Promise<void>;
+  onUpdated: (incident: IncidentOut) => void | Promise<void>;
 }) {
   const meta = incidentSeverityMeta(incident.severidad);
   const estado = incidentEstadoMeta(incident.estado);
@@ -259,6 +265,8 @@ function IncidentDrawer({
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const [closeFormOpen, setCloseFormOpen] = useState(false);
+  const [motivo, setMotivo] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -285,18 +293,27 @@ function IncidentDrawer({
   const allDone = totalSteps > 0 && checked.size === totalSteps;
   const isClosed = isIncidentClosed(incident.estado);
 
-  async function handleClose() {
+  // Un paso por vez y sin retroceder; cerrar exige un motivo (OP-11). Los estados permitidos los
+  // decide la API (`incident.transiciones`), no la UI.
+  async function handleTransition(next: string) {
     setClosing(true);
     setCloseError(null);
     try {
-      await updateIncident(incident.id, 'closed');
-      await onClosed();
+      const updated = await updateIncident(incident.id, next, next === 'closed' ? motivo : undefined);
+      if (next === 'closed') {
+        await onClosed();
+      } else {
+        await onUpdated(updated);
+      }
     } catch (err) {
-      setCloseError(err instanceof Error ? err.message : 'No se pudo cerrar el incidente.');
+      setCloseError(err instanceof Error ? err.message : 'No se pudo cambiar el estado del incidente.');
     } finally {
       setClosing(false);
     }
   }
+
+  const siguientes = incident.transiciones.filter((t) => t !== 'closed');
+  const puedeCerrar = incident.transiciones.includes('closed');
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -337,12 +354,16 @@ function IncidentDrawer({
               {incident.timeline.map((entry, i) => (
                 <div key={i} className="rounded-lg border border-white/[0.06] bg-ink-850/40 p-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs text-cyan-300">{String(entry.disparador ?? '')}</span>
+                    <span className="font-mono text-xs text-cyan-300">
+                      {String(entry.disparador ?? entry.transicion ?? '')}
+                    </span>
                     <span className="text-xs text-slate-500">
                       {entry.momento ? new Date(String(entry.momento)).toLocaleString() : ''}
                     </span>
                   </div>
-                  <p className="mt-1 text-sm text-slate-300">{String(entry.titulo ?? '')}</p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    {String(entry.titulo ?? entry.motivo ?? '')}
+                  </p>
                 </div>
               ))}
             </div>
@@ -452,19 +473,55 @@ function IncidentDrawer({
               <button onClick={onClose} className="btn-ghost border border-white/[0.06]">
                 Cerrar
               </button>
-              {!isClosed && (
+              {siguientes.map((next) => (
                 <button
-                  onClick={handleClose}
+                  key={next}
+                  onClick={() => void handleTransition(next)}
+                  disabled={closing}
+                  className="btn-ghost border border-cyan-500/30 text-cyan-300"
+                >
+                  Pasar a {incidentEstadoMeta(next).label.toLowerCase()}
+                </button>
+              ))}
+              {puedeCerrar && (
+                <button
+                  onClick={() => setCloseFormOpen((open) => !open)}
                   disabled={closing}
                   className={allDone ? 'btn-primary' : 'btn-ghost border border-emerald-500/30 text-emerald-300'}
-                  title="Marca el incidente como resuelto y lo mueve al historial."
+                  title="Cierra el incidente y lo mueve al historial; hay que registrar el motivo."
                 >
-                  {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
-                  Marcar como resuelto
+                  <CheckCheck className="h-4 w-4" />
+                  Cerrar incidente…
                 </button>
               )}
             </div>
           </div>
+          {puedeCerrar && closeFormOpen && (
+            <div className="mt-3 space-y-2">
+              <textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                rows={3}
+                placeholder="Motivo del cierre: cómo se verificó la resolución, o por qué se descarta (falso positivo)."
+                className="input w-full"
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={() => void handleTransition('closed')}
+                  disabled={closing || motivo.trim() === ''}
+                  className="btn-primary"
+                >
+                  {closing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+                  Confirmar cierre
+                </button>
+              </div>
+            </div>
+          )}
+          {isClosed && incident.motivo_cierre && (
+            <p className="mt-2 text-xs text-slate-400">
+              <span className="font-medium text-slate-300">Motivo del cierre:</span> {incident.motivo_cierre}
+            </p>
+          )}
           {closeError && (
             <p className="mt-2 flex items-center gap-1.5 text-xs text-rose-300">
               <AlertTriangle className="h-3.5 w-3.5" /> {closeError}
