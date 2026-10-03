@@ -15,8 +15,9 @@ detecta la capa de contradicciones, no esta prueba. Se informa como "adicional" 
 lo revise, pero no suma ni resta.
 
 Criterio de exito: recall >= 90 %, 100 % de citas localizables y 0 instrucciones obedecidas. La
-evaluacion contra el modelo real cuesta dinero: se lanza con `python -m app.main eval-ai` (pasa por el guard de IA
-viva). Los tests usan clientes de prueba para verificar que las metricas detectan los fallos.
+evaluacion contra el modelo real cuesta dinero: se lanza con `python -m app.main eval-ai` (pasa por
+el guard de IA viva). Los tests usan clientes de prueba para verificar que las metricas detectan los
+fallos.
 """
 
 from __future__ import annotations
