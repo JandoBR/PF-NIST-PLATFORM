@@ -154,3 +154,56 @@ def test_degrades_to_empty_list_when_ai_unavailable():
     )
 
     assert evidence == []
+
+
+def test_every_process_rule_can_be_reached_from_the_extraction_vocabulary():
+    """Cada regla que filtra `process_defined` por `contenido.proceso` debe poder recibir un valor
+    que el prompt ofrece. Antes no se ofrecia `respuesta` y CRI-RS-01 no encontraba nunca un plan."""
+
+    import re
+    from datetime import UTC, datetime
+
+    from app.ai.extraction import _CONTENT_FIELDS
+    from app.evaluation.rules import (
+        de02_event_analysis,
+        gv04_strategy_review,
+        id03_risk_assessment,
+        rc01_recovery_procedure,
+        rs01_response_plan,
+        rs02_incident_analysis,
+    )
+    from app.schemas.evidence import EvidenceInstance, Locator, Modality
+
+    vocabulario = re.search(r"proceso \(([^)]*)\)", _CONTENT_FIELDS["process_defined"]).group(1)
+    opciones = vocabulario.split("|")
+
+    def claim(proceso):
+        return EvidenceInstance(
+            type_id="doc.claim",
+            type_version=1,
+            subject_type="document",
+            subject_ref="doc:x",
+            scope="s",
+            value={
+                "tipo_afirmacion": "process_defined",
+                "contenido": {"proceso": proceso},
+                "encontrado": True,
+                "confianza": 0.9,
+            },
+            source_id="s",
+            locator=Locator(file="x.md"),
+            observed_at=datetime.now(UTC),
+            modality=Modality.DOCUMENTAL,
+            created_by="ai:extraction",
+        )
+
+    filtros = {
+        "CRI-RS-01": rs01_response_plan._es_de_respuesta,
+        "CRI-RC-01": rc01_recovery_procedure._es_de_recuperacion,
+        "CRI-GV-04": gv04_strategy_review._es_de_revision,
+        "CRI-ID-03": id03_risk_assessment._es_de_riesgos,
+        "CRI-RS-02": rs02_incident_analysis._es_de_analisis,
+        "CRI-DE-02": de02_event_analysis._es_de_declaracion,
+    }
+    inalcanzables = [cid for cid, f in filtros.items() if not any(f(claim(o)) for o in opciones)]
+    assert inalcanzables == []

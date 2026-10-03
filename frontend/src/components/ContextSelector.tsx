@@ -48,6 +48,10 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
   if (!open) return null;
 
   const hasCustomFiles = terraformFiles.length + ansibleFiles.length + documentFiles.length > 0;
+  // Hay documentos en esta evaluación (los de ejemplo o los subidos) y sin U1 no se leen.
+  const hasDocuments = (mode === 'demo'
+    ? (DEMO_BUNDLES.find((b) => b.id === bundleId)?.documents?.length ?? 0)
+    : documentFiles.length) > 0;
   const canSubmit = mode === 'demo' || hasCustomFiles;
 
   async function handleSubmit() {
@@ -247,6 +251,12 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
                 onChange={setUseAiForDocuments}
                 label="Usar IA para extraer afirmaciones de los documentos (U1)"
               />
+              {hasDocuments && !useAiForDocuments && (
+                <p className="pl-6 text-xs text-amber-300/90">
+                  Sin esta opción los documentos no se leen: Gobernar e Identificar quedan sin evidencia,
+                  y Responder y Recuperar solo con lo que muestren los eventos.
+                </p>
+              )}
               <p className="pl-6 text-xs text-slate-600">
                 Solo aplica a esta evaluación: se restablece al cerrar o enviar el modal. Sin una
                 DEEPSEEK_API_KEY configurada en el backend, esto no tiene costo ni efecto: el

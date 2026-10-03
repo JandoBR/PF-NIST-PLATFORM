@@ -249,7 +249,7 @@ Usuario (json):
 - Salida por plan con esquema fijo (ver §4.1).
 - Prohibido proponer acciones que ejecuten cambios: los pasos son sugerencias para un humano.
 
-Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v1.txt`,
+Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v2.txt`,
 `adjust_v1.txt`, `plan_v1.txt`). Cambiar un prompt cambia `prompt_version` y se registra en los ajustes.
 
 ## 7. Seguridad

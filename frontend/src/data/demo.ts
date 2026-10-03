@@ -1,7 +1,7 @@
-// Paquetes de evidencia de ejemplo, servidos como archivos estaticos desde /public/demo
-// (copias de backend/tests/fixtures). Son los mismos archivos que usan los tests del backend --
-// no son texto inventado para la demo, son Terraform/Ansible/eventos reales que el motor
-// determinista ya sabe evaluar.
+// Paquetes de evidencia de ejemplo, servidos como archivos estaticos desde /public/demo. El
+// Terraform, el Ansible y los eventos son copias de backend/tests/fixtures (lo que el motor ya sabe
+// evaluar). Los documentos estan escritos para la demo: cubren Gobernar, Identificar, Responder y
+// Recuperar, que sin documentos quedan sin evidencia. Solo se leen con la capa de IA activada.
 
 export interface DemoBundle {
   id: string;
@@ -20,14 +20,27 @@ export const DEMO_BUNDLES: DemoBundle[] = [
       'RDS sin cifrar, SSH root habilitado, firewall apagado. Pensado para mostrar hallazgos y planes.',
     terraform: ['/demo/gaps/terraform/main.tf'],
     ansible: ['/demo/gaps/ansible/hardening.yml'],
-    documents: ['/demo/gaps/documents/politica-seguridad.md', '/demo/gaps/documents/manual-operaciones.md'],
+    documents: [
+      '/demo/gaps/documents/politica-seguridad.md',
+      '/demo/gaps/documents/manual-operaciones.md',
+      '/demo/gaps/documents/roles.md',
+      '/demo/gaps/documents/riesgos-y-respaldos.md',
+    ],
   },
   {
     id: 'good',
     label: 'Entorno conforme',
-    description: 'RDS cifrado, backups retenidos, bastionado SSH correcto. Pocas o ninguna brecha.',
+    description:
+      'RDS cifrado, backups retenidos, bastionado SSH correcto y políticas completas. Pocas o ninguna brecha.',
     terraform: ['/demo/good/terraform/main.tf'],
     ansible: ['/demo/good/ansible/hardening.yml'],
+    documents: [
+      '/demo/good/documents/politica-seguridad.md',
+      '/demo/good/documents/roles-y-responsabilidades.md',
+      '/demo/good/documents/gestion-de-riesgos.md',
+      '/demo/good/documents/respuesta-incidentes.md',
+      '/demo/good/documents/continuidad.md',
+    ],
   },
 ];
 
