@@ -95,6 +95,34 @@ def test_tier_is_not_estimable_without_t2_indicator_criteria(methodology):
     assert estimate.tier is None
 
 
+def test_tier_is_not_estimable_when_every_t2_indicator_lacks_evidence(methodology):
+    """T3 (docs/01 §8.3): todo criterio tiene resultado; sin puntaje en ningun indicador de T2 no
+    se puede estimar. Antes esto daba "Tier 1 provisional"."""
+
+    results = [
+        _result("CRI-GV-01", Estado.EVIDENCIA_INSUFICIENTE),
+        _result("CRI-GV-02", Estado.EVIDENCIA_INSUFICIENTE),
+        _result("CRI-ID-03", Estado.ERROR),
+        _result("CRI-PR-01", Estado.EVALUADO, 100),
+    ]
+    estimate = tier.estimate_tier(methodology.settings.tier, results)
+
+    assert estimate.estimable is False and estimate.tier is None
+    assert "No estimable" in estimate.justificacion
+    assert estimate.faltantes  # la ruta de mejora sigue diciendo que falta (T5)
+
+
+def test_one_scored_t2_indicator_makes_the_tier_estimable(methodology):
+    results = [
+        _result("CRI-GV-01", Estado.NO_IMPLEMENTADO, 0),
+        _result("CRI-GV-02", Estado.EVIDENCIA_INSUFICIENTE),
+        _result("CRI-ID-03", Estado.EVIDENCIA_INSUFICIENTE),
+    ]
+    estimate = tier.estimate_tier(methodology.settings.tier, results)
+
+    assert estimate.estimable is True and estimate.tier == 1 and estimate.provisional is True
+
+
 def test_tier_is_partial_when_only_one_of_three_t2_indicators_exists(methodology):
     # CRI-GV-01 ya esta en el catalogo; CRI-GV-02 y CRI-ID-03 todavia no tienen adaptador.
     results = [_result("CRI-GV-01", Estado.EVALUADO, 100)]
@@ -173,3 +201,31 @@ def test_no_score_is_never_provisional(methodology):
         methodology, [_result("CRI-PR-01", Estado.EVIDENCIA_INSUFICIENTE)]
     )
     assert funciones[0].score is None and funciones[0].provisional is False
+
+
+def test_global_coverage_is_the_criteria_ratio_not_the_mean_of_functions(methodology):
+    """docs/01 §7: criterios aplicables con puntaje / criterios aplicables. Con 4 de 6 criterios PR
+    evaluados y los otros 17 sin evidencia, es 4/23, no el promedio de las seis funciones (4/36)."""
+
+    results = [
+        _result(cid, Estado.EVALUADO, 50)
+        if cid in {"CRI-PR-01", "CRI-PR-02", "CRI-PR-03", "CRI-PR-05"}
+        else _result(cid, Estado.EVIDENCIA_INSUFICIENTE)
+        for cid in methodology.criterios
+    ]
+    funciones = aggregation.aggregate_by_funcion(methodology, results)
+
+    glob = aggregation.aggregate_global(methodology, funciones)
+
+    assert glob.cobertura == round(4 / 23, 4)
+
+
+def test_not_applicable_criteria_leave_the_global_coverage_denominator(methodology):
+    results = [
+        _result("CRI-PR-01", Estado.EVALUADO, 100),
+        _result("CRI-PR-03", Estado.NO_APLICABLE),
+        _result("CRI-GV-01", Estado.EVIDENCIA_INSUFICIENTE),
+    ]
+    funciones = aggregation.aggregate_by_funcion(methodology, results)
+
+    assert aggregation.aggregate_global(methodology, funciones).cobertura == 0.5  # A2

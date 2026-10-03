@@ -14,7 +14,11 @@ def _check_level(
 ) -> tuple[bool, bool, bool, list[str]]:
     """Evalua un nivel de umbrales.
 
-    Retorna (algun_indicador_presente, cumple_todos, hay_insuficiente, faltantes).
+    Retorna (algun_indicador_evaluable, cumple_todos, hay_insuficiente, faltantes).
+
+    Un indicador es *evaluable* solo si su criterio dio puntaje (`evaluado`/`no_implementado`):
+    todo criterio tiene siempre un resultado, asi que "existe un resultado" no basta para la regla
+    T3 (docs/01 §8.3). Antes se contaba cualquier resultado y "no estimable" era inalcanzable.
     """
 
     presente = False
@@ -29,12 +33,12 @@ def _check_level(
             faltantes.append(f"{criterion_id} no evaluado")
             continue
 
-        presente = True
         if result.estado in (Estado.EVIDENCIA_INSUFICIENTE, Estado.ERROR):
             insuficiente = True
             cumple = False
             faltantes.append(f"{criterion_id} con evidencia insuficiente")
         elif result.estado in (Estado.EVALUADO, Estado.NO_IMPLEMENTADO):
+            presente = True
             if result.final_score is None or result.final_score < minimo:
                 cumple = False
                 faltantes.append(f"{criterion_id} = {result.final_score} (< {minimo})")
@@ -55,7 +59,11 @@ def estimate_tier(tier_settings: TierSettings, results: list[CriterionResult]) -
             nombre=None,
             provisional=False,
             estimable=False,
-            justificacion="Ningun criterio indicador de Tier 2 fue evaluado (T3).",
+            justificacion=(
+                "No estimable: ningun criterio indicador de Tier 2 tiene evidencia suficiente para"
+                " puntuar (T3)."
+            ),
+            faltantes=[f"{cid} con evidencia insuficiente" for cid in sorted(tier_settings.t2)],
         )
 
     achieved = 1

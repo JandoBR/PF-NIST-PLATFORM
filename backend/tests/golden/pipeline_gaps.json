@@ -260,7 +260,7 @@
     }
   ],
   "global": {
-    "cobertura": 0.1389,
+    "cobertura": 0.2174,
     "conteo_estados": {
       "evaluado": 5,
       "evidencia_insuficiente": 18
@@ -271,15 +271,15 @@
     "score": 21.25
   },
   "tier": {
-    "estimable": true,
+    "estimable": false,
     "faltantes": [
       "CRI-GV-01 con evidencia insuficiente",
       "CRI-GV-02 con evidencia insuficiente",
       "CRI-ID-03 con evidencia insuficiente"
     ],
-    "justificacion": "Tier 1 (Partial): mayor nivel cuyos requisitos se cumplen. Marcado provisional: algun indicador tiene evidencia insuficiente (T2).",
-    "nombre": "Partial",
-    "provisional": true,
-    "tier": 1
+    "justificacion": "No estimable: ningun criterio indicador de Tier 2 tiene evidencia suficiente para puntuar (T3).",
+    "nombre": null,
+    "provisional": false,
+    "tier": null
   }
 }

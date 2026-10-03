@@ -108,7 +108,8 @@ def aggregate_by_funcion(
 
 
 def aggregate_global(methodology: Methodology, funcion_aggregates: list[Aggregate]) -> Aggregate:
-    """Global = promedio ponderado de las funciones con puntaje (A6: sin ninguna, es None)."""
+    """Global = promedio ponderado de las funciones con puntaje (A6: sin ninguna, es None); la
+    cobertura se calcula sobre los criterios, no sobre las funciones."""
 
     pesos = methodology.settings.funciones
     con_score = [a for a in funcion_aggregates if a.score is not None]
@@ -120,15 +121,18 @@ def aggregate_global(methodology: Methodology, funcion_aggregates: list[Aggregat
         else None
     )
 
-    con_cobertura = [a for a in funcion_aggregates if a.cobertura is not None]
-    cobertura = (
-        sum(a.cobertura for a in con_cobertura) / len(con_cobertura) if con_cobertura else None
-    )
-
     conteo_estados: dict[str, int] = defaultdict(int)
     for aggregate in funcion_aggregates:
         for estado, count in aggregate.conteo_estados.items():
             conteo_estados[estado] += count
+
+    # Cobertura de evidencia (docs/01 §7): criterios aplicables con puntaje / criterios aplicables,
+    # sobre todos los criterios (cada uno pertenece a una sola funcion, asi que sumar los conteos de
+    # las funciones no duplica). No es el promedio de las coberturas por funcion: eso pesaba igual
+    # una funcion de 3 criterios que una de 6.
+    aplicables = sum(n for estado, n in conteo_estados.items() if estado != Estado.NO_APLICABLE)
+    puntuables = sum(conteo_estados.get(estado.value, 0) for estado in SCORING_STATES)
+    cobertura = puntuables / aplicables if aplicables else None
 
     return Aggregate(
         nivel=Nivel.GLOBAL,

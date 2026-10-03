@@ -72,10 +72,10 @@ def test_worker_completes_the_job_and_the_assessment(
     assert body["estado"] == "completada"
     assert body["score_global"] is not None
     assert any(a["ref"] == "PR" for a in body["agregados_funcion"])
-    # Solo Terraform, sin documentos: CRI-GV-01 (en el catalogo) queda evidencia_insuficiente,
-    # asi que el Tier es "Partial" pero marcado provisional -- igual que en la CLI.
-    assert body["tier"]["tier"] == 1
-    assert body["tier"]["provisional"] is True
+    # Solo Terraform, sin documentos: ningun indicador de Tier 2 (GV-01, GV-02, ID-03) tiene
+    # evidencia para puntuar, asi que el Tier es "no estimable" (T3), no "Partial".
+    assert body["tier"]["tier"] is None
+    assert body["tier"]["estimable"] is False
 
 
 def test_get_assessment_and_sub_resources(api_client, db_session, methodology, fake_redis):
