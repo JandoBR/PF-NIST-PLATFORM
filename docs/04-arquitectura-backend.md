@@ -220,7 +220,8 @@ Convenciones:
 - Respuestas siempre incluyen `puntaje` **y** `cobertura` juntos.
 - Los errores usan `application/problem+json` con `type`, `title`, `detail`, `instance`.
 - Paginación por cursor en listados grandes.
-- Toda respuesta incluye `methodology_version` para trazabilidad.
+- Toda respuesta lleva la cabecera `X-Methodology-Version` (la `methodology_version` con la que se calcula) para trazabilidad; las evaluaciones además la traen en el cuerpo. Las respuestas 500 que genera el servidor antes del middleware no la llevan.
+- Todo error es `application/problem+json` (`type`, `title`, `status`, `detail`, `instance`); `detail` es siempre un texto y la validación (422) agrega `errors` por campo (docs/09 §55).
 
 ## 7. Estructura de Carpetas
 

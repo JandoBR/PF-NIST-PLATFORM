@@ -1753,3 +1753,23 @@ este archivo". Ahora indica qué líneas.
 **Verificación:** backend 5 tests nuevos (rangos con anidación, strings y comentarios, bloque sin cerrar, líneas de
 Terraform y de Ansible, limitación de lo no soportado) + `ruff check` limpio.
 
+## 55. API-04: todos los errores son `problem+json` y toda respuesta lleva la versión de metodología
+
+docs/04 §6 prometía errores `application/problem+json` y `methodology_version` en toda respuesta. Solo dos
+excepciones propias (`AssessmentNotFoundError`, `SurveillanceError`) salían como problem+json; el resto
+(`HTTPException` de jobs, incidentes, auth…, la validación 422 y los 500) salía con el `{"detail": ...}` de
+FastAPI, y la validación con `detail` como lista de objetos.
+
+- **Errores** (`api/errors.py`): handlers para `HTTPException` (conserva sus cabeceras), `RequestValidationError`
+  (422) y cualquier excepción no prevista (500). Forma común: `type`, `title` (la frase HTTP), `status`,
+  `detail`, `instance`. `detail` es **siempre texto**, así que el cliente lo muestra tal cual (la UI ya leía
+  `body.detail`); la validación lo resume ("limit: …") y agrega `errors` con `loc/msg/type` por campo. El 500
+  responde un mensaje genérico y deja el detalle en el log: no filtra mensajes ni trazas internas.
+- **Versión de metodología:** middleware que añade `X-Methodology-Version` a toda respuesta (incluidos los
+  errores 4xx), y CORS la expone al navegador junto con `Content-Disposition`. Se eligió una cabecera y no un
+  campo en cada cuerpo para no tocar todos los esquemas; las evaluaciones ya la traían en el cuerpo.
+- **Límite:** un 500 que genera el servidor antes del middleware no lleva la cabecera.
+
+**Verificación:** backend 6 tests nuevos (`test_api_errors.py`: 404, 409, 401, 422, la cabecera en varias rutas y que
+el 500 no filtra) + `ruff check` limpio.
+

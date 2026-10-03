@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
@@ -24,6 +24,7 @@ from app.api import (
     routes_methodology,
     routes_orgs,
 )
+from app.api.deps import get_methodology
 from app.api.errors import register_exception_handlers
 from app.core.db import build_engine, build_session_factory, ensure_schema
 from app.core.seed import ensure_seed_users
@@ -72,7 +73,18 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Para que el navegador (JS) pueda leerlos: la version de metodologia y el nombre del PDF.
+    expose_headers=["X-Methodology-Version", "Content-Disposition"],
 )
+
+
+@app.middleware("http")
+async def add_methodology_version(request: Request, call_next):
+    """Toda respuesta lleva la version de la metodologia con la que se calculo (docs/04 §6)."""
+
+    response = await call_next(request)
+    response.headers["X-Methodology-Version"] = get_methodology().methodology_version
+    return response
 
 register_exception_handlers(app)
 
