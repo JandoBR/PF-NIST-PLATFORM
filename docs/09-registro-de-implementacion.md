@@ -1952,3 +1952,20 @@ modelo real (cuesta dinero; no se hizo).
 actualizaron los que fijaban el 0 por silencio) + `ruff check` y `ruff format --check` limpios. Los golden de
 pipeline solo cambian el texto de una explicación de DE-02.
 
+## 61. Citas tolerantes a formato y la evaluación nueva pasa a ser la activa
+
+- **Comparación de citas (E8).** `quotes.normalize` ahora deja solo letras y dígitos (minúsculas, sin acentos),
+  separados por un espacio. Antes solo colapsaba espacios: una viñeta, un `**` de markdown, comillas rizadas o un
+  guion distinto bastaban para descartar una cita fiel como "no localizable", y la afirmación dejaba de puntuar
+  por formato. Las palabras distintas o en otro orden siguen fallando, así que una cita inventada no pasa. La
+  misma función usa el golden set. Tests nuevos en `tests/test_quotes.py`.
+- **Evaluación nueva = activa al aceptarse el job.** El sondeo de la evaluación activa (§58) ya recargaba
+  puntajes, hallazgos y planes al terminar, pero una evaluación nueva solo pasaba a ser la activa cuando el
+  sondeo del modal acababa: si el modal se cerraba a mitad, quedaba en el historial y había que elegirla a mano.
+  Ahora `App.handleAccepted` obtiene la evaluación apenas la API acepta el job (202), la activa y cambia al
+  resumen; el sondeo existente la recarga al terminar, esté o no abierto el modal. Efecto: al lanzar una
+  evaluación se deja de ver la que se miraba antes (se ve vacía hasta que termina).
+
+**Verificación:** backend 505 tests; `tsc --noEmit` del frontend limpio. El cambio de UI no se probó en el
+navegador.
+

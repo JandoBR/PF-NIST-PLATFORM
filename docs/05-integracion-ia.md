@@ -63,7 +63,7 @@ Documento → extracción de texto → chunking (por sección/página)
 | E5 | Campos de tipo fecha/rol se validan contra formatos esperados; valores absurdos se descartan. |
 | E6 | Un chunk sin afirmaciones no genera evidencia; el documento completo se marca como analizado. |
 | E7 | Los prompts son **fijos por versión** (`prompt_version`); el modelo no los modifica. |
-| E8 | La cita de una afirmación encontrada **debe aparecer en el texto enviado** (sin distinguir mayúsculas, acentos ni espacios; `app/ai/quotes.py`, la misma comparación que usa el golden set). Si no aparece, la afirmación se guarda con la limitación "cita no localizable" y no cuenta para ningún criterio; se informa como hallazgo `limitacion`. La cita se guarda en la evidencia (`doc.claim@2`). |
+| E8 | La cita de una afirmación encontrada **debe aparecer en el texto enviado** (sin distinguir mayúsculas, acentos, espacios ni puntuación/markdown; `app/ai/quotes.py`, la misma comparación que usa el golden set). Si no aparece, la afirmación se guarda con la limitación "cita no localizable" y no cuenta para ningún criterio; se informa como hallazgo `limitacion`. La cita se guarda en la evidencia (`doc.claim@2`). |
 
 ### 2.4 Por qué las reglas no las genera la IA
 

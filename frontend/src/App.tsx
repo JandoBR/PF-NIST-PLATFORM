@@ -28,7 +28,7 @@ import {
   logout as apiLogout,
 } from '@/lib/api';
 import type { AuthUser } from '@/lib/api';
-import type { AssessmentDetail, CriterionResult, Finding, Plan } from '@/lib/types';
+import type { AssessmentAccepted, AssessmentDetail, CriterionResult, Finding, Plan } from '@/lib/types';
 
 type Tab = 'dashboard' | 'recommendations' | 'threats' | 'compare' | 'jobs';
 
@@ -153,10 +153,19 @@ function App() {
     await loadAssessmentDetails(detail);
   }
 
-  // Se llama apenas la API acepta el job (202): refresca el historial para que la evaluación
-  // recién encolada aparezca aunque el modal se cierre antes de que termine.
-  async function handleAccepted() {
+  // Se llama apenas la API acepta el job (202). La evaluación recién encolada pasa a ser la activa
+  // enseguida: así, aunque el modal se cierre antes de que termine, el sondeo de la activa (abajo)
+  // recarga puntajes, hallazgos y planes al acabar, sin ir al historial a elegirla.
+  async function handleAccepted(accepted: AssessmentAccepted) {
+    setDetailError(null);
     await refreshHistory();
+    try {
+      const detail = await getAssessment(accepted.assessment_id);
+      setTab('dashboard');
+      await loadAssessmentDetails(detail);
+    } catch {
+      // sin el detalle no se puede activar; queda en el historial y se elige desde ahí
+    }
   }
 
   // Mientras la evaluación activa está en curso (se eligió del historial o se acaba de crear), se
