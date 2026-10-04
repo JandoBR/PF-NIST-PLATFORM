@@ -8,12 +8,16 @@ Deterministas y sin IA: comparan dos lados *ya extraidos como evidencia* sobre l
 Solo se comparan evidencias del mismo `scope` (docs/02 §5: entornos distintos no se contradicen).
 Un hallazgo por criterio y por clase de contradiccion, nunca uno por recurso.
 
-**Efecto en el puntaje:** una afirmacion documental que contradice a otra fuente **no cuenta** para
+**Efecto en el puntaje:** una afirmacion documental que afirma un hecho que otra fuente desmiente
+(la politica dice "hay respaldos" y Terraform los deshabilita; "la base no es publica" y lo es; dos
+documentos con valores distintos) **no cuenta** para
 puntuar el criterio de la contradiccion (`excluded_by_criterion`): ese criterio se evalua como si la
 afirmacion no existiera, y el hallazgo y una nota en la explicacion dejan constancia. Los demas
 criterios que leen la misma afirmacion por otra propiedad (p. ej. `RC-02`, que mira la verificacion
 de integridad de una `backup_policy` cuya retencion contradice a Terraform) la siguen usando. La
-evidencia tecnica nunca se excluye.
+evidencia tecnica nunca se excluye. Una politica que fija un **requisito** que la configuracion no
+alcanza (retencion configurada menor que la documentada) no se excluye: es un incumplimiento, la
+regla del criterio lo puntua y el hallazgo lo muestra.
 Vive en `evaluation` (no en `recommendations`) porque el motor la necesita antes de puntuar; los
 hallazgos (`recommendations/contradictions.py`) solo la presentan.
 """
@@ -110,9 +114,12 @@ def _backup_vs_policy(evidence: list[EvidenceInstance]) -> list[Contradiction]:
                 _PR02,
                 "La retencion configurada es menor que la de la politica",
                 "media",
-                f"{detalle}. Prevalece lo tecnico (D7).",
+                f"{detalle}. La configuracion incumple la politica.",
                 ids,
-                _unique(p.id for p, _, _ in menores),
+                # La politica no afirma un hecho falso: fija un requisito que la configuracion no
+                # cumple. Sigue contando, y PR-02 lo puntua como retencion < politica (50). Si se
+                # excluyera, incumplir la politica valdria lo mismo que no tenerla (75).
+                [],
             )
         )
     return findings

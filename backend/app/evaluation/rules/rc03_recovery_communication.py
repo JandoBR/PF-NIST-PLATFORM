@@ -1,9 +1,9 @@
 """CRI-RC-03 — Restauracion verificada y comunicacion de recuperacion (docs/03 §6).
 
-Mixto: el 100 se alcanza con `log.pattern(restore_verified)` mas la comunicacion **definida o
-evidenciada** — esto es, `recovery_communicated` o una lista de notificacion documentada
-(`doc.claim(notification_list)` con destinatarios). `restore_verified` sin comunicacion es la
-condicion del disparador D5 (docs/08 §5).
+Mixto: el 100 exige `log.pattern(restore_verified)` mas la comunicacion **evidenciada**
+(`recovery_communicated`). Una lista de notificacion documentada (`doc.claim(notification_list)` con
+destinatarios) se cita, pero no sustituye a la comunicacion observada: antes daba 100 mientras el
+disparador D5 (docs/08 §5) abria un incidente por esa misma comunicacion faltante.
 """
 
 from __future__ import annotations
@@ -39,21 +39,28 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     # Sin destinatarios no hay lista (docs/09 §47): igual que en DE-03 y RS-03.
     notificacion = best_found_with(doc_claims(evidence, "notification_list"), "destinatarios")
 
-    if verificado is not None and (comunicado is not None or notificacion is not None):
-        ids = [ventana[0].id, verificado.id]
-        if comunicado is not None:
-            ids.append(comunicado.id)
+    if verificado is not None and comunicado is not None:
+        ids = [ventana[0].id, verificado.id, comunicado.id]
         if notificacion is not None:
             ids.append(notificacion.id)
-        fuente = (
-            "evidenciada en la ventana" if comunicado is not None else "definida en la politica"
-        )
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
             100,
-            f"Restauracion verificada y comunicacion de recuperacion {fuente}.",
+            "Restauracion verificada y comunicacion de recuperacion evidenciada en la ventana.",
             ids,
+        )
+
+    if verificado is not None and notificacion is not None:
+        # Saber a quien avisar no prueba que se aviso: sin `recovery_communicated` el tope es 75,
+        # como en los demas criterios mixtos sin evidencia operativa.
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            75,
+            "Restauracion verificada y lista de notificacion documentada, sin comunicacion de"
+            " recuperacion observada.",
+            [ventana[0].id, verificado.id, notificacion.id],
         )
 
     if verificado is not None:

@@ -159,7 +159,7 @@ cuando ambas hablan del mismo recurso, propiedad y alcance.**
 | Caso | Tratamiento | Efecto |
 |---|---|---|
 | Política dice “BD no pública”; Terraform dice `publicly_accessible = true` | Prevalece Terraform. Se registra contradicción. | El criterio usa el valor técnico; se crea hallazgo de coherencia. |
-| Política dice “backups 7 días”; Terraform dice `backup_retention_period = 1` | Prevalece Terraform. | Igual que arriba. |
+| Política dice “backups 7 días”; Terraform dice `backup_retention_period = 1` | La política fija un requisito que la configuración incumple. | La política sigue contando: el criterio puntúa retención < política (50) y se crea el hallazgo. |
 | Política dice “hay responsable de incidentes”; Terraform no aporta nada | Se acepta la evidencia documental. | Sin contradicción; el criterio de proceso usa `doc.claim`. |
 | Terraform tiene expresión no resuelta | No contradice al documento; es limitación. | Criterio → `evidencia_insuficiente` para ese recurso. |
 | Fuentes de entornos o momentos distintos | No se comparan ni contradicen. | Requieren mismo `scope` y ventana compatible. |
@@ -168,11 +168,13 @@ cuando ambas hablan del mismo recurso, propiedad y alcance.**
 Las contradicciones se registran como **hallazgos** con ambos lados citados (evidencia + locator).
 No penalizan doble: el hallazgo referencia el criterio afectado una sola vez.
 
-**Efecto en el puntaje:** una afirmación documental que contradice a otra fuente **no cuenta** para
-puntuar el criterio de la contradicción; ese criterio se evalúa como si no existiera, y queda el hallazgo
+**Efecto en el puntaje:** una afirmación documental que afirma un **hecho** que otra fuente desmiente
+(“hay respaldos” con retención 0, “la base no es pública” siendo pública, dos documentos con valores
+distintos) **no cuenta** para puntuar el criterio de la contradicción; ese criterio se evalúa como si no existiera, y queda el hallazgo
 más una nota en su explicación. La exclusión es por criterio: otros criterios que leen la misma afirmación
 por otra propiedad (p. ej. `RC-02` y la verificación de integridad de una política cuya retención contradice
-a Terraform) la siguen usando. En documento-vs-documento no cuenta ninguno de los dos (no se elige un ganador). La
+a Terraform) la siguen usando. Una política que fija un **requisito** que la configuración no alcanza
+(retención menor que la documentada) no se excluye: es un incumplimiento, lo puntúa la regla del criterio. En documento-vs-documento no cuenta ninguno de los dos (no se elige un ganador). La
 evidencia técnica nunca se excluye.
 
 **Tope de puntaje:** mientras un criterio tenga una contradicción sin resolver, su puntaje final **no

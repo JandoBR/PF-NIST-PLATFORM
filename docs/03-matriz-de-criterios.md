@@ -12,7 +12,7 @@ puntaje, peso, ajustabilidad por IA y recomendación base.
 | **Peso** | Entero 1–5; relativo dentro de la categoría |
 | **Ajuste IA** | `sí` / `no`; si `no`, el modelo no puede mover el puntaje (puede explicar) |
 | **MVP** | `sí` = entra al prototipo; `parcial` = versión reducida; `no` = primera ampliación |
-| **Estados** | `evaluado`, `no_implementado` (todo puntaje 0), `evidencia_insuficiente`, `no_aplicable`, `error` |
+| **Estados** | `evaluado`, `no_implementado` (todo puntaje 0; la UI lo muestra como "Ausente o fallido"), `evidencia_insuficiente`, `no_aplicable`, `error` |
 
 Reglas transversales:
 
@@ -154,7 +154,7 @@ Resumen de cobertura del catálogo:
 - **Regla:**
   - 100: retención configurada ≥ política documentada y backups con cifrado (instancia RDS con cifrado `enabled`; si no está confirmado, tope 75).
   - 75: retención configurada ≥ 7 días sin otros detalles.
-  - 50: backups habilitados con retención < política.
+  - 50: backups habilitados con retención < política. La política sigue contando (fija el requisito) y además se informa como hallazgo de contradicción (docs/09 §64).
   - 25: retención en 0 o backups deshabilitados explícitamente.
   - `unknown` → insuficiente.
 - **Recomendación:** alinear retención de backups con la política y asegurar su cifrado.
@@ -166,8 +166,7 @@ Resumen de cobertura del catálogo:
   - 100: sin reglas que expongan SSH (22) o RDP (3389) desde `0.0.0.0/0` o `::/0`, y SSH con acceso restringido.
   - 25: cualquier regla que exponga administración a Internet.
   - Se registra que es configuración declarada; no demuestra accesibilidad efectiva.
-  - Un CIDR que es una expresión sin resolver no se adivina: esa regla no cuenta y queda como limitación.
-  - Una regla abierta a Internet cuyo puerto es una expresión sin resolver (`var.ssh_port`), sin otra exposición confirmada → `evidencia_insuficiente`: no se puede afirmar ni 25 ni 100.
+  - Sin exposición confirmada, una regla de entrada que podría exponer administración y no se puede resolver → `evidencia_insuficiente` (ni 25 ni 100): abierta a Internet con el puerto sin resolver (`var.ssh_port`), o en un puerto administrativo con el CIDR sin resolver. Un CIDR sin resolver en un puerto no administrativo no afecta.
   - Sin security groups evaluables → insuficiente.
 - **Recomendación:** restringir puertos administrativos a rangos corporativos/VPN y eliminar reglas `0.0.0.0/0`.
 
@@ -214,8 +213,8 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** DE.CM-01, DE.CM-09 · **Tipo:** Mixto · **Peso:** 5 · **IA:** no · **MVP:** sí · **Tier:** T3 · **Privacidad:** apoyo Detect
 - **Evidencias:** `tf.logging.config`, `an.service.state`, `log.window` (¿hubo actividad observable?)
 - **Regla:**
-  - 100: CloudTrail habilitado **con centralización** (multirregión o destino declarado) **y** logs de sistema declarados (servicio de syslog habilitado en Ansible).
-  - 75: alguna fuente habilitada (CloudTrail o logs de sistema) sin la centralización completa.
+  - 100: CloudTrail habilitado **multirregión** **y** logs de sistema declarados (servicio de syslog habilitado en Ansible). El bucket de destino no cuenta como centralización: es obligatorio y siempre está.
+  - 75: alguna fuente habilitada (CloudTrail o logs de sistema) sin las dos condiciones anteriores.
   - 0: CloudTrail declarado pero ninguna fuente habilitada.
   - Sin configuración de monitoreo evaluable → `evidencia_insuficiente`, no 0. Un CloudTrail con estado sin resolver no puntúa.
   - Si hay ventana de observación (`log.window`) se cita como actividad observable; no cambia el puntaje.
@@ -310,8 +309,8 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** RC.RP-05, RC.CO-03 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** parcial · **Tier:** T4
 - **Evidencias:** `log.pattern(restore_verified)`, `doc.claim(tipo=notification_list)`
 - **Regla** (exige una ventana de eventos completa; sin ella → `evidencia_insuficiente`):
-  - 100: restauración verificada en el escenario + comunicación de recuperación observada (`recovery_communicated`) o lista de notificación documentada con destinatarios.
-  - 75: restauración verificada sin comunicación.
+  - 100: restauración verificada en el escenario + comunicación de recuperación observada (`recovery_communicated`).
+  - 75: restauración verificada sin comunicación observada. Una lista de notificación documentada (con destinatarios) se cita, pero no sustituye a la comunicación: saber a quién avisar no prueba que se avisó.
   - 50: recuperación ejecutada (ejercicio exitoso) sin verificación final.
   - Ventana completa sin ningún patrón aplicable → `evidencia_insuficiente` (sin oportunidad, no se penaliza). No hay tramo de 0.
 - **Recomendación:** confirmar operación normal tras restaurar y comunicar el estado a los interesados.

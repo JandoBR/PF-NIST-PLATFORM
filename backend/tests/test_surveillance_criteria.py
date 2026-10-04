@@ -214,13 +214,15 @@ def test_all_surveillance_rules_require_a_window(rule):
     assert rule.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
 
 
-def test_rc03_a_notification_list_without_recipients_is_not_a_communication():
+def test_rc03_a_notification_list_without_recipients_is_not_cited():
     """Sin destinatarios no hay lista (docs/09 §47, igual que DE-03/RS-03). El modelo real produjo
-    `destinatarios: []` en el golden set; antes eso daba RC-03 = 100."""
+    `destinatarios: []` en el golden set."""
 
     verificado = [_window(), _pattern("restore_verified")]
     vacia = _claim("notification_list", {"destinatarios": [], "criterios": "falla del servidor"})
     completa = _claim("notification_list", {"destinatarios": ["CISO"], "plazos": "72 horas"})
 
-    assert rc03_recovery_communication.evaluate([*verificado, vacia]).final_score == 75
-    assert rc03_recovery_communication.evaluate([*verificado, vacia, completa]).final_score == 100
+    sin_lista = rc03_recovery_communication.evaluate([*verificado, vacia])
+    assert sin_lista.final_score == 75 and vacia.id not in sin_lista.evidence_ids
+    con_lista = rc03_recovery_communication.evaluate([*verificado, vacia, completa])
+    assert con_lista.final_score == 75 and completa.id in con_lista.evidence_ids

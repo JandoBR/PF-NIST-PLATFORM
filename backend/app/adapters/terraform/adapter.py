@@ -108,13 +108,19 @@ def _find_unresolved(obj: Any, watched: set[str]) -> list[tuple[str, str]]:
     return found
 
 
-def _literal_list(value: Any) -> list[Any]:
-    """Elementos literales de una lista; una expresion (o un elemento-expresion) se descarta y
-    queda registrada como `tf.expression.unresolved`, nunca como un CIDR inventado."""
+#: Origen/destino de una regla cuyo CIDR es una expresion sin resolver.
+CIDR_DESCONOCIDO = "unknown"
 
+
+def _cidrs(value: Any) -> list[str]:
+    """CIDRs de una regla. Uno que es una expresion (o la lista entera) queda como `unknown`, nunca
+    como un CIDR inventado ni omitido: una regla de origen desconocido sigue siendo una regla."""
+
+    if _is_expression(value):
+        return [CIDR_DESCONOCIDO]
     if not isinstance(value, list):
         return []
-    return [item for item in value if not _is_expression(item)]
+    return [CIDR_DESCONOCIDO if _is_expression(item) else item for item in value]
 
 
 _RESOURCE_START = re.compile(r'^\s*resource\s+"([^"]+)"\s+"([^"]+)"\s*\{')
@@ -179,7 +185,9 @@ def _strip_meta(block: dict) -> dict:
 #: v3: emite tf.db_exposure.config (publicly_accessible).
 #: v4: el locator trae `line_start`/`line_end` del bloque `resource`, y `tf.resource.present` de un
 #: tipo no soportado declara la limitacion (docs/11 OP-15).
-ADAPTER_VERSION = "4"
+#: v5: una regla de security group con CIDR sin resolver se emite con `cidr: unknown` en vez de
+#: omitirse.
+ADAPTER_VERSION = "5"
 
 
 class TerraformAdapter:
@@ -542,7 +550,7 @@ class TerraformAdapter:
                 cidrs = [
                     cidr
                     for key in ("cidr_blocks", "ipv6_cidr_blocks")
-                    for cidr in _literal_list(block.get(key))
+                    for cidr in _cidrs(block.get(key))
                 ]
                 for cidr in cidrs:
                     rules.append(

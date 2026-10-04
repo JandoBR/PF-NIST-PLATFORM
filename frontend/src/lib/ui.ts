@@ -21,7 +21,7 @@ export const ESTADO_META: Record<Estado, Meta> = {
     bar: 'bg-emerald-400',
   },
   no_implementado: {
-    label: 'No implementado',
+    label: 'Ausente o fallido',
     text: 'text-rose-300',
     bg: 'bg-rose-500/10',
     border: 'border-rose-500/30',

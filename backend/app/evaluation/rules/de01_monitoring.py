@@ -64,16 +64,17 @@ def _evaluate_config(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     habilitados = [e for e in logging_cfg if e.value.get("habilitado") is True]
-    centralizado = any(
-        e.value.get("multi_region") is True or e.value.get("destino") for e in habilitados
-    )
+    # `destino` (el bucket del trail) es obligatorio en `aws_cloudtrail`: siempre viene, asi que
+    # no distingue nada. La centralizacion que si se puede leer es el trail multirregion.
+    centralizado = any(e.value.get("multi_region") is True for e in habilitados)
 
     if habilitados and centralizado and syslog:
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
             100,
-            "Fuentes de log habilitadas y centralizadas (CloudTrail + logs de sistema).",
+            "Fuentes de log habilitadas y centralizadas (CloudTrail multirregion + logs de"
+            " sistema).",
             [e.id for e in habilitados],
         )
     if habilitados or syslog:
@@ -81,7 +82,8 @@ def _evaluate_config(evidence: list[EvidenceInstance]) -> CriterionResult:
             CRITERION_ID,
             Estado.EVALUADO,
             75,
-            "Fuentes de monitoreo habilitadas, sin centralizacion completa declarada.",
+            "Fuentes de monitoreo habilitadas, sin CloudTrail multirregion junto a logs de"
+            " sistema.",
             [e.id for e in habilitados] or [e.id for e in by_type(evidence, "an.service.state")],
         )
     return result(

@@ -196,13 +196,22 @@ def test_rc02_fallo_prevalece_sobre_politica_scores_0():
 # -- CRI-RC-03 ----------------------------------------------------------------------
 
 
-def test_rc03_restauracion_y_notificacion_documentada_scores_100():
+def test_rc03_lista_documentada_sin_comunicacion_observada_scores_75():
+    """Saber a quien avisar no prueba que se aviso: antes esto daba 100 mientras D5 abria un
+    incidente por la comunicacion faltante (docs/09 §64)."""
+
     evidence = [
         _window(),
         _pattern("restore_verified"),
         _claim("notification_list", {"destinatarios": ["soc", "direccion"]}),
     ]
-    assert rc03_recovery_communication.evaluate(evidence).final_score == 100
+    result = rc03_recovery_communication.evaluate(evidence)
+    assert result.final_score == 75 and "lista de notificacion" in result.explanation
+
+    comunicado = rc03_recovery_communication.evaluate(
+        [*evidence, _pattern("recovery_communicated")]
+    )
+    assert comunicado.final_score == 100
 
 
 def test_rc03_restauracion_sin_comunicacion_scores_75():

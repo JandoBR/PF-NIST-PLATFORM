@@ -7,6 +7,7 @@ solo en la exposicion de puertos administrativos en los security groups.
 
 from __future__ import annotations
 
+from app.adapters.terraform.adapter import CIDR_DESCONOCIDO
 from app.evaluation.rules._common import by_type, noting_unresolved
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
@@ -20,12 +21,9 @@ CIDRS_ABIERTOS = {"0.0.0.0/0", "::/0"}
 def _expone_administracion(rule: dict) -> bool:
     if rule["direccion"] != "ingress" or rule["cidr"] not in CIDRS_ABIERTOS:
         return False
-    desde, hasta = rule["puerto_desde"], rule["puerto_hasta"]
-    if desde is None or hasta is None:
-        return True  # rango sin acotar (p. ej. protocolo -1): se asume que cubre el puerto.
     if _puerto_sin_resolver(rule):
-        return False  # no se adivina: ver `_abierta_con_puerto_sin_resolver`
-    return any(desde <= puerto <= hasta for puerto in PUERTOS_ADMINISTRATIVOS)
+        return False  # no se adivina: ver `_indeterminada`
+    return _cubre_administracion(rule)
 
 
 def _puerto_sin_resolver(rule: dict) -> bool:
@@ -37,14 +35,26 @@ def _puerto_sin_resolver(rule: dict) -> bool:
     )
 
 
-def _abierta_con_puerto_sin_resolver(rule: dict) -> bool:
-    """Ingress abierto a Internet cuyo puerto no se conoce: puede ser administrativo o no."""
+def _cubre_administracion(rule: dict) -> bool:
+    desde, hasta = rule["puerto_desde"], rule["puerto_hasta"]
+    if desde is None or hasta is None:
+        return True  # rango sin acotar (p. ej. protocolo -1): se asume que cubre el puerto.
+    return any(desde <= puerto <= hasta for puerto in PUERTOS_ADMINISTRATIVOS)
 
-    return (
-        rule["direccion"] == "ingress"
-        and rule["cidr"] in CIDRS_ABIERTOS
-        and _puerto_sin_resolver(rule)
-    )
+
+def _indeterminada(rule: dict) -> bool:
+    """Ingress que podria exponer administracion a Internet y no se puede saber: abierto en un
+    puerto sin resolver, o en un puerto administrativo (o sin resolver) desde un CIDR sin resolver.
+    """
+
+    if rule["direccion"] != "ingress":
+        return False
+    sin_puerto = _puerto_sin_resolver(rule)
+    if rule["cidr"] in CIDRS_ABIERTOS:
+        return sin_puerto
+    if rule["cidr"] == CIDR_DESCONOCIDO:
+        return sin_puerto or _cubre_administracion(rule)
+    return False
 
 
 @noting_unresolved({"cidr_blocks", "ipv6_cidr_blocks", "from_port", "to_port"})
@@ -73,17 +83,15 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             evidence_ids=[sg.id for sg in expuestos],
         )
 
-    indeterminados = [
-        sg for sg in relevant if any(_abierta_con_puerto_sin_resolver(r) for r in sg.value)
-    ]
+    indeterminados = [sg for sg in relevant if any(_indeterminada(r) for r in sg.value)]
     if indeterminados:
-        # Abierto a Internet en un puerto desconocido: ni 25 (no se sabe que sea administrativo)
-        # ni 100 (no se puede afirmar que no lo sea).
+        # Puerto u origen desconocido: ni 25 (no se sabe que exponga administracion) ni 100 (no
+        # se puede afirmar que no lo haga).
         return CriterionResult(
             criterion_id=CRITERION_ID,
             criterion_version=CRITERION_VERSION,
             estado=Estado.EVIDENCIA_INSUFICIENTE,
-            explanation="Reglas abiertas a Internet con el puerto sin resolver en: "
+            explanation="Reglas de entrada con el puerto o el origen sin resolver en: "
             + ", ".join(sg.subject_ref for sg in indeterminados)
             + ". No se puede concluir si exponen administracion.",
             evidence_ids=[sg.id for sg in indeterminados],

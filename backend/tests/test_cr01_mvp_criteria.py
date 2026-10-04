@@ -242,5 +242,14 @@ def test_de01_habilitado_sin_centralizar_es_75():
     assert de01_monitoring.evaluate(evidence).final_score == 75
 
 
+def test_de01_el_bucket_del_trail_no_cuenta_como_centralizacion():
+    """`destino` es obligatorio en `aws_cloudtrail`, asi que siempre viene: aceptarlo hacia que la
+    condicion de centralizacion fuera siempre verdadera (docs/09 §64)."""
+
+    trail = _tf_logging(habilitado=True, multi_region=False)
+    con_destino = trail.model_copy(update={"value": {**trail.value, "destino": "org-logs"}})
+    assert de01_monitoring.evaluate([con_destino, _syslog()]).final_score == 75
+
+
 def test_de01_sin_configuracion_es_insuficiente():
     assert de01_monitoring.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE

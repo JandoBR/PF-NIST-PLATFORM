@@ -2016,3 +2016,33 @@ falta de alerta (docs/03 vs docs/08 §5); `DE-01` acepta cualquier `destino` com
 Tier usa el puntaje final, con ajuste de IA incluido.
 
 **Verificación:** backend 514 tests.
+
+## 64. Lógica de negocio, segunda pasada: lo que no tenía sentido (`criteria.yml` v10)
+
+Revisión por sentido, no por coincidencia con los documentos. Cambia decisiones anteriores (§41, CR-05):
+
+- **Incumplir la política de respaldos da 50, no 75.** §41 excluía toda afirmación contradicha. Eso es
+  correcto cuando el documento afirma un hecho falso, pero una retención documentada es un requisito: con
+  política de 30 días y 14 configurados la organización incumple su propia política, que es justo el tramo de
+  50 de `PR-02`. Al excluirla puntuaba 75, igual que quien no tiene política, y el tramo de 50 era
+  inalcanzable. Ahora esa contradicción no excluye nada: la regla puntúa 50, la política se cita y el hallazgo
+  se mantiene. Las demás contradicciones (respaldos deshabilitados, base pública, documento vs documento)
+  siguen excluyendo.
+- **`RC-03`: el 100 exige comunicación observada.** Una lista de notificación documentada bastaba para el 100
+  mientras D5 abría un incidente por esa misma comunicación faltante. La evidencia operativa no sale de
+  Terraform ni de Ansible sino de los eventos (`recovery_communicated`), que son la misma fuente de la que
+  sale `restore_verified`: `RC-03` ya exigía una ventana de eventos para puntuar, así que el 100 sigue siendo
+  alcanzable. Con lista y sin comunicación observada: 75, y la lista se cita.
+- **`DE-01`: centralización = multirregión.** Se aceptaba cualquier `destino`, pero el bucket del trail es
+  obligatorio en `aws_cloudtrail`: la condición era siempre verdadera.
+- **`PR-03` con CIDR sin resolver.** El adaptador omitía la regla y el grupo quedaba en 100. Ahora la emite
+  con `cidr: unknown` (adaptador v5) y, en un puerto administrativo y sin otra exposición confirmada, el
+  criterio es `evidencia_insuficiente`.
+- **Etiqueta.** `no_implementado` se muestra como "Ausente o fallido": desde §63 incluye fallas observadas
+  (un ejercicio de restauración fallido), y "No implementado" no las describía.
+
+**Se mantiene** que `GV-01` elija por confianza (§47): elegir la afirmación más favorable daría un puntaje
+mayor del que es realista; la confianza es el criterio conservador.
+
+**Verificación:** backend 518 tests; `tsc` y `eslint` del frontend limpios. La etiqueta no se probó en el
+navegador.

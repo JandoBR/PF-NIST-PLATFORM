@@ -116,13 +116,16 @@ def _annotate_contradictions(
             anotados.append(r)
             continue
         detalle = " ".join(c.detalle for c in pendientes)
+        # Solo se dice que la afirmacion no conto si de verdad se excluyo.
+        cierre = (
+            " La afirmacion documental contradicha no cuenta para este puntaje (ver hallazgo)."
+            if any(c.excluded_claim_ids for c in pendientes)
+            else " (ver hallazgo)."
+        )
         anotados.append(
             r.model_copy(
                 update={
-                    "explanation": (
-                        f"{r.explanation} Contradiccion entre fuentes: {detalle} La afirmacion"
-                        " documental contradicha no cuenta para este puntaje (ver hallazgo)."
-                    )
+                    "explanation": f"{r.explanation} Contradiccion entre fuentes: {detalle}{cierre}"
                 }
             )
         )

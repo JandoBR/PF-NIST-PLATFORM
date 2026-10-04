@@ -84,7 +84,7 @@ def test_retention_below_policy_is_a_contradiction_citing_both_sides():
         None,
     )
     assert set(f.evidence_ids) == {tf.id, doc.id}
-    assert "30 dias" in f.detalle and "7" in f.detalle and "D7" in f.detalle
+    assert "30 dias" in f.detalle and "7" in f.detalle and "incumple" in f.detalle
 
 
 def test_policy_declaring_backups_while_terraform_disables_them_is_high_severity():
@@ -269,16 +269,31 @@ def _score(methodology, evidence, criterion_id):
     return next(r for r in results if r.criterion_id == criterion_id)
 
 
-def test_contradicted_policy_does_not_count_and_the_result_says_so(methodology):
-    # retencion 7 vs politica 30: antes puntuaba 50; ahora la politica no cuenta
+def test_retention_below_policy_scores_50_and_the_policy_still_counts(methodology):
+    """Una politica fija un requisito, no afirma un hecho: si la configuracion no lo alcanza es
+    un incumplimiento (50), no una afirmacion falsa que se ignore. Excluirla daba 75, lo mismo que
+    no tener politica (docs/09 §64)."""
+
     evidence = [_backup(7), _encryption(), _claim("backup_policy", {"retencion": "30 dias"})]
     pr02 = _score(methodology, evidence, "CRI-PR-02")
 
-    assert pr02.final_score == 75  # solo tecnico (>= 7 dias), sin politica: tope 75
+    assert pr02.final_score == 50
     assert "Contradiccion entre fuentes" in pr02.explanation
+    assert "no cuenta" not in pr02.explanation
+    assert evidence[2].id in pr02.evidence_ids  # la politica se cita: es la vara de medir
+
+    sin_politica = _score(methodology, [_backup(7), _encryption()], "CRI-PR-02")
+    assert sin_politica.final_score == 75  # incumplir la politica no puede valer lo mismo
+
+
+def test_false_factual_claim_does_not_count_and_the_result_says_so(methodology):
+    # La politica dice que hay respaldos y Terraform los deshabilita: esa afirmacion es falsa.
+    politica = _claim("backup_policy", {"respaldo": True, "retencion": "7 dias"})
+    pr02 = _score(methodology, [_backup(0), _encryption(), politica], "CRI-PR-02")
+
+    assert pr02.final_score == 25
     assert "no cuenta" in pr02.explanation
-    claim_id = evidence[2].id
-    assert claim_id not in pr02.evidence_ids  # no se cita como evidencia usada
+    assert politica.id not in pr02.evidence_ids
 
 
 def test_agreeing_policy_still_counts(methodology):
@@ -291,7 +306,7 @@ def test_agreeing_policy_still_counts(methodology):
 def test_technical_evidence_is_never_excluded(methodology):
     from app.evaluation.contradictions import exclude_contradicted
 
-    evidence = [_backup(7), _claim("backup_policy", {"retencion": "30 dias"})]
+    evidence = [_backup(0), _claim("backup_policy", {"respaldo": True, "retencion": "30 dias"})]
     visibles, contradicciones = exclude_contradicted(evidence)
     assert len(contradicciones) == 1
     assert evidence[0] in visibles and evidence[1] not in visibles
@@ -334,9 +349,9 @@ def test_same_document_repeating_itself_is_not_excluded(methodology):
 
 
 def test_evaluate_only_applies_the_same_exclusion(methodology):
-    evidence = [_backup(7), _encryption(), _claim("backup_policy", {"retencion": "30 dias"})]
+    evidence = [_backup(0), _encryption(), _claim("backup_policy", {"respaldo": True})]
     (pr02,) = engine.evaluate_only(methodology, evidence, ["CRI-PR-02"])
-    assert pr02.final_score == 75 and "no cuenta" in pr02.explanation
+    assert pr02.final_score == 25 and "no cuenta" in pr02.explanation
 
 
 def test_no_contradiction_leaves_evaluation_untouched(methodology):
@@ -394,7 +409,7 @@ def test_no_contradiction_means_no_cap():
     assert r.final_score == 75
 
 
-def test_cap_holds_until_the_contradiction_is_resolved(db_session, methodology, tmp_path):
+def test_policy_violation_scores_50_until_it_is_resolved(db_session, methodology, tmp_path):
     tf = tmp_path / "main.tf"
     docs = FIXTURES / "documents" / "politica-seguridad.md"
     politica_30 = FakeAIClient(
@@ -432,15 +447,15 @@ def test_cap_holds_until_the_contradiction_is_resolved(db_session, methodology, 
     primera = run(3)  # sin politica, retencion 3 (< 7): 50
     assert primera.final_score == 50
 
-    # El usuario corrige la retencion Y aparece una contradiccion nueva (14 < 30 de la politica):
-    # lo tecnico valdria 75, pero el tope lo deja en el puntaje anterior.
+    # El usuario sube la retencion a 14 y aporta una politica que exige 30: sigue en 50, ahora
+    # porque incumple la politica (la regla lo puntua; ya no hace falta el tope para contenerlo).
     segunda = run(14, documents_path=docs, ai_client=politica_30)
-    assert segunda.base_score == 75 and segunda.final_score == 50
-    assert "no puede superar el de la evaluacion anterior (50)" in segunda.explanation
+    assert segunda.base_score == 50 and segunda.final_score == 50
+    assert "Contradiccion entre fuentes" in segunda.explanation
 
-    # La contradiccion persiste: el tope sigue, no se levanta por esperar una evaluacion.
+    # El incumplimiento persiste: no mejora por esperar una evaluacion.
     tercera = run(14, documents_path=docs, ai_client=politica_30)
-    assert tercera.base_score == 75 and tercera.final_score == 50
+    assert tercera.final_score == 50
 
     # Se resuelve (retencion >= 30 dias, de acuerdo con la politica): se aplica normalmente.
     cuarta = run(30, documents_path=docs, ai_client=politica_30)
@@ -448,22 +463,27 @@ def test_cap_holds_until_the_contradiction_is_resolved(db_session, methodology, 
 
 
 def test_contradiction_only_excludes_the_claim_for_its_own_criterion(methodology):
-    """La retencion de la politica contradice a Terraform (PR-02), pero su verificacion de
-    integridad no: RC-02 y RC-01 la siguen leyendo. Antes la exclusion era global y ambos caian a
+    """Dos documentos discrepan en la retencion (PR-02), pero no en la verificacion de integridad:
+    RC-02 y RC-01 los siguen leyendo. Antes la exclusion era global y ambos caian a
     evidencia_insuficiente sin ninguna nota."""
 
-    politica = _claim(
-        "backup_policy",
-        {"respaldo": True, "verificacion_integridad": True, "retencion": "30 dias"},
-    )
-    evidence = [_backup(14), _encryption(), politica]
+    politicas = [
+        _claim(
+            "backup_policy",
+            {"respaldo": True, "verificacion_integridad": True, "retencion": retencion},
+            doc=doc,
+        )
+        for retencion, doc in (("7 dias", "politica"), ("14 dias", "manual"))
+    ]
+    evidence = [_backup(14), _encryption(), *politicas]
 
     pr02 = _score(methodology, evidence, "CRI-PR-02")
-    assert pr02.final_score == 75 and "no cuenta" in pr02.explanation
+    assert pr02.final_score == 75 and "no cuenta" in pr02.explanation  # como si no hubiera politica
+    assert not {p.id for p in politicas} & set(pr02.evidence_ids)
 
     rc02 = _score(methodology, evidence, "CRI-RC-02")
     assert (rc02.estado, rc02.final_score) == (Estado.EVALUADO, 75)
-    assert politica.id in rc02.evidence_ids and "Contradiccion" not in rc02.explanation
+    assert "Contradiccion" not in rc02.explanation
 
     rc01 = _score(methodology, evidence, "CRI-RC-01")
     assert (rc01.estado, rc01.final_score) == (Estado.EVALUADO, 50)

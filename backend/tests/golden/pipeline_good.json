@@ -7,7 +7,7 @@
       "evidence": [
         "tf.logging.config|aws_cloudtrail.main"
       ],
-      "explanation": "Fuentes de log habilitadas y centralizadas (CloudTrail + logs de sistema).",
+      "explanation": "Fuentes de log habilitadas y centralizadas (CloudTrail multirregion + logs de sistema).",
       "final_score": 100.0
     },
     {

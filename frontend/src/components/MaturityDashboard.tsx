@@ -31,7 +31,7 @@ interface DashboardProps {
 const FILTERS: { key: Estado | 'all'; label: string }[] = [
   { key: 'all', label: 'Todos' },
   { key: 'evaluado', label: 'Evaluado' },
-  { key: 'no_implementado', label: 'No implementado' },
+  { key: 'no_implementado', label: 'Ausente o fallido' },
   { key: 'evidencia_insuficiente', label: 'Evidencia insuficiente' },
   { key: 'no_aplicable', label: 'No aplicable' },
   { key: 'error', label: 'Error' },

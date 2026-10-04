@@ -15,7 +15,10 @@
 #     evidencia_insuficiente; GV-04 y DE-02 cambian tramos (docs/09 §60).
 # v9: todo puntaje 0 sale con estado no_implementado (la IA no puede subirlo, J2); RC-03 exige
 #     destinatarios en la lista de notificacion (docs/09 §63).
-version: 9
+# v10: PR-02 puntua la retencion menor que la politica (50) en vez de ignorar la politica; RC-03
+#      exige comunicacion observada para el 100; DE-01 centralizacion = multirregion; PR-03 es
+#      insuficiente con CIDR/puerto sin resolver (docs/09 §64).
+version: 10
 criterios:
   - id: CRI-GV-01
     version: 1

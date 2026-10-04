@@ -118,7 +118,8 @@ def test_security_group_cidr_expression_does_not_crash_nor_invent_a_cidr(tmp_pat
         """,
     )
     rules = _of(evidence, "tf.security_group.rules")[0].value
-    assert [r["cidr"] for r in rules] == ["10.0.0.0/16"]
+    # Una regla de origen desconocido sigue siendo una regla: queda como `unknown`, no se omite.
+    assert [r["cidr"] for r in rules] == ["unknown", "10.0.0.0/16", "unknown"]
     atributos = [e.value["atributo"] for e in _of(evidence, "tf.expression.unresolved")]
     assert atributos.count("cidr_blocks") == 2
 
@@ -348,3 +349,25 @@ def test_pr03_unresolved_port_does_not_hide_a_literal_exposure_nor_matter_when_c
 
     assert score(abierta_22 + variable_abierta) == 25  # la exposicion confirmada manda
     assert score(variable_interna) == 100  # puerto desconocido, pero no abierto a Internet
+
+
+def test_pr03_unresolved_cidr_matters_only_on_an_admin_port(tmp_path):
+    """Un origen sin resolver en el puerto 22 puede ser Internet o no: insuficiente, no 100. En un
+    puerto que no es administrativo da igual de donde venga."""
+
+    def evaluar(puerto):
+        tf = f"""
+        resource "aws_security_group" "sg" {{
+          ingress {{
+            from_port   = {puerto}
+            to_port     = {puerto}
+            protocol    = "tcp"
+            cidr_blocks = var.cidrs
+          }}
+        }}
+        """
+        return pr03_admin_access.evaluate(_parse(tmp_path, tf))
+
+    ssh = evaluar(22)
+    assert (ssh.estado, ssh.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
+    assert evaluar(443).final_score == 100
