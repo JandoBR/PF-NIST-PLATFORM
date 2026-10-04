@@ -2144,3 +2144,11 @@ La vista decía cuánto cambió el puntaje, no qué cambió ni por qué, y uno d
 
 **Verificación:** backend 557 tests (`tests/test_comparison.py`); `tsc`, `eslint` y `vite build` limpios. **No
 verificado:** la pantalla en el navegador.
+
+**PDF de la comparación.** Tenía las mismas carencias que la pantalla y solo había recibido el aviso de reglas
+o alcance distintos. Ahora trae también: cobertura de evidencia junto al puntaje y el Tier; tabla de cambio por
+función (puntaje ponderado y cobertura, los mismos agregados que el informe ejecutivo); hallazgos que ya no
+aparecen o son nuevos; la columna "Cambio" con la dirección (Mejoró, Empeoró, Ahora se evalúa, Dejó de
+evaluarse) en vez de "N/D" cuando faltaba un puntaje, ordenada con lo que empeoró primero; y una sección "Por
+qué cambió cada criterio" con la explicación de antes y de después. En ambos PDF `no_implementado` se muestra
+como "ausente o fallido", igual que en la UI. Revisado a la vista generando la comparación brechas → en mejora.

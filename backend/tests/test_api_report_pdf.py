@@ -63,6 +63,27 @@ def test_comparison_report_lists_both_assessments(api_client, db_session, method
     assert f"{before['score_global']:g}" in text and f"{after['score_global']:g}" in text
 
 
+def test_comparison_report_says_what_changed_and_why(
+    api_client, db_session, methodology, fake_redis
+):
+    """Lo mismo que la pantalla Comparar (docs/09 §67): cobertura, funciones, direccion de cada
+    cambio, hallazgos y la explicacion de antes y de despues."""
+
+    before = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
+    after = _create_and_complete(api_client, db_session, methodology, fake_redis, "good")
+    text = _norm(
+        _text(api_client.get(f"/assessments/{before['id']}/compare/{after['id']}/report.pdf"))
+    )
+
+    assert "Cobertura de evidencia" in text
+    assert "Cambio por funcion" in text and "PR - " in text
+    assert "Mejoro" in text and "Ahora se evalua" in text  # PR-06 no tenia evidencia en gaps
+    assert "Hallazgos - ya no aparecen: " in text
+    assert "Por que cambio cada criterio" in text
+    assert "Antes: Puertos administrativos (22/3389) expuestos a Internet" in text
+    assert "Despues: Ningun security group expone puertos administrativos" in text
+
+
 def test_report_of_an_unfinished_assessment_is_409(api_client):
     accepted = _upload_terraform(api_client, "good").json()  # encolado, sin correr el job
 

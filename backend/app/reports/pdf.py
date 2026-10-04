@@ -19,6 +19,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import (
+    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -85,8 +86,33 @@ def _pct(value: float | None) -> str:
     return "N/D" if value is None else f"{value:.0%}"
 
 
+#: Como en la UI: `no_implementado` incluye fallas observadas, no solo "no implementado".
+_ESTADO_LABELS = {"no_implementado": "ausente o fallido"}
+
+#: Que le paso a un criterio entre dos evaluaciones (`CriterionDiff.direccion`).
+_DIRECCION_LABELS = {
+    "mejora": "Mejoro",
+    "retroceso": "Empeoro",
+    "ahora_evaluado": "Ahora se evalua",
+    "dejo_de_evaluarse": "Dejo de evaluarse",
+    "cambio_de_estado": "Cambio de estado",
+    "igual": "Sin cambio",
+}
+#: Primero lo que empeoro, como en la pantalla.
+_DIRECCION_ORDER = (
+    "retroceso",
+    "dejo_de_evaluarse",
+    "mejora",
+    "ahora_evaluado",
+    "cambio_de_estado",
+    "igual",
+)
+
+
 def _estado(value: str | None) -> str:
-    return "-" if value is None else value.replace("_", " ")
+    if value is None:
+        return "-"
+    return _ESTADO_LABELS.get(value, value.replace("_", " "))
 
 
 def _fecha(value: datetime) -> str:
@@ -417,12 +443,17 @@ def build_comparison_report(
                     _p(_score(comparison.global_despues), _CELL_BOLD),
                 ],
                 [
+                    _p("Cobertura de evidencia", _CELL_BOLD),
+                    _p(_pct(antes.cobertura_global), _CELL),
+                    _p(_pct(despues.cobertura_global), _CELL),
+                ],
+                [
                     _p("Tier estimado", _CELL_BOLD),
                     _p(_tier_text(antes), _CELL),
                     _p(_tier_text(despues), _CELL),
                 ],
             ],
-            [3.5 * cm, (width - 3.5 * cm) / 2, (width - 3.5 * cm) / 2],
+            [4.4 * cm, (width - 4.4 * cm) / 2, (width - 4.4 * cm) / 2],
         ),
         Spacer(1, 6),
         _p(f"Cambio en el puntaje global: {delta_text}", _BODY),
@@ -444,31 +475,90 @@ def build_comparison_report(
             )
         )
 
-    cambios = [d for d in comparison.diffs if d.cambio]
+    # Hallazgos que dejaron de aparecer o son nuevos.
+    if comparison.hallazgos_resueltos or comparison.hallazgos_nuevos:
+        partes = []
+        if comparison.hallazgos_resueltos:
+            partes.append("ya no aparecen: " + ", ".join(comparison.hallazgos_resueltos))
+        if comparison.hallazgos_nuevos:
+            partes.append("nuevos: " + ", ".join(comparison.hallazgos_nuevos))
+        story.append(_p("Hallazgos - " + "; ".join(partes) + ".", _BODY))
+        if any(d.direccion == "dejo_de_evaluarse" for d in comparison.diffs):
+            story.append(
+                _p(
+                    "Un hallazgo tambien deja de aparecer cuando su criterio deja de poder"
+                    " evaluarse; no significa que se haya corregido.",
+                    _SMALL,
+                )
+            )
+
+    # Madurez por funcion: los mismos agregados (ponderados) que el informe ejecutivo.
+    antes_f = {a.ref: a for a in antes.agregados_funcion}
+    despues_f = {a.ref: a for a in despues.agregados_funcion}
+    refs = [r for r in _FUNCTION_ORDER if r in antes_f or r in despues_f]
+    refs += sorted((set(antes_f) | set(despues_f)) - set(_FUNCTION_ORDER))
+    if refs:
+        filas = [_head("Funcion", "Puntaje antes", "Puntaje despues", "Cobertura")]
+        for ref in refs:
+            a, d = antes_f.get(ref), despues_f.get(ref)
+            filas.append(
+                [
+                    _p(f"{ref} - {FUNCTION_NAMES.get(ref, ref)}", _CELL),
+                    _p(_score(a.score if a else None), _CELL),
+                    _p(_score(d.score if d else None), _CELL_BOLD),
+                    _p(
+                        f"{_pct(a.cobertura if a else None)} > {_pct(d.cobertura if d else None)}",
+                        _CELL,
+                    ),
+                ]
+            )
+        story += [
+            _p("Cambio por funcion", _H2),
+            _table(
+                filas,
+                [width * 0.37, width * 0.2, width * 0.2, width * 0.23],
+                align_right=(1, 2),
+            ),
+        ]
+
+    cambios = sorted(
+        (d for d in comparison.diffs if d.cambio),
+        key=lambda d: (_DIRECCION_ORDER.index(d.direccion), d.criterion_id),
+    )
     story.append(_p(f"Criterios que cambiaron ({len(cambios)})", _H2))
     if cambios:
         filas = [_head("Criterio", "Descripcion", "Estado", "Puntaje", "Cambio")]
         for d in cambios:
-            antes_s, despues_s = d.score_antes, d.score_despues
-            variacion = (
-                "N/D" if antes_s is None or despues_s is None else f"{despues_s - antes_s:+g}"
-            )
             filas.append(
                 [
                     _p(d.criterion_id, _CELL),
                     _p(d.titulo, _CELL),
                     _p(f"{_estado(d.estado_antes)} > {_estado(d.estado_despues)}", _CELL),
-                    _p(f"{_score(antes_s)} > {_score(despues_s)}", _CELL),
-                    _p(variacion, _CELL_BOLD),
+                    _p(f"{_score(d.score_antes)} > {_score(d.score_despues)}", _CELL),
+                    _p(_DIRECCION_LABELS.get(d.direccion, d.direccion), _CELL_BOLD),
                 ]
             )
         story.append(
             _table(
                 filas,
-                [width * 0.14, width * 0.34, width * 0.22, width * 0.18, width * 0.12],
-                align_right=(4,),
+                [width * 0.14, width * 0.30, width * 0.24, width * 0.14, width * 0.18],
             )
         )
+
+        # El porque de cada cambio: la explicacion del criterio en cada evaluacion.
+        story.append(_p("Por que cambio cada criterio", _H2))
+        for d in cambios:
+            # Cada criterio va entero en una pagina: el titulo no se separa de su explicacion.
+            story.append(
+                KeepTogether(
+                    [
+                        _p(f"{d.criterion_id} - {d.titulo}", _CELL_BOLD),
+                        _p(f"Antes: {d.explicacion_antes or 'sin resultado'}", _SMALL),
+                        _p(f"Despues: {d.explicacion_despues or 'sin resultado'}", _SMALL),
+                        Spacer(1, 5),
+                    ]
+                )
+            )
     else:
         story.append(_p("Ningun criterio cambio entre las dos evaluaciones."))
 
