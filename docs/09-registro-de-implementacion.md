@@ -1990,3 +1990,28 @@ navegador.
   proceso de riesgos (ID-03 = 75, requisito de Tier 2). Ahora mira el valor.
 
 **Verificación:** backend 511 tests; migración probada ida y vuelta en SQLite, no en Postgres.
+
+## 63. Lógica de negocio: tres correcciones (`criteria.yml` v9)
+
+De la lista de inconsistencias de la revisión se corrigió solo lo que contradecía a los propios documentos:
+
+- **Todo 0 sale como `no_implementado`.** docs/01 §3 define ese estado como "evidencia explícita de ausencia →
+  0", pero las reglas devolvían sus 0 como `evaluado` (solo `DE-01` usaba el estado). Consecuencia: la
+  protección J2/R3 ("la IA no sube un `no_implementado`") nunca se activaba, y U2 podía subir una falla
+  observada en `DE-02`, `RS-01` o `RC-02`. Ahora el motor (`engine._evaluate_one`) fija el estado para
+  cualquier puntaje base 0. Los puntajes no cambian; cambian el estado y el conteo de estados (golden
+  `pipeline_gaps` regenerado). Al comparar con una evaluación anterior a este cambio, esos criterios aparecen
+  como modificados por el estado.
+- **D3 como D2.** Un `escalation_done` anterior al `incident_declared` contaba como escalamiento a tiempo
+  (delta negativo ≤ plazo). Ahora exige que sea posterior, igual que el triaje en D2 (§53).
+- **`RC-03` exige destinatarios.** Leía la `notification_list` con `best_found`, así que una lista sin
+  destinatarios (el caso real de §47) bastaba para el 100. Usa `best_found_with("destinatarios")`, como
+  `DE-03` y `RS-03`.
+
+**Revisado y dejado como está** (decisiones documentadas o de diseño, no errores): `GV-01` elige por confianza
+(§47); una retención contradicha da 75 en `PR-02` (§41); `RC-03` acepta la lista documentada en lugar de la
+comunicación observada (docs/03); `DE-02` cuenta la declaración como positivo aunque D1 abra incidente por
+falta de alerta (docs/03 vs docs/08 §5); `DE-01` acepta cualquier `destino` como centralización (docs/03); el
+Tier usa el puntaje final, con ajuste de IA incluido.
+
+**Verificación:** backend 514 tests.

@@ -88,7 +88,7 @@ la madurez.
 |---|---|---|---|---|
 | D1 | `auth_failures_burst` ≥ N en ventana W y **sin** `alert_raised` esperado | media | Crear incidente + plan de detección | CRI-DE-02, CRI-DE-03 |
 | D2 | `alert_raised` sin `incident_triaged` dentro de `plazo_triaje_minutos` (30) | media | Crear incidente + plan de triaje | CRI-RS-01 |
-| D3 | `incident_declared` sin `escalation_done` dentro del plazo documentado | alta | Crear/actualizar incidente + plan de escalamiento | CRI-RS-01 |
+| D3 | `incident_declared` sin `escalation_done` posterior dentro del plazo documentado | alta | Crear/actualizar incidente + plan de escalamiento | CRI-RS-01 |
 | D4 | `restore_exercise_run` con resultado `fail` | alta | Crear incidente + plan de recovery | CRI-RC-02, CRI-RC-03 |
 | D5 | `restore_verified` sin `recovery_communicated` | baja | Crear/actualizar incidente + plan de comunicación | CRI-RC-03 |
 

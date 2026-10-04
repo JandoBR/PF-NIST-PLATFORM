@@ -184,3 +184,59 @@ def test_no_change_is_still_recorded_in_explanation():
 
     assert out.final_score == 25.0
     assert "sin cambio" in out.explanation
+
+
+def test_ai_cannot_raise_an_observed_failure_scored_by_the_engine():
+    """J2 de punta a punta: un ejercicio de restauracion fallido da RC-02 = 0. Antes ese 0 salia
+    como `evaluado` y la IA podia subirlo; el motor lo marca `no_implementado`."""
+
+    from app.evaluation import engine
+
+    methodology = _methodology()
+    ahora = datetime.now(UTC)
+
+    def operativa(type_id, value):
+        return EvidenceInstance(
+            type_id=type_id,
+            type_version=1,
+            subject_type="scope",
+            subject_ref="s",
+            scope="s",
+            value=value,
+            source_id="surveillance:org",
+            locator=Locator(event_id="e"),
+            observed_at=ahora,
+            modality=Modality.OPERATIVA,
+            created_by="surveillance",
+        )
+
+    tiempo = ahora.isoformat()
+    evidence = [
+        operativa("log.window", {"desde": tiempo, "hasta": tiempo, "completo": True}),
+        operativa(
+            "log.pattern",
+            {
+                "patron": "restore_exercise_run",
+                "resultado": "fail",
+                "desde": tiempo,
+                "hasta": tiempo,
+                "conteo": 1,
+            },
+        ),
+    ]
+    results = engine.evaluate_all(methodology, evidence)
+    rc02 = next(r for r in results if r.criterion_id == "CRI-RC-02")
+    assert (rc02.estado, rc02.base_score) == (Estado.NO_IMPLEMENTADO, 0)
+
+    client = FakeAIClient(
+        {
+            "CRI-RC-02": _fake_response(
+                criterion_id="CRI-RC-02",
+                puntaje_propuesto=20,
+                evidencias_referenciadas=[rc02.evidence_ids[0]],
+            )
+        }
+    )
+    ajustados = engine.apply_ai_adjustments(methodology, results, evidence, client, {})
+    final = next(r for r in ajustados if r.criterion_id == "CRI-RC-02")
+    assert final.final_score == 0 and final.degradado is False

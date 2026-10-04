@@ -13,7 +13,9 @@
 # v7: PR-05 consume tf.db_exposure.config y pide exposure_policy (contradiccion docs/02 §5).
 # v8: los criterios documentales leen doc.claim@2 (cita verificada); silencio documental ->
 #     evidencia_insuficiente; GV-04 y DE-02 cambian tramos (docs/09 §60).
-version: 8
+# v9: todo puntaje 0 sale con estado no_implementado (la IA no puede subirlo, J2); RC-03 exige
+#     destinatarios en la lista de notificacion (docs/09 §63).
+version: 9
 criterios:
   - id: CRI-GV-01
     version: 1

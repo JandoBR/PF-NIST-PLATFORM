@@ -2,13 +2,13 @@
 
 Mixto: el 100 se alcanza con `log.pattern(restore_verified)` mas la comunicacion **definida o
 evidenciada** — esto es, `recovery_communicated` o una lista de notificacion documentada
-(`doc.claim(notification_list)`). `restore_verified` sin comunicacion es la condicion del disparador
-D5 (docs/08 §5).
+(`doc.claim(notification_list)` con destinatarios). `restore_verified` sin comunicacion es la
+condicion del disparador D5 (docs/08 §5).
 """
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, by_type, doc_claims, result
+from app.evaluation.rules._common import best_found_with, by_type, doc_claims, result
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -36,7 +36,8 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     verificado = _patron(evidence, "restore_verified")
     comunicado = _patron(evidence, "recovery_communicated")
     ejercicio = _patron(evidence, "restore_exercise_run")
-    notificacion = best_found(doc_claims(evidence, "notification_list"))
+    # Sin destinatarios no hay lista (docs/09 §47): igual que en DE-03 y RS-03.
+    notificacion = best_found_with(doc_claims(evidence, "notification_list"), "destinatarios")
 
     if verificado is not None and (comunicado is not None or notificacion is not None):
         ids = [ventana[0].id, verificado.id]

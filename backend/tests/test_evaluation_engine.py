@@ -45,6 +45,9 @@ def test_gaps_fixture_scores(methodology):
     assert results["CRI-PR-02"].final_score == 25  # retencion 0
     assert results["CRI-PR-03"].final_score == 25  # SSH y RDP abiertos a 0.0.0.0/0
     assert results["CRI-PR-05"].final_score == 0  # block_public_acls = false explicito
+    # Un 0 es evidencia explicita de ausencia: sale como no_implementado, no como evaluado.
+    assert results["CRI-PR-05"].estado == Estado.NO_IMPLEMENTADO
+    assert results["CRI-PR-01"].estado == Estado.EVALUADO  # un 25 sigue siendo evaluado
 
     assert results["CRI-PR-06"].estado == Estado.EVIDENCIA_INSUFICIENTE
     assert results["CRI-PR-06"].final_score is None

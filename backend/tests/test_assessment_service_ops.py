@@ -86,8 +86,9 @@ def test_running_an_assessment_after_ingest_picks_up_surveillance_evidence(db_se
     )
     results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, assessment.id)}
 
-    assert results["CRI-DE-02"].estado == Estado.EVALUADO
-    assert results["CRI-DE-02"].final_score == 0  # burst sin alerta: falla de deteccion
+    # burst sin alerta: falla de deteccion observada, un 0 con estado no_implementado
+    assert results["CRI-DE-02"].estado == Estado.NO_IMPLEMENTADO
+    assert results["CRI-DE-02"].final_score == 0
     assert "evidencia_insuficiente" != results["CRI-DE-02"].estado
 
 

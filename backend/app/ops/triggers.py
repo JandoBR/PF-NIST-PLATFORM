@@ -92,7 +92,8 @@ def _d3_sin_escalar(
     escalado = _by_patron(matches, "escalation_done")
     if escalado is not None:
         delta_segundos = (escalado.desde - declarado.desde).total_seconds()
-        if delta_segundos <= settings.plazo_escalamiento_minutos * 60:
+        # Como en D2: un escalamiento anterior a la declaracion no es el de este incidente.
+        if 0 <= delta_segundos <= settings.plazo_escalamiento_minutos * 60:
             return None  # escalo a tiempo: sin disparador
 
     recurso = declarado.recurso or scope

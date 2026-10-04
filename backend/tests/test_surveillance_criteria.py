@@ -212,3 +212,15 @@ _SURVEILLANCE_RULES = [
 @pytest.mark.parametrize("rule", _SURVEILLANCE_RULES)
 def test_all_surveillance_rules_require_a_window(rule):
     assert rule.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+def test_rc03_a_notification_list_without_recipients_is_not_a_communication():
+    """Sin destinatarios no hay lista (docs/09 §47, igual que DE-03/RS-03). El modelo real produjo
+    `destinatarios: []` en el golden set; antes eso daba RC-03 = 100."""
+
+    verificado = [_window(), _pattern("restore_verified")]
+    vacia = _claim("notification_list", {"destinatarios": [], "criterios": "falla del servidor"})
+    completa = _claim("notification_list", {"destinatarios": ["CISO"], "plazos": "72 horas"})
+
+    assert rc03_recovery_communication.evaluate([*verificado, vacia]).final_score == 75
+    assert rc03_recovery_communication.evaluate([*verificado, vacia, completa]).final_score == 100

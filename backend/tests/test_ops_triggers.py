@@ -134,3 +134,21 @@ def test_d2_a_triage_before_the_alert_does_not_count(vigilancia_settings):
 
 def test_d2_needs_an_alert(vigilancia_settings):
     assert evaluate_triggers([], vigilancia_settings, SCOPE) == []
+
+
+def test_d3_an_escalation_before_the_declaration_does_not_count(vigilancia_settings):
+    """Como en D2: un `escalation_done` anterior al `incident_declared` no es su escalamiento.
+    Antes un delta negativo contaba como "a tiempo" y D3 no se disparaba."""
+
+    from datetime import UTC, datetime, timedelta
+
+    from app.surveillance.patterns import PatternMatch
+
+    declarado = datetime(2026, 9, 21, 3, 14, tzinfo=UTC)
+    antes = declarado - timedelta(minutes=5)
+    matches = [
+        PatternMatch("incident_declared", "ok", declarado, declarado, 1, ["d"], "srv-app-01"),
+        PatternMatch("escalation_done", "ok", antes, antes, 1, ["e"], "srv-app-01"),
+    ]
+    triggers = evaluate_triggers(matches, vigilancia_settings, SCOPE)
+    assert [t.disparador for t in triggers] == ["D3"]

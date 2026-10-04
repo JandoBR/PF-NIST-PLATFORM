@@ -131,7 +131,7 @@
     {
       "base_score": 0.0,
       "criterion_id": "CRI-PR-05",
-      "estado": "evaluado",
+      "estado": "no_implementado",
       "evidence": [
         "tf.db_exposure.config|aws_db_instance.legacy",
         "tf.public_access.config|aws_s3_bucket.backups"
@@ -230,8 +230,9 @@
     {
       "cobertura": 0.8333,
       "conteo_estados": {
-        "evaluado": 5,
-        "evidencia_insuficiente": 1
+        "evaluado": 4,
+        "evidencia_insuficiente": 1,
+        "no_implementado": 1
       },
       "nivel": "funcion",
       "provisional": false,
@@ -262,8 +263,9 @@
   "global": {
     "cobertura": 0.2174,
     "conteo_estados": {
-      "evaluado": 5,
-      "evidencia_insuficiente": 18
+      "evaluado": 4,
+      "evidencia_insuficiente": 18,
+      "no_implementado": 1
     },
     "nivel": "global",
     "provisional": true,

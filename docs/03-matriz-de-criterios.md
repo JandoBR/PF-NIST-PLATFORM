@@ -12,7 +12,7 @@ puntaje, peso, ajustabilidad por IA y recomendación base.
 | **Peso** | Entero 1–5; relativo dentro de la categoría |
 | **Ajuste IA** | `sí` / `no`; si `no`, el modelo no puede mover el puntaje (puede explicar) |
 | **MVP** | `sí` = entra al prototipo; `parcial` = versión reducida; `no` = primera ampliación |
-| **Estados** | `evaluado`, `no_implementado`, `evidencia_insuficiente`, `no_aplicable`, `error` |
+| **Estados** | `evaluado`, `no_implementado` (todo puntaje 0), `evidencia_insuficiente`, `no_aplicable`, `error` |
 
 Reglas transversales:
 
@@ -309,7 +309,7 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** RC.RP-05, RC.CO-03 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** parcial · **Tier:** T4
 - **Evidencias:** `log.pattern(restore_verified)`, `doc.claim(tipo=notification_list)`
 - **Regla** (exige una ventana de eventos completa; sin ella → `evidencia_insuficiente`):
-  - 100: restauración verificada en el escenario + comunicación de recuperación observada (`recovery_communicated`) o lista de notificación documentada.
+  - 100: restauración verificada en el escenario + comunicación de recuperación observada (`recovery_communicated`) o lista de notificación documentada con destinatarios.
   - 75: restauración verificada sin comunicación.
   - 50: recuperación ejecutada (ejercicio exitoso) sin verificación final.
   - Ventana completa sin ningún patrón aplicable → `evidencia_insuficiente` (sin oportunidad, no se penaliza). No hay tramo de 0.

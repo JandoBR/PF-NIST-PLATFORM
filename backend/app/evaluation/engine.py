@@ -90,6 +90,11 @@ def _evaluate_one(
         )
     result = rule(evidence)
     result.criterion_version = criterion.version
+    if result.estado == Estado.EVALUADO and result.base_score == 0:
+        # Un 0 es siempre evidencia explicita de ausencia o una falla observada (docs/01 §3,
+        # docs/03 §0): su estado es `no_implementado`. Se fija aqui y no regla por regla para que
+        # ninguna lo olvide: de ese estado depende que la IA no pueda subirlo (R3/J2).
+        result.estado = Estado.NO_IMPLEMENTADO
     return result
 
 
