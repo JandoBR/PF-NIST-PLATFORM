@@ -147,6 +147,25 @@ def test_id03_proceso_sin_registro_es_75():
     assert id03_risk_assessment.evaluate(evidence).final_score == 75
 
 
+def test_id03_no_toma_otro_proceso_por_traer_las_claves_en_null():
+    """El prompt pide `registro_riesgos`/`priorizacion` en todo `process_defined`: un proceso de
+    recuperacion los trae en null y antes contaba como proceso de riesgos (ID-03 = 75)."""
+
+    evidence = [
+        _claim(
+            "process_defined",
+            {
+                "proceso": "recuperacion",
+                "pasos": "x",
+                "registro_riesgos": None,
+                "priorizacion": False,
+            },
+        )
+    ]
+    result = id03_risk_assessment.evaluate(evidence)
+    assert (result.estado, result.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
+
+
 def test_id03_solo_proceso_de_recuperacion_es_insuficiente():
     evidence = [_claim("process_defined", {"proceso": "recuperacion", "pasos": "x"})]
     result = id03_risk_assessment.evaluate(evidence)

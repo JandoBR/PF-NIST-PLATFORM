@@ -1969,3 +1969,24 @@ pipeline solo cambian el texto de una explicación de DE-02.
 **Verificación:** backend 505 tests; `tsc --noEmit` del frontend limpio. El cambio de UI no se probó en el
 navegador.
 
+
+## 62. Cuatro correcciones tras una revisión de bugs
+
+- **Clave de correlación única por organización.** `incidents.correlation_key` era única global, pero la clave
+  sale de los eventos (recurso + hora): dos organizaciones que ingerían el mismo log (p. ej. `demo` y `smoke`
+  con el log de ejemplo) chocaban y la segunda ingesta fallaba con `IntegrityError`. Ahora la unicidad es
+  `(org_id, correlation_key)` (migración `b7e2f4c19d55`). Una BD SQLite de dev creada antes conserva la
+  restricción vieja: hay que recrearla.
+- **PR-03 con puerto sin resolver.** `from_port = var.ssh_port` con un CIDR abierto lanzaba `TypeError` y
+  tumbaba la evaluación. Esa regla ya no cuenta y queda la limitación (`tf.expression.unresolved`), igual que
+  un CIDR sin resolver (docs/03 actualizado).
+- **La exclusión por contradicción es por criterio.** La afirmación contradicha se quitaba de toda la
+  evaluación: una `backup_policy` cuya retención contradecía a Terraform (PR-02) dejaba además a RC-02 y RC-01
+  sin evidencia, y dos frecuencias de revisión distintas (GV-01) silenciaban GV-04, sin nota en esos
+  criterios. Ahora solo deja de contar para el criterio de la contradicción (docs/02 §5 actualizado). El
+  efecto sobre el propio criterio (§41) no cambia.
+- **ID-03 por valor.** `_es_de_riesgos` miraba si las claves `registro_riesgos`/`priorizacion` existían; como
+  el prompt las pide en todo `process_defined`, un proceso de recuperación con ambas en null contaba como
+  proceso de riesgos (ID-03 = 75, requisito de Tier 2). Ahora mira el valor.
+
+**Verificación:** backend 511 tests; migración probada ida y vuelta en SQLite, no en Postgres.

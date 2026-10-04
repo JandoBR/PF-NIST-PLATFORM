@@ -9,8 +9,11 @@ Solo se comparan evidencias del mismo `scope` (docs/02 §5: entornos distintos n
 Un hallazgo por criterio y por clase de contradiccion, nunca uno por recurso.
 
 **Efecto en el puntaje:** una afirmacion documental que contradice a otra fuente **no cuenta** para
-puntuar (`exclude_contradicted`): el criterio se evalua como si esa afirmacion no existiera, y el
-hallazgo y una nota en la explicacion dejan constancia. La evidencia tecnica nunca se excluye.
+puntuar el criterio de la contradiccion (`excluded_by_criterion`): ese criterio se evalua como si la
+afirmacion no existiera, y el hallazgo y una nota en la explicacion dejan constancia. Los demas
+criterios que leen la misma afirmacion por otra propiedad (p. ej. `RC-02`, que mira la verificacion
+de integridad de una `backup_policy` cuya retencion contradice a Terraform) la siguen usando. La
+evidencia tecnica nunca se excluye.
 Vive en `evaluation` (no en `recommendations`) porque el motor la necesita antes de puntuar; los
 hallazgos (`recommendations/contradictions.py`) solo la presentan.
 """
@@ -227,6 +230,18 @@ def exclude_contradicted(
     if not excluidas:
         return evidence, contradicciones
     return [e for e in evidence if e.id not in excluidas], contradicciones
+
+
+def excluded_by_criterion(contradicciones: list[Contradiction]) -> dict[str, set[str]]:
+    """Por criterio, los `doc.claim` que no cuentan para puntuarlo. La contradiccion es sobre una
+    propiedad de un criterio (retencion, frecuencia de revision, exposicion): no invalida la
+    afirmacion para los demas criterios que la leen."""
+
+    excluidas: dict[str, set[str]] = {}
+    for c in contradicciones:
+        if c.excluded_claim_ids:
+            excluidas.setdefault(c.criterion_id, set()).update(c.excluded_claim_ids)
+    return excluidas
 
 
 def cap_contradicted(

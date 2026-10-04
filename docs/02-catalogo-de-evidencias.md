@@ -169,8 +169,10 @@ Las contradicciones se registran como **hallazgos** con ambos lados citados (evi
 No penalizan doble: el hallazgo referencia el criterio afectado una sola vez.
 
 **Efecto en el puntaje:** una afirmación documental que contradice a otra fuente **no cuenta** para
-puntuar; el criterio se evalúa como si no existiera, y queda el hallazgo más una nota en la explicación
-del criterio. En documento-vs-documento no cuenta ninguno de los dos (no se elige un ganador). La
+puntuar el criterio de la contradicción; ese criterio se evalúa como si no existiera, y queda el hallazgo
+más una nota en su explicación. La exclusión es por criterio: otros criterios que leen la misma afirmación
+por otra propiedad (p. ej. `RC-02` y la verificación de integridad de una política cuya retención contradice
+a Terraform) la siguen usando. En documento-vs-documento no cuenta ninguno de los dos (no se elige un ganador). La
 evidencia técnica nunca se excluye.
 
 **Tope de puntaje:** mientras un criterio tenga una contradicción sin resolver, su puntaje final **no

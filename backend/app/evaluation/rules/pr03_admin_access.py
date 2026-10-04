@@ -23,6 +23,10 @@ def _expone_administracion(rule: dict) -> bool:
     desde, hasta = rule["puerto_desde"], rule["puerto_hasta"]
     if desde is None or hasta is None:
         return True  # rango sin acotar (p. ej. protocolo -1): se asume que cubre el puerto.
+    if not isinstance(desde, int) or not isinstance(hasta, int):
+        # Puerto como expresion sin resolver (`var.ssh_port`): no se adivina. Queda declarado como
+        # limitacion (`tf.expression.unresolved`), igual que un CIDR sin resolver.
+        return False
     return any(desde <= puerto <= hasta for puerto in PUERTOS_ADMINISTRATIVOS)
 
 

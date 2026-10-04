@@ -445,3 +445,35 @@ def test_cap_holds_until_the_contradiction_is_resolved(db_session, methodology, 
     # Se resuelve (retencion >= 30 dias, de acuerdo con la politica): se aplica normalmente.
     cuarta = run(30, documents_path=docs, ai_client=politica_30)
     assert cuarta.final_score >= 75 and "no puede superar" not in cuarta.explanation
+
+
+def test_contradiction_only_excludes_the_claim_for_its_own_criterion(methodology):
+    """La retencion de la politica contradice a Terraform (PR-02), pero su verificacion de
+    integridad no: RC-02 y RC-01 la siguen leyendo. Antes la exclusion era global y ambos caian a
+    evidencia_insuficiente sin ninguna nota."""
+
+    politica = _claim(
+        "backup_policy",
+        {"respaldo": True, "verificacion_integridad": True, "retencion": "30 dias"},
+    )
+    evidence = [_backup(14), _encryption(), politica]
+
+    pr02 = _score(methodology, evidence, "CRI-PR-02")
+    assert pr02.final_score == 75 and "no cuenta" in pr02.explanation
+
+    rc02 = _score(methodology, evidence, "CRI-RC-02")
+    assert (rc02.estado, rc02.final_score) == (Estado.EVALUADO, 75)
+    assert politica.id in rc02.evidence_ids and "Contradiccion" not in rc02.explanation
+
+    rc01 = _score(methodology, evidence, "CRI-RC-01")
+    assert (rc01.estado, rc01.final_score) == (Estado.EVALUADO, 50)
+
+
+def test_disagreeing_review_frequencies_do_not_silence_gv04(methodology):
+    reciente = (date.today() - timedelta(days=30)).isoformat()
+    revisiones = [
+        _claim("policy_review", {"frecuencia": f, "ultima_revision": reciente}, doc=doc)
+        for f, doc in (("anual", "politica"), ("trimestral", "manual"))
+    ]
+    gv04 = _score(methodology, revisiones, "CRI-GV-04")
+    assert (gv04.estado, gv04.final_score) == (Estado.EVALUADO, 50)

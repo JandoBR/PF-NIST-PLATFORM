@@ -84,3 +84,16 @@ def test_ingesting_e1c_opens_a_d2_incident_with_a_triage_plan(db_session, method
     (plan,) = operations.load_incident_plans(db_session, incident.id)
     assert plan.criterion_id == "CRI-RS-01" and plan.prioridad == "media"
     assert "alert_raised" in plan.diagnostico_observable
+
+
+def test_two_organizations_can_share_a_correlation_key(db_session):
+    """La clave sale de los eventos (recurso + hora): dos organizaciones que ingieren el mismo log
+    la comparten. Antes era unica global y la segunda ingesta fallaba con IntegrityError."""
+
+    a, b = _org(db_session, "Org A"), _org(db_session, "Org B")
+    primero, nuevo_a = upsert_incident(db_session, a.id, "s", _trigger(correlation_key="ck-shared"))
+    segundo, nuevo_b = upsert_incident(db_session, b.id, "s", _trigger(correlation_key="ck-shared"))
+    db_session.commit()
+
+    assert nuevo_a and nuevo_b and primero.id != segundo.id
+    assert db_session.query(Incident).filter_by(correlation_key="ck-shared").count() == 2

@@ -18,11 +18,13 @@ CRITERION_VERSION = 1
 def _es_de_riesgos(claim: EvidenceInstance) -> bool:
     contenido = claim.value.get("contenido", {})
     proceso = str(contenido.get("proceso", "")).lower()
-    return (
+    # Por valor y no por presencia de la clave: el prompt pide `registro_riesgos`/`priorizacion`
+    # en todo `process_defined`, y un proceso de otro tipo los trae en null/false.
+    return bool(
         "riesgo" in proceso
         or "risk" in proceso
-        or "registro_riesgos" in contenido
-        or "priorizacion" in contenido
+        or contenido.get("registro_riesgos")
+        or contenido.get("priorizacion")
     )
 
 

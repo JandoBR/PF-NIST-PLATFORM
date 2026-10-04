@@ -305,3 +305,24 @@ def test_de01_cites_observation_window_without_changing_score():
     con = de01_monitoring.evaluate([syslog, _window()])
     assert sin.final_score == con.final_score
     assert "Actividad observable" in con.explanation
+
+
+def test_pr03_does_not_crash_or_guess_when_the_port_is_an_expression(tmp_path):
+    """Antes `var.ssh_port <= 22` lanzaba TypeError y tumbaba la evaluacion entera."""
+
+    evidence = _parse(
+        tmp_path,
+        """
+        resource "aws_security_group" "sg" {
+          ingress {
+            from_port   = var.ssh_port
+            to_port     = var.ssh_port
+            protocol    = "tcp"
+            cidr_blocks = ["0.0.0.0/0"]
+          }
+        }
+        """,
+    )
+    resultado = pr03_admin_access.evaluate(evidence)
+    assert resultado.final_score == 100
+    assert "Limitacion" in resultado.explanation and "from_port" in resultado.explanation

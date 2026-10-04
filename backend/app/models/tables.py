@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -231,11 +231,16 @@ class Incident(Base):
     crea por un disparador y se actualiza por hechos posteriores; el motor nunca los fabrica."""
 
     __tablename__ = "incidents"
+    #: La clave de correlacion sale de los eventos (recurso + hora), asi que dos organizaciones que
+    #: ingieren el mismo log la comparten: es unica por organizacion, no global.
+    __table_args__ = (
+        UniqueConstraint("org_id", "correlation_key", name="uq_incidents_org_correlation_key"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"))
     scope: Mapped[str] = mapped_column(String)
-    correlation_key: Mapped[str] = mapped_column(String, unique=True)
+    correlation_key: Mapped[str] = mapped_column(String)
     titulo: Mapped[str] = mapped_column(String)
     estado: Mapped[str] = mapped_column(String, default="open")
     severidad: Mapped[str] = mapped_column(String)
