@@ -77,7 +77,7 @@ Las instancias **nunca se sobrescriben**. Una nueva recolección crea instancias
 | Estado | Significado | ¿Aporta puntaje? |
 |---|---|---|
 | `evaluado` | Evidencia suficiente; se calcula puntaje. | Sí |
-| `no_implementado` | Evidencia explícita de ausencia (ej. `disabled`). | Sí, 0 |
+| `no_implementado` | Evidencia explícita de ausencia (ej. `disabled`) o una falla observada en los eventos. Todo puntaje 0 tiene este estado (lo fija el motor, docs/09 §63); la UI lo muestra como “Ausente o fallido”. | Sí, 0 |
 | `evidencia_insuficiente` | No se puede concluir (falta de evidencia o `unknown`). | No; resta cobertura |
 | `no_aplicable` | Exclusión justificada por contexto (con motivo registrado). | No; no resta cobertura |
 | `error` | El análisis no pudo completarse (parser, IA inválida, etc.). | No; resta cobertura |
@@ -94,7 +94,7 @@ Escala 0–100 con anclas (adaptable por criterio en la metodología):
 
 | Valor | Ancla |
 |---|---|
-| 0 | Sin implementación; evidencia explícita de ausencia. |
+| 0 | Sin implementación; evidencia explícita de ausencia en todo el alcance (ningún recurso cifra, administración expuesta a Internet) o falla observada. |
 | 25 | Implementación parcial, aislada o incompleta en la mayoría del alcance. |
 | 50 | Implementada en parte del alcance, con brechas relevantes. |
 | 75 | Implementada en todo el alcance evaluado, sin verificación completa. |
@@ -224,6 +224,7 @@ docs/09 §59.
 | T3 | Si no se puede evaluar ningún requisito de T2, el Tier se reporta como “no estimable”. “Evaluar” significa que el criterio dio puntaje (`evaluado` o `no_implementado`): todo criterio tiene siempre un resultado, así que un requisito en `evidencia_insuficiente`/`error` no cuenta. |
 | T4 | Los umbrales son parámetros de metodología versionada; se recalibran con datos, no con opiniones. |
 | T5 | El informe muestra qué falta para alcanzar el siguiente Tier (ruta de mejora). |
+| T6 | Los umbrales se comparan contra el puntaje **final** `S` (con el ajuste de IA, si lo hubo), no contra el base: el sistema es tan determinista como se puede sin descartar el matiz que aporta la IA. Como los puntajes base caen en las anclas, en la práctica un ajuste puede hacer perder un umbral (75 → 74) pero no ganarlo. |
 
 ### 8.4 Niveles por función (opcional, no NIST)
 

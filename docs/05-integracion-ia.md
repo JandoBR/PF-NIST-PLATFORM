@@ -105,7 +105,7 @@ Parámetros iniciales (en `methodology/settings.yml`):
 | # | Regla |
 |---|---|
 | J1 | Solo criterios `ai_adjustable: true` reciben U2. |
-| J2 | Criterios `no_implementado` no se ajustan hacia arriba; pueden ajustarse a la baja solo si la justificación es “la brecha es más grave por contexto”. |
+| J2 | Criterios `no_implementado` (todo puntaje base 0, docs/09 §63) no se ajustan hacia arriba; pueden ajustarse a la baja solo si la justificación es “la brecha es más grave por contexto”. |
 | J3 | `evidencia_insuficiente` y `error` no reciben ajuste. |
 | J4 | Si `A` falta, es inválido o vacío → ajuste 0, criterio `degradado`, evaluación continúa. |
 | J5 | La justificación debe referenciar IDs de evidencia existentes; si no, ajuste 0. |

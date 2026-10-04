@@ -67,7 +67,7 @@ La capa de vigilancia agrega eventos en `log.pattern`:
 
 | Patrón | Condición | Alimenta |
 |---|---|---|
-| `auth_failures_burst` | ≥ N fallos del mismo actor/recursos en ventana W | CRI-DE-02 (contexto) |
+| `auth_failures_burst` | ≥ N fallos del mismo actor/recurso dentro de algún tramo de duración W (ventana deslizante: otros fallos del mismo actor fuera de ese tramo no la ocultan) | CRI-DE-02 (contexto) |
 | `alert_raised` | Existe `alert_raised` que referencia un evento previo | CRI-DE-02, CRI-DE-03 |
 | `incident_triaged` | Existe `incident_triaged` (triaje de una alerta) | Disparador D2 (docs/08 §5) |
 | `containment_done` | Existe `containment_done` | Solo contexto: ningún criterio ni disparador lo usa todavía |
@@ -78,6 +78,11 @@ La capa de vigilancia agrega eventos en `log.pattern`:
 | `recovery_communicated` | Comunicación de recuperación a stakeholders | CRI-RC-03 |
 
 Cada patrón guarda `desde`, `hasta`, `conteo`, `resultado` y la referencia al `evidence_id` generado.
+
+Los patrones se detectan sobre **todos los eventos guardados** de la organización y el scope, no solo sobre
+el archivo recién ingerido: describen la misma ventana que `log.window`. Hay una fila por patrón y por scope,
+que se reemplaza en cada ingesta; entre dos eventos con la misma hora cuenta como último el que se ingirió
+después (docs/09 §65).
 
 Los patrones alimentan el flujo A (evidencia para criterios) y son la entrada de los **disparadores
 determinísticos** del flujo B, que decide si se abre un incidente y se genera un plan (doc 08 §5).
@@ -174,8 +179,8 @@ Cargar eventos (event_time en orden)
 **Automático (docs/08 §8).** La nueva evaluación **no la pide el usuario**: al procesar una ingesta,
 si agregó suficientes `log.pattern` **nuevos** para su scope (umbral
 `vigilancia.refresco_min_patrones_nuevos`, default 3), el worker de logs encola una reevaluación de
-la última evaluación completada del `org`+`scope`. Reingerir el mismo archivo agrega 0 patrones y
-no dispara. La evaluación hereda el estado de seguimiento (docs/05 §4.4).
+la última evaluación completada del `org`+`scope`. Un patrón cuenta como nuevo si cambia su resultado, su
+intervalo o su conteo; reingerir el mismo archivo agrega 0 patrones y no dispara. La evaluación hereda el estado de seguimiento (docs/05 §4.4).
 
 **Independencia de la evaluación.** Los eventos y los incidentes son **organización+scope**, no
 pertenecen a una evaluación: se ingieren y consultan aunque nunca se haya evaluado. Si no hay una

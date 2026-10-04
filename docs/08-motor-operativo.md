@@ -72,7 +72,10 @@ open ──► triaged ──► contained ──► recovering ──► closed
 
 Reglas:
 
-- Un `incident` se **crea** por un disparador y se **actualiza** por hechos posteriores.
+- Un `incident` se **crea** por un disparador y se **actualiza** por hechos posteriores. En el prototipo eso
+  significa: los disparadores se evalúan sobre todos los eventos del org+scope, y una ingesta solo toca un
+  incidente si aporta alguno de los eventos de su disparador (docs/09 §65). Un hecho posterior que resuelve la
+  condición (p. ej. un `escalation_done` tardío) no avanza ni cierra el incidente: las transiciones son manuales.
 - El motor **observa** hechos operativos; **no los fabrica** (no inventa un escalamiento porque exista un plan).
 - Cerrar un incidente es una decisión basada en criterios; nunca automática por ausencia de eventos.
 - Las transiciones se validan (docs/09 §52): se avanza un paso por vez y no se retrocede; `closed` es terminal y
@@ -128,7 +131,7 @@ Contrato de salida (esquema de plan de recovery, docs/05 §4.3):
 > En un plan de incidente, `brecha_ref` referencia el **disparador** (`D1`…); `prioridad` la fija el
 > código (severidad del disparador), no la IA.
 
-- El plan se **actualiza** si el incidente recibe nuevos hechos.
+- El plan se **actualiza** si el incidente recibe nuevos hechos; al regenerarse conserva su estado de seguimiento.
 - Al cerrar el incidente se registra cómo se verificó; el plan conserva su estado de seguimiento
   (`pendiente`/`en_progreso`/`hecho`, docs/05 §4.4).
 - La IA **solo redacta** (diagnóstico, hipótesis, pasos, verificación) citando evidencia; la
@@ -184,6 +187,7 @@ refrescarse por eventos.
 | E2-b (declarado sin escalar) | D3 | `alta` | Plan de escalamiento |
 | E3 (restauración ok y verificada) | ninguno; si falta comunicación, D5 | `baja` | Plan de comunicación |
 | E3-b (restauración fallida) | D4 | `alta` | Plan de recovery |
+| Respuesta parcial (log de ejemplo de la UI) | D3 (escalamiento a los 45 min) y D5 | `alta`, `baja` | Planes de escalamiento y de comunicación |
 
 > Los escenarios con flujo correcto **no** deben crear incidentes: esto valida la regla anti-ruido.
 

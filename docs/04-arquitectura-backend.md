@@ -141,7 +141,7 @@ porque toca el modelo de evidencias.
 | `plans` | `id`, `incident_id?`, `assessment_id?`, `criterion_id`, `origen` (`criterio`\|`evento`), `titulo`, `prioridad`, `pasos jsonb`, `verificacion`, `estado` (`pendiente`\|`en_progreso`\|`hecho`, **seguimiento, no puntaje** — docs/05 §4.4), `generado_por` |
 | `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id` |
 | `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `evidence_id` |
-| `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `pattern_ids[]`, `criterios[]`, `timeline jsonb`, `creado_en`, `actualizado_en` |
+| `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `pattern_ids[]`, `criterios[]`, `timeline jsonb`, `creado_en`, `actualizado_en`. Único por (`org_id`, `correlation_key`): la clave sale de los eventos y dos organizaciones pueden compartirla (docs/09 §62) |
 | `jobs` | `id`, `assessment_id?`, `org_id?`, `tipo`, `estado`, `progreso`, `error`, `payload?` (entradas para reintentar, docs/09 §46), `creado_en`, `tomado_en`, `actualizado_en` |
 
 ### Reglas de integridad
@@ -185,7 +185,7 @@ evidencia y recalcular solo los criterios afectados.
 |---|---|---|
 | `POST` | `/auth/login` | Login (usuario/contraseña) → token + usuario. Público. |
 | `GET` | `/auth/me` | Usuario de la sesión actual. |
-| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). |
+| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). Un `context` que no sea un objeto JSON da 422 antes de crear nada. |
 | `GET` | `/assessments` | Lista de evaluaciones de la organización (cada una con su resumen/Tier). |
 | `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
 | `GET` | `/jobs` | Historial de jobs de la organización, del más reciente al más antiguo. Filtros `estado`, `tipo` y `limit` (1–200, por defecto 50). Marca `fallido` los jobs activos que se quedaron colgados antes de listar (docs/09 §45). |
@@ -207,7 +207,7 @@ evidencia y recalcular solo los criterios afectados.
 | `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |
 | `PATCH` | `/incidents/{id}` | Cambia el estado del incidente (`open`…`closed`). Un paso por vez, sin retroceder; `closed` (terminal, desde cualquier estado abierto) exige `motivo` y lo mueve al historial. Transición inválida o sin motivo → 409 (docs/08 §4, docs/09 §52). |
 | `POST` | `/assessments/{id}/reevaluate` | Crea nueva evaluación heredando fuentes. |
-| `GET` | `/assessments/{id}/compare/{other_id}` | Diferencias de puntajes, cobertura y hallazgos. |
+| `GET` | `/assessments/{id}/compare/{other_id}` | Por criterio: estado, puntaje, `direccion` del cambio y la explicación de antes y de después. Además el puntaje global, si ambas usan la misma metodología y alcance, y los hallazgos que ya no aparecen o son nuevos (docs/09 §67). |
 | `GET` | `/methodology` | Catálogo de criterios y tipos de evidencia vigentes. |
 | `GET` | `/health` | Liveness/readiness. |
 

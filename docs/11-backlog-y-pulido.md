@@ -125,7 +125,7 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **23 de 23** criterios de docs/03 (`criteria.yml` v5). Cobertura por función:
+El catálogo implementa **23 de 23** criterios de docs/03 (`criteria.yml` v11). Cobertura por función:
 GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 - **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
@@ -224,6 +224,26 @@ demostrable.
 4. Pulido barato: ~~FN-03~~ (hecho, docs/09 §51), ~~FN-07~~ (hecho, docs/09 §50), ~~FN-01 + API-03~~ (hechos, docs/09 §45), ~~FN-09~~ (hecho, docs/09 §46), ~~OP-05 + FN-08~~ (hechos, docs/09 §53), ~~OP-11~~ (hecho, docs/09 §52), ~~OP-15~~ (hecho, docs/09 §54), ~~OP-13~~ (hecho, docs/09 §49), ~~API-04~~ (hecho, docs/09 §55) y
    ~~la decisión de CR-07~~ (hecha, docs/09 §57).
 
-> **Estado:** no queda nada pendiente en este backlog. Solo FN-04 sigue marcado `[~]` y está obsoleto (el botón
+> **Estado:** de las secciones A–H no queda nada pendiente; lo señalado en la revisión del 2026-10-04 está en §I. Solo FN-04 sigue marcado `[~]` y está obsoleto (el botón
 > "Reevaluar" se eliminó, UI-10). Lo hecho está en docs/09 §23–§57; el trabajo que se decidió dejar fuera, en docs/12.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).
+
+## I. Revisión de bugs y lógica (2026-10-04)
+
+Hecha fuera del backlog, tras una auditoría del código (docs/09 §62–§67): 4 correcciones iniciales, 3 de lógica
+de negocio, una segunda pasada de reglas que no tenían sentido, 10 bugs más con los pisos de severidad, los tres
+paquetes de ejemplo y la vista y el PDF de Comparar.
+
+Quedó señalado y **sin hacer**:
+
+- [ ] La UI y el informe ejecutivo muestran solo el **número** de evidencias de un criterio; el archivo, las
+  líneas y la cita verificada se guardan pero no se ven (`getEvidence` no se usa en el frontend).
+- [ ] Un incidente no reacciona a hechos posteriores (ver docs/08 §4): las transiciones son manuales.
+- [ ] `valor_schema`, `modalidad_permitida` y `requiere_locator` de `evidence_types.yml` no se validan.
+- [ ] El scope no se puede elegir en la UI (fijo en `entorno:produccion`).
+- [ ] Sin tests de frontend ni CI.
+- [ ] `pollJob` agota a los 180 s y sugiere revisar los workers aunque el job siga corriendo (corridas con IA).
+- [ ] Los puntajes documentales de los tres paquetes de ejemplo no se han confirmado con una corrida real con IA.
+
+Decidido y **dejado como está**: `GV-01` elige la afirmación por confianza (conservador); el Tier usa el puntaje
+final con ajuste de IA (docs/01 §8.3 T6); validar la extracción afirmación por afirmación (sin casos reales).

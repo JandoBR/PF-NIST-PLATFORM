@@ -63,7 +63,7 @@ Prototipo completo para su alcance declarado:
 - **Frontend:** los paneles de Resumen de Madurez, Recomendaciones, Eventos e Incidentes y Comparar, más la
   vista de Actividad, todos sobre la API real.
 
-No queda trabajo pendiente en [docs/11](docs/11-backlog-y-pulido.md); lo descartado a propósito está en
+Lo que queda pendiente está en [docs/11 §I](docs/11-backlog-y-pulido.md); lo descartado a propósito está en
 [docs/12](docs/12-alcance-y-trabajo-futuro.md). El detalle de cómo se construyó cada parte está en
 [docs/09](docs/09-registro-de-implementacion.md).
 
