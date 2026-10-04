@@ -1,7 +1,8 @@
 """Deteccion de patrones sobre una ventana de eventos (docs/06 §3).
 
-Simplificado a proposito: cada llamada a `load_events_jsonl` + `detect_patterns` trata el lote
-ingerido completo como UNA ventana completa (`log.window.completo = True`). Un stream continuo
+Simplificado a proposito: `detect_patterns` trata los eventos que recibe como UNA ventana completa
+(`log.window.completo = True`). La ingesta le pasa todos los eventos guardados del org+scope, no
+solo los del archivo recien subido (`core/operations.py`). Un stream continuo
 real con ventanas deslizantes e ingesta parcial es evolucion futura (docs/08 §11); el contrato
 de evidencia (`log.window`) ya distingue completo/incompleto para cuando eso exista.
 
@@ -58,21 +59,29 @@ def _auth_failures_burst(
         grupos.setdefault((evento.actor, evento.recurso), []).append(evento)
 
     umbral = settings.auth_failures_burst
+    ventana_segundos = umbral.ventana_minutos * 60
     for grupo in grupos.values():
-        if len(grupo) < umbral.n:
-            continue
-        desde, hasta = grupo[0].event_time, grupo[-1].event_time
-        if (hasta - desde).total_seconds() > umbral.ventana_minutos * 60:
-            continue
-        return PatternMatch(
-            patron="auth_failures_burst",
-            resultado="detectado",
-            desde=desde,
-            hasta=hasta,
-            conteo=len(grupo),
-            event_ids=[e.event_id for e in grupo],
-            recurso=grupo[0].recurso,
-        )
+        grupo = sorted(grupo, key=lambda e: e.event_time)
+        # Ventana deslizante: basta con `n` fallos dentro de la ventana en algun tramo. Antes se
+        # exigia que TODOS los fallos del actor cupieran en ella, y un fallo suelto una hora
+        # despues ocultaba la rafaga.
+        for inicio, primero in enumerate(grupo):
+            rafaga = [
+                e
+                for e in grupo[inicio:]
+                if (e.event_time - primero.event_time).total_seconds() <= ventana_segundos
+            ]
+            if len(rafaga) < umbral.n:
+                continue
+            return PatternMatch(
+                patron="auth_failures_burst",
+                resultado="detectado",
+                desde=rafaga[0].event_time,
+                hasta=rafaga[-1].event_time,
+                conteo=len(rafaga),
+                event_ids=[e.event_id for e in rafaga],
+                recurso=primero.recurso,
+            )
     return None
 
 

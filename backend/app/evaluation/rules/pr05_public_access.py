@@ -135,6 +135,19 @@ def _evaluate_public_access(evidence: list[EvidenceInstance]) -> CriterionResult
         score, nivel_txt = 50, "bloqueo parcial (alguno de los 4 modos)"
         afectados = parciales
     else:
+        con_bloque = {e.subject_ref for e in relevant}
+        sin_bloque = sorted(b.subject_ref for b in buckets if b.subject_ref not in con_bloque)
+        if sin_bloque:
+            # Sin exposicion confirmada, un bucket sin bloque declarado impide afirmar el 100.
+            return CriterionResult(
+                criterion_id=CRITERION_ID,
+                criterion_version=CRITERION_VERSION,
+                estado=Estado.EVIDENCIA_INSUFICIENTE,
+                explanation="Buckets sin `aws_s3_bucket_public_access_block` declarado: "
+                + ", ".join(sin_bloque)
+                + ". Los demas tienen bloqueo completo.",
+                evidence_ids=[e.id for e in resolved],
+            )
         score, nivel_txt = 100, "bloqueo completo en los 4 modos"
         afectados = resolved
 

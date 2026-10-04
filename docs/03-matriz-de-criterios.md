@@ -102,7 +102,7 @@ Resumen de cobertura del catálogo:
   - 50: cubre parcialmente (25–74 %).
   - 25: existe mención de inventario sin cobertura verificable.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
-  - La cobertura se calcula sobre tipos de recurso, y se registra como limitación que solo se evalúan tipos soportados.
+  - La cobertura se calcula sobre tipos de recurso, y se registra como limitación que solo se evalúan tipos soportados. Los recursos que solo configuran a otro (cifrado, versionado o bloqueo público de un bucket) no cuentan como activos.
 - **Recomendación:** mantener un inventario de activos que incluya los recursos desplegados y su responsable.
 
 ### CRI-ID-02 — Priorización de activos por criticidad
@@ -142,7 +142,8 @@ Resumen de cobertura del catálogo:
 - **Evidencias:** `tf.encryption.config` (RDS, S3), `doc.claim(tipo=policy_exists)`
 - **Regla (por recurso soportado):**
   - Todos `enabled` → 100.
-  - Alguno `disabled` → 25 (prevalece sobre la política).
+  - Alguno `disabled` y alguno `enabled` → 25: implementación parcial (prevalece sobre la política).
+  - Ningún recurso resuelto cifra (todos `disabled`) → 0: ausencia explícita.
   - `unknown` → el recurso pasa a `evidencia_insuficiente`; se puntúa sobre los resueltos y se registra la limitación.
   - Sin recursos del tipo → `no_aplicable` con motivo.
   - Política documental sin recursos: no eleva el puntaje técnico; alimenta contexto y el hallazgo.
@@ -155,7 +156,9 @@ Resumen de cobertura del catálogo:
   - 100: retención configurada ≥ política documentada y backups con cifrado (instancia RDS con cifrado `enabled`; si no está confirmado, tope 75).
   - 75: retención configurada ≥ 7 días sin otros detalles.
   - 50: backups habilitados con retención < política. La política sigue contando (fija el requisito) y además se informa como hallazgo de contradicción (docs/09 §64).
-  - 25: retención en 0 o backups deshabilitados explícitamente.
+  - 25: alguna base con retención en 0 y otras con backups.
+  - 0: ninguna base resuelta tiene backups (retención en 0 en todas).
+  - La retención de la política se lee con unidades (días, semanas, meses ≈ 30 días, años ≈ 365).
   - `unknown` → insuficiente.
 - **Recomendación:** alinear retención de backups con la política y asegurar su cifrado.
 
@@ -164,9 +167,9 @@ Resumen de cobertura del catálogo:
 - **Evidencias:** `tf.security_group.rules`
 - **Regla:**
   - 100: sin reglas que expongan SSH (22) o RDP (3389) desde `0.0.0.0/0` o `::/0`, y SSH con acceso restringido.
-  - 25: cualquier regla que exponga administración a Internet.
+  - 0: cualquier regla que exponga administración a Internet. Es una exposición explícita, no una implementación parcial (como una base pública en PR-05).
   - Se registra que es configuración declarada; no demuestra accesibilidad efectiva.
-  - Sin exposición confirmada, una regla de entrada que podría exponer administración y no se puede resolver → `evidencia_insuficiente` (ni 25 ni 100): abierta a Internet con el puerto sin resolver (`var.ssh_port`), o en un puerto administrativo con el CIDR sin resolver. Un CIDR sin resolver en un puerto no administrativo no afecta.
+  - Sin exposición confirmada, una regla de entrada que podría exponer administración y no se puede resolver → `evidencia_insuficiente` (ni 0 ni 100): abierta a Internet con el puerto sin resolver (`var.ssh_port`), o en un puerto administrativo con el CIDR sin resolver. Un CIDR sin resolver en un puerto no administrativo no afecta.
   - Sin security groups evaluables → insuficiente.
 - **Recomendación:** restringir puertos administrativos a rangos corporativos/VPN y eliminar reglas `0.0.0.0/0`.
 
@@ -178,6 +181,8 @@ Resumen de cobertura del catálogo:
   - 75: solo uno de los dos endurecido.
   - 50: SSH configurado sin opciones explícitas de endurecimiento.
   - 25: `PermitRootLogin yes` o `PasswordAuthentication yes` explícito.
+  - 0: los dos en `yes` explícito.
+  - El valor se lee de `line` (lo que queda escrito), nunca de `regexp`.
   - `an.file.permissions` sobre `sshd_config` con escritura para grupo/otros → tope 25.
   - Sin tareas de SSH interpretadas → insuficiente.
 - **Recomendación:** deshabilitar login de root y autenticación por contraseña; usar claves.
@@ -186,7 +191,8 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** PR.DS-01 · **Tipo:** Técnico · **Peso:** 3 · **IA:** no · **MVP:** sí · **Privacidad:** Protect-P
 - **Evidencias:** `tf.public_access.config`, `tf.versioning.config` (informativa), `tf.db_exposure.config`
 - **Regla:**
-  - 100: bloqueo de acceso público en los 4 modos (ACL, política, ignorar, restringir) declarado.
+  - 100: bloqueo de acceso público en los 4 modos (ACL, política, ignorar, restringir) declarado en **todos** los buckets.
+  - Sin exposición ni bloqueo parcial, un bucket sin bloque declarado → `evidencia_insuficiente`.
   - 50: bloqueo parcial (alguno de los 4).
   - 0: `block_public_acls = false` o equivalente explícito, **o** una base de datos con
     `publicly_accessible = true` (exposición explícita; prevalece sobre una política que diga lo contrario).

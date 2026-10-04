@@ -2046,3 +2046,48 @@ mayor del que es realista; la confianza es el criterio conservador.
 
 **Verificación:** backend 518 tests; `tsc` y `eslint` del frontend limpios. La etiqueta no se probó en el
 navegador.
+
+## 65. Resto de la revisión de bugs (`criteria.yml` v11, Terraform v6, Ansible v3)
+
+**Pisos de las reglas técnicas.** La severidad de un hallazgo sale del puntaje (alta < 25). `PR-01/02/03/04`
+no bajaban de 25, así que SSH abierto a Internet o una base sin cifrar ni respaldos eran siempre severidad
+media, y un solo flag de S3 en `false` (0 en `PR-05`) era alta. Se bajaron los pisos en vez de mover las
+bandas: 0 cuando la ausencia es total (ningún recurso cifra, ninguna base tiene backups, administración
+expuesta a Internet, las dos directivas de SSH en `yes`), 25 cuando es parcial. En el entorno con brechas de
+la demo `PR-01`, `PR-02` y `PR-03` pasan de 25 a 0. Como son `no_implementado` (§63), la IA no los sube.
+
+**Reglas y adaptadores:**
+
+- `ID-01` contaba como activos los recursos que solo configuran un bucket (`aws_s3_bucket_versioning`…): un
+  inventario completo de la demo conforme daba 50 (4/7).
+- Ansible: `mode: 0644` sin comillas llega de YAML como el entero 420 y se guardaba como "420", que leído como
+  octal es escritura para el grupo: `PR-04` caía a 25. `0600` se ignoraba. Ahora el modo se guarda en octal.
+- `PR-04` leía `regexp` además de `line`: `regexp: '(yes|no)'` con `line: '... yes'` daba 100.
+- `PR-05` ignoraba un bucket sin bloque si otro lo tenía (100). Ahora es `evidencia_insuficiente`.
+- `PR-02`: la retención de la política ignoraba la unidad ("1 año" = 1 día).
+- Terraform: las referencias a un bucket solo se resolvían dentro del mismo `.tf`; un bloque en otro archivo
+  se informaba como "bucket sin bloque declarado".
+
+**Vigilancia:**
+
+- `auth_failures_burst` exigía que todos los fallos del actor cupieran en la ventana: un fallo suelto una hora
+  después ocultaba la ráfaga. Ahora es una ventana deslizante.
+- **Los patrones se detectan sobre todos los eventos guardados del org+scope**, no por archivo. Antes dos logs
+  dejaban dos filas del mismo patrón y cada regla tomaba la primera; además la clave de deduplicación no
+  incluía `resultado`, así que un ejercicio `ok` cargado tras uno `fail` a la misma hora se descartaba. Ahora
+  hay una fila por patrón y por scope, que se reemplaza en cada ingesta; entre dos eventos con la misma hora
+  cuenta como último el que se ingirió después. Un disparador solo toca su incidente si el archivo aporta
+  alguno de sus eventos, y regenerar el plan conserva su estado de seguimiento.
+
+**Plataforma:**
+
+- `worker-core`/`worker-logs` solo toman jobs `pendiente`. Un job dado por perdido mientras hacía cola y luego
+  reintentado dejaba dos mensajes para la misma evaluación y los resultados quedaban duplicados (46 filas para
+  23 criterios).
+- `context` inválido en `POST /assessments` o `/reevaluate` da 422 antes de crear nada (antes 500 y una
+  evaluación `pendiente` para siempre).
+
+**No se tocó:** validar afirmación por afirmación en la extracción (en las respuestas reales en caché no hay
+ningún caso que lo necesite).
+
+**Verificación:** backend 545 tests. Regresiones en `tests/test_review_fixes.py`.

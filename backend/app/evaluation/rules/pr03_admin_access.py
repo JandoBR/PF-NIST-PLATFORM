@@ -71,12 +71,14 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     expuestos = [sg for sg in relevant if any(_expone_administracion(r) for r in sg.value)]
 
     if expuestos:
+        # Administracion abierta a Internet es una exposicion explicita, no una implementacion
+        # parcial: 0, como una base de datos publica en PR-05.
         return CriterionResult(
             criterion_id=CRITERION_ID,
             criterion_version=CRITERION_VERSION,
             estado=Estado.EVALUADO,
-            base_score=25,
-            final_score=25,
+            base_score=0,
+            final_score=0,
             explanation="Puertos administrativos (22/3389) expuestos a Internet en: "
             + ", ".join(sg.subject_ref for sg in expuestos)
             + ". Es configuracion declarada; no demuestra accesibilidad efectiva.",
@@ -85,7 +87,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     indeterminados = [sg for sg in relevant if any(_indeterminada(r) for r in sg.value)]
     if indeterminados:
-        # Puerto u origen desconocido: ni 25 (no se sabe que exponga administracion) ni 100 (no
+        # Puerto u origen desconocido: ni 0 (no se sabe que exponga administracion) ni 100 (no
         # se puede afirmar que no lo haga).
         return CriterionResult(
             criterion_id=CRITERION_ID,

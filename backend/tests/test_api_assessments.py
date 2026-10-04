@@ -32,6 +32,18 @@ def test_create_assessment_requires_at_least_one_file(api_client):
     assert response.status_code == 422
 
 
+def test_invalid_context_is_422_and_creates_nothing(api_client, db_session):
+    """Antes un `context` que no era JSON daba 500 despues de crear la evaluacion, que quedaba
+    `pendiente` para siempre y sin job."""
+
+    from app.models.tables import Assessment
+
+    for context in ("{no es json", "[1, 2]"):
+        response = _upload_terraform(api_client, "good", context=context)
+        assert response.status_code == 422
+    assert db_session.query(Assessment).count() == 0
+
+
 def test_upload_rejects_disallowed_extension(api_client):
     response = api_client.post(
         "/assessments",
@@ -88,7 +100,7 @@ def test_get_assessment_and_sub_resources(api_client, db_session, methodology, f
 
     criteria = api_client.get(f"/assessments/{assessment_id}/criteria").json()
     by_id = {c["criterion_id"]: c for c in criteria}
-    assert by_id["CRI-PR-01"]["final_score"] == 25  # cifrado deshabilitado en el fixture gaps
+    assert by_id["CRI-PR-01"]["final_score"] == 0  # ningun recurso cifrado en el fixture gaps
 
     evidence = api_client.get(f"/assessments/{assessment_id}/evidence").json()
     assert len(evidence) > 0
@@ -182,7 +194,7 @@ def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
     # UPLOADS_DIR), no en uno temporal: el job de reevaluacion debe poder re-leerlo.
     before_criteria = api_client.get(f"/assessments/{before['id']}/criteria").json()
     pr01_before = next(c for c in before_criteria if c["criterion_id"] == "CRI-PR-01")
-    assert pr01_before["final_score"] == 25  # cifrado deshabilitado en el fixture gaps
+    assert pr01_before["final_score"] == 0  # ningun recurso cifrado en el fixture gaps
 
     reeval_accepted = api_client.post(f"/assessments/{before['id']}/reevaluate")
     assert reeval_accepted.status_code == 202

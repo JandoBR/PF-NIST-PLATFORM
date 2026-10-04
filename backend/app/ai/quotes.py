@@ -20,7 +20,8 @@ def normalize(text: str) -> str:
 
 
 def quote_in_text(fragmento: str, texto: str) -> bool:
-    """`fragmento` aparece en `texto`, sin distinguir mayusculas, acentos, espacios ni puntuacion."""
+    """`fragmento` aparece en `texto`, sin distinguir mayusculas, acentos, espacios ni
+    puntuacion."""
 
     cita = normalize(fragmento)
     return bool(cita) and cita in normalize(texto)

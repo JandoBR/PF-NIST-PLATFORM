@@ -62,7 +62,17 @@ def _any_module_key(task: dict) -> str | None:
 
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
 #: v2: el locator trae `line_start`/`line_end` de la tarea (docs/11 OP-15).
-ADAPTER_VERSION = "2"
+#: v3: `an.file.permissions.modo` es siempre octal, aunque el YAML lo traiga sin comillas.
+ADAPTER_VERSION = "3"
+
+
+def _modo_octal(modo: Any) -> str:
+    """El modo como texto octal. YAML lee `mode: 0644` (sin comillas) como el entero 420; tomarlo
+    tal cual lo convertia en "420", que leido como octal son otros permisos."""
+
+    if isinstance(modo, int) and not isinstance(modo, bool):
+        return format(modo, "04o")
+    return str(modo)
 
 
 def _node_lines(node: yaml.Node, lineas: list[str]) -> tuple[int, int]:
@@ -212,7 +222,7 @@ class AnsibleAdapter:
                 type_id="an.file.permissions",
                 subject_type="file",
                 subject_ref=ruta,
-                value={"ruta": ruta, "modo": str(modo), "owner": parametros.get("owner")},
+                value={"ruta": ruta, "modo": _modo_octal(modo), "owner": parametros.get("owner")},
                 file_path=file_path,
             )
         ]

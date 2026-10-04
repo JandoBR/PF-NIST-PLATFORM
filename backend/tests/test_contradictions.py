@@ -242,7 +242,7 @@ def test_end_to_end_policy_says_backups_but_terraform_disables_them(db_session, 
     assert lados == {"tf.backup.config", "doc.claim"}
     # prevalece lo tecnico: el criterio puntua con retencion 0, no con la politica
     pr02 = next(r for r in results if r.criterion_id == "CRI-PR-02")
-    assert pr02.final_score == 25
+    assert pr02.final_score == 0
 
 
 # -- efecto en el puntaje: la afirmacion contradicha no cuenta ----------------------------
@@ -291,7 +291,7 @@ def test_false_factual_claim_does_not_count_and_the_result_says_so(methodology):
     politica = _claim("backup_policy", {"respaldo": True, "retencion": "7 dias"})
     pr02 = _score(methodology, [_backup(0), _encryption(), politica], "CRI-PR-02")
 
-    assert pr02.final_score == 25
+    assert pr02.final_score == 0
     assert "no cuenta" in pr02.explanation
     assert politica.id not in pr02.evidence_ids
 
@@ -312,10 +312,10 @@ def test_technical_evidence_is_never_excluded(methodology):
     assert evidence[0] in visibles and evidence[1] not in visibles
 
 
-def test_policy_declaring_backups_with_zero_retention_keeps_the_technical_25(methodology):
+def test_policy_declaring_backups_with_zero_retention_keeps_the_technical_0(methodology):
     evidence = [_backup(0), _claim("backup_policy", {"respaldo": True, "retencion": "7 dias"})]
     pr02 = _score(methodology, evidence, "CRI-PR-02")
-    assert pr02.final_score == 25
+    assert pr02.final_score == 0
     assert "Contradiccion entre fuentes" in pr02.explanation
 
 
@@ -351,7 +351,7 @@ def test_same_document_repeating_itself_is_not_excluded(methodology):
 def test_evaluate_only_applies_the_same_exclusion(methodology):
     evidence = [_backup(0), _encryption(), _claim("backup_policy", {"respaldo": True})]
     (pr02,) = engine.evaluate_only(methodology, evidence, ["CRI-PR-02"])
-    assert pr02.final_score == 25 and "no cuenta" in pr02.explanation
+    assert pr02.final_score == 0 and "no cuenta" in pr02.explanation
 
 
 def test_no_contradiction_leaves_evaluation_untouched(methodology):

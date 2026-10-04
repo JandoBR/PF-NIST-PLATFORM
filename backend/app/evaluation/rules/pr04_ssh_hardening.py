@@ -16,22 +16,26 @@ from app.schemas.evidence import EvidenceInstance
 CRITERION_ID = "CRI-PR-04"
 CRITERION_VERSION = 1
 
-_DIRECTIVE_NO = re.compile(r"\bno\b", re.IGNORECASE)
-_DIRECTIVE_YES = re.compile(r"\byes\b", re.IGNORECASE)
-
 
 def _directive_value(tasks: list[EvidenceInstance], directive: str) -> bool | None:
-    """True=endurecido (no), False=explicito (yes), None=no se encontro la directiva."""
+    """True=endurecido (no), False=explicito (yes), None=no se encontro la directiva.
 
+    Solo se lee `line`, que es lo que queda escrito en el archivo. `regexp` dice que linea se
+    reemplaza y puede contener ambos valores (`(yes|no)`): leerlo daba por endurecido un `yes`."""
+
+    patron = re.compile(rf"^\s*{re.escape(directive)}\s+(\S+)", re.IGNORECASE)
     valor: bool | None = None
     for task in tasks:
         parametros = task.value["parametros"]
-        texto = f"{parametros.get('regexp', '')} {parametros.get('line', '')}"
-        if directive.lower() not in texto.lower():
+        if parametros.get("state") == "absent":
             continue
-        if _DIRECTIVE_NO.search(texto):
+        coincide = patron.match(str(parametros.get("line", "")))
+        if coincide is None:
+            continue
+        escrito = coincide.group(1).lower()
+        if escrito == "no":
             valor = True
-        elif _DIRECTIVE_YES.search(texto):
+        elif escrito == "yes":
             valor = False
     return valor
 
@@ -91,7 +95,13 @@ def _evaluate_directives(evidence: list[EvidenceInstance]) -> CriterionResult:
     password_auth = _directive_value(sshd_tasks, "PasswordAuthentication")
     valores = [permit_root_login, password_auth]
 
-    if False in valores:
+    if valores.count(False) == 2:
+        score = 0
+        explanation = (
+            "PermitRootLogin yes y PasswordAuthentication yes explicitos en sshd_config: sin"
+            " ningun endurecimiento."
+        )
+    elif False in valores:
         score = 25
         explanation = (
             "Directiva insegura explicita en sshd_config "

@@ -18,7 +18,10 @@
 # v10: PR-02 puntua la retencion menor que la politica (50) en vez de ignorar la politica; RC-03
 #      exige comunicacion observada para el 100; DE-01 centralizacion = multirregion; PR-03 es
 #      insuficiente con CIDR/puerto sin resolver (docs/09 §64).
-version: 10
+# v11: PR-01/02/03/04 dan 0 ante una ausencia explicita total (antes su piso era 25 y nunca
+#      llegaban a severidad alta); PR-05 exige bloque en todos los buckets; ID-01 no cuenta
+#      recursos de configuracion (docs/09 §65).
+version: 11
 criterios:
   - id: CRI-GV-01
     version: 1

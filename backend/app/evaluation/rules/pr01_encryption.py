@@ -22,7 +22,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     resultado = _evaluate_technical(evidence)
     politica = best_found(doc_claims(evidence, "policy_exists"))
-    if politica is None or resultado.final_score != 25:
+    if politica is None or resultado.final_score not in (0, 25):
         return resultado
     return resultado.model_copy(
         update={
@@ -57,12 +57,14 @@ def _evaluate_technical(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
         if unknown:
             explanation += f" {len(unknown)} recurso(s) con estado desconocido no se consideraron."
+        # Ningun recurso resuelto cifra: ausencia explicita (0). Con alguno cifrado es parcial (25).
+        score = 25 if enabled else 0
         return CriterionResult(
             criterion_id=CRITERION_ID,
             criterion_version=CRITERION_VERSION,
             estado=Estado.EVALUADO,
-            base_score=25,
-            final_score=25,
+            base_score=score,
+            final_score=score,
             explanation=explanation,
             evidence_ids=[e.id for e in disabled + enabled],
         )

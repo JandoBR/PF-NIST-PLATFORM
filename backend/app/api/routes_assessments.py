@@ -105,6 +105,19 @@ def _assessment_detail(
     )
 
 
+def _parse_context(context: str) -> dict:
+    """`context` llega como texto JSON. Se valida antes de crear nada: un JSON invalido reventaba
+    con 500 despues de crear la evaluacion, que quedaba `pendiente` para siempre y sin job."""
+
+    try:
+        parsed = json.loads(context)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail=f"`context` no es JSON valido: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=422, detail="`context` debe ser un objeto JSON.")
+    return parsed
+
+
 async def _save_uploads(files: list[UploadFile] | None, tipo: str) -> Path | None:
     if not files:
         return None
@@ -149,6 +162,7 @@ async def create_assessment(
     )
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
+    contexto = _parse_context(context)
 
     terraform_path = await _save_uploads(terraform_files, "terraform")
     ansible_path = await _save_uploads(ansible_files, "ansible")
@@ -169,7 +183,7 @@ async def create_assessment(
             "documents_path": str(documents_path) if documents_path else None,
             "ai_requested": ai_requested,
             "apply_ai_adjustment": ai_adjust,
-            "context": json.loads(context),
+            "context": contexto,
         },
         assessment_id=assessment.id,
     )
@@ -309,6 +323,7 @@ def reevaluate_assessment(
     )
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
+    contexto = _parse_context(context)
 
     new_assessment, job = svc.enqueue_reevaluation(
         session,
@@ -316,7 +331,7 @@ def reevaluate_assessment(
         redis_client,
         assessment_id,
         apply_ai_adjustment=ai_adjust,
-        context=json.loads(context),
+        context=contexto,
     )
 
     return AssessmentAccepted(

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from app.ai.quotes import normalize
 from app.evaluation.rules._common import (
     best_found,
     by_type,
@@ -22,15 +23,30 @@ CRITERION_ID = "CRI-PR-02"
 CRITERION_VERSION = 1
 RETENCION_MINIMA_DIAS = 7
 
-_DIAS_RE = re.compile(r"(\d+)")
+_RETENCION_RE = re.compile(r"(\d+)\s*([a-z]*)")
+#: Prefijo de la unidad -> dias. Sin unidad reconocida se asumen dias.
+_UNIDADES_DIAS = (
+    ("sem", 7),
+    ("week", 7),
+    ("mes", 30),
+    ("month", 30),
+    ("ano", 365),
+    ("year", 365),
+)
 
 
 def retencion_politica_dias(claim: EvidenceInstance) -> int | None:
-    """Extrae los dias de `contenido.retencion` (texto libre: "7 dias", "7d", "1 mes")."""
+    """Dias de `contenido.retencion` (texto libre: "7 dias", "7d", "2 semanas", "1 mes", "1 año").
+    Meses y años son aproximados (30 y 365 dias)."""
 
     contenido = claim.value.get("contenido") or {}
-    coincidencia = _DIAS_RE.search(str(contenido.get("retencion") or ""))
-    return int(coincidencia.group(1)) if coincidencia else None
+    texto = normalize(str(contenido.get("retencion") or ""))
+    coincidencia = _RETENCION_RE.search(texto)
+    if coincidencia is None:
+        return None
+    cantidad, unidad = int(coincidencia.group(1)), coincidencia.group(2)
+    factor = next((dias for prefijo, dias in _UNIDADES_DIAS if unidad.startswith(prefijo)), 1)
+    return cantidad * factor
 
 
 def _rds_sin_cifrado(evidence: list[EvidenceInstance], recursos: list[str]) -> list[str]:
@@ -70,10 +86,11 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     disabled = [e for e in resolved if e.value["retencion_dias"] == 0]
     if disabled:
+        # Ninguna base con backups: ausencia explicita (0). Si otras si los tienen es parcial (25).
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
-            25,
+            0 if len(disabled) == len(resolved) else 25,
             "Backups deshabilitados explicitamente en: "
             + ", ".join(e.subject_ref for e in disabled)
             + ".",

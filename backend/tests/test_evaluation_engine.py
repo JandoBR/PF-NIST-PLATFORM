@@ -41,13 +41,13 @@ def test_good_fixture_scores(methodology):
 def test_gaps_fixture_scores(methodology):
     results = _results_by_id(methodology, "gaps")
 
-    assert results["CRI-PR-01"].final_score == 25  # disabled prevalece (D7)
-    assert results["CRI-PR-02"].final_score == 25  # retencion 0
-    assert results["CRI-PR-03"].final_score == 25  # SSH y RDP abiertos a 0.0.0.0/0
+    # Ausencias explicitas, no implementaciones parciales: 0 (docs/09 §65).
+    assert results["CRI-PR-01"].final_score == 0  # ningun recurso cifrado
+    assert results["CRI-PR-02"].final_score == 0  # retencion 0 en la unica base
+    assert results["CRI-PR-03"].final_score == 0  # SSH y RDP abiertos a 0.0.0.0/0
     assert results["CRI-PR-05"].final_score == 0  # block_public_acls = false explicito
     # Un 0 es evidencia explicita de ausencia: sale como no_implementado, no como evaluado.
     assert results["CRI-PR-05"].estado == Estado.NO_IMPLEMENTADO
-    assert results["CRI-PR-01"].estado == Estado.EVALUADO  # un 25 sigue siendo evaluado
 
     assert results["CRI-PR-06"].estado == Estado.EVIDENCIA_INSUFICIENTE
     assert results["CRI-PR-06"].final_score is None

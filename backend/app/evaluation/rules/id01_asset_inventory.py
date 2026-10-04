@@ -7,6 +7,7 @@ sobre **tipos** de recurso (docs/03 declara esa limitacion): solo se evaluan los
 
 from __future__ import annotations
 
+from app.adapters.terraform.adapter import CONFIG_RESOURCE_TYPES
 from app.evaluation.rules._common import (
     best_found,
     by_type,
@@ -50,7 +51,11 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             [c.id for c in claims],
         )
 
-    tipos_tf = {str(e.value.get("tipo")) for e in by_type(evidence, "tf.resource.present")}
+    # Los recursos que solo configuran a otro (versionado o cifrado de un bucket) no son activos:
+    # ningun inventario los lista, y contarlos dejaba en 50 a un inventario completo.
+    tipos_tf = {
+        str(e.value.get("tipo")) for e in by_type(evidence, "tf.resource.present")
+    } - CONFIG_RESOURCE_TYPES
     if not tipos_tf:
         return result(
             CRITERION_ID,

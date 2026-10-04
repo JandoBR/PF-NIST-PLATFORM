@@ -96,13 +96,18 @@ def test_run_assessment_combines_terraform_and_ansible_evidence(db_session, meth
     assert results["CRI-PR-06"].final_score == 100  # CloudTrail multirregion + rsyslog
 
 
-def test_run_assessment_applies_ai_adjustment_within_bounds(db_session, methodology):
+def test_run_assessment_applies_ai_adjustment_within_bounds(db_session, methodology, tmp_path):
+    # Una base cifrada y otra no: PR-01 = 25 (parcial), un puntaje que la IA si puede matizar.
+    (tmp_path / "main.tf").write_text(
+        'resource "aws_db_instance" "a" {\n  storage_encrypted = true\n}\n'
+        'resource "aws_db_instance" "b" {\n  storage_encrypted = false\n}\n'
+    )
     assessment = svc.run_assessment(
         db_session,
         methodology,
         org_name="Empresa Ajuste",
         scope="s",
-        terraform_path=FIXTURES / "gaps",
+        terraform_path=tmp_path,
         ai_client=_EchoAdjustingClient(delta=40),  # fuera del margen D=20: debe acotarse
         apply_ai_adjustment=True,
     )
@@ -114,6 +119,24 @@ def test_run_assessment_applies_ai_adjustment_within_bounds(db_session, methodol
     assert pr01.final_score == 30  # B=25, A acotado a 45 (25+20), S=0.75*25+0.25*45
     assert pr01.degradado is False
     assert "Ajuste contextual" in pr01.explanation
+
+
+def test_ai_adjustment_never_raises_an_explicit_absence(db_session, methodology):
+    """En el fixture gaps ningun recurso cifra: PR-01 = 0 (`no_implementado`). La IA propone
+    subirlo y J2 lo impide."""
+
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Ausencia",
+        scope="s",
+        terraform_path=FIXTURES / "gaps",
+        ai_client=_EchoAdjustingClient(delta=40),
+        apply_ai_adjustment=True,
+    )
+    results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, assessment.id)}
+    pr01 = results["CRI-PR-01"]
+    assert (pr01.estado, pr01.base_score, pr01.final_score) == (Estado.NO_IMPLEMENTADO, 0, 0)
 
 
 def test_run_assessment_without_ai_adjust_flag_leaves_base_score_as_final(db_session, methodology):
@@ -128,7 +151,7 @@ def test_run_assessment_without_ai_adjust_flag_leaves_base_score_as_final(db_ses
     )
 
     results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, assessment.id)}
-    assert results["CRI-PR-01"].final_score == 25
+    assert results["CRI-PR-01"].final_score == 0
 
 
 def test_run_assessment_marks_failure_without_losing_the_row(db_session, methodology):
@@ -155,7 +178,7 @@ def test_reevaluate_rereads_the_same_path_and_picks_up_fixes(db_session, methodo
         db_session, methodology, org_name="Empresa Mejora", scope="s", terraform_path=workdir
     )
     before_results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, before.id)}
-    assert before_results["CRI-PR-01"].final_score == 25  # cifrado deshabilitado
+    assert before_results["CRI-PR-01"].final_score == 0  # ningun recurso cifrado
 
     main_tf = workdir / "main.tf"
     _fix_rds_encryption(main_tf)
@@ -186,7 +209,7 @@ def test_compare_reports_per_criterion_and_global_change(db_session, methodology
     report = comparison.compare(db_session, methodology, before.id, after.id)
 
     pr01_diff = next(d for d in report.diffs if d.criterion_id == "CRI-PR-01")
-    assert pr01_diff.score_antes == 25
+    assert pr01_diff.score_antes == 0
     assert pr01_diff.score_despues == 100
     assert pr01_diff.cambio is True
     assert pr01_diff in report.cambios

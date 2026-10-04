@@ -9,7 +9,7 @@ automatica tras una ingesta vive en `refresh`.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -32,7 +32,7 @@ from app.ops.incidents import set_incident_estado, upsert_incident
 from app.ops.plans import generate_incident_plan
 from app.ops.triggers import evaluate_triggers
 from app.recommendations.plans import Plan
-from app.surveillance.events import load_events_jsonl
+from app.surveillance.events import RawEvent, load_events_jsonl
 from app.surveillance.patterns import detect_patterns
 
 
@@ -47,6 +47,37 @@ def _event_source_id(fuente: str | None, jsonl_path: Path) -> str:
     (solo el nombre, no la ruta del servidor)."""
 
     return fuente or f"events:{Path(jsonl_path).name}"
+
+
+def _pattern_key(patron: str, resultado: str, desde: datetime, hasta: datetime, conteo: int):
+    """Identidad de un patron para saber si una ingesta aporto algo nuevo. Incluye `resultado`:
+    un ejercicio `ok` no es el mismo hecho que uno `fail` a la misma hora."""
+
+    return (patron, resultado, _naive(desde), _naive(hasta), conteo)
+
+
+def _stored_events(session: Session, org_id: str, scope: str) -> list[RawEvent]:
+    """Todos los eventos guardados del org+scope, en orden de tiempo de evento. Entre dos con la
+    misma hora va ultimo el que se ingirio despues: es la observacion mas reciente."""
+
+    rows = session.query(Event).filter_by(org_id=org_id, scope=scope).all()
+    rows.sort(key=lambda r: (_naive(r.event_time), _naive(r.creado_en), r.event_id))
+    return [
+        RawEvent(
+            event_id=row.event_id,
+            # SQLite descarta tzinfo; siempre se guarda en UTC.
+            event_time=row.event_time
+            if row.event_time.tzinfo
+            else row.event_time.replace(tzinfo=UTC),
+            tipo=row.tipo,
+            recurso=row.recurso,
+            scope=row.scope,
+            actor=row.actor,
+            detalle=row.detalle or {},
+            fuente=row.source_id,
+        )
+        for row in rows
+    ]
 
 
 @dataclass
@@ -113,7 +144,8 @@ def ingest_events(
         }
         for evento in eventos:
             if evento.event_id in ya_ingeridos:
-                continue  # mismo archivo reingerido: no duplicar filas append-only
+                continue  # mismo archivo reingerido (o id repetido): no duplicar filas append-only
+            ya_ingeridos.add(evento.event_id)
             eventos_nuevos += 1
             session.add(
                 Event(
@@ -130,18 +162,29 @@ def ingest_events(
             )
         session.flush()
 
-        matches = detect_patterns(eventos, methodology.settings.vigilancia)
-        # SQLite no conserva tzinfo en DateTime(timezone=True): se compara en naive UTC para
-        # que el dedup no falle silenciosamente por un desajuste de tipo, no de valor.
-        patrones_existentes = {
-            (row.patron, _naive(row.desde), _naive(row.hasta), row.conteo)
-            for row in session.query(LogPatternRow).filter_by(org_id=org.id, scope=scope).all()
+        # Los patrones se detectan sobre TODO lo guardado del org+scope, no solo sobre este
+        # archivo: la ventana de la evaluacion (`log.window`) cubre todos los eventos, asi que los
+        # patrones tienen que describir esa misma ventana. Detectando por archivo, dos logs
+        # dejaban dos filas del mismo patron (una `fail` y otra `ok`) y cada regla tomaba la
+        # primera que encontraba.
+        ventana = _stored_events(session, org.id, scope)
+        matches = detect_patterns(ventana, methodology.settings.vigilancia)
+        origen = {e.event_id: e.fuente for e in ventana}
+
+        existentes = session.query(LogPatternRow).filter_by(org_id=org.id, scope=scope).all()
+        claves_existentes = {
+            _pattern_key(r.patron, r.resultado, r.desde, r.hasta, r.conteo) for r in existentes
         }
-        agregados = 0
+        patrones_nuevos_por_scope[scope] = sum(
+            1
+            for m in matches
+            if _pattern_key(m.patron, m.resultado, m.desde, m.hasta, m.conteo)
+            not in claves_existentes
+        )
+        # Un patron por tipo y por scope: se reemplazan, no se acumulan.
+        for row in existentes:
+            session.delete(row)
         for match in matches:
-            clave = (match.patron, _naive(match.desde), _naive(match.hasta), match.conteo)
-            if clave in patrones_existentes:
-                continue  # mismo archivo reingerido: no duplicar el patron ya detectado
             session.add(
                 LogPatternRow(
                     org_id=org.id,
@@ -151,28 +194,28 @@ def ingest_events(
                     desde=match.desde,
                     hasta=match.hasta,
                     conteo=match.conteo,
-                    fuentes=sorted(
-                        {
-                            _event_source_id(e.fuente, jsonl_path)
-                            for e in eventos
-                            if e.event_id in set(match.event_ids)
-                        }
-                    )
-                    or None,
+                    fuentes=sorted({origen[i] for i in match.event_ids if origen.get(i)}) or None,
                 )
             )
-            agregados += 1
-        patrones_nuevos_por_scope[scope] = agregados
         session.flush()
 
+        # Un disparador solo se procesa si este archivo aporta alguno de sus eventos: los que ya
+        # estaban y no cambian no vuelven a tocar su incidente ni su plan.
+        de_este_archivo = {e.event_id for e in eventos}
         triggers = evaluate_triggers(matches, methodology.settings.vigilancia, scope)
         for trigger in triggers:
+            if not de_este_archivo & set(trigger.event_ids):
+                continue
             incident, es_nuevo = upsert_incident(session, org.id, scope, trigger)
             (nuevos if es_nuevo else actualizados).append(incident)
 
             plan = generate_incident_plan(methodology, trigger, client=ai_client)
+            anterior = session.query(PlanRow).filter_by(incident_id=incident.id).first()
+            row = plan_to_row(plan, incident_id=incident.id)
+            if anterior is not None:
+                row.estado = anterior.estado  # regenerar no pierde el seguimiento
             session.query(PlanRow).filter_by(incident_id=incident.id).delete()
-            session.add(plan_to_row(plan, incident_id=incident.id))
+            session.add(row)
 
     session.commit()
     return IngestResult(

@@ -31,6 +31,16 @@ _HANDLED_TYPES = {
 }
 
 
+#: Recursos que configuran a otro (el bucket) y no son un activo propio: no van en un inventario.
+CONFIG_RESOURCE_TYPES = frozenset(
+    {
+        "aws_s3_bucket_server_side_encryption_configuration",
+        "aws_s3_bucket_public_access_block",
+        "aws_s3_bucket_versioning",
+    }
+)
+
+
 def _resolve_simple_ref(value: Any) -> tuple[str, str] | None:
     """Resuelve una referencia directa a otro recurso local (docs/02 §4: 'variable literal simple').
 
@@ -187,7 +197,9 @@ def _strip_meta(block: dict) -> dict:
 #: tipo no soportado declara la limitacion (docs/11 OP-15).
 #: v5: una regla de security group con CIDR sin resolver se emite con `cidr: unknown` en vez de
 #: omitirse.
-ADAPTER_VERSION = "5"
+#: v6: las referencias a un bucket se resuelven entre los `.tf` del directorio, no solo dentro del
+#: mismo archivo.
+ADAPTER_VERSION = "6"
 
 
 class TerraformAdapter:
@@ -209,20 +221,31 @@ class TerraformAdapter:
         return sorted(path.glob("*.tf")) if path.is_dir() else [path]
 
     def parse_path(self, path: Path) -> list[EvidenceInstance]:
-        evidence: list[EvidenceInstance] = []
+        """Los `.tf` de un directorio son un solo modulo: una referencia (`aws_s3_bucket.a.id`)
+        puede apuntar a un recurso declarado en otro archivo, asi que primero se leen todos."""
+
+        options = SerializationOptions(strip_string_quotes=True)
+        archivos = []
         for file_path in self.list_files(path):
-            evidence.extend(self._parse_file(file_path))
+            text = file_path.read_text(encoding="utf-8")
+            raw = hcl2.loads(text, serialization_options=options)
+            archivos.append((file_path, self._flatten_resources(raw), resource_line_ranges(text)))
+        todos = [recurso for _, recursos, _ in archivos for recurso in recursos]
+
+        evidence: list[EvidenceInstance] = []
+        for file_path, recursos, rangos in archivos:
+            evidence.extend(self._parse_file(file_path, recursos, rangos, todos))
         return evidence
 
     # -- parsing -----------------------------------------------------------------
 
-    def _parse_file(self, file_path: Path) -> list[EvidenceInstance]:
-        options = SerializationOptions(strip_string_quotes=True)
-        text = file_path.read_text(encoding="utf-8")
-        raw = hcl2.loads(text, serialization_options=options)
-
-        resources = self._flatten_resources(raw)
-        rangos = resource_line_ranges(text)
+    def _parse_file(
+        self,
+        file_path: Path,
+        resources: list[tuple[str, str, dict]],
+        rangos: dict[tuple[str, str], tuple[int, int]],
+        all_resources: list[tuple[str, str, dict]],
+    ) -> list[EvidenceInstance]:
         evidence: list[EvidenceInstance] = []
 
         for resource_type, local_name, attrs in resources:
@@ -231,7 +254,9 @@ class TerraformAdapter:
             if resource_type not in _HANDLED_TYPES:
                 continue
             evidence.extend(
-                self._evidence_for_resource(file_path, resource_type, local_name, attrs, resources)
+                self._evidence_for_resource(
+                    file_path, resource_type, local_name, attrs, all_resources
+                )
             )
         return evidence
 

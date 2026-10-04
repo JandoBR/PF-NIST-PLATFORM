@@ -66,6 +66,12 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
         job_service.fail_linked_assessment(session, job)
         return
 
+    if job.estado != "pendiente":
+        # Ya no espera a nadie: se dio por perdido mientras hacia cola (y quiza ya se reintento
+        # con otro job) o es un mensaje repetido. Correrlo ejecutaria el trabajo dos veces.
+        logger.warning("Job %s esta %r, no pendiente; se descarta el mensaje.", job.id, job.estado)
+        return
+
     job_service.mark_taken(session, job)
     try:
         ai_requested = bool(message.get("ai_requested"))

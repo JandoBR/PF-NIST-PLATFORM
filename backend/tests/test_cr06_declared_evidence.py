@@ -185,7 +185,7 @@ def test_pr03_still_flags_literal_open_admin_port_next_to_an_expression(tmp_path
         """,
     )
     resultado = pr03_admin_access.evaluate(evidence)
-    assert resultado.final_score == 25
+    assert resultado.final_score == 0
     assert "Limitacion" in resultado.explanation
 
 
@@ -289,7 +289,7 @@ def test_pr01_policy_never_raises_score_but_is_cited_next_to_a_gap(tmp_path):
     )
     gap = _parse(tmp_path, 'resource "aws_db_instance" "d" { storage_encrypted = false }')
     resultado = pr01_encryption.evaluate([*gap, claim])
-    assert resultado.final_score == 25
+    assert resultado.final_score == 0
     assert claim.id in resultado.evidence_ids
 
     ok = _parse(tmp_path, 'resource "aws_db_instance" "d" { storage_encrypted = true }')
@@ -325,7 +325,7 @@ def test_pr03_does_not_crash_or_guess_when_the_port_is_an_expression(tmp_path):
         """,
     )
     resultado = pr03_admin_access.evaluate(evidence)
-    # Abierto a Internet en un puerto desconocido: no se puede afirmar ni 25 ni 100.
+    # Abierto a Internet en un puerto desconocido: no se puede afirmar ni 0 ni 100.
     assert (resultado.estado, resultado.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
     assert "Limitacion" in resultado.explanation and "from_port" in resultado.explanation
 
@@ -347,7 +347,7 @@ def test_pr03_unresolved_port_does_not_hide_a_literal_exposure_nor_matter_when_c
         tf = f'resource "aws_security_group" "sg" {{ {cuerpo} }}'
         return pr03_admin_access.evaluate(_parse(tmp_path, tf)).final_score
 
-    assert score(abierta_22 + variable_abierta) == 25  # la exposicion confirmada manda
+    assert score(abierta_22 + variable_abierta) == 0  # la exposicion confirmada manda
     assert score(variable_interna) == 100  # puerto desconocido, pero no abierto a Internet
 
 
