@@ -40,6 +40,28 @@ resource "aws_s3_bucket_versioning" "documentos" {
   }
 }
 
+resource "aws_s3_bucket" "logs" {
+  bucket = "org-logs-prod"
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Falta `restrict_public_buckets`: el bloqueo del bucket de logs es parcial.
+resource "aws_s3_bucket_public_access_block" "logs" {
+  bucket              = aws_s3_bucket.logs.id
+  block_public_acls   = true
+  block_public_policy = true
+  ignore_public_acls  = true
+}
+
 resource "aws_security_group" "app" {
   name        = "app-sg"
   description = "Security group for app servers"
@@ -68,7 +90,7 @@ resource "aws_security_group" "app" {
 
 resource "aws_cloudtrail" "main" {
   name                  = "org-trail"
-  s3_bucket_name        = aws_s3_bucket.documentos.id
+  s3_bucket_name        = aws_s3_bucket.logs.id
   is_multi_region_trail = true
   enable_logging        = true
 }

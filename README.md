@@ -76,7 +76,7 @@ No queda trabajo pendiente en [docs/11](docs/11-backlog-y-pulido.md); lo descart
   para la API.
 - **Solo el frontend:** `cd frontend && cp .env.example .env && npm install && npm run dev`, con la API
   corriendo aparte.
-- **Datos de ejemplo:** el diálogo "Nueva Evaluación" trae dos paquetes (entorno con brechas y entorno
+- **Datos de ejemplo:** el diálogo "Nueva Evaluación" trae tres paquetes (entorno con brechas, en mejora y
   conforme). Sus documentos solo se leen con la opción de IA activada (requiere `DEEPSEEK_API_KEY`); sin
   ella, Gobernar e Identificar quedan sin evidencia. Los logs de ejemplo de Eventos e Incidentes empiezan de
   cero cada vez.

@@ -182,7 +182,7 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
           <div className="px-6 py-5">
             {/* La organización sale de la sesión (doc 10): ya no se elige aquí. */}
             {mode === 'demo' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 {DEMO_BUNDLES.map((b) => (
                   <button
                     key={b.id}

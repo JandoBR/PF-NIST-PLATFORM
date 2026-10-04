@@ -30,6 +30,7 @@ from app.surveillance.patterns import detect_patterns
 from app.workers import core as worker_core
 
 DEMO = Path(__file__).resolve().parents[2] / "frontend" / "public" / "demo"
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "terraform"
 SCOPE = "entorno:produccion"
 
 
@@ -112,7 +113,7 @@ def test_open_admin_ports_and_missing_encryption_are_high_severity(methodology):
     """El motivo del cambio: con el piso en 25, SSH abierto a Internet o una base sin cifrar
     nunca llegaban a severidad alta, y un solo flag de S3 en false si."""
 
-    evidence = TerraformAdapter("test", "s").parse_path(DEMO / "gaps" / "terraform")
+    evidence = TerraformAdapter("test", "s").parse_path(FIXTURES / "gaps")
     results = engine.evaluate_all(methodology, evidence)
     severidad = {
         f.criterion_id: f.severidad
@@ -125,8 +126,8 @@ def test_open_admin_ports_and_missing_encryption_are_high_severity(methodology):
 # -- ID-01: los recursos de configuracion no son activos ----------------------------------------
 
 
-def test_id01_complete_inventory_of_the_good_demo_scores_100():
-    evidence = TerraformAdapter("test", "s").parse_path(DEMO / "good" / "terraform")
+def test_id01_complete_inventory_scores_100():
+    evidence = TerraformAdapter("test", "s").parse_path(FIXTURES / "good")
     inventario = _claim(
         "data_inventory",
         {"activos": ["aws_db_instance", "aws_s3_bucket", "aws_security_group", "aws_cloudtrail"]},
@@ -316,7 +317,7 @@ def test_worker_does_not_run_a_job_that_was_already_given_up_on(db_session, meth
     assessment = svc.create_pending_assessment(db_session, methodology, org_name="Org", scope="s")
     mensaje = {
         "assessment_id": assessment.id,
-        "terraform_path": str(DEMO / "good" / "terraform"),
+        "terraform_path": str(FIXTURES / "good"),
         "ai_requested": False,
     }
     perdido = job_service.create_job(db_session, "assessment_run", assessment_id=assessment.id)

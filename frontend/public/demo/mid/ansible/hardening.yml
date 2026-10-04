@@ -1,0 +1,26 @@
+- hosts: servidores_app
+  become: true
+  tasks:
+    - name: Deshabilitar login de root por SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PermitRootLogin'
+        line: 'PermitRootLogin no'
+
+    - name: Mantener autenticacion por contrasena (pendiente de migrar a llaves)
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+
+    - name: Permisos de sshd_config
+      file:
+        path: /etc/ssh/sshd_config
+        mode: 0644
+        owner: root
+
+    - name: Habilitar rsyslog
+      service:
+        name: rsyslog
+        state: started
+        enabled: true

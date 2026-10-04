@@ -8,6 +8,16 @@ resource "aws_db_instance" "legacy" {
   publicly_accessible     = true
 }
 
+resource "aws_db_instance" "reportes" {
+  identifier              = "reportes-db"
+  engine                  = "postgres"
+  instance_class          = "db.t3.micro"
+  allocated_storage       = 20
+  storage_encrypted       = true
+  backup_retention_period = 3
+  publicly_accessible     = false
+}
+
 resource "aws_s3_bucket" "backups" {
   bucket = "org-backups-prod"
 }

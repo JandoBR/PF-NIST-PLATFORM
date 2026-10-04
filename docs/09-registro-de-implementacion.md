@@ -2091,3 +2091,30 @@ la demo `PR-01`, `PR-02` y `PR-03` pasan de 25 a 0. Como son `no_implementado` (
 ningún caso que lo necesite).
 
 **Verificación:** backend 545 tests. Regresiones en `tests/test_review_fixes.py`.
+
+## 66. Paquetes de ejemplo: tres momentos en vez de dos extremos
+
+Con los pisos de §65 los dos paquetes de la UI quedaban en los extremos (global 3,75 con casi todo en 0, y 97,4
+sin ningún hallazgo): no se veía ningún tramo intermedio ni casi nada de lo corregido en §62–§65.
+
+- **Entorno con brechas** (suavizado): una segunda base cifrada y con 3 días de retención. `PR-01` y `PR-02`
+  pasan a 25 (parcial); siguen en 0 `PR-03` (SSH/RDP abiertos) y `PR-05` (base pública). Severidades alta y
+  media.
+- **Entorno en mejora** (nuevo, `demo/mid`): Terraform en dos archivos (el bloqueo del bucket referencia un
+  recurso de otro archivo), una base sin cifrar (25), un bucket sin bloque (`evidencia_insuficiente`), un CIDR
+  como variable en un puerto no administrativo (hallazgo `limitacion`), CloudTrail de una región (75), SSH sin
+  root pero con contraseña (25) y `mode: 0644` sin comillas. Los documentos están escritos para dar tramos de
+  75 y 50 (política aprobada con revisión vencida, roles sin autoridad, proceso de riesgos sin registro,
+  procedimiento de recuperación sin criterios de activación) y una retención de 30 días que los 14 configurados
+  incumplen (`PR-02` = 50 más contradicción, §64).
+- **Entorno conforme** (suavizado): un bucket de logs con el bloqueo público incompleto. `PR-05` = 50, un
+  hallazgo de severidad baja.
+- **Log "Respuesta parcial"** (nuevo): alerta y triaje a tiempo, escalamiento a los 45 minutos y restauración
+  verificada sin comunicar. Abre D3 y D5.
+
+Global técnico sin IA: 16 → 68 → 94. `tests/test_demo_bundles.py` fija los puntajes técnicos de cada paquete y
+los disparadores de cada log. Los fixtures de `backend/tests/fixtures` no cambian: los paquetes de la UI ya no
+son copias suyas.
+
+**Verificación:** backend 554 tests; `tsc`, `eslint` y `vite build` del frontend limpios. **No verificado:** los
+puntajes documentales de los tres paquetes (dependen de una corrida real con IA) ni la UI en el navegador.

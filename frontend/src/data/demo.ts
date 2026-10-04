@@ -1,7 +1,9 @@
-// Paquetes de evidencia de ejemplo, servidos como archivos estaticos desde /public/demo. El
-// Terraform, el Ansible y los eventos son copias de backend/tests/fixtures (lo que el motor ya sabe
-// evaluar). Los documentos estan escritos para la demo: cubren Gobernar, Identificar, Responder y
-// Recuperar, que sin documentos quedan sin evidencia. Solo se leen con la capa de IA activada.
+// Paquetes de evidencia de ejemplo, servidos como archivos estaticos desde /public/demo. Son tres
+// momentos de una misma organizacion (con brechas -> en mejora -> conforme), pensados para que cada
+// uno muestre tramos distintos de la escala y para que "Comparar" tenga algo que contar. Los
+// puntajes tecnicos que producen estan fijados en backend/tests/test_demo_bundles.py. Los
+// documentos cubren Gobernar, Identificar, Responder y Recuperar, que sin documentos quedan sin
+// evidencia, y solo se leen con la capa de IA activada.
 
 export interface DemoBundle {
   id: string;
@@ -17,7 +19,7 @@ export const DEMO_BUNDLES: DemoBundle[] = [
     id: 'gaps',
     label: 'Entorno con brechas',
     description:
-      'RDS sin cifrar, SSH root habilitado, firewall apagado. Pensado para mostrar hallazgos y planes.',
+      'SSH y RDP abiertos a Internet, una base de datos pública sin cifrar ni respaldos y login de root habilitado. Hallazgos de severidad alta y media.',
     terraform: ['/demo/gaps/terraform/main.tf'],
     ansible: ['/demo/gaps/ansible/hardening.yml'],
     documents: [
@@ -28,10 +30,25 @@ export const DEMO_BUNDLES: DemoBundle[] = [
     ],
   },
   {
+    id: 'mid',
+    label: 'Entorno en mejora',
+    description:
+      'Lo grave ya está corregido, pero queda trabajo a medias: una base sin cifrar, un bucket sin bloqueo público, SSH aún con contraseña y respaldos por debajo de la política. Puntajes intermedios y evidencia insuficiente.',
+    terraform: ['/demo/mid/terraform/main.tf', '/demo/mid/terraform/security.tf'],
+    ansible: ['/demo/mid/ansible/hardening.yml'],
+    documents: [
+      '/demo/mid/documents/politica-seguridad.md',
+      '/demo/mid/documents/roles.md',
+      '/demo/mid/documents/riesgos-e-inventario.md',
+      '/demo/mid/documents/continuidad.md',
+      '/demo/mid/documents/respuesta-incidentes.md',
+    ],
+  },
+  {
     id: 'good',
     label: 'Entorno conforme',
     description:
-      'RDS cifrado, backups retenidos, bastionado SSH correcto y políticas completas. Pocas o ninguna brecha.',
+      'Cifrado, respaldos, SSH endurecido, registro multirregión y políticas completas. Queda una brecha menor: el bloqueo público de un bucket está incompleto.',
     terraform: ['/demo/good/terraform/main.tf'],
     ansible: ['/demo/good/ansible/hardening.yml'],
     documents: [
@@ -51,18 +68,28 @@ export interface DemoEventLog {
   file: string;
 }
 
+// Cada log es un escenario distinto del mismo día, no una continuación del anterior: el botón
+// limpia los eventos de la organización antes de cargarlo.
 export const DEMO_EVENT_LOGS: DemoEventLog[] = [
   {
     id: 'incidentes-demo',
     label: 'Con incidentes',
     description:
-      'Ráfaga de fallos de autenticación sin alerta, incidente declarado sin escalar a tiempo y un ejercicio de restauración fallido: dispara 3 incidentes (D1, D3, D4).',
+      'Ráfaga de fallos de autenticación sin alerta, incidente declarado que nunca se escala y un ejercicio de restauración fallido: abre 3 incidentes (D1, D3, D4).',
     file: '/demo/events/incidentes-demo.jsonl',
+  },
+  {
+    id: 'respuesta-parcial-demo',
+    label: 'Respuesta parcial',
+    description:
+      'Hay alerta y triaje a tiempo, pero el incidente se escala tarde y la restauración verificada nunca se comunica: abre 2 incidentes (D3, D5).',
+    file: '/demo/events/respuesta-parcial-demo.jsonl',
   },
   {
     id: 'flujo-correcto-demo',
     label: 'Flujo correcto',
-    description: 'Los mismos tipos de evento, pero con alerta, escalamiento y restauración a tiempo: no abre incidentes.',
+    description:
+      'Alerta, triaje, escalamiento, restauración verificada y comunicación, todo a tiempo: no abre incidentes.',
     file: '/demo/events/flujo-correcto-demo.jsonl',
   },
 ];
