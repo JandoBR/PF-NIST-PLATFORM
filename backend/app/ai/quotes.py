@@ -11,15 +11,16 @@ import unicodedata
 
 
 def normalize(text: str) -> str:
-    """Minusculas, sin acentos y con espacios colapsados: una cita no falla por formato."""
+    """Minusculas, sin acentos, solo letras y digitos separados por un espacio: una cita no falla
+    por formato (vinetas, markdown, comillas o guiones distintos), solo por palabras distintas."""
 
     sin_acentos = unicodedata.normalize("NFKD", text)
     sin_acentos = "".join(c for c in sin_acentos if not unicodedata.combining(c))
-    return re.sub(r"\s+", " ", sin_acentos).strip().lower()
+    return " ".join(re.findall(r"[a-z0-9]+", sin_acentos.lower()))
 
 
 def quote_in_text(fragmento: str, texto: str) -> bool:
-    """`fragmento` aparece en `texto`, sin distinguir mayusculas, acentos ni espacios."""
+    """`fragmento` aparece en `texto`, sin distinguir mayusculas, acentos, espacios ni puntuacion."""
 
     cita = normalize(fragmento)
     return bool(cita) and cita in normalize(texto)
