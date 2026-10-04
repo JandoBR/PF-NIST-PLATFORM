@@ -23,11 +23,28 @@ def _expone_administracion(rule: dict) -> bool:
     desde, hasta = rule["puerto_desde"], rule["puerto_hasta"]
     if desde is None or hasta is None:
         return True  # rango sin acotar (p. ej. protocolo -1): se asume que cubre el puerto.
-    if not isinstance(desde, int) or not isinstance(hasta, int):
-        # Puerto como expresion sin resolver (`var.ssh_port`): no se adivina. Queda declarado como
-        # limitacion (`tf.expression.unresolved`), igual que un CIDR sin resolver.
-        return False
+    if _puerto_sin_resolver(rule):
+        return False  # no se adivina: ver `_abierta_con_puerto_sin_resolver`
     return any(desde <= puerto <= hasta for puerto in PUERTOS_ADMINISTRATIVOS)
+
+
+def _puerto_sin_resolver(rule: dict) -> bool:
+    """El puerto es una expresion que el parser no resolvio (`var.ssh_port`)."""
+
+    return any(
+        puerto is not None and not isinstance(puerto, int)
+        for puerto in (rule["puerto_desde"], rule["puerto_hasta"])
+    )
+
+
+def _abierta_con_puerto_sin_resolver(rule: dict) -> bool:
+    """Ingress abierto a Internet cuyo puerto no se conoce: puede ser administrativo o no."""
+
+    return (
+        rule["direccion"] == "ingress"
+        and rule["cidr"] in CIDRS_ABIERTOS
+        and _puerto_sin_resolver(rule)
+    )
 
 
 @noting_unresolved({"cidr_blocks", "ipv6_cidr_blocks", "from_port", "to_port"})
@@ -54,6 +71,22 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             + ", ".join(sg.subject_ref for sg in expuestos)
             + ". Es configuracion declarada; no demuestra accesibilidad efectiva.",
             evidence_ids=[sg.id for sg in expuestos],
+        )
+
+    indeterminados = [
+        sg for sg in relevant if any(_abierta_con_puerto_sin_resolver(r) for r in sg.value)
+    ]
+    if indeterminados:
+        # Abierto a Internet en un puerto desconocido: ni 25 (no se sabe que sea administrativo)
+        # ni 100 (no se puede afirmar que no lo sea).
+        return CriterionResult(
+            criterion_id=CRITERION_ID,
+            criterion_version=CRITERION_VERSION,
+            estado=Estado.EVIDENCIA_INSUFICIENTE,
+            explanation="Reglas abiertas a Internet con el puerto sin resolver en: "
+            + ", ".join(sg.subject_ref for sg in indeterminados)
+            + ". No se puede concluir si exponen administracion.",
+            evidence_ids=[sg.id for sg in indeterminados],
         )
 
     return CriterionResult(

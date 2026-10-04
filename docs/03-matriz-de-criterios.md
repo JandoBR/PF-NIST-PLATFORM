@@ -166,7 +166,8 @@ Resumen de cobertura del catálogo:
   - 100: sin reglas que expongan SSH (22) o RDP (3389) desde `0.0.0.0/0` o `::/0`, y SSH con acceso restringido.
   - 25: cualquier regla que exponga administración a Internet.
   - Se registra que es configuración declarada; no demuestra accesibilidad efectiva.
-  - Un puerto o un CIDR que es una expresión sin resolver (`var.ssh_port`) no se adivina: esa regla no cuenta y queda como limitación.
+  - Un CIDR que es una expresión sin resolver no se adivina: esa regla no cuenta y queda como limitación.
+  - Una regla abierta a Internet cuyo puerto es una expresión sin resolver (`var.ssh_port`), sin otra exposición confirmada → `evidencia_insuficiente`: no se puede afirmar ni 25 ni 100.
   - Sin security groups evaluables → insuficiente.
 - **Recomendación:** restringir puertos administrativos a rangos corporativos/VPN y eliminar reglas `0.0.0.0/0`.
 

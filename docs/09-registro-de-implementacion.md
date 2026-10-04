@@ -1978,8 +1978,9 @@ navegador.
   `(org_id, correlation_key)` (migración `b7e2f4c19d55`). Una BD SQLite de dev creada antes conserva la
   restricción vieja: hay que recrearla.
 - **PR-03 con puerto sin resolver.** `from_port = var.ssh_port` con un CIDR abierto lanzaba `TypeError` y
-  tumbaba la evaluación. Esa regla ya no cuenta y queda la limitación (`tf.expression.unresolved`), igual que
-  un CIDR sin resolver (docs/03 actualizado).
+  tumbaba la evaluación. Ya no falla. Primero se dejó en 100 con la limitación; se corrigió después a
+  `evidencia_insuficiente`: abierto a Internet en un puerto desconocido no permite afirmar ni 25 ni 100
+  (docs/03 actualizado).
 - **La exclusión por contradicción es por criterio.** La afirmación contradicha se quitaba de toda la
   evaluación: una `backup_policy` cuya retención contradecía a Terraform (PR-02) dejaba además a RC-02 y RC-01
   sin evidencia, y dos frecuencias de revisión distintas (GV-01) silenciaban GV-04, sin nota en esos

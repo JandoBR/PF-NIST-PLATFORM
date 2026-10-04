@@ -324,5 +324,27 @@ def test_pr03_does_not_crash_or_guess_when_the_port_is_an_expression(tmp_path):
         """,
     )
     resultado = pr03_admin_access.evaluate(evidence)
-    assert resultado.final_score == 100
+    # Abierto a Internet en un puerto desconocido: no se puede afirmar ni 25 ni 100.
+    assert (resultado.estado, resultado.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
     assert "Limitacion" in resultado.explanation and "from_port" in resultado.explanation
+
+
+def test_pr03_unresolved_port_does_not_hide_a_literal_exposure_nor_matter_when_closed(tmp_path):
+    regla = """
+          ingress {{
+            from_port   = {puerto}
+            to_port     = {puerto}
+            protocol    = "tcp"
+            cidr_blocks = ["{cidr}"]
+          }}
+    """
+    abierta_22 = regla.format(puerto=22, cidr="0.0.0.0/0")
+    variable_abierta = regla.format(puerto="var.p", cidr="0.0.0.0/0")
+    variable_interna = regla.format(puerto="var.p", cidr="10.0.0.0/16")
+
+    def score(cuerpo):
+        tf = f'resource "aws_security_group" "sg" {{ {cuerpo} }}'
+        return pr03_admin_access.evaluate(_parse(tmp_path, tf)).final_score
+
+    assert score(abierta_22 + variable_abierta) == 25  # la exposicion confirmada manda
+    assert score(variable_interna) == 100  # puerto desconocido, pero no abierto a Internet
