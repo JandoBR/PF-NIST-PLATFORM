@@ -208,7 +208,12 @@ def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
     compare = api_client.get(f"/assessments/{before['id']}/compare/{reeval['id']}")
     assert compare.status_code == 200
     assert compare.json()["assessment_id_a"] == before["id"]
-    assert compare.json()["diffs"]  # el mismo criterio aparece en ambos lados, sin cambio
+    body = compare.json()
+    assert body["diffs"]  # el mismo criterio aparece en ambos lados, sin cambio
+    assert {d["direccion"] for d in body["diffs"]} == {"igual"}
+    assert all(d["explicacion_antes"] == d["explicacion_despues"] for d in body["diffs"])
+    assert body["misma_metodologia"] and body["mismo_scope"]
+    assert body["hallazgos_resueltos"] == [] and body["hallazgos_nuevos"] == []
 
 
 def test_reevaluate_inherits_plan_follow_up_state(api_client, db_session, methodology, fake_redis):

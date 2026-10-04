@@ -427,6 +427,22 @@ def build_comparison_report(
         Spacer(1, 6),
         _p(f"Cambio en el puntaje global: {delta_text}", _BODY),
     ]
+    if not comparison.misma_metodologia or not comparison.mismo_scope:
+        motivos = [
+            texto
+            for distinto, texto in (
+                (not comparison.misma_metodologia, "versiones distintas de la metodologia"),
+                (not comparison.mismo_scope, "alcances distintos"),
+            )
+            if distinto
+        ]
+        story.append(
+            _p(
+                f"Atencion: las dos evaluaciones usan {' y '.join(motivos)}. Parte de los cambios"
+                " puede deberse a eso y no a cambios en el entorno.",
+                _SMALL,
+            )
+        )
 
     cambios = [d for d in comparison.diffs if d.cambio]
     story.append(_p(f"Criterios que cambiaron ({len(cambios)})", _H2))

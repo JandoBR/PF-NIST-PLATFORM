@@ -41,6 +41,10 @@ class ComparisonDiffOut(BaseModel):
     score_antes: float | None
     score_despues: float | None
     cambio: bool
+    #: mejora | retroceso | ahora_evaluado | dejo_de_evaluarse | cambio_de_estado | igual
+    direccion: str = "igual"
+    explicacion_antes: str | None = None
+    explicacion_despues: str | None = None
 
 
 class ComparisonOut(BaseModel):
@@ -49,3 +53,10 @@ class ComparisonOut(BaseModel):
     diffs: list[ComparisonDiffOut]
     global_antes: float | None
     global_despues: float | None
+    #: False si las evaluaciones usaron reglas o alcances distintos: los cambios pueden no venir
+    #: del entorno.
+    misma_metodologia: bool = True
+    mismo_scope: bool = True
+    #: Ids de criterio con brecha solo antes (resueltos) o solo despues (nuevos).
+    hallazgos_resueltos: list[str] = []
+    hallazgos_nuevos: list[str] = []

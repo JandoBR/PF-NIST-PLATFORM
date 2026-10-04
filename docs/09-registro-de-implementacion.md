@@ -2118,3 +2118,29 @@ son copias suyas.
 
 **Verificación:** backend 554 tests; `tsc`, `eslint` y `vite build` del frontend limpios. **No verificado:** los
 puntajes documentales de los tres paquetes (dependen de una corrida real con IA) ni la UI en el navegador.
+
+## 67. Comparar: qué cambió y por qué
+
+La vista decía cuánto cambió el puntaje, no qué cambió ni por qué, y uno de sus números estaba mal.
+
+- **Puntaje por función.** Se calculaba en el navegador como promedio simple de los criterios; el real es
+  ponderado por peso, así que Comparar y el Resumen de Madurez podían mostrar valores distintos para la misma
+  evaluación. Ahora usa los agregados del backend, con su cobertura.
+- **Dirección del cambio (`direccion`, backend).** Pasar de `evidencia_insuficiente` a un puntaje no contaba
+  como nada (flecha neutra). Ahora cada criterio es `mejora`, `retroceso`, `ahora_evaluado`,
+  `dejo_de_evaluarse`, `cambio_de_estado` o `igual`: ganar o perder evidencia no se confunde con mejorar o
+  empeorar.
+- **El porqué.** `GET /assessments/{a}/compare/{b}` devuelve la explicación del criterio en cada evaluación;
+  cada fila se despliega y las muestra lado a lado.
+- **Aviso de reglas o alcance distintos** (`misma_metodologia`, `mismo_scope`), también en el PDF: tras subir la
+  metodología de v8 a v11, comparar una evaluación vieja con una nueva muestra cambios que son de las reglas.
+- **Cobertura y Tier** junto al puntaje global, y **hallazgos** que ya no aparecen o son nuevos
+  (`hallazgos_resueltos`, `hallazgos_nuevos`).
+- Solo se listan los criterios con cambio (los demás, a pedido), primero lo que empeoró; los estados usan las
+  etiquetas de la UI; "Antes" es por defecto la evaluación inmediatamente anterior a la activa; la comparación
+  se calcula sola y hay un botón para intercambiar; aviso si "Antes" es más reciente que "Después". Se quitó la
+  tarjeta de barras del puntaje global (repetía el resumen) y el texto que mandaba a un botón "Reevaluar" que
+  ya no existe.
+
+**Verificación:** backend 557 tests (`tests/test_comparison.py`); `tsc`, `eslint` y `vite build` limpios. **No
+verificado:** la pantalla en el navegador.

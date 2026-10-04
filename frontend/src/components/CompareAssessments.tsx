@@ -2,19 +2,27 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   GitCompare,
   ArrowRight,
+  ArrowLeftRight,
   ArrowUpRight,
   ArrowDownRight,
+  ChevronDown,
+  Eye,
+  EyeOff,
   Loader2,
   AlertTriangle,
   Minus,
-  TrendingUp,
-  TrendingDown,
 } from 'lucide-react';
 import { compareAssessments, downloadComparisonReport, listAssessments } from '@/lib/api';
 import { DownloadPdfButton } from '@/components/DownloadPdfButton';
-import type { AssessmentDetail, ComparisonDiff, ComparisonOut } from '@/lib/types';
+import type {
+  AssessmentDetail,
+  ComparisonDiff,
+  ComparisonDirection,
+  ComparisonOut,
+  Estado,
+} from '@/lib/types';
 import { FUNCTION_NAMES, FUNCTION_ORDER } from '@/lib/types';
-import { FUNCTION_ACCENTS } from '@/lib/ui';
+import { ESTADO_META, FUNCTION_ACCENTS } from '@/lib/ui';
 
 interface Props {
   orgId: string;
@@ -24,34 +32,88 @@ interface Props {
 function label(a: AssessmentDetail): string {
   const when = new Date(a.creado_en).toLocaleString();
   const score = a.score_global != null ? Math.round(a.score_global) : '—';
-  return `${when} · ${a.estado} · score ${score}`;
+  return `${when} · score ${score}`;
 }
 
-function functionOf(criterionId: string): string {
-  return criterionId.split('-')[1] ?? '';
+const time = (a: AssessmentDetail) => new Date(a.creado_en).getTime();
+
+const round = (value: number | null | undefined) => (value != null ? `${Math.round(value)}` : '—');
+
+const percent = (value: number | null | undefined) =>
+  value != null ? `${Math.round(value * 100)}%` : '—';
+
+function tierText(a: AssessmentDetail): string {
+  if (!a.tier.estimable || a.tier.tier == null) return 'No estimable';
+  return `Tier ${a.tier.tier}${a.tier.provisional ? ' (prov.)' : ''}`;
 }
 
-/** Delta de score de un criterio, o `null` si Falta alguno de los dos puntajes. */
-function scoreDelta(d: ComparisonDiff): number | null {
-  if (d.score_antes == null || d.score_despues == null) return null;
-  return d.score_despues - d.score_antes;
+function estadoLabel(estado: string | null): string {
+  if (estado == null) return '—';
+  return ESTADO_META[estado as Estado]?.label ?? estado;
 }
 
-type Direction = 'up' | 'down' | 'changed' | 'same';
-
-function direction(d: ComparisonDiff): Direction {
-  if (!d.cambio) return 'same';
-  const delta = scoreDelta(d);
-  if (delta == null || delta === 0) return 'changed';
-  return delta > 0 ? 'up' : 'down';
+interface DirectionMeta {
+  label: string;
+  text: string;
+  bg: string;
+  border: string;
+  icon: React.ReactNode;
 }
 
-const DIRECTION_META: Record<Direction, { text: string; bg: string; border: string }> = {
-  up: { text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
-  down: { text: 'text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
-  changed: { text: 'text-cyan-300', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
-  same: { text: 'text-slate-500', bg: 'bg-white/[0.04]', border: 'border-white/10' },
+const DIRECTION_META: Record<ComparisonDirection, DirectionMeta> = {
+  mejora: {
+    label: 'Mejoró',
+    text: 'text-emerald-300',
+    bg: 'bg-emerald-500/10',
+    border: 'border-emerald-500/30',
+    icon: <ArrowUpRight className="h-3.5 w-3.5" />,
+  },
+  retroceso: {
+    label: 'Empeoró',
+    text: 'text-rose-300',
+    bg: 'bg-rose-500/10',
+    border: 'border-rose-500/30',
+    icon: <ArrowDownRight className="h-3.5 w-3.5" />,
+  },
+  ahora_evaluado: {
+    label: 'Ahora se evalúa',
+    text: 'text-cyan-300',
+    bg: 'bg-cyan-500/10',
+    border: 'border-cyan-500/30',
+    icon: <Eye className="h-3.5 w-3.5" />,
+  },
+  dejo_de_evaluarse: {
+    label: 'Dejó de evaluarse',
+    text: 'text-amber-300',
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/30',
+    icon: <EyeOff className="h-3.5 w-3.5" />,
+  },
+  cambio_de_estado: {
+    label: 'Cambió de estado',
+    text: 'text-slate-300',
+    bg: 'bg-white/[0.06]',
+    border: 'border-white/15',
+    icon: <ArrowRight className="h-3.5 w-3.5" />,
+  },
+  igual: {
+    label: 'Sin cambio',
+    text: 'text-slate-500',
+    bg: 'bg-white/[0.04]',
+    border: 'border-white/10',
+    icon: <Minus className="h-3.5 w-3.5" />,
+  },
 };
+
+/** Orden en que se listan los cambios: primero lo que empeoró. */
+const DIRECTION_ORDER: ComparisonDirection[] = [
+  'retroceso',
+  'dejo_de_evaluarse',
+  'mejora',
+  'ahora_evaluado',
+  'cambio_de_estado',
+  'igual',
+];
 
 export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
   const [assessments, setAssessments] = useState<AssessmentDetail[] | null>(null);
@@ -60,6 +122,8 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
   const [comparison, setComparison] = useState<ComparisonOut | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showUnchanged, setShowUnchanged] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -68,13 +132,16 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
         if (!active) return;
         const ownComplete = all
           .filter((a) => a.org_id === orgId && a.estado === 'completada')
-          .sort((a, b) => new Date(b.creado_en).getTime() - new Date(a.creado_en).getTime());
+          .sort((a, b) => time(b) - time(a));
         setAssessments(ownComplete);
         if (ownComplete.length >= 2) {
-          const defaultB = ownComplete.find((a) => a.id === currentAssessmentId) ?? ownComplete[0];
-          const defaultA = ownComplete.find((a) => a.id !== defaultB.id) ?? ownComplete[1];
-          setIdB(defaultB.id);
-          setIdA(defaultA.id);
+          // "Después" es la evaluación activa; "Antes", la inmediatamente anterior a ella (o, si
+          // la activa es la más antigua, la siguiente).
+          const after = ownComplete.find((a) => a.id === currentAssessmentId) ?? ownComplete[0];
+          const older = ownComplete.find((a) => time(a) < time(after));
+          const before = older ?? ownComplete.find((a) => a.id !== after.id) ?? ownComplete[1];
+          setIdB(after.id);
+          setIdA(before.id);
         }
       })
       .catch((err) => active && setError(err instanceof Error ? err.message : 'Error desconocido.'));
@@ -83,52 +150,71 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
     };
   }, [orgId, currentAssessmentId]);
 
-  const canCompare = idA && idB && idA !== idB;
-
-  async function handleCompare() {
+  // La comparación se recalcula sola al cambiar cualquiera de las dos evaluaciones.
+  useEffect(() => {
+    if (!idA || !idB || idA === idB) {
+      setComparison(null);
+      return;
+    }
+    let active = true;
     setLoading(true);
     setError(null);
-    try {
-      setComparison(await compareAssessments(idA, idB));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido.');
-    } finally {
-      setLoading(false);
-    }
-  }
+    setExpanded(null);
+    compareAssessments(idA, idB)
+      .then((result) => active && setComparison(result))
+      .catch((err) => {
+        if (!active) return;
+        setComparison(null);
+        setError(err instanceof Error ? err.message : 'Error desconocido.');
+      })
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [idA, idB]);
 
-  const summary = useMemo(() => {
-    if (!comparison) return null;
-    const mejoras = comparison.diffs.filter((d) => direction(d) === 'up').length;
-    const retrocesos = comparison.diffs.filter((d) => direction(d) === 'down').length;
-    const sinCambio = comparison.diffs.filter((d) => !d.cambio).length;
-    const deltaGlobal =
-      comparison.global_antes != null && comparison.global_despues != null
-        ? comparison.global_despues - comparison.global_antes
-        : null;
-    return { mejoras, retrocesos, sinCambio, deltaGlobal };
+  const before = assessments?.find((a) => a.id === idA) ?? null;
+  const after = assessments?.find((a) => a.id === idB) ?? null;
+  const reversed = before != null && after != null && time(before) > time(after);
+
+  const counts = useMemo(() => {
+    const result = {} as Record<ComparisonDirection, number>;
+    for (const key of DIRECTION_ORDER) result[key] = 0;
+    for (const d of comparison?.diffs ?? []) result[d.direccion] += 1;
+    return result;
   }, [comparison]);
 
+  // Puntaje y cobertura por función tal como los calcula el backend (ponderados por peso): los
+  // mismos números que muestra el Resumen de Madurez.
   const byFunction = useMemo(() => {
-    if (!comparison) return [];
+    if (!comparison || !before || !after) return [];
+    const aggregate = (a: AssessmentDetail, key: string) =>
+      a.agregados_funcion.find((f) => f.ref === key) ?? null;
     return FUNCTION_ORDER.map((key) => {
-      const diffs = comparison.diffs.filter((d) => functionOf(d.criterion_id) === key);
+      const antes = aggregate(before, key);
+      const despues = aggregate(after, key);
+      const diffs = comparison.diffs.filter((d) => d.criterion_id.split('-')[1] === key);
       if (diffs.length === 0) return null;
-      const before = diffs.filter((d) => d.score_antes != null);
-      const after = diffs.filter((d) => d.score_despues != null);
-      const avg = (xs: ComparisonDiff[], pick: (d: ComparisonDiff) => number | null) =>
-        xs.length > 0 ? xs.reduce((n, d) => n + (pick(d) ?? 0), 0) / xs.length : null;
       return {
         key,
         name: FUNCTION_NAMES[key] ?? key,
         accent: FUNCTION_ACCENTS[key] ?? '#94a3b8',
-        antes: avg(before, (d) => d.score_antes),
-        despues: avg(after, (d) => d.score_despues),
+        antes,
+        despues,
         cambiados: diffs.filter((d) => d.cambio).length,
         total: diffs.length,
       };
     }).filter((x): x is NonNullable<typeof x> => x !== null);
-  }, [comparison]);
+  }, [comparison, before, after]);
+
+  const rows = useMemo(() => {
+    if (!comparison) return [];
+    const order = (d: ComparisonDiff) => DIRECTION_ORDER.indexOf(d.direccion);
+    return comparison.diffs
+      .filter((d) => showUnchanged || d.cambio)
+      .slice()
+      .sort((a, b) => order(a) - order(b) || a.criterion_id.localeCompare(b.criterion_id));
+  }, [comparison, showUnchanged]);
 
   if (assessments === null) {
     return (
@@ -144,12 +230,23 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
         <GitCompare className="mb-3 h-10 w-10 text-slate-700" />
         <h3 className="text-sm font-semibold text-slate-200">Nada que comparar todavía</h3>
         <p className="mt-1 max-w-sm text-xs text-slate-500">
-          Necesitas al menos 2 evaluaciones completadas para esta organización. Reevalúa desde el
-          resumen de madurez para generar una segunda.
+          Necesitas al menos 2 evaluaciones completadas de esta organización. Crea otra desde
+          «Nueva Evaluación»: los tres paquetes de ejemplo están pensados para compararse entre sí.
         </p>
       </div>
     );
   }
+
+  const deltaGlobal =
+    comparison?.global_antes != null && comparison?.global_despues != null
+      ? comparison.global_despues - comparison.global_antes
+      : null;
+  const deltaCobertura =
+    before?.cobertura_global != null && after?.cobertura_global != null
+      ? (after.cobertura_global - before.cobertura_global) * 100
+      : null;
+  const changedCount = comparison?.diffs.filter((d) => d.cambio).length ?? 0;
+  const unchangedCount = (comparison?.diffs.length ?? 0) - changedCount;
 
   return (
     <div className="space-y-6">
@@ -160,7 +257,7 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">Comparar Evaluaciones</h3>
-            <p className="text-xs text-slate-500">Diferencia criterio por criterio entre dos evaluaciones completadas.</p>
+            <p className="text-xs text-slate-500">Qué cambió entre dos evaluaciones completadas, y por qué.</p>
           </div>
         </div>
 
@@ -175,7 +272,16 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
               ))}
             </select>
           </div>
-          <ArrowRight className="mb-2.5 h-4 w-4 flex-shrink-0 text-slate-600" />
+          <button
+            title="Intercambiar antes y después"
+            onClick={() => {
+              setIdA(idB);
+              setIdB(idA);
+            }}
+            className="btn-ghost mb-0.5 border border-white/[0.06] px-2.5"
+          >
+            <ArrowLeftRight className="h-4 w-4" />
+          </button>
           <div className="min-w-[220px] flex-1">
             <label className="mb-1.5 block text-xs font-medium text-slate-400">Después</label>
             <select value={idB} onChange={(e) => setIdB(e.target.value)} className="input">
@@ -186,12 +292,29 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
               ))}
             </select>
           </div>
-          <button onClick={handleCompare} disabled={!canCompare || loading} className="btn-primary">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitCompare className="h-4 w-4" />}
-            Comparar
-          </button>
+          {loading && <Loader2 className="mb-2.5 h-4 w-4 animate-spin text-slate-500" />}
         </div>
 
+        {idA === idB && (
+          <p className="mt-3 text-xs text-slate-500">Elige dos evaluaciones distintas.</p>
+        )}
+        {reversed && (
+          <Notice>
+            «Antes» es más reciente que «Después»: la comparación se lee al revés en el tiempo.
+          </Notice>
+        )}
+        {comparison && (!comparison.misma_metodologia || !comparison.mismo_scope) && (
+          <Notice>
+            Estas evaluaciones usan{' '}
+            {[
+              !comparison.misma_metodologia && 'versiones distintas de las reglas',
+              !comparison.mismo_scope && 'alcances distintos',
+            ]
+              .filter(Boolean)
+              .join(' y ')}
+            . Parte de los cambios puede deberse a eso y no a cambios en el entorno.
+          </Notice>
+        )}
         {error && (
           <p className="mt-3 flex items-center gap-1.5 text-xs text-rose-300">
             <AlertTriangle className="h-3.5 w-3.5" /> {error}
@@ -199,7 +322,7 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
         )}
       </div>
 
-      {comparison && summary && (
+      {comparison && before && after && (
         <>
           <div className="flex justify-end">
             <DownloadPdfButton
@@ -210,50 +333,61 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
             />
           </div>
 
-          {/* Resumen del cambio */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <DeltaCard
+          {/* Resumen: puntaje, cobertura y Tier, siempre juntos (un puntaje sin su cobertura engaña) */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <SummaryCard
               label="Score global"
-              value={`${comparison.global_antes != null ? Math.round(comparison.global_antes) : '—'} → ${
-                comparison.global_despues != null ? Math.round(comparison.global_despues) : '—'
-              }`}
-              delta={summary.deltaGlobal}
+              value={`${round(comparison.global_antes)} → ${round(comparison.global_despues)}`}
+              delta={deltaGlobal}
             />
-            <StatCard
-              icon={<TrendingUp className="h-5 w-5" />}
-              accent="emerald"
-              label="Criterios mejorados"
-              value={`${summary.mejoras}`}
+            <SummaryCard
+              label="Cobertura de evidencia"
+              value={`${percent(before.cobertura_global)} → ${percent(after.cobertura_global)}`}
+              delta={deltaCobertura}
+              unit=" pts"
             />
-            <StatCard
-              icon={<TrendingDown className="h-5 w-5" />}
-              accent="rose"
-              label="Criterios degradados"
-              value={`${summary.retrocesos}`}
-            />
-            <StatCard
-              icon={<Minus className="h-5 w-5" />}
-              accent="slate"
-              label="Sin cambio"
-              value={`${summary.sinCambio}`}
+            <SummaryCard
+              label="Tier estimado"
+              value={`${tierText(before)} → ${tierText(after)}`}
+              delta={
+                before.tier.tier != null && after.tier.tier != null
+                  ? after.tier.tier - before.tier.tier
+                  : null
+              }
             />
           </div>
 
-          {/* Score global antes/después */}
+          {/* Qué pasó con los criterios y con los hallazgos */}
           <div className="card p-5">
-            <h3 className="mb-4 text-sm font-semibold text-white">Score global</h3>
-            <div className="space-y-3">
-              <DoubleBar
-                label="Antes"
-                value={comparison.global_antes}
-                accent="#64748b"
-              />
-              <DoubleBar
-                label="Después"
-                value={comparison.global_despues}
-                accent={summary.deltaGlobal != null && summary.deltaGlobal < 0 ? '#fb7185' : '#34d399'}
-              />
+            <div className="flex flex-wrap gap-2">
+              {DIRECTION_ORDER.filter((key) => counts[key] > 0).map((key) => {
+                const meta = DIRECTION_META[key];
+                return (
+                  <span
+                    key={key}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium ${meta.bg} ${meta.border} ${meta.text}`}
+                  >
+                    {meta.icon}
+                    {counts[key]} · {meta.label.toLowerCase()}
+                  </span>
+                );
+              })}
             </div>
+            <p className="mt-3 text-xs leading-relaxed text-slate-400">
+              <span className="font-semibold text-slate-300">Hallazgos:</span>{' '}
+              {comparison.hallazgos_resueltos.length === 0 && comparison.hallazgos_nuevos.length === 0
+                ? 'los mismos criterios tienen brecha en las dos evaluaciones.'
+                : [
+                    comparison.hallazgos_resueltos.length > 0 &&
+                      `${comparison.hallazgos_resueltos.length} ya no aparece(n) (${comparison.hallazgos_resueltos.join(', ')})`,
+                    comparison.hallazgos_nuevos.length > 0 &&
+                      `${comparison.hallazgos_nuevos.length} nuevo(s) (${comparison.hallazgos_nuevos.join(', ')})`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') + '.'}
+              {counts.dejo_de_evaluarse > 0 &&
+                ' Un hallazgo también deja de aparecer cuando su criterio deja de poder evaluarse: revisa los marcados «dejó de evaluarse».'}
+            </p>
           </div>
 
           {/* Cambio por función */}
@@ -261,7 +395,7 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
             <div className="card p-5">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">Cambio por función CSF</h3>
-                <span className="text-xs text-slate-500">Score promedio antes vs. después</span>
+                <span className="text-xs text-slate-500">Score ponderado y cobertura, antes → después</span>
               </div>
               <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {byFunction.map((f) => (
@@ -278,9 +412,12 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
                       </span>
                     </div>
                     <p className="mb-2.5 text-xs font-medium text-slate-300">{f.name}</p>
-                    <DoubleBar label="Antes" value={f.antes} accent="#475569" compact />
+                    <ScoreBar label="Antes" value={f.antes?.score ?? null} accent="#475569" />
                     <div className="h-1.5" />
-                    <DoubleBar label="Después" value={f.despues} accent={f.accent} compact />
+                    <ScoreBar label="Después" value={f.despues?.score ?? null} accent={f.accent} />
+                    <p className="mt-2.5 text-[11px] text-slate-500">
+                      Cobertura {percent(f.antes?.cobertura)} → {percent(f.despues?.cobertura)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -289,49 +426,37 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
 
           {/* Detalle por criterio */}
           <div className="card overflow-hidden">
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
-              <h3 className="text-sm font-semibold text-white">Detalle por criterio</h3>
-              <span className="text-xs text-slate-500">
-                {comparison.diffs.filter((d) => d.cambio).length} de {comparison.diffs.length} criterio(s) con cambio
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.06] px-5 py-3.5">
+              <h3 className="text-sm font-semibold text-white">
+                {changedCount} criterio(s) con cambio
+              </h3>
+              {unchangedCount > 0 && (
+                <button
+                  onClick={() => setShowUnchanged((v) => !v)}
+                  className="text-xs text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline"
+                >
+                  {showUnchanged ? 'Ocultar' : 'Mostrar'} los {unchangedCount} sin cambio
+                </button>
+              )}
             </div>
-            <div className="divide-y divide-white/[0.04]">
-              {comparison.diffs.map((d) => {
-                const dir = direction(d);
-                const meta = DIRECTION_META[dir];
-                return (
-                  <div
+            {rows.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-slate-500">
+                Ningún criterio cambió entre las dos evaluaciones.
+              </p>
+            ) : (
+              <div className="divide-y divide-white/[0.04]">
+                {rows.map((d) => (
+                  <CriterionRow
                     key={d.criterion_id}
-                    className={`flex items-center gap-4 px-5 py-3 text-sm ${d.cambio ? 'bg-cyan-500/[0.03]' : ''}`}
-                  >
-                    <span className="w-24 flex-shrink-0 font-mono text-xs text-slate-500">{d.criterion_id}</span>
-                    <span className="min-w-0 flex-1 truncate text-slate-300">{d.titulo}</span>
-                    <span className="hidden w-32 flex-shrink-0 text-right text-xs text-slate-500 sm:block">
-                      {d.estado_antes ?? '—'}
-                    </span>
-                    <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border ${meta.bg} ${meta.border} ${meta.text}`}>
-                      {dir === 'up' ? (
-                        <ArrowUpRight className="h-3.5 w-3.5" />
-                      ) : dir === 'down' ? (
-                        <ArrowDownRight className="h-3.5 w-3.5" />
-                      ) : dir === 'changed' ? (
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      ) : (
-                        <Minus className="h-3.5 w-3.5" />
-                      )}
-                    </span>
-                    <span className="hidden w-32 flex-shrink-0 text-xs text-slate-300 sm:block">
-                      {d.estado_despues ?? '—'}
-                    </span>
-                    <span className="w-16 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
-                      {d.score_antes != null ? Math.round(d.score_antes) : '—'}
-                      {' → '}
-                      {d.score_despues != null ? Math.round(d.score_despues) : '—'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                    diff={d}
+                    open={expanded === d.criterion_id}
+                    onToggle={() =>
+                      setExpanded((current) => (current === d.criterion_id ? null : d.criterion_id))
+                    }
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -339,46 +464,117 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  accent,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  accent: 'emerald' | 'rose' | 'slate';
-}) {
-  const colors = {
-    emerald: 'text-emerald-300 bg-emerald-500/10 ring-emerald-500/20',
-    rose: 'text-rose-300 bg-rose-500/10 ring-rose-500/20',
-    slate: 'text-slate-400 bg-white/[0.04] ring-white/10',
-  };
+function Notice({ children }: { children: React.ReactNode }) {
   return (
-    <div className="card card-hover p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-500">{label}</p>
-          <p className="mt-1.5 text-2xl font-bold tracking-tight text-white">{value}</p>
+    <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-200">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
+function CriterionRow({
+  diff,
+  open,
+  onToggle,
+}: {
+  diff: ComparisonDiff;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const meta = DIRECTION_META[diff.direccion];
+  const sameExplanation = diff.explicacion_antes === diff.explicacion_despues;
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-5 py-3 text-left text-sm transition-colors hover:bg-white/[0.02]"
+      >
+        <span
+          title={meta.label}
+          className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border ${meta.bg} ${meta.border} ${meta.text}`}
+        >
+          {meta.icon}
+        </span>
+        <span className="w-24 flex-shrink-0 font-mono text-xs text-slate-500">{diff.criterion_id}</span>
+        <span className="min-w-0 flex-1 truncate text-slate-300">{diff.titulo}</span>
+        <span className={`hidden flex-shrink-0 text-xs sm:block ${meta.text}`}>{meta.label}</span>
+        <span className="w-20 flex-shrink-0 text-right text-xs font-semibold text-slate-300">
+          {round(diff.score_antes)} → {round(diff.score_despues)}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 flex-shrink-0 text-slate-600 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && (
+        <div className="grid gap-3 bg-ink-900/40 px-5 pb-4 pt-1 sm:grid-cols-2">
+          <ExplanationPanel
+            title="Antes"
+            estado={diff.estado_antes}
+            score={diff.score_antes}
+            text={diff.explicacion_antes}
+          />
+          <ExplanationPanel
+            title="Después"
+            estado={diff.estado_despues}
+            score={diff.score_despues}
+            text={sameExplanation ? 'La misma explicación que antes.' : diff.explicacion_despues}
+            muted={sameExplanation}
+          />
         </div>
-        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ring-1 ${colors[accent]}`}>
-          {icon}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
-function DeltaCard({ label, value, delta }: { label: string; value: string; delta: number | null }) {
-  const positive = delta != null && delta > 0;
-  const negative = delta != null && delta < 0;
+function ExplanationPanel({
+  title,
+  estado,
+  score,
+  text,
+  muted = false,
+}: {
+  title: string;
+  estado: string | null;
+  score: number | null;
+  text: string | null;
+  muted?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-white/[0.06] p-3">
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
+        <span className="font-semibold text-slate-300">{title}</span>
+        <span className="text-slate-500">
+          {estadoLabel(estado)} · {round(score)}
+        </span>
+      </div>
+      <p className={`text-xs leading-relaxed ${muted ? 'italic text-slate-500' : 'text-slate-400'}`}>
+        {text ?? 'El criterio no existía en esta evaluación.'}
+      </p>
+    </div>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  delta,
+  unit = '',
+}: {
+  label: string;
+  value: string;
+  delta: number | null;
+  unit?: string;
+}) {
+  const rounded = delta != null ? Math.round(delta) : null;
+  const positive = rounded != null && rounded > 0;
+  const negative = rounded != null && rounded < 0;
   return (
     <div className="card p-5">
       <p className="text-xs font-medium text-slate-500">{label}</p>
-      <div className="mt-1.5 flex items-baseline gap-2">
-        <p className="text-2xl font-bold tracking-tight text-white">{value}</p>
-        {delta != null && (
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2">
+        <p className="text-xl font-bold tracking-tight text-white">{value}</p>
+        {rounded != null && (
           <span
             className={`flex items-center gap-0.5 text-sm font-semibold ${
               positive ? 'text-emerald-300' : negative ? 'text-rose-300' : 'text-slate-400'
@@ -391,8 +587,9 @@ function DeltaCard({ label, value, delta }: { label: string; value: string; delt
             ) : (
               <Minus className="h-4 w-4" />
             )}
-            {delta > 0 ? '+' : ''}
-            {Math.round(delta)}
+            {positive ? '+' : ''}
+            {rounded}
+            {unit}
           </span>
         )}
       </div>
@@ -400,28 +597,18 @@ function DeltaCard({ label, value, delta }: { label: string; value: string; delt
   );
 }
 
-function DoubleBar({
-  label,
-  value,
-  accent,
-  compact = false,
-}: {
-  label: string;
-  value: number | null;
-  accent: string;
-  compact?: boolean;
-}) {
+function ScoreBar({ label, value, accent }: { label: string; value: number | null; accent: string }) {
   const pct = value != null ? Math.max(0, Math.min(100, value)) : 0;
   return (
     <div className="flex items-center gap-3">
-      <span className={`flex-shrink-0 text-xs text-slate-500 ${compact ? 'w-14' : 'w-16'}`}>{label}</span>
+      <span className="w-14 flex-shrink-0 text-xs text-slate-500">{label}</span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
         <div
           className="h-full rounded-full transition-all duration-700"
           style={{ width: `${pct}%`, backgroundColor: accent }}
         />
       </div>
-      <span className={`flex-shrink-0 text-right text-xs font-semibold text-slate-400 ${compact ? 'w-8' : 'w-10'}`}>
+      <span className="w-8 flex-shrink-0 text-right text-xs font-semibold text-slate-400">
         {value != null ? Math.round(value) : '—'}
       </span>
     </div>

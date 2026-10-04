@@ -355,11 +355,18 @@ def _comparison_out(report: comparison.ComparisonReport) -> ComparisonOut:
                 score_antes=d.score_antes,
                 score_despues=d.score_despues,
                 cambio=d.cambio,
+                direccion=d.direccion,
+                explicacion_antes=d.explicacion_antes,
+                explicacion_despues=d.explicacion_despues,
             )
             for d in report.diffs
         ],
         global_antes=report.global_antes,
         global_despues=report.global_despues,
+        misma_metodologia=report.misma_metodologia,
+        mismo_scope=report.mismo_scope,
+        hallazgos_resueltos=report.hallazgos_resueltos,
+        hallazgos_nuevos=report.hallazgos_nuevos,
     )
 
 

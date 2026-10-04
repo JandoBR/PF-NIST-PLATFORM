@@ -174,7 +174,20 @@ export interface ComparisonDiff {
   score_antes: number | null;
   score_despues: number | null;
   cambio: boolean;
+  direccion: ComparisonDirection;
+  /** La explicación del criterio en cada evaluación: el porqué del cambio. */
+  explicacion_antes: string | null;
+  explicacion_despues: string | null;
 }
+
+/** Pasar de no tener puntaje a tenerlo (o al revés) no es mejorar ni empeorar. */
+export type ComparisonDirection =
+  | 'mejora'
+  | 'retroceso'
+  | 'ahora_evaluado'
+  | 'dejo_de_evaluarse'
+  | 'cambio_de_estado'
+  | 'igual';
 
 export interface ComparisonOut {
   assessment_id_a: string;
@@ -182,6 +195,12 @@ export interface ComparisonOut {
   diffs: ComparisonDiff[];
   global_antes: number | null;
   global_despues: number | null;
+  /** False si las evaluaciones usaron reglas o alcances distintos. */
+  misma_metodologia: boolean;
+  mismo_scope: boolean;
+  /** Ids de criterio con brecha solo antes (resueltos) o solo después (nuevos). */
+  hallazgos_resueltos: string[];
+  hallazgos_nuevos: string[];
 }
 
 export type JobEstado = 'pendiente' | 'en_progreso' | 'completado' | 'fallido';
