@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
+from functools import cached_property
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.evidence import Modality
 
@@ -109,3 +111,77 @@ class EvidenceTypesCatalog(BaseModel):
 class CriteriaCatalog(BaseModel):
     version: int
     criterios: list[CriterionDefinition]
+
+
+class CsfSubcategory(BaseModel):
+    id: str
+    titulo: str
+
+
+class CsfCategory(BaseModel):
+    id: str
+    nombre: str
+    subcategorias: list[CsfSubcategory]
+
+
+class CsfFunction(BaseModel):
+    id: str
+    nombre: str
+    categorias: list[CsfCategory]
+
+
+class CsfCoreCatalog(BaseModel):
+    """Nucleo de NIST CSF 2.0: el denominador de la cobertura de implementacion (docs/01 §7).
+
+    Las invariantes de abajo son lo que convierte un id mal escrito en un fallo de arranque
+    en vez de en una subcategoria fantasma: `subcategorias` en un criterio es `list[str]`
+    sin validar, asi que el unico sitio donde se puede atrapar el error es aqui.
+    """
+
+    version: int
+    total_declarado: int
+    funciones: list[CsfFunction]
+
+    @model_validator(mode="after")
+    def _check_estructura(self) -> CsfCoreCatalog:
+        vistos: set[str] = set()
+        for funcion in self.funciones:
+            for categoria in funcion.categorias:
+                if not categoria.id.startswith(f"{funcion.id}."):
+                    raise ValueError(
+                        f"la categoria '{categoria.id}' no pertenece a la funcion '{funcion.id}'"
+                    )
+                for sub in categoria.subcategorias:
+                    if not sub.id.startswith(f"{categoria.id}-"):
+                        raise ValueError(
+                            f"la subcategoria '{sub.id}' no pertenece a la categoria"
+                            f" '{categoria.id}'"
+                        )
+                    if not re.fullmatch(r".+-\d{2}", sub.id):
+                        raise ValueError(f"la subcategoria '{sub.id}' no termina en -NN")
+                    if sub.id in vistos:
+                        raise ValueError(f"la subcategoria '{sub.id}' esta duplicada")
+                    vistos.add(sub.id)
+
+        # Los huecos de numeracion de CSF 2.0 son reales; este conteo impide "rellenarlos".
+        if len(vistos) != self.total_declarado:
+            raise ValueError(
+                f"el catalogo declara {self.total_declarado} subcategorias pero contiene"
+                f" {len(vistos)}"
+            )
+        return self
+
+    @cached_property
+    def subcategoria_ids(self) -> frozenset[str]:
+        return frozenset(
+            sub.id
+            for funcion in self.funciones
+            for categoria in funcion.categorias
+            for sub in categoria.subcategorias
+        )
+
+    @cached_property
+    def categoria_ids(self) -> frozenset[str]:
+        return frozenset(
+            categoria.id for funcion in self.funciones for categoria in funcion.categorias
+        )

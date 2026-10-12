@@ -1,0 +1,212 @@
+# Nucleo de NIST CSF 2.0 (NIST.CSWP.29): 6 funciones, 22 categorias, 106 subcategorias.
+#
+# Denominador de la cobertura de implementacion (docs/01 §7) y catalogo contra el que
+# `loader._validate_cross_references` valida `categorias` y `subcategorias` de cada criterio.
+#
+# AVISO: los saltos de numeracion son REALES. NIST retiro subcategorias de la v1.1 y no
+# renumero las restantes. Faltan a proposito:
+#   ID.AM-06 · PR.DS-03..09 · DE.CM-04/05/07/08 · DE.AE-01/05
+#   RS.AN-01/02/04/05 · RS.CO-01 · RC.CO-01/02
+# No "rellenar" los huecos: el total subiria por encima de 106. `total_declarado` y el
+# validador del modelo existen para impedirlo.
+#
+# Los titulos son traduccion propia al espanol, resumida; el id es lo normativo.
+version: 1
+total_declarado: 106
+
+funciones:
+  - id: GV
+    nombre: "Gobernar"
+    categorias:
+      - id: GV.OC
+        nombre: "Contexto organizacional"
+        subcategorias:
+          - { id: GV.OC-01, titulo: "La mision organizacional se entiende e informa la gestion del riesgo de ciberseguridad" }
+          - { id: GV.OC-02, titulo: "Se entienden y consideran las necesidades y expectativas de las partes interesadas internas y externas" }
+          - { id: GV.OC-03, titulo: "Se entienden y gestionan los requisitos legales, regulatorios y contractuales, incluidos los de privacidad y libertades civiles" }
+          - { id: GV.OC-04, titulo: "Se entienden y comunican los objetivos, capacidades y servicios criticos de los que dependen las partes interesadas" }
+          - { id: GV.OC-05, titulo: "Se entienden y comunican los resultados, capacidades y servicios de los que depende la organizacion" }
+      - id: GV.RM
+        nombre: "Estrategia de gestion del riesgo"
+        subcategorias:
+          - { id: GV.RM-01, titulo: "Los objetivos de gestion del riesgo son establecidos y acordados por las partes interesadas" }
+          - { id: GV.RM-02, titulo: "Se establecen, comunican y mantienen las declaraciones de apetito y tolerancia al riesgo" }
+          - { id: GV.RM-03, titulo: "Las actividades de gestion del riesgo de ciberseguridad se integran en la gestion del riesgo empresarial" }
+          - { id: GV.RM-04, titulo: "Se establece y comunica una direccion estrategica que describe las opciones de respuesta al riesgo" }
+          - { id: GV.RM-05, titulo: "Se establecen lineas de comunicacion del riesgo de ciberseguridad en toda la organizacion" }
+          - { id: GV.RM-06, titulo: "Se establece y comunica un metodo estandarizado para calcular, documentar, categorizar y priorizar riesgos" }
+          - { id: GV.RM-07, titulo: "Las oportunidades estrategicas se caracterizan y se incluyen en la discusion del riesgo" }
+      - id: GV.RR
+        nombre: "Roles, responsabilidades y autoridades"
+        subcategorias:
+          - { id: GV.RR-01, titulo: "El liderazgo es responsable del riesgo de ciberseguridad y fomenta una cultura consciente del riesgo" }
+          - { id: GV.RR-02, titulo: "Se establecen, comunican, entienden y hacen cumplir los roles, responsabilidades y autoridades" }
+          - { id: GV.RR-03, titulo: "Se asignan recursos adecuados y acordes con la estrategia de riesgo y los requisitos" }
+          - { id: GV.RR-04, titulo: "La ciberseguridad se incluye en las practicas de recursos humanos" }
+      - id: GV.PO
+        nombre: "Politica"
+        subcategorias:
+          - { id: GV.PO-01, titulo: "Se establece, comunica y hace cumplir la politica de ciberseguridad" }
+          - { id: GV.PO-02, titulo: "La politica se revisa y actualiza ante cambios en requisitos, amenazas, tecnologia y mision" }
+      - id: GV.OV
+        nombre: "Supervision"
+        subcategorias:
+          - { id: GV.OV-01, titulo: "Los resultados de la estrategia de gestion del riesgo se revisan para informar y ajustar la estrategia y la direccion" }
+          - { id: GV.OV-02, titulo: "La estrategia de gestion del riesgo se revisa y ajusta para asegurar la cobertura de los requisitos y riesgos" }
+          - { id: GV.OV-03, titulo: "El desempeno de la gestion del riesgo de ciberseguridad se evalua y revisa para introducir ajustes" }
+      - id: GV.SC
+        nombre: "Gestion del riesgo de la cadena de suministro"
+        subcategorias:
+          - { id: GV.SC-01, titulo: "Se establece y acuerda un programa, estrategia, objetivos y politicas de cadena de suministro" }
+          - { id: GV.SC-02, titulo: "Se establecen, comunican y coordinan los roles y responsabilidades para proveedores y terceros" }
+          - { id: GV.SC-03, titulo: "La gestion del riesgo de la cadena de suministro se integra en la ciberseguridad y el riesgo empresarial" }
+          - { id: GV.SC-04, titulo: "Se conocen los proveedores y se priorizan por criticidad" }
+          - { id: GV.SC-05, titulo: "Se establecen e integran en los contratos los requisitos para abordar el riesgo de la cadena de suministro" }
+          - { id: GV.SC-06, titulo: "Se realiza la debida diligencia para reducir riesgos antes de formalizar relaciones con proveedores" }
+          - { id: GV.SC-07, titulo: "Los riesgos planteados por proveedores se comprenden, registran, priorizan, evaluan y responden durante la relacion" }
+          - { id: GV.SC-08, titulo: "Se incluye a proveedores y terceros relevantes en la planificacion, respuesta y recuperacion de incidentes" }
+          - { id: GV.SC-09, titulo: "Las practicas de seguridad de la cadena de suministro se integran y monitorean durante el ciclo de vida" }
+          - { id: GV.SC-10, titulo: "Los planes de riesgo de la cadena de suministro incluyen disposiciones para despues de finalizar la relacion" }
+
+  - id: ID
+    nombre: "Identificar"
+    categorias:
+      - id: ID.AM
+        nombre: "Gestion de activos"
+        subcategorias:
+          - { id: ID.AM-01, titulo: "Se mantienen inventarios del hardware gestionado por la organizacion" }
+          - { id: ID.AM-02, titulo: "Se mantienen inventarios del software, servicios y sistemas gestionados" }
+          - { id: ID.AM-03, titulo: "Se mantienen representaciones de la comunicacion de red y del flujo de datos interno y externo" }
+          - { id: ID.AM-04, titulo: "Se mantienen inventarios de los servicios proporcionados por proveedores" }
+          - { id: ID.AM-05, titulo: "Los activos se priorizan segun clasificacion, criticidad, recursos e impacto en la mision" }
+          - { id: ID.AM-07, titulo: "Se mantienen inventarios de los datos y sus metadatos asociados" }
+          - { id: ID.AM-08, titulo: "Los activos de hardware, software, servicios y datos se gestionan a lo largo de su ciclo de vida" }
+      - id: ID.RA
+        nombre: "Evaluacion del riesgo"
+        subcategorias:
+          - { id: ID.RA-01, titulo: "Se identifican, validan y registran las vulnerabilidades de los activos" }
+          - { id: ID.RA-02, titulo: "Se recibe inteligencia sobre amenazas desde foros y fuentes de intercambio" }
+          - { id: ID.RA-03, titulo: "Se identifican y registran las amenazas internas y externas" }
+          - { id: ID.RA-04, titulo: "Se identifican y registran los impactos y probabilidades potenciales de la explotacion de vulnerabilidades" }
+          - { id: ID.RA-05, titulo: "Amenazas, vulnerabilidades, probabilidades e impactos se usan para comprender el riesgo inherente y priorizar la respuesta" }
+          - { id: ID.RA-06, titulo: "Se eligen, priorizan, planifican, siguen y comunican las respuestas al riesgo" }
+          - { id: ID.RA-07, titulo: "Los cambios y excepciones se gestionan, evaluan en riesgo, registran y siguen" }
+          - { id: ID.RA-08, titulo: "Se establecen procesos para recibir, analizar y responder a divulgaciones de vulnerabilidades" }
+          - { id: ID.RA-09, titulo: "Se evalua la autenticidad e integridad del hardware y software antes de su adquisicion y uso" }
+          - { id: ID.RA-10, titulo: "Se evalua el riesgo de los proveedores criticos antes de la contratacion" }
+      - id: ID.IM
+        nombre: "Mejora"
+        subcategorias:
+          - { id: ID.IM-01, titulo: "Se identifican mejoras a partir de evaluaciones" }
+          - { id: ID.IM-02, titulo: "Se identifican mejoras a partir de pruebas y ejercicios de seguridad, incluidos los coordinados con proveedores" }
+          - { id: ID.IM-03, titulo: "Se identifican mejoras a partir de la ejecucion de procesos operativos, procedimientos y actividades" }
+          - { id: ID.IM-04, titulo: "Se establecen, comunican, mantienen y mejoran los planes de respuesta a incidentes y otros planes de ciberseguridad" }
+
+  - id: PR
+    nombre: "Proteger"
+    categorias:
+      - id: PR.AA
+        nombre: "Gestion de identidades, autenticacion y control de acceso"
+        subcategorias:
+          - { id: PR.AA-01, titulo: "Se gestionan las identidades y credenciales de usuarios, servicios y hardware autorizados" }
+          - { id: PR.AA-02, titulo: "Las identidades se comprueban y vinculan a credenciales segun el contexto de las interacciones" }
+          - { id: PR.AA-03, titulo: "Los usuarios, servicios y hardware se autentican" }
+          - { id: PR.AA-04, titulo: "Las aserciones de identidad se protegen, transmiten y verifican" }
+          - { id: PR.AA-05, titulo: "Los permisos y autorizaciones de acceso se definen, gestionan y hacen cumplir con minimo privilegio y separacion de funciones" }
+          - { id: PR.AA-06, titulo: "El acceso fisico a los activos se gestiona, monitorea y hace cumplir de forma acorde al riesgo" }
+      - id: PR.AT
+        nombre: "Concientizacion y capacitacion"
+        subcategorias:
+          - { id: PR.AT-01, titulo: "El personal recibe concientizacion y capacitacion para desempenar sus tareas con conciencia de la seguridad" }
+          - { id: PR.AT-02, titulo: "Las personas en roles especializados reciben concientizacion y capacitacion acorde a esos roles" }
+      - id: PR.DS
+        nombre: "Seguridad de los datos"
+        subcategorias:
+          - { id: PR.DS-01, titulo: "Se protege la confidencialidad, integridad y disponibilidad de los datos en reposo" }
+          - { id: PR.DS-02, titulo: "Se protege la confidencialidad, integridad y disponibilidad de los datos en transito" }
+          - { id: PR.DS-10, titulo: "Se protege la confidencialidad, integridad y disponibilidad de los datos en uso" }
+          - { id: PR.DS-11, titulo: "Se crean, protegen, mantienen y prueban copias de respaldo de los datos" }
+      - id: PR.PS
+        nombre: "Seguridad de las plataformas"
+        subcategorias:
+          - { id: PR.PS-01, titulo: "Se establecen y aplican practicas de gestion de la configuracion" }
+          - { id: PR.PS-02, titulo: "El software se mantiene, reemplaza y retira de forma acorde al riesgo" }
+          - { id: PR.PS-03, titulo: "El hardware se mantiene, reemplaza y retira de forma acorde al riesgo" }
+          - { id: PR.PS-04, titulo: "Se generan registros y se ponen a disposicion para el monitoreo continuo" }
+          - { id: PR.PS-05, titulo: "Se previene la instalacion y ejecucion de software no autorizado" }
+          - { id: PR.PS-06, titulo: "Se integran practicas de desarrollo seguro de software y se monitorea su desempeno durante el ciclo de vida" }
+      - id: PR.IR
+        nombre: "Resiliencia de la infraestructura tecnologica"
+        subcategorias:
+          - { id: PR.IR-01, titulo: "Las redes y entornos se protegen del acceso logico y del uso no autorizados" }
+          - { id: PR.IR-02, titulo: "Los activos tecnologicos de la organizacion se protegen de amenazas ambientales" }
+          - { id: PR.IR-03, titulo: "Se implementan mecanismos para alcanzar los requisitos de resiliencia en situaciones normales y adversas" }
+          - { id: PR.IR-04, titulo: "Se mantiene capacidad de recursos adecuada para asegurar la disponibilidad" }
+
+  - id: DE
+    nombre: "Detectar"
+    categorias:
+      - id: DE.CM
+        nombre: "Monitoreo continuo"
+        subcategorias:
+          - { id: DE.CM-01, titulo: "Se monitorean las redes y los servicios de red para detectar eventos potencialmente adversos" }
+          - { id: DE.CM-02, titulo: "Se monitorea el entorno fisico para detectar eventos potencialmente adversos" }
+          - { id: DE.CM-03, titulo: "Se monitorea la actividad del personal y el uso de la tecnologia para detectar eventos potencialmente adversos" }
+          - { id: DE.CM-06, titulo: "Se monitorean las actividades y servicios de proveedores externos para detectar eventos potencialmente adversos" }
+          - { id: DE.CM-09, titulo: "Se monitorean el hardware y software de computo, los entornos de ejecucion y sus datos para detectar eventos potencialmente adversos" }
+      - id: DE.AE
+        nombre: "Analisis de eventos adversos"
+        subcategorias:
+          - { id: DE.AE-02, titulo: "Se analizan los eventos potencialmente adversos para comprender las actividades asociadas" }
+          - { id: DE.AE-03, titulo: "La informacion se correlaciona a partir de multiples fuentes" }
+          - { id: DE.AE-04, titulo: "Se comprenden el impacto y el alcance estimados de los eventos adversos" }
+          - { id: DE.AE-06, titulo: "La informacion sobre eventos adversos se proporciona al personal y herramientas autorizados" }
+          - { id: DE.AE-07, titulo: "La inteligencia sobre amenazas y otra informacion contextual se integra al analisis" }
+          - { id: DE.AE-08, titulo: "Los incidentes se declaran cuando los eventos adversos cumplen los criterios definidos" }
+
+  - id: RS
+    nombre: "Responder"
+    categorias:
+      - id: RS.MA
+        nombre: "Gestion de incidentes"
+        subcategorias:
+          - { id: RS.MA-01, titulo: "El plan de respuesta a incidentes se ejecuta en coordinacion con terceros una vez declarado un incidente" }
+          - { id: RS.MA-02, titulo: "Los informes de incidentes se clasifican y validan" }
+          - { id: RS.MA-03, titulo: "Los incidentes se categorizan y priorizan" }
+          - { id: RS.MA-04, titulo: "Los incidentes se escalan o elevan segun sea necesario" }
+          - { id: RS.MA-05, titulo: "Se aplican los criterios para iniciar la recuperacion del incidente" }
+      - id: RS.AN
+        nombre: "Analisis de incidentes"
+        subcategorias:
+          - { id: RS.AN-03, titulo: "Se realiza el analisis para establecer que ocurrio durante un incidente y su causa raiz" }
+          - { id: RS.AN-06, titulo: "Se registran las acciones realizadas durante una investigacion, preservando integridad y procedencia" }
+          - { id: RS.AN-07, titulo: "Los datos y metadatos del incidente se recopilan y preservan manteniendo su integridad y procedencia" }
+          - { id: RS.AN-08, titulo: "Se estima y valida la magnitud del incidente" }
+      - id: RS.CO
+        nombre: "Reporte y comunicacion de la respuesta"
+        subcategorias:
+          - { id: RS.CO-02, titulo: "Se notifica a las partes interesadas internas y externas sobre los incidentes" }
+          - { id: RS.CO-03, titulo: "Se comparte informacion sobre el incidente con las partes interesadas designadas" }
+      - id: RS.MI
+        nombre: "Mitigacion del incidente"
+        subcategorias:
+          - { id: RS.MI-01, titulo: "Los incidentes se contienen" }
+          - { id: RS.MI-02, titulo: "Los incidentes se erradican" }
+
+  - id: RC
+    nombre: "Recuperar"
+    categorias:
+      - id: RC.RP
+        nombre: "Ejecucion del plan de recuperacion"
+        subcategorias:
+          - { id: RC.RP-01, titulo: "La parte de recuperacion del plan de respuesta a incidentes se ejecuta una vez iniciada desde el proceso de respuesta" }
+          - { id: RC.RP-02, titulo: "Se seleccionan, delimitan, priorizan y realizan las acciones de recuperacion" }
+          - { id: RC.RP-03, titulo: "Se verifica la integridad de las copias de respaldo y otros activos de restauracion antes de usarlos" }
+          - { id: RC.RP-04, titulo: "Se consideran las funciones criticas de la mision y el riesgo de ciberseguridad al establecer las normas operativas posteriores al incidente" }
+          - { id: RC.RP-05, titulo: "Se verifica la integridad de los activos restaurados, se restauran los sistemas y se confirma el estado operativo normal" }
+          - { id: RC.RP-06, titulo: "Se declara el fin de la recuperacion del incidente segun criterios y se completa la documentacion relacionada" }
+      - id: RC.CO
+        nombre: "Comunicacion de la recuperacion"
+        subcategorias:
+          - { id: RC.CO-03, titulo: "Las actividades de recuperacion y el avance de la restauracion se comunican a las partes interesadas designadas" }
+          - { id: RC.CO-04, titulo: "Se comparten actualizaciones publicas sobre la recuperacion del incidente usando metodos y mensajes aprobados" }

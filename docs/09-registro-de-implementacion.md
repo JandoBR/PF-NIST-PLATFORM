@@ -2152,3 +2152,51 @@ aparecen o son nuevos; la columna "Cambio" con la dirección (Mejoró, Empeoró,
 evaluarse) en vez de "N/D" cuando faltaba un puntaje, ordenada con lo que empeoró primero; y una sección "Por
 qué cambió cada criterio" con la explicación de antes y de después. En ambos PDF `no_implementado` se muestra
 como "ausente o fallido", igual que en la UI. Revisado a la vista generando la comparación brechas → en mejora.
+
+## 68. El núcleo de NIST en el repositorio: validación del mapeo y cobertura de implementación (AMP-04)
+
+**El problema.** `CriterionDefinition.subcategorias` era `list[str]` sin validar y no existía ningún
+catálogo de NIST contra el que contrastarlo. Una subcategoría mal escrita —o una de las que NIST
+retiró en la v1.1 y nunca renumeró, como `ID.AM-06` o `PR.DS-03`— se cargaba en silencio y falseaba
+el mapeo. Y la cobertura de implementación que `docs/01 §7` especifica no se calculaba en ninguna
+parte: estaba en `docs/12` como AMP-04.
+
+**El núcleo.** `methodology/csf_subcategories.yml` (`version: 1`) trae las 6 funciones, 22 categorías
+y 106 subcategorías del CSF 2.0, con `total_declarado: 106` como guarda. Los huecos de numeración son
+reales y el fichero lo advierte: "rellenarlos" produciría más de 106 entradas y rompería el modelo.
+Los títulos son traducción propia resumida; lo normativo es el id.
+
+`CsfCoreCatalog` (`app/methodology/schemas.py`) valida cuatro invariantes al cargar: cada categoría
+cuelga de su función, cada subcategoría de su categoría, el sufijo es `-NN` y no hay duplicados ni
+descuadre con `total_declarado`.
+
+**La validación que faltaba.** `loader._validate_cross_references` recibe ahora el núcleo y comprueba,
+para cada criterio: que la categoría exista, que pertenezca a la función que el criterio declara, que
+la subcategoría exista y que su categoría padre esté listada en `categorias`. Las cinco formas de
+error fallan el arranque. Las 23 criterios actuales pasan sin cambios: el mapeo estaba bien escrito,
+solo no estaba comprobado.
+
+**La métrica.** `app/methodology/coverage.py`, deliberadamente fuera de `evaluation/aggregation.py`.
+Son dos coberturas que `docs/01 §7` obliga a no mezclar: la de evidencia es por evaluación y decide
+la marca `provisional`; la de implementación es metadato del producto, función pura de `criteria.yml`
++ el núcleo, y no toca ningún puntaje. Tenerlas en el mismo módulo invitaba a alimentar una con la
+otra. `Methodology.cobertura_implementacion()` la expone, igual que `tipos_afirmacion_requeridos()`.
+
+Devuelve subcategorías cubiertas, ratio, desglose por función, el mapa subcategoría → criterios y
+`categorias_sin_criterio`, que hoy es `['GV.OC', 'GV.SC', 'ID.IM', 'PR.AT', 'RS.MI']`. Esa lista es
+el indicador legible de lo que falta por cubrir, calculado por el sistema y no a mano.
+
+**Estado actual: 37 de 106 subcategorías (34,9 %)** — GV 8/31, ID 6/21, PR 6/22, DE 5/11, RS 7/13,
+RC 5/8 — y 17 de 22 categorías.
+
+**API.** `GET /methodology` añade `nucleo_csf_version` y `cobertura_implementacion` como claves
+hermanas, nunca anidadas en `criterios`. `methodology_version` incorpora `csf=N`, así que las
+evaluaciones nuevas registran una versión distinta de las anteriores.
+
+**Verificación:** 570 tests (`tests/test_csf_core_catalog.py` nuevo, con los conteos por categoría y
+la guarda de ids retirados; seis casos negativos nuevos en `tests/test_methodology_loader.py`).
+`ruff check` y `ruff format` limpios. Endpoint comprobado a mano. **No verificado:** la pantalla en el
+navegador — la métrica todavía no se muestra en el frontend. **Preexistente, ajeno a este cambio:**
+`test_uploads.py::test_windows_separator_is_rejected` y los dos
+`test_golden.py::test_ansible_adapter_evidence_matches_golden` fallan en Windows también sin estos
+cambios (comprobado sobre el árbol limpio).
