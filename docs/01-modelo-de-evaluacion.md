@@ -176,7 +176,7 @@ Se reportan dos métricas distintas — nunca se mezclan:
 Cobertura de implementación (metadata del producto):
   subcategorías con ≥1 criterio implementado
   ─────────────────────────────────────────────
-  total de subcategorías de CSF 2.0 relevantes al perfil
+  106 subcategorías del núcleo de CSF 2.0
 
 Cobertura de evidencia (por evaluación):
   criterios aplicables con estado evaluado/no_implementado
@@ -187,6 +187,13 @@ Cobertura de evidencia (por evaluación):
 La cobertura global usa esta misma fórmula sobre **todos** los criterios de la evaluación; no es el promedio
 de las coberturas por función (eso pesaría igual una función de 3 criterios que una de 6). Corregido en
 docs/09 §59.
+
+La **cobertura de implementación** se calcula en `app/methodology/coverage.py` sobre
+`methodology/csf_subcategories.yml` (las 106 subcategorías) y se expone en `GET /methodology`;
+hoy son **37/106 (34,9 %)** y las categorías sin ningún criterio son `GV.OC`, `GV.SC`, `ID.IM`,
+`PR.AT` y `RS.MI` (docs/09 §68). Es metadato del producto: constante para una versión de
+metodología y sin efecto sobre ningún puntaje. La **cobertura de evidencia** es la de abajo, por
+evaluación, y es la única que marca un puntaje como provisional. No se mezclan ni se suman.
 
 - `criterios aplicables` = todos menos `no_aplicable`.
 - Un puntaje de 80/100 con cobertura 30% se muestra como **provisional**: `Aggregate.provisional` es

@@ -80,8 +80,11 @@ estas medidas no tienen superficie real aquí.
 | ID | Qué es | Por qué no en el prototipo | Detalle |
 |---|---|---|---|
 | AMP-01 | Recuperación semántica (embeddings) sobre el catálogo NIST | El motor es determinístico y basado en reglas + evidencia estructurada; añade proveedor, índice, costo y no-determinismo. | docs/07 §2/§7 |
-| AMP-04 | Cobertura de implementación del producto (subcategorías con criterio / total CSF) expuesta en API/UI | Métrica de producto, no de evaluación; no altera puntajes. | docs/01 §7 |
 | AMP-06 | Niveles por función A/B/C/D (Consolidado/Gestionado/…) | El diseño lo marca opcional y no-NIST. | docs/01 §8.4 |
+| AMP-07 | Procedencia de módulos y proveedores de Terraform (`tf.module.source`) como señal técnica de cadena de suministro (GV.SC-07, ID.RA-09) | El adaptador solo lee bloques `resource`; exige una ruta de parseo nueva, un tipo de evidencia y fixtures en los tres paquetes, para una subcategoría que GV.SC ya cubre por vía documental. | docs/04 §3 |
+
+*(AMP-04, cobertura de implementación, se promovió al prototipo y está hecha: `methodology/csf_subcategories.yml`
+con las 106 subcategorías, `app/methodology/coverage.py` y `GET /methodology` — ver docs/09 §68.)*
 
 *(AMP-02, exportación PDF, se promovió al prototipo y está hecha: separa el acceso a la herramienta
 del acceso a los resultados y da oficialidad al informe — ver `docs/11 §G`, docs/09 §44.)*
