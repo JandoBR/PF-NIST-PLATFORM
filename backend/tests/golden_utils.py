@@ -21,14 +21,38 @@ from app.schemas.evidence import EvidenceInstance
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_TOKEN = "<REPO>"
+
 
 def _label(item: EvidenceInstance) -> str:
     return f"{item.type_id}|{item.subject_ref}"
 
 
+def _portable_paths(node: Any) -> Any:
+    """Rutas absolutas bajo el repo -> `<REPO>/...` con separador `/`.
+
+    Los adaptadores registran el archivo fuente con ruta absoluta, que cambia con la máquina y
+    rompe los goldens fuera del checkout canónico. Solo se tocan cadenas que empiezan por la raíz
+    del repo; el resto (regex, valores de configuración) queda intacto.
+    """
+
+    if isinstance(node, str):
+        root = str(REPO_ROOT)
+        if node == root or node.startswith(root + os.sep):
+            return REPO_TOKEN + node[len(root) :].replace(os.sep, "/")
+        return node
+    if isinstance(node, dict):
+        return {k: _portable_paths(v) for k, v in node.items()}
+    if isinstance(node, (list, tuple)):
+        return [_portable_paths(v) for v in node]
+    return node
+
+
 def normalize_evidence(evidence: list[EvidenceInstance]) -> list[dict[str, Any]]:
     """Sin `id`, `observed_at` ni `source_id` (varian por corrida); `locator.file` solo el nombre
-    del archivo; orden estable."""
+    del archivo; rutas absolutas bajo el repo como `<REPO>/...` (portable entre maquinas);
+    orden estable."""
 
     items = []
     for e in evidence:
@@ -36,18 +60,20 @@ def normalize_evidence(evidence: list[EvidenceInstance]) -> list[dict[str, Any]]
         if "file" in locator:
             locator["file"] = Path(locator["file"]).name
         items.append(
-            {
-                "type_id": e.type_id,
-                "type_version": e.type_version,
-                "subject_type": e.subject_type,
-                "subject_ref": e.subject_ref,
-                "scope": e.scope,
-                "value": e.value,
-                "locator": locator,
-                "modality": e.modality.value,
-                "limitations": e.limitations,
-                "created_by": e.created_by,
-            }
+            _portable_paths(
+                {
+                    "type_id": e.type_id,
+                    "type_version": e.type_version,
+                    "subject_type": e.subject_type,
+                    "subject_ref": e.subject_ref,
+                    "scope": e.scope,
+                    "value": e.value,
+                    "locator": locator,
+                    "modality": e.modality.value,
+                    "limitations": e.limitations,
+                    "created_by": e.created_by,
+                }
+            )
         )
     return sorted(
         items,

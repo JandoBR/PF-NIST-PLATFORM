@@ -32,7 +32,7 @@
     "type_id": "an.playbook.present",
     "type_version": 1,
     "value": {
-      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/good/hardening.yml",
+      "archivo": "<REPO>/backend/tests/fixtures/ansible/good/hardening.yml",
       "hosts": [
         "servidores_app"
       ],
@@ -73,7 +73,7 @@
     "type_id": "an.task.config",
     "type_version": 1,
     "value": {
-      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/good/hardening.yml",
+      "archivo": "<REPO>/backend/tests/fixtures/ansible/good/hardening.yml",
       "modulo": "copy",
       "parametros": {
         "dest": "/etc/issue.net",
@@ -97,7 +97,7 @@
     "type_id": "an.task.config",
     "type_version": 1,
     "value": {
-      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/good/hardening.yml",
+      "archivo": "<REPO>/backend/tests/fixtures/ansible/good/hardening.yml",
       "modulo": "lineinfile",
       "parametros": {
         "line": "PasswordAuthentication no",
@@ -122,7 +122,7 @@
     "type_id": "an.task.config",
     "type_version": 1,
     "value": {
-      "archivo": "/home/jando/Documents/Code/PF_Proyecto/backend/tests/fixtures/ansible/good/hardening.yml",
+      "archivo": "<REPO>/backend/tests/fixtures/ansible/good/hardening.yml",
       "modulo": "lineinfile",
       "parametros": {
         "line": "PermitRootLogin no",

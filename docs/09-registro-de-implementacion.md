@@ -2200,3 +2200,21 @@ navegador — la métrica todavía no se muestra en el frontend. **Preexistente,
 `test_uploads.py::test_windows_separator_is_rejected` y los dos
 `test_golden.py::test_ansible_adapter_evidence_matches_golden` fallan en Windows también sin estos
 cambios (comprobado sobre el árbol limpio).
+
+## 69. Goldens portables: rutas absolutas como `<REPO>/...`
+
+**El problema.** Los goldens de evidencia de Ansible llevaban la ruta absoluta del checkout
+canónico (`/home/jando/.../hardening.yml`) en `value.archivo`. `normalize_evidence` ya reducía
+`locator.file` al nombre base, pero no tocaba `value` — y su docstring prometía normalizar "rutas
+absolutas" sin hacerlo. Resultado: esos dos tests solo pasaban en una máquina y en una ruta, y en
+cualquier otro checkout fallaban haciéndose pasar por regresión (así se diagnosticó el aviso de
+Windows del §68: feat real verificado, fallo ambiental).
+
+**El fix.** `tests/golden_utils.py::_portable_paths`: reescribe recursivamente las cadenas que
+empiezan por la raíz del repo (calculada desde `__file__`, no hardcodeada) como
+`<REPO>/...` con separador `/`. Solo toca rutas bajo el repo; regex y valores de configuración
+quedan intactos. Se aplica en `normalize_evidence` antes de ordenar, así el orden también es
+independiente de la máquina. Goldens regenerados: el diff son exactamente 6 líneas de rutas, nada más.
+
+**Verificación:** suite completa **573 tests** + `ruff check` y `ruff format` limpios; `test_golden.py`
+pasa desde un checkout en otra ruta (`/tmp/...`), cosa que antes fallaba.
