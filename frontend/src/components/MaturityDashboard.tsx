@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Gauge,
   Target,
@@ -8,9 +8,15 @@ import {
   ChevronRight,
   Info,
   Lock,
+  Library,
 } from 'lucide-react';
-import { downloadExecutiveReport } from '@/lib/api';
-import type { AssessmentDetail, CriterionResult, Estado } from '@/lib/types';
+import { downloadExecutiveReport, getMethodology } from '@/lib/api';
+import type {
+  AssessmentDetail,
+  CriterionResult,
+  Estado,
+  ImplementationCoverage,
+} from '@/lib/types';
 import { DownloadPdfButton } from '@/components/DownloadPdfButton';
 import { FUNCTION_NAMES, FUNCTION_ORDER, TIER_LABELS } from '@/lib/types';
 import {
@@ -42,6 +48,20 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
   const [funcFilter, setFuncFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [tableMode, setTableMode] = useState<TableMode>('criteria');
+  // Cobertura DEL CATALOGO (AMP-04): metadato del producto, constante para esta version de
+  // metodologia, asi que se pide una sola vez y no depende de la evaluacion que se este viendo.
+  // Si falla, la seccion no se pinta: es metadato y nunca debe tumbar la matriz.
+  const [coverage, setCoverage] = useState<ImplementationCoverage | null>(null);
+
+  useEffect(() => {
+    let vigente = true;
+    getMethodology()
+      .then((m) => vigente && setCoverage(m.cobertura_implementacion))
+      .catch(() => undefined);
+    return () => {
+      vigente = false;
+    };
+  }, []);
 
   // Las 6 funciones de CSF 2.0 siempre se muestran: una sin criterios implementados aparece como
   // "sin criterios" en vez de desaparecer (docs/11 §C, cobertura IDENTIFY = 0).
@@ -114,13 +134,13 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
         <SummaryCard
           icon={<Target className="h-5 w-5" />}
           accent="indigo"
-          label="Cobertura Global"
+          label="Cobertura de evidencia"
           value={
             assessment.cobertura_global != null
               ? `${Math.round(assessment.cobertura_global * 100)}%`
               : '—'
           }
-          sub="Criterios con evidencia suficiente"
+          sub="Criterios con evidencia suficiente en esta evaluación"
         />
         <SummaryCard
           icon={<ShieldQuestion className="h-5 w-5" />}
@@ -203,6 +223,9 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
           })}
         </div>
       </div>
+
+      {/* Cobertura del catalogo (AMP-04, docs/01 §7): mide la herramienta, no esta evaluacion */}
+      {coverage && <CatalogCoverage coverage={coverage} />}
 
       {/* Criterios evaluados, con una vista alterna de privacidad (docs/03 §7) */}
       <div className="card overflow-hidden">
@@ -436,6 +459,92 @@ function SummaryCard({
         <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ring-1 ${colors[accent]}`}>
           {icon}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CatalogCoverage({ coverage }: { coverage: ImplementationCoverage }) {
+  const pct = Math.round(coverage.ratio * 100);
+  const completo = coverage.categorias_sin_criterio.length === 0;
+
+  return (
+    <div className="card p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300 ring-1 ring-violet-500/20">
+            <Library className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-white">Cobertura del catálogo NIST CSF 2.0</h3>
+            <p className="max-w-xl text-xs leading-relaxed text-slate-500">
+              Qué parte del marco tiene al menos un criterio que la evalúe. Describe la{' '}
+              <span className="text-slate-400">herramienta</span>, no esta evaluación: la cobertura
+              de esta corrida es la tarjeta «Cobertura de evidencia», y las dos no se mezclan.
+            </p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-bold tracking-tight text-white">{pct}%</p>
+          <p
+            className="text-[11px] text-slate-500"
+            title="Subcategorías del CSF 2.0 con al menos un criterio en el catálogo"
+          >
+            {coverage.subcategorias_cubiertas} de {coverage.subcategorias_totales} subcategorías
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {FUNCTION_ORDER.map((key) => {
+          const [cubiertas, totales] = coverage.por_funcion[key] ?? [0, 0];
+          const accent = FUNCTION_ACCENTS[key] ?? '#94a3b8';
+          const ancho = totales > 0 ? (cubiertas / totales) * 100 : 0;
+          return (
+            <div key={key} className="rounded-lg border border-white/[0.06] bg-ink-900/40 p-3">
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="text-xs font-bold" style={{ color: accent }}>
+                  {key}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {cubiertas}/{totales}
+                </span>
+              </div>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                <div
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${ancho}%`, backgroundColor: accent }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-4">
+        <span className="text-xs text-slate-500">
+          Categorías con criterio:{' '}
+          <span className="font-semibold text-slate-300">
+            {coverage.categorias_cubiertas} de {coverage.categorias_totales}
+          </span>
+        </span>
+        {completo ? (
+          <span className="chip border border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+            Las {coverage.categorias_totales} categorías del marco están representadas
+          </span>
+        ) : (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-slate-500">· sin ningún criterio todavía:</span>
+            {coverage.categorias_sin_criterio.map((c) => (
+              <span
+                key={c}
+                className="chip border border-white/10 bg-white/[0.03] font-mono text-[11px] text-slate-400"
+              >
+                {c}
+              </span>
+            ))}
+          </span>
+        )}
       </div>
     </div>
   );

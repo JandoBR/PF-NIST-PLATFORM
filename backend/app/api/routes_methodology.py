@@ -29,6 +29,8 @@ def get_methodology_catalog(methodology: Methodology = Depends(get_methodology))
             "subcategorias_cubiertas": cobertura.subcategorias_cubiertas,
             "subcategorias_totales": cobertura.subcategorias_totales,
             "ratio": round(cobertura.ratio, 4),
+            "categorias_cubiertas": cobertura.categorias_cubiertas,
+            "categorias_totales": cobertura.categorias_totales,
             "por_funcion": {f: list(v) for f, v in cobertura.por_funcion.items()},
             "categorias_sin_criterio": cobertura.categorias_sin_criterio,
         },
