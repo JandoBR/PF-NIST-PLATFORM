@@ -205,7 +205,9 @@ def test_no_score_is_never_provisional(methodology):
 
 def test_global_coverage_is_the_criteria_ratio_not_the_mean_of_functions(methodology):
     """docs/01 §7: criterios aplicables con puntaje / criterios aplicables. Con 4 de 6 criterios PR
-    evaluados y los otros 17 sin evidencia, es 4/23, no el promedio de las seis funciones (4/36)."""
+    evaluados y el resto sin evidencia, es 4 sobre el catalogo entero, no el promedio de las seis
+    funciones. El denominador sale de `methodology.criterios` para que cada oleada del catalogo no
+    rompa este test."""
 
     results = [
         _result(cid, Estado.EVALUADO, 50)
@@ -217,7 +219,7 @@ def test_global_coverage_is_the_criteria_ratio_not_the_mean_of_functions(methodo
 
     glob = aggregation.aggregate_global(methodology, funciones)
 
-    assert glob.cobertura == round(4 / 23, 4)
+    assert glob.cobertura == round(4 / len(methodology.criterios), 4)
 
 
 def test_not_applicable_criteria_leave_the_global_coverage_denominator(methodology):

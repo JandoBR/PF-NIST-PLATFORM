@@ -91,6 +91,14 @@
       "final_score": null
     },
     {
+      "base_score": null,
+      "criterion_id": "CRI-ID-05",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre mejora continua.",
+      "final_score": null
+    },
+    {
       "base_score": 100.0,
       "criterion_id": "CRI-PR-01",
       "estado": "evaluado",
@@ -200,6 +208,14 @@
       "evidence": [],
       "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre notificacion a interesados.",
       "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-RS-04",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin ventana de observacion completa ni procedimiento de contencion documentado.",
+      "final_score": null
     }
   ],
   "funciones": [
@@ -227,7 +243,7 @@
     {
       "cobertura": 0.0,
       "conteo_estados": {
-        "evidencia_insuficiente": 4
+        "evidencia_insuficiente": 5
       },
       "nivel": "funcion",
       "provisional": false,
@@ -257,7 +273,7 @@
     {
       "cobertura": 0.0,
       "conteo_estados": {
-        "evidencia_insuficiente": 3
+        "evidencia_insuficiente": 4
       },
       "nivel": "funcion",
       "provisional": false,
@@ -266,10 +282,10 @@
     }
   ],
   "global": {
-    "cobertura": 0.3043,
+    "cobertura": 0.28,
     "conteo_estados": {
       "evaluado": 7,
-      "evidencia_insuficiente": 16
+      "evidencia_insuficiente": 18
     },
     "nivel": "global",
     "provisional": true,

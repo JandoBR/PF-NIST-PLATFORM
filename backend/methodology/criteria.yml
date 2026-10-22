@@ -24,7 +24,10 @@
 # v12: Oleada 0 - GV-04, ID-03 y RS-02 declaran las subcategorias que sus propias anclas ya
 #      evidencian (GV.OV-02, ID.RA-03/06, RS.AN-06). Sin cambios de regla: solo el mapeo
 #      (docs/09 §70).
-version: 12
+# v13: Oleada A (1/2) - CRI-RS-04 (contencion/erradicacion, RS.MI) consume el patron
+#      containment_done que no tenia consumidor, y CRI-ID-05 (mejora continua, ID.IM) suma el
+#      ejercicio observado a lo documental (docs/09 §72).
+version: 13
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -145,6 +148,22 @@ criterios:
     regla:
       tipo: inventario_datos
       tipos_afirmacion: [data_inventory]
+
+  - id: CRI-ID-05
+    version: 1
+    titulo: "Mejora continua a partir de evaluaciones y ejercicios"
+    tipo: mixto
+    funcion: ID
+    categorias: [ID.IM]
+    subcategorias: [ID.IM-01, ID.IM-02, ID.IM-03]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [doc.claim@2, log.pattern@1, log.window@1]
+    recomendacion: "Cerrar el ciclo de mejora: registrar las lecciones de evaluaciones y ejercicios y seguir los ajustes con metricas."
+    regla:
+      tipo: mejora_continua
+      patrones_positivos: [restore_exercise_run]
+      tipos_afirmacion: [process_defined]
 
   - id: CRI-PR-01
     version: 1
@@ -330,6 +349,23 @@ criterios:
     regla:
       tipo: notificacion
       tipos_afirmacion: [notification_list]
+
+  - id: CRI-RS-04
+    version: 1
+    titulo: "Contencion y erradicacion del incidente"
+    tipo: mixto
+    funcion: RS
+    categorias: [RS.MI]
+    subcategorias: [RS.MI-01, RS.MI-02]
+    peso: 4
+    ai_adjustable: true
+    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
+    recomendacion: "Documentar los pasos de contencion y erradicacion y registrar la contencion de cada incidente declarado."
+    regla:
+      tipo: patron_con_justicia
+      patrones_positivos: [containment_done]
+      patron_oportunidad: incident_declared
+      tipos_afirmacion: [process_defined]
 
   - id: CRI-RC-01
     version: 1

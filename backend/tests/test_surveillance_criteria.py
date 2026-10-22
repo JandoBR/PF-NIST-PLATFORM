@@ -5,9 +5,11 @@ import pytest
 from app.evaluation.rules import (
     de02_event_analysis,
     de03_alert_notification,
+    id05_improvement,
     rc02_backup_verification,
     rc03_recovery_communication,
     rs01_response_plan,
+    rs04_containment,
 )
 from app.evaluation.schemas import Estado
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
@@ -201,9 +203,110 @@ def test_rc03_ok_exercise_without_verification_scores_50():
     assert result.final_score == 50
 
 
+# -- CRI-RS-04 (contencion y erradicacion) ------------------------------------------
+
+
+def test_rs04_without_window_or_document_is_insufficient():
+    assert rs04_containment.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+def test_rs04_containment_observed_with_documented_steps_scores_100():
+    evidence = [
+        _window(),
+        _pattern("containment_done"),
+        _claim("process_defined", {"proceso": "contencion", "pasos": "aislar, revocar, bloquear"}),
+    ]
+    assert rs04_containment.evaluate(evidence).final_score == 100
+
+
+def test_rs04_containment_observed_without_document_caps_at_75():
+    evidence = [_window(), _pattern("containment_done")]
+    assert rs04_containment.evaluate(evidence).final_score == 75
+
+
+def test_rs04_incident_declared_without_containment_is_a_mitigation_failure():
+    """Regla de justicia (docs/06 5): hubo una oportunidad real y no se contenía."""
+
+    evidence = [_window(), _pattern("incident_declared")]
+    result = rs04_containment.evaluate(evidence)
+    assert result.final_score == 0
+    assert result.estado == Estado.EVALUADO
+
+
+def test_rs04_documented_plan_without_incidents_is_not_penalized():
+    evidence = [
+        _window(),
+        _claim("process_defined", {"proceso": "erradicacion", "pasos": "parchear y validar"}),
+    ]
+    assert rs04_containment.evaluate(evidence).final_score == 75
+
+
+def test_rs04_complete_window_without_opportunity_is_insufficient():
+    assert rs04_containment.evaluate([_window()]).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+def test_rs04_ignores_a_response_process_that_is_not_about_containment():
+    """El proceso de respuesta generico es de CRI-RS-01; este criterio pide contencion."""
+
+    evidence = [_window(), _claim("process_defined", {"proceso": "respuesta", "pasos": "triaje"})]
+    assert rs04_containment.evaluate(evidence).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+# -- CRI-ID-05 (mejora continua) ----------------------------------------------------
+
+
+def test_id05_without_documents_is_insufficient():
+    assert id05_improvement.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+def test_id05_improvement_cycle_with_an_observed_exercise_scores_100():
+    """ID.IM-02 (mejoras a partir de ejercicios) solo se sostiene con el ejercicio observado."""
+
+    evidence = [
+        _window(),
+        _pattern("restore_exercise_run"),
+        _claim("process_defined", {"proceso": "mejora continua", "metricas": True}),
+    ]
+    assert id05_improvement.evaluate(evidence).final_score == 100
+
+
+def test_id05_documented_cycle_without_exercise_caps_at_75():
+    evidence = [_claim("process_defined", {"proceso": "lecciones aprendidas", "ajustes": True})]
+    assert id05_improvement.evaluate(evidence).final_score == 75
+
+
+def test_id05_generic_improvement_scores_50():
+    evidence = [_claim("process_defined", {"proceso": "mejora", "pasos": "revisar"})]
+    assert id05_improvement.evaluate(evidence).final_score == 50
+
+
+def test_id05_exercise_without_an_improvement_cycle_scores_50():
+    evidence = [_window(), _pattern("restore_exercise_run")]
+    assert id05_improvement.evaluate(evidence).final_score == 50
+
+
+def test_id05_an_exercise_outside_a_complete_window_does_not_count():
+    evidence = [
+        _window(completo=False),
+        _pattern("restore_exercise_run"),
+        _claim("process_defined", {"proceso": "mejora continua", "metricas": True}),
+    ]
+    assert id05_improvement.evaluate(evidence).final_score == 75
+
+
+def test_id05_documents_that_say_nothing_about_improvement_are_silence():
+    """Silencio documental (docs/09 60): insuficiente, nunca 0."""
+
+    evidence = [_claim("process_defined", {"proceso": "respuesta", "pasos": "triaje"})]
+    result = id05_improvement.evaluate(evidence)
+    assert result.estado == Estado.EVIDENCIA_INSUFICIENTE
+    assert "no equivale a 0" in result.explanation
+
+
 _SURVEILLANCE_RULES = [
     de02_event_analysis,
     rs01_response_plan,
+    rs04_containment,
     rc02_backup_verification,
     rc03_recovery_communication,
 ]

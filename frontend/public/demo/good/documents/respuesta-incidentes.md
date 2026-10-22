@@ -26,3 +26,19 @@ legal. Los clientes afectados se notifican dentro de las 72 horas siguientes a l
 
 Despues de cada incidente se realiza un analisis de causa raiz y se preservan los registros y la
 evidencia en un repositorio de solo lectura durante un ano.
+
+## Contencion y erradicacion
+
+El procedimiento de contencion sigue tres pasos: aislar el recurso afectado de la red, revocar las
+credenciales involucradas y bloquear el origen del ataque en el grupo de seguridad. La erradicacion
+se considera completa cuando se elimina el artefacto malicioso, se aplica el parche correspondiente
+y el equipo de guardia confirma que el indicador de compromiso ya no aparece. El responsable de
+ejecutar la contencion es el equipo de guardia, con el visto bueno del CISO.
+
+## Mejora continua
+
+Despues de cada incidente y de cada ejercicio de restauracion se celebra una reunion de lecciones
+aprendidas. Los pasos son: revisar lo ocurrido, identificar las mejoras y registrarlas con un
+responsable y una fecha. El seguimiento se hace con metricas trimestrales (tiempo medio de deteccion
+y de contencion, y porcentaje de mejoras cerradas) y los ajustes que resultan se incorporan al plan
+de respuesta y al de continuidad.

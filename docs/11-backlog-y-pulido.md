@@ -125,8 +125,11 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **23 de 23** criterios de docs/03 (`criteria.yml` v11). Cobertura por función:
-GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
+El catálogo implementa **25 de 25** criterios de docs/03 (`criteria.yml` v13). Cobertura por función:
+GV 4/4 · ID 5/5 · PR 6/6 · DE 3/3 · RS 4/4 · RC 3/3.
+- **Cobertura del marco (AMP-04):** 46 de 106 subcategorías y 19 de 22 categorías, calculada por el
+  sistema (`GET /methodology`) y visible en el dashboard (docs/09 §70-§72). Faltan `GV.OC`, `GV.SC`
+  y `PR.AT`, que cierra la segunda mitad de la Oleada A.
 - **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
 

@@ -15,3 +15,9 @@ la Direccion General.
 
 Ante un incidente confirmado se notifica al responsable de seguridad y a la responsable de
 infraestructura.
+
+## Contencion
+
+Cuando se detecta un incidente, el equipo de guardia aplica las medidas de contencion que considere
+necesarias segun el caso. Todavia no hay un procedimiento escrito de erradicacion ni una lista de
+pasos acordada.
