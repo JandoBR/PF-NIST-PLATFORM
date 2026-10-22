@@ -132,7 +132,11 @@ def test_rejects_subcategory_whose_category_is_not_declared(tmp_path):
 
 
 def test_current_catalog_maps_cleanly_onto_nist():
-    """Las 37 subcategorias en uso existen y cuelgan de la categoria y funcion correctas."""
+    """Las subcategorias en uso existen y cuelgan de la categoria y funcion correctas.
+
+    No fija el conteo: cada oleada del catalogo lo mueve y el numero vive en
+    `cobertura_implementacion` (test_csf_core_catalog.py), no replicado aca.
+    """
 
     methodology = load_methodology(METHODOLOGY_DIR)
     nucleo = methodology.nucleo_csf
@@ -142,4 +146,4 @@ def test_current_catalog_maps_cleanly_onto_nist():
 
     declaradas = {s for c in methodology.criterios.values() for s in c.subcategorias}
     assert declaradas <= nucleo.subcategoria_ids
-    assert len(declaradas) == 37
+    assert len(declaradas) == methodology.cobertura_implementacion().subcategorias_cubiertas
