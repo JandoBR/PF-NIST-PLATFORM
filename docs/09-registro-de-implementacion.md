@@ -2285,3 +2285,45 @@ ya depende de esa forma.
 limpios; `GET /methodology` comprobado contra la API corriendo (41/106, 17/22).
 **No verificado:** la pantalla en el navegador — la extensión de Chrome no estaba conectada en esta
 sesión. El panel se ve con la API en `:8000` y `npm run dev` en `:5173`, entrando con `demo/demo123`.
+
+## 72. Oleada A (1/2): `RS.MI` e `ID.IM`, con evidencia operativa (`criteria.yml` v13)
+
+De las cinco categorías sin ningún criterio, estas dos se cubren **sin inventar un tipo de
+afirmación**: la evidencia que necesitan ya la produce el sistema.
+
+**`CRI-RS-04` — Contención y erradicación (RS.MI).** El patrón `containment_done` se agregaba desde
+el §53 y ningún criterio lo consumía ("solo contexto"). Ahora es el eje de un criterio mixto, con la
+misma regla de justicia que `CRI-RS-01`: un `incident_declared` en ventana completa sin contención
+es un 0 por falla de mitigación, y sin ventana completa no se concluye nada de lo operativo. El
+filtro documental pide un proceso de contención/erradicación/mitigación, así que el plan de respuesta
+genérico de `CRI-RS-01` no lo alimenta por accidente — hay un test que lo fija.
+
+**`CRI-ID-05` — Mejora continua (ID.IM).** Mixto a propósito. `ID.IM-02` habla de "mejoras a partir
+de pruebas y ejercicios", y declararlo con solo un documento sería creerle al texto; la regla exige
+`log.pattern(restore_exercise_run)` en ventana completa para el 100. `ID.IM-04` (mantener y mejorar
+los planes) se queda fuera: nada lo evidencia. No está en `_SURVEILLANCE_RULES` porque su vía
+documental **no** requiere ventana, igual que `CRI-RS-02`.
+
+**Enum de `proceso`.** `_CONTENT_FIELDS` suma `contencion` y `mejora` al enum de `process_defined`:
+sin eso U1 no tiene por qué devolver esos valores y el filtro de ambas reglas nunca acertaría. No
+hace falta tipo de afirmación nuevo ni tocar `evidence_types.yml`.
+
+**Dos tests que fijaban el tamaño del catálogo.** `test_loads_expected_criteria` enumera los ids (hay
+que añadirlos a mano, es el inventario) y `test_aggregation` fijaba `round(4 / 23, 4)`; ahora usa
+`len(methodology.criterios)` y no vuelve a romper por una oleada.
+
+**Goldens.** Regenerados: el diff es exactamente los dos criterios nuevos en
+`evidencia_insuficiente`, sus conteos de estado y el denominador de la cobertura global
+(0,3043 → 0,28 en `good`). Ningún puntaje se movió, como estaba previsto: `_weighted_aggregate`
+excluye `evidencia_insuficiente` del numerador y del denominador.
+
+**Paquetes de ejemplo.** `good` gana las secciones de contención/erradicación (tres pasos) y de
+mejora continua (lecciones aprendidas con métricas trimestrales y ajustes); `mid` gana una contención
+sin procedimiento escrito, que es justo el tramo de 50; `gaps` no gana nada, y queda insuficiente.
+Son documentos, así que solo puntúan en la corrida con IA.
+
+**Estado: 46 de 106 subcategorías (43,4 %) y 19 de 22 categorías.** Quedan `GV.OC`, `GV.SC` y
+`PR.AT`, que son la segunda mitad de la oleada.
+
+**Verificación:** 588 tests (14 nuevos en `test_surveillance_criteria.py`), `ruff check`/`format`
+limpios, cobertura comprobada con el loader. Sigue fallando solo el `test_uploads` de Windows.

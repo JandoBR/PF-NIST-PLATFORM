@@ -25,6 +25,7 @@ from app.evaluation.rules import (
     id02_asset_criticality,
     id03_risk_assessment,
     id04_data_inventory,
+    id05_improvement,
     pr01_encryption,
     pr02_backup,
     pr03_admin_access,
@@ -37,6 +38,7 @@ from app.evaluation.rules import (
     rs01_response_plan,
     rs02_incident_analysis,
     rs03_notification,
+    rs04_containment,
 )
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.loader import Methodology
@@ -53,6 +55,7 @@ _RULES: dict[str, RuleFn] = {
     id02_asset_criticality.CRITERION_ID: id02_asset_criticality.evaluate,
     id03_risk_assessment.CRITERION_ID: id03_risk_assessment.evaluate,
     id04_data_inventory.CRITERION_ID: id04_data_inventory.evaluate,
+    id05_improvement.CRITERION_ID: id05_improvement.evaluate,
     de01_monitoring.CRITERION_ID: de01_monitoring.evaluate,
     pr01_encryption.CRITERION_ID: pr01_encryption.evaluate,
     pr02_backup.CRITERION_ID: pr02_backup.evaluate,
@@ -68,6 +71,7 @@ _RULES: dict[str, RuleFn] = {
     rc03_recovery_communication.CRITERION_ID: rc03_recovery_communication.evaluate,
     rs02_incident_analysis.CRITERION_ID: rs02_incident_analysis.evaluate,
     rs03_notification.CRITERION_ID: rs03_notification.evaluate,
+    rs04_containment.CRITERION_ID: rs04_containment.evaluate,
 }
 
 

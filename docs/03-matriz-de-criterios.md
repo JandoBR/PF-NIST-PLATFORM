@@ -30,14 +30,16 @@ Resumen de cobertura del catálogo:
 | Función | Criterios | MVP total | MVP parcial |
 |---|---|---|---|
 | Govern | 4 | 3 | 0 |
-| Identify | 4 | 3 | 0 |
+| Identify | 5 | 3 | 0 |
 | Protect | 6 | 6 | 0 |
 | Detect | 3 | 1 | 1 |
-| Respond | 3 | 1 | 0 |
+| Respond | 4 | 1 | 0 |
 | Recover | 3 | 2 | 1 |
-| **Total** | **23** | **16** | **2** |
+| **Total** | **25** | **16** | **2** |
 
-> **Estado de implementación:** **23 de 23** criterios implementados (CR-01…CR-05, docs/11 §C).
+> **Estado de implementación:** **25 de 25** criterios implementados (CR-01…CR-05 y la Oleada A,
+> docs/11 §C). Cobertura del marco medida por el propio sistema en `GET /methodology`
+> (`cobertura_implementacion`): **46 de 106 subcategorías y 19 de 22 categorías**.
 > **Las reglas de esta matriz describen el código** (`backend/app/evaluation/rules/`): si una regla cambia, se
 > actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-02 (docs/09 §59).
 > Detalle del código en `09-registro-de-implementacion.md §31–§34`.
@@ -132,6 +134,18 @@ Resumen de cobertura del catálogo:
   - 50: inventario parcial o sin clasificación.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** documentar qué datos existen, dónde residen y su clasificación, incluyendo datos personales.
+
+### CRI-ID-05 — Mejora continua a partir de evaluaciones y ejercicios
+- **Subcategorías:** ID.IM-01, ID.IM-02, ID.IM-03 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** —
+- **Evidencias:** `doc.claim(tipo=process_defined)` con `contenido.proceso` de mejora/lecciones aprendidas, `log.pattern(restore_exercise_run)`, `log.window`
+- **Regla:**
+  - 100: ciclo de mejora documentado con métricas o ajustes **y** un ejercicio observado en una ventana completa.
+  - 75: ciclo documentado con métricas/ajustes sin ejercicio observado; o proceso documentado y ejercicio observado pero sin métricas ni ajustes.
+  - 50: mejora descrita de forma genérica; o ejercicio observado sin ningún ciclo de mejora documentado.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
+  - Sin documentos ni ejercicio → `evidencia_insuficiente`.
+- **Nota de mapeo:** `ID.IM-02` ("mejoras a partir de pruebas y ejercicios") solo se declara porque la regla consume el ejercicio observado; sin ese patrón sería una afirmación documental sin verificar. `ID.IM-04` (mantener y mejorar los planes) queda fuera: nada lo evidencia.
+- **Recomendación:** cerrar el ciclo de mejora: registrar las lecciones de evaluaciones y ejercicios y seguir los ajustes con métricas.
 
 ---
 
@@ -282,6 +296,18 @@ Resumen de cobertura del catálogo:
   - 75: lista definida sin plazos.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** definir a quién, cuándo y cómo se notifica un incidente.
+
+### CRI-RS-04 — Contención y erradicación del incidente
+- **Subcategorías:** RS.MI-01, RS.MI-02 · **Tipo:** Mixto · **Peso:** 4 · **IA:** sí · **MVP:** no · **Tier:** —
+- **Evidencias:** `log.pattern(containment_done)`, `log.pattern(incident_declared)`, `log.window`, `doc.claim(tipo=process_defined)` con `contenido.proceso` de contención/erradicación/mitigación
+- **Regla:**
+  - 100: contención observada en una ventana completa **y** procedimiento documentado con pasos.
+  - 75: contención observada sin procedimiento documentado (tope 75); o procedimiento con pasos sin incidentes que contener.
+  - 50: contención descrita de forma genérica, sin pasos.
+  - 0: incidente declarado en una ventana completa sin contención: falla de mitigación (docs/06 §5).
+  - Ventana completa sin incidentes ni procedimiento, o sin ventana ni documento → `evidencia_insuficiente`.
+- **Nota de mapeo:** `RS.MI-01` (contener) la evidencia el patrón `containment_done`, que hasta ahora se agregaba sin consumidor (docs/09 §53). `RS.MI-02` (erradicar) descansa en la parte documental: ningún evento del contrato declara la erradicación por sí solo.
+- **Recomendación:** documentar los pasos de contención y erradicación y registrar la contención de cada incidente declarado.
 
 ---
 
