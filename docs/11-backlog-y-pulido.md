@@ -125,11 +125,14 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **25 de 25** criterios de docs/03 (`criteria.yml` v13). Cobertura por función:
-GV 4/4 · ID 5/5 · PR 6/6 · DE 3/3 · RS 4/4 · RC 3/3.
-- **Cobertura del marco (AMP-04):** 46 de 106 subcategorías y 19 de 22 categorías, calculada por el
-  sistema (`GET /methodology`) y visible en el dashboard (docs/09 §70-§72). Faltan `GV.OC`, `GV.SC`
-  y `PR.AT`, que cierra la segunda mitad de la Oleada A.
+El catálogo implementa **28 de 28** criterios de docs/03 (`criteria.yml` v14). Cobertura por función:
+GV 6/6 · ID 5/5 · PR 7/7 · DE 3/3 · RS 4/4 · RC 3/3.
+- **Cobertura del marco (AMP-04):** **57 de 106 subcategorías (53,8 %) y 22 de 22 categorías**,
+  calculada por el sistema (`GET /methodology`) y visible en el dashboard (docs/09 §70-§73).
+  `categorias_sin_criterio` quedó vacía con la Oleada A: ya no hay ninguna categoría del CSF sin un
+  criterio que la evalúe. Lo que falta para subir el porcentaje son subcategorías dentro de
+  categorías ya cubiertas (sobre todo las seis restantes de `GV.SC` y `PR.DS`), más SUB-01…SUB-03 de
+  docs/12 §5.
 - **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
 

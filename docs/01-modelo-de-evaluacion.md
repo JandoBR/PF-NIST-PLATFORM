@@ -220,7 +220,7 @@ evaluación, y es la única que marca un puntaje como provisional. No se mezclan
 | 1 | Partial | Base: sin requisitos. Se asigna si no se alcanza Tier 2. |
 | 2 | Risk Informed | `CRI-GV-01 ≥ 50` (política o gestión aprobada), `CRI-GV-02 ≥ 50` (roles), `CRI-ID-03 ≥ 50` (riesgos) |
 | 3 | Repeatable | Requisitos de T2 + `CRI-GV-01 ≥ 75`, `CRI-GV-03 ≥ 75` (tolerancia), `CRI-GV-04 ≥ 75` (revisión), `CRI-DE-01 ≥ 75` (monitoreo), `CRI-RS-01 ≥ 75` (plan de respuesta), `CRI-RC-01 ≥ 75` (recuperación), `CRI-RC-02 ≥ 75` (backups probados) |
-| 4 | Adaptive | Requisitos de T3 + `CRI-GV-04 = 100` (mejora basada en resultados), `CRI-RS-02 ≥ 75` (análisis de incidentes), `CRI-RC-03 ≥ 75` (restauración verificada y comunicada), `CRI-ID-04 ≥ 75` (inventario de datos) |
+| 4 | Adaptive | Requisitos de T3 + `CRI-GV-04 = 100` (mejora basada en resultados), `CRI-RS-02 ≥ 75` (análisis de incidentes), `CRI-RC-03 ≥ 75` (restauración verificada y comunicada), `CRI-ID-04 ≥ 75` (inventario de datos), `CRI-ID-05 ≥ 75` (ciclo de mejora continua) |
 
 ### 8.3 Reglas
 

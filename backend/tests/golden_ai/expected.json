@@ -114,6 +114,35 @@
         }
       ]
     },
+    "gobierno-y-proveedores.md": {
+      "claims": [
+        {
+          "tipo": "org_context",
+          "contenido": {
+            "mision": "procesar pagos electronicos para comercios medianos de la region"
+          },
+          "cita": "La mision de la organizacion es procesar pagos electronicos para comercios medianos de la region"
+        },
+        {
+          "tipo": "supplier_program",
+          "contenido": {
+            "programa": true,
+            "proveedores_priorizados": true,
+            "requisitos_contractuales": true
+          },
+          "cita": "Existe un programa de gestion del riesgo de proveedores con politicas aprobadas por el comite de"
+        },
+        {
+          "tipo": "training_program",
+          "contenido": {
+            "programa": true,
+            "frecuencia": "anual",
+            "roles_especializados": true
+          },
+          "cita": "El programa de concienciacion en seguridad es obligatorio para todo el personal"
+        }
+      ]
+    },
     "manual-operaciones.md": {
       "claims": []
     },

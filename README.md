@@ -51,7 +51,7 @@
 
 Prototipo completo para su alcance declarado:
 
-- **Evaluación:** núcleo determinista con los 25 criterios del catálogo (`criteria.yml` v13, doc 03),
+- **Evaluación:** núcleo determinista con los 28 criterios del catálogo (`criteria.yml` v14, doc 03),
   adaptadores de Terraform, Ansible y documentos, agregación por función, cobertura de evidencia y Tier
   estimado (doc 01).
 - **IA (opcional):** extracción documental con cita (U1), ajuste contextual acotado (U2) y redacción de
