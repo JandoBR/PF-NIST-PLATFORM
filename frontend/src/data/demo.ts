@@ -38,6 +38,7 @@ export const DEMO_BUNDLES: DemoBundle[] = [
     ansible: ['/demo/mid/ansible/hardening.yml'],
     documents: [
       '/demo/mid/documents/politica-seguridad.md',
+      '/demo/mid/documents/gobierno-y-proveedores.md',
       '/demo/mid/documents/roles.md',
       '/demo/mid/documents/riesgos-e-inventario.md',
       '/demo/mid/documents/continuidad.md',
@@ -53,6 +54,7 @@ export const DEMO_BUNDLES: DemoBundle[] = [
     ansible: ['/demo/good/ansible/hardening.yml'],
     documents: [
       '/demo/good/documents/politica-seguridad.md',
+      '/demo/good/documents/gobierno-y-proveedores.md',
       '/demo/good/documents/roles-y-responsabilidades.md',
       '/demo/good/documents/gestion-de-riesgos.md',
       '/demo/good/documents/respuesta-incidentes.md',

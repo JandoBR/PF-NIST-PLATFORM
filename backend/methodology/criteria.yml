@@ -27,7 +27,10 @@
 # v13: Oleada A (1/2) - CRI-RS-04 (contencion/erradicacion, RS.MI) consume el patron
 #      containment_done que no tenia consumidor, y CRI-ID-05 (mejora continua, ID.IM) suma el
 #      ejercicio observado a lo documental (docs/09 §72).
-version: 13
+# v14: Oleada A (2/2) - CRI-GV-05 (GV.OC), CRI-GV-06 (GV.SC) y CRI-PR-07 (PR.AT) con tres tipos de
+#      afirmacion nuevos (org_context, supplier_program, training_program). 22/22 categorias
+#      (docs/09 §73).
+version: 14
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -88,6 +91,36 @@ criterios:
     regla:
       tipo: revision_documental
       tipos_afirmacion: [policy_review, process_defined]
+
+  - id: CRI-GV-05
+    version: 1
+    titulo: "Contexto organizacional declarado"
+    tipo: proceso
+    funcion: GV
+    categorias: [GV.OC]
+    subcategorias: [GV.OC-01, GV.OC-02, GV.OC-03, GV.OC-04, GV.OC-05]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [doc.claim@2]
+    recomendacion: "Declarar mision, partes interesadas, requisitos legales (incluida privacidad), servicios criticos y dependencias externas como entrada de la gestion del riesgo."
+    regla:
+      tipo: contexto_organizacional
+      tipos_afirmacion: [org_context]
+
+  - id: CRI-GV-06
+    version: 1
+    titulo: "Programa de riesgo de la cadena de suministro"
+    tipo: proceso
+    funcion: GV
+    categorias: [GV.SC]
+    subcategorias: [GV.SC-01, GV.SC-02, GV.SC-04, GV.SC-05]
+    peso: 2
+    ai_adjustable: true
+    evidencias: [doc.claim@2]
+    recomendacion: "Establecer un programa de proveedores con roles acordados, inventario priorizado por criticidad y requisitos de ciberseguridad en los contratos."
+    regla:
+      tipo: cadena_de_suministro
+      tipos_afirmacion: [supplier_program]
 
   - id: CRI-ID-01
     version: 1
@@ -255,6 +288,21 @@ criterios:
     recomendacion: "Habilitar CloudTrail multirregion y logging de sistema con retencion definida."
     regla:
       tipo: cloudtrail_multiregion
+
+  - id: CRI-PR-07
+    version: 1
+    titulo: "Concienciacion y formacion en seguridad"
+    tipo: proceso
+    funcion: PR
+    categorias: [PR.AT]
+    subcategorias: [PR.AT-01, PR.AT-02]
+    peso: 3
+    ai_adjustable: true
+    evidencias: [doc.claim@2]
+    recomendacion: "Formalizar un programa de concienciacion con periodicidad declarada y formacion especifica para los roles con acceso privilegiado."
+    regla:
+      tipo: formacion
+      tipos_afirmacion: [training_program]
 
   - id: CRI-DE-01
     version: 1

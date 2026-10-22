@@ -29,17 +29,18 @@ Resumen de cobertura del catálogo:
 
 | Función | Criterios | MVP total | MVP parcial |
 |---|---|---|---|
-| Govern | 4 | 3 | 0 |
+| Govern | 6 | 3 | 0 |
 | Identify | 5 | 3 | 0 |
-| Protect | 6 | 6 | 0 |
+| Protect | 7 | 6 | 0 |
 | Detect | 3 | 1 | 1 |
 | Respond | 4 | 1 | 0 |
 | Recover | 3 | 2 | 1 |
-| **Total** | **25** | **16** | **2** |
+| **Total** | **28** | **16** | **2** |
 
-> **Estado de implementación:** **25 de 25** criterios implementados (CR-01…CR-05 y la Oleada A,
+> **Estado de implementación:** **28 de 28** criterios implementados (CR-01…CR-05 y la Oleada A,
 > docs/11 §C). Cobertura del marco medida por el propio sistema en `GET /methodology`
-> (`cobertura_implementacion`): **46 de 106 subcategorías y 19 de 22 categorías**.
+> (`cobertura_implementacion`): **57 de 106 subcategorías (53,8 %) y las 22 categorías del CSF 2.0**,
+> es decir `categorias_sin_criterio` vacía.
 > **Las reglas de esta matriz describen el código** (`backend/app/evaluation/rules/`): si una regla cambia, se
 > actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-02 (docs/09 §59).
 > Detalle del código en `09-registro-de-implementacion.md §31–§34`.
@@ -136,7 +137,7 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** documentar qué datos existen, dónde residen y su clasificación, incluyendo datos personales.
 
 ### CRI-ID-05 — Mejora continua a partir de evaluaciones y ejercicios
-- **Subcategorías:** ID.IM-01, ID.IM-02, ID.IM-03 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** —
+- **Subcategorías:** ID.IM-01, ID.IM-02, ID.IM-03 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T4
 - **Evidencias:** `doc.claim(tipo=process_defined)` con `contenido.proceso` de mejora/lecciones aprendidas, `log.pattern(restore_exercise_run)`, `log.window`
 - **Regla:**
   - 100: ciclo de mejora documentado con métricas o ajustes **y** un ejercicio observado en una ventana completa.

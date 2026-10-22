@@ -2327,3 +2327,60 @@ Son documentos, así que solo puntúan en la corrida con IA.
 
 **Verificación:** 588 tests (14 nuevos en `test_surveillance_criteria.py`), `ruff check`/`format`
 limpios, cobertura comprobada con el loader. Sigue fallando solo el `test_uploads` de Windows.
+
+## 73. Oleada A (2/2): las 22 categorías del CSF tienen criterio (`criteria.yml` v14)
+
+Cierra `GV.OC`, `GV.SC` y `PR.AT`, las tres categorías que seguían sin ningún criterio. Las tres son
+documentales y cada una estrena un tipo de afirmación.
+
+**`CRI-GV-05` — Contexto organizacional (GV.OC).** `org_context` trae **un campo por subcategoría**:
+`mision` → GV.OC-01, `partes_interesadas` → GV.OC-02, `requisitos_legales` → GV.OC-03,
+`servicios_criticos` → GV.OC-04, `dependencias` → GV.OC-05. El puntaje es proporcional a cuántos de
+los cinco se declaran (5 → 100, 3-4 → 75, 1-2 → 50) y la explicación **nombra los que faltan** con
+su id. Esa lista es el valor del criterio; un número suelto sobre "contexto" no diría nada.
+
+**`CRI-GV-06` — Cadena de suministro (GV.SC).** `supplier_program` exige `programa` para puntuar
+(mencionar proveedores no es tener un programa: sin él es silencio documental, no 0) y suma `roles`
+(GV.SC-02), `proveedores_priorizados` (GV.SC-04) y `requisitos_contractuales` (GV.SC-05). De las 10
+subcategorías de `GV.SC` se declaran **4**: las otras seis (debida diligencia previa, monitoreo del
+ciclo de vida, cierre de la relación…) no las evidencia nada. La señal técnica de procedencia de
+módulos de Terraform sigue siendo AMP-07 en `docs/12 §5`.
+
+**`CRI-PR-07` — Concienciación y formación (PR.AT).** `PR.AT` separa la formación general
+(`PR.AT-01`) de la de roles especializados (`PR.AT-02`), así que la regla puntúa por separado
+`frecuencia` y `roles_especializados`: con las dos, 100; con una, 75 (y la explicación dice cuál
+falta); con solo el programa, 50.
+
+**Los tres tipos declaran solo los campos que sus reglas leen.** Es la lección de CR-06 y CR-07
+(§36, §57): un campo en `_CONTENT_FIELDS` que ninguna regla consume es evidencia declarada sin
+consumidor. Por eso `training_program` no pide `registro` de asistencia, que no se usa en ningún
+tramo.
+
+**`CRI-ID-05` entra como indicador de Tier 4** (`settings.yml` v3, umbral 75). El nivel "Adaptativo"
+se define por la mejora continua informada por riesgo, así que era el indicador que faltaba.
+Comprobado antes de añadirlo: no mueve los goldens, porque su lista de `faltantes` solo llega a los
+indicadores de Tier 2.
+
+**`CRI-GV-05` no entra en el cruce de privacidad.** `GV.OC-03` nombra los requisitos de privacidad,
+pero eso es **Govern-P** del PF 1.0, y el alcance declarado del cruce (docs/00 §6, docs/03 §7, y
+§VII-E del informe) son Identify-P, Protect-P y los eventos. Añadirlo a `PRIVACY_CRITERIA` ensancharía
+un límite de alcance declarado; queda como AMP-08 en `docs/12 §5` para decidirlo como lo que es.
+
+**Golden set de IA.** `tests/golden_ai/documents/gobierno-y-proveedores.md` con los tres tipos
+anotados en `expected.json`: así TS-02 cubre también las afirmaciones nuevas. **No verificado:** la
+corrida real (`python -m app.main eval-ai`) cuesta dinero y necesita `DEEPSEEK_API_KEY`; la anotación
+es la especificación de lo que U1 debe encontrar, no una medición.
+
+**Paquetes de ejemplo.** `good` gana `gobierno-y-proveedores.md` con los cinco datos de contexto, el
+programa de proveedores completo y el programa de formación con roles; `mid` gana una versión parcial
+(contexto a medias, proveedores sin programa, formación anual sin roles); `gaps` gana una inducción
+informal que **no** es un programa, que es justo el caso que debe dar insuficiente y no 0.
+
+**Estado: 57 de 106 subcategorías (53,8 %) y 22 de 22 categorías** — GV 18/31, ID 11/21, PR 8/22,
+DE 5/11, RS 10/13, RC 5/8. `categorias_sin_criterio` quedó **vacía**, que era el indicador que el
+§68 dejó puesto para saber cuándo estaba cerrado.
+
+**Verificación:** 606 tests (18 nuevos en `test_wave_a_documental_criteria.py`), `ruff
+check`/`format` limpios, `npm run typecheck`/`lint`/`build` limpios, goldens regenerados sin que se
+mueva un solo puntaje (el diff son los tres criterios nuevos en `evidencia_insuficiente` y los
+denominadores de cobertura). Sigue fallando solo el `test_uploads` de Windows.

@@ -60,6 +60,22 @@
     },
     {
       "base_score": null,
+      "criterion_id": "CRI-GV-05",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre el contexto organizacional.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
+      "criterion_id": "CRI-GV-06",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre la gestion de proveedores y terceros.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
       "criterion_id": "CRI-ID-01",
       "estado": "evidencia_insuficiente",
       "evidence": [],
@@ -163,6 +179,14 @@
     },
     {
       "base_score": null,
+      "criterion_id": "CRI-PR-07",
+      "estado": "evidencia_insuficiente",
+      "evidence": [],
+      "explanation": "Sin documentos analizados (o sin afirmaciones utilizables) sobre formacion y concienciacion.",
+      "final_score": null
+    },
+    {
+      "base_score": null,
       "criterion_id": "CRI-RC-01",
       "estado": "evidencia_insuficiente",
       "evidence": [],
@@ -233,7 +257,7 @@
     {
       "cobertura": 0.0,
       "conteo_estados": {
-        "evidencia_insuficiente": 4
+        "evidencia_insuficiente": 6
       },
       "nivel": "funcion",
       "provisional": false,
@@ -251,9 +275,10 @@
       "score": null
     },
     {
-      "cobertura": 1.0,
+      "cobertura": 0.8571,
       "conteo_estados": {
-        "evaluado": 6
+        "evaluado": 6,
+        "evidencia_insuficiente": 1
       },
       "nivel": "funcion",
       "provisional": false,
@@ -282,10 +307,10 @@
     }
   ],
   "global": {
-    "cobertura": 0.28,
+    "cobertura": 0.25,
     "conteo_estados": {
       "evaluado": 7,
-      "evidencia_insuficiente": 18
+      "evidencia_insuficiente": 21
     },
     "nivel": "global",
     "provisional": true,

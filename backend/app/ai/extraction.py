@@ -56,6 +56,23 @@ _CONTENT_FIELDS: dict[str, str] = {
     ),
     "notification_list": ("destinatarios (lista), criterios (string|null), plazos (string|null)"),
     "escalation_path": "niveles (string), criterios (string|null)",
+    "org_context": (
+        "mision (string|null), partes_interesadas (lista|null), requisitos_legales (lista|null:"
+        " legales, regulatorios o contractuales, incluida privacidad), servicios_criticos"
+        " (lista|null), dependencias (lista|null: proveedores o servicios externos de los que"
+        " depende la operacion)"
+    ),
+    "supplier_program": (
+        "programa (bool: existe un programa o politica de proveedores/terceros), roles (bool|null:"
+        " roles y responsabilidades acordados con proveedores), proveedores_priorizados (bool|null:"
+        " inventario de proveedores priorizado por criticidad), requisitos_contractuales"
+        " (bool|null: requisitos de ciberseguridad en los contratos)"
+    ),
+    "training_program": (
+        "programa (bool: existe un programa de concienciacion o formacion),"
+        " frecuencia (mensual|trimestral|semestral|anual), roles_especializados (bool|null:"
+        " formacion especifica para roles con acceso privilegiado o funciones de seguridad)"
+    ),
     "exposure_policy": (
         "bases_publicas_permitidas (bool|null: false si la politica prohibe bases de datos"
         " accesibles desde Internet, true si las permite), descripcion (string|null)"
