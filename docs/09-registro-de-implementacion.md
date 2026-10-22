@@ -2283,8 +2283,9 @@ ya depende de esa forma.
 
 **Verificación:** 573 tests y `ruff` limpios; `npm run typecheck`, `npm run lint` y `npm run build`
 limpios; `GET /methodology` comprobado contra la API corriendo (41/106, 17/22).
-**No verificado:** la pantalla en el navegador — la extensión de Chrome no estaba conectada en esta
-sesión. El panel se ve con la API en `:8000` y `npm run dev` en `:5173`, entrando con `demo/demo123`.
+**Verificado en el navegador** (§74): Chrome headless por CDP contra `npm run dev`, con sesión
+sembrada en `localStorage`. El panel muestra 54 %, 57 de 106, el desglose por función y
+"Las 22 categorías del marco están representadas".
 
 ## 72. Oleada A (1/2): `RS.MI` e `ID.IM`, con evidencia operativa (`criteria.yml` v13)
 
@@ -2384,3 +2385,35 @@ DE 5/11, RS 10/13, RC 5/8. `categorias_sin_criterio` quedó **vacía**, que era 
 check`/`format` limpios, `npm run typecheck`/`lint`/`build` limpios, goldens regenerados sin que se
 mueva un solo puntaje (el diff son los tres criterios nuevos en `evidencia_insuficiente` y los
 denominadores de cobertura). Sigue fallando solo el `test_uploads` de Windows.
+
+## 74. Comparar dos catálogos distintos: lo que no cambió no debe parecer un cambio
+
+**Cómo salió.** Revisando las pantallas con el navegador (Chrome headless por CDP, porque la
+extensión no estaba disponible), con dos evaluaciones de la misma infraestructura: una del catálogo
+de 23 criterios y otra del de 28.
+
+**El defecto.** Los cinco criterios nuevos aparecían en Comparar como **"Cambió de estado — → —"**.
+Dos guiones y una etiqueta que afirma un cambio que no ocurrió: no es que el criterio pasara a otro
+estado, es que **no existía** en la metodología anterior. El aviso general de "versiones distintas de
+las reglas" ya estaba, pero cada fila seguía contando otra cosa. Y con el catálogo creciendo por
+oleadas, este caso pasa a ser la norma y no la excepción.
+
+**El arreglo.** `CriterionDiff.direccion` gana `criterio_nuevo` y `criterio_retirado`, que se
+deciden **antes** que cualquier comparación de puntajes, porque sobre un `None` comparar no dice
+nada. La pantalla y el PDF los etiquetan como "Nuevo en el catálogo" / "Ya no está en el catálogo" y
+los ordenan al final, después de los cambios reales del entorno.
+
+**El mismo error, un nivel más arriba.** La tarjeta "Cobertura de evidencia" mostraba
+`30 % → 25 %, -5 pts` en rojo. No empeoró nada: la cobertura se mide sobre el catálogo de cada
+evaluación y el denominador creció. Ahora, cuando la metodología difiere, la tarjeta lleva debajo
+que esa diferencia no es comparable, y el PDF de comparación dice lo mismo (§67: el PDF no puede
+diferir de la pantalla).
+
+**Lo que no se tocó.** La comparación ya hacía la unión de los ids de las dos evaluaciones y marcaba
+`misma_metodologia`, así que no había que cambiar ni el modelo ni la consulta: el fallo estaba solo
+en cómo se nombraba el resultado.
+
+**Verificación:** 608 tests (dos nuevos en `test_comparison.py`: el mapeo de dirección y una
+comparación real a la que se le quita el resultado de `CRI-RS-04` para simular el catálogo
+anterior), `ruff` limpio, `typecheck`/`lint` limpios, y las dos pantallas y el PDF comprobados en
+una corrida real.

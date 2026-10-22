@@ -41,7 +41,8 @@ class ComparisonDiffOut(BaseModel):
     score_antes: float | None
     score_despues: float | None
     cambio: bool
-    #: mejora | retroceso | ahora_evaluado | dejo_de_evaluarse | cambio_de_estado | igual
+    #: mejora | retroceso | ahora_evaluado | dejo_de_evaluarse | cambio_de_estado |
+    #: criterio_nuevo | criterio_retirado | igual
     direccion: str = "igual"
     explicacion_antes: str | None = None
     explicacion_despues: str | None = None

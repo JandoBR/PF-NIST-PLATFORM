@@ -24,6 +24,11 @@ RETROCESO = "retroceso"
 AHORA_EVALUADO = "ahora_evaluado"
 DEJO_DE_EVALUARSE = "dejo_de_evaluarse"
 CAMBIO_DE_ESTADO = "cambio_de_estado"
+#: El criterio no existia en el catalogo de la otra evaluacion (el catalogo crecio o se recorto).
+#: No es un cambio del entorno y no debe leerse como tal: una evaluacion es una instantanea de su
+#: version de metodologia, y comparar dos versiones distintas mezcla las dos cosas.
+CRITERIO_NUEVO = "criterio_nuevo"
+CRITERIO_RETIRADO = "criterio_retirado"
 IGUAL = "igual"
 
 
@@ -47,6 +52,12 @@ class CriterionDiff:
     def direccion(self) -> str:
         if not self.cambio:
             return IGUAL
+        # Sin resultado en un lado el criterio no estaba en ese catalogo: no cambio nada del
+        # entorno. Va antes que cualquier comparacion de puntajes, que sobre `None` no dice nada.
+        if self.estado_antes is None:
+            return CRITERIO_NUEVO
+        if self.estado_despues is None:
+            return CRITERIO_RETIRADO
         antes, despues = self.score_antes, self.score_despues
         if antes is None and despues is not None:
             return AHORA_EVALUADO
