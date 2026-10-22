@@ -180,13 +180,19 @@ export interface ComparisonDiff {
   explicacion_despues: string | null;
 }
 
-/** Pasar de no tener puntaje a tenerlo (o al revés) no es mejorar ni empeorar. */
+/**
+ * Pasar de no tener puntaje a tenerlo (o al revés) no es mejorar ni empeorar.
+ * `criterio_nuevo`/`criterio_retirado`: el criterio no estaba en el catálogo de la otra
+ * evaluación. No es un cambio del entorno.
+ */
 export type ComparisonDirection =
   | 'mejora'
   | 'retroceso'
   | 'ahora_evaluado'
   | 'dejo_de_evaluarse'
   | 'cambio_de_estado'
+  | 'criterio_nuevo'
+  | 'criterio_retirado'
   | 'igual';
 
 export interface ComparisonOut {

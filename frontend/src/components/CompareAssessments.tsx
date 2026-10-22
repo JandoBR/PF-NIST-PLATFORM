@@ -11,6 +11,8 @@ import {
   Loader2,
   AlertTriangle,
   Minus,
+  PackagePlus,
+  PackageMinus,
 } from 'lucide-react';
 import { compareAssessments, downloadComparisonReport, listAssessments } from '@/lib/api';
 import { DownloadPdfButton } from '@/components/DownloadPdfButton';
@@ -96,6 +98,20 @@ const DIRECTION_META: Record<ComparisonDirection, DirectionMeta> = {
     border: 'border-white/15',
     icon: <ArrowRight className="h-3.5 w-3.5" />,
   },
+  criterio_nuevo: {
+    label: 'Nuevo en el catálogo',
+    text: 'text-violet-300',
+    bg: 'bg-violet-500/10',
+    border: 'border-violet-500/30',
+    icon: <PackagePlus className="h-3.5 w-3.5" />,
+  },
+  criterio_retirado: {
+    label: 'Ya no está en el catálogo',
+    text: 'text-violet-300',
+    bg: 'bg-violet-500/10',
+    border: 'border-violet-500/30',
+    icon: <PackageMinus className="h-3.5 w-3.5" />,
+  },
   igual: {
     label: 'Sin cambio',
     text: 'text-slate-500',
@@ -112,6 +128,9 @@ const DIRECTION_ORDER: ComparisonDirection[] = [
   'mejora',
   'ahora_evaluado',
   'cambio_de_estado',
+  // Al final, porque no son cambios del entorno: el catálogo creció o se recortó.
+  'criterio_retirado',
+  'criterio_nuevo',
   'igual',
 ];
 
@@ -345,6 +364,11 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
               value={`${percent(before.cobertura_global)} → ${percent(after.cobertura_global)}`}
               delta={deltaCobertura}
               unit=" pts"
+              note={
+                comparison.misma_metodologia
+                  ? undefined
+                  : 'El catálogo cambió de tamaño: esta cobertura tiene otro denominador en cada evaluación y la diferencia no es comparable.'
+              }
             />
             <SummaryCard
               label="Tier estimado"
@@ -560,11 +584,14 @@ function SummaryCard({
   value,
   delta,
   unit = '',
+  note,
 }: {
   label: string;
   value: string;
   delta: number | null;
   unit?: string;
+  /** Advertencia bajo el número, cuando el delta no significa lo que parece. */
+  note?: string;
 }) {
   const rounded = delta != null ? Math.round(delta) : null;
   const positive = rounded != null && rounded > 0;
@@ -593,6 +620,7 @@ function SummaryCard({
           </span>
         )}
       </div>
+      {note && <p className="mt-1.5 text-[11px] leading-snug text-amber-300/80">{note}</p>}
     </div>
   );
 }

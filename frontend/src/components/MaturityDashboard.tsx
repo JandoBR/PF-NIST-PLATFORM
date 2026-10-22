@@ -140,7 +140,7 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
               ? `${Math.round(assessment.cobertura_global * 100)}%`
               : '—'
           }
-          sub="Criterios con evidencia suficiente en esta evaluación"
+          sub="Criterios con evidencia suficiente"
         />
         <SummaryCard
           icon={<ShieldQuestion className="h-5 w-5" />}

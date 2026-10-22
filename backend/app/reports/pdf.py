@@ -96,6 +96,8 @@ _DIRECCION_LABELS = {
     "ahora_evaluado": "Ahora se evalua",
     "dejo_de_evaluarse": "Dejo de evaluarse",
     "cambio_de_estado": "Cambio de estado",
+    "criterio_nuevo": "Nuevo en el catalogo",
+    "criterio_retirado": "Ya no esta en el catalogo",
     "igual": "Sin cambio",
 }
 #: Primero lo que empeoro, como en la pantalla.
@@ -105,6 +107,8 @@ _DIRECCION_ORDER = (
     "mejora",
     "ahora_evaluado",
     "cambio_de_estado",
+    "criterio_retirado",
+    "criterio_nuevo",
     "igual",
 )
 
@@ -474,6 +478,17 @@ def build_comparison_report(
                 _SMALL,
             )
         )
+        if not comparison.misma_metodologia:
+            # Misma trampa que en pantalla: la cobertura de evidencia se calcula sobre el
+            # catalogo de cada evaluacion, asi que al crecer el catalogo "baja" sin que haya
+            # empeorado nada.
+            story.append(
+                _p(
+                    "La cobertura de evidencia se mide sobre el catalogo de cada evaluacion: si"
+                    " cambio de tamano, su diferencia no es comparable.",
+                    _SMALL,
+                )
+            )
 
     # Hallazgos que dejaron de aparecer o son nuevos.
     if comparison.hallazgos_resueltos or comparison.hallazgos_nuevos:
