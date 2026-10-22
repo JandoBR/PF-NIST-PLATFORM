@@ -250,8 +250,25 @@ export interface CriterionDefinition {
   recomendacion: string;
 }
 
+// Cobertura DEL CATALOGO: que parte del marco NIST tiene al menos un criterio. Es metadato del
+// producto, constante para una version de metodologia. No confundir con `cobertura_global` /
+// `Aggregate.cobertura`, que es la cobertura de EVIDENCIA de una evaluacion y es la que marca un
+// puntaje como provisional: docs/01 §7 obliga a no mezclarlas.
+export interface ImplementationCoverage {
+  subcategorias_cubiertas: number;
+  subcategorias_totales: number;
+  ratio: number;
+  categorias_cubiertas: number;
+  categorias_totales: number;
+  /** Por función: [cubiertas, totales]. */
+  por_funcion: Record<string, [number, number]>;
+  categorias_sin_criterio: string[];
+}
+
 export interface MethodologyCatalog {
   methodology_version: number;
+  nucleo_csf_version: number;
+  cobertura_implementacion: ImplementationCoverage;
   criterios: CriterionDefinition[];
   tipos_evidencia: string[];
 }

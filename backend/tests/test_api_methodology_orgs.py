@@ -21,6 +21,31 @@ def test_methodology_lists_catalog(api_client):
     assert "log.pattern@1" in body["tipos_evidencia"]
 
 
+def test_methodology_exposes_implementation_coverage(api_client):
+    """Contrato que consume el dashboard: claves hermanas de `criterios`, nunca anidadas en el.
+
+    La cobertura DEL CATALOGO no se mezcla con la cobertura de evidencia de una evaluacion
+    (docs/01 7), y la UI no debe recalcular ninguno de estos numeros.
+    """
+
+    body = api_client.get("/methodology").json()
+    cobertura = body["cobertura_implementacion"]
+
+    assert set(cobertura) == {
+        "subcategorias_cubiertas",
+        "subcategorias_totales",
+        "ratio",
+        "categorias_cubiertas",
+        "categorias_totales",
+        "por_funcion",
+        "categorias_sin_criterio",
+    }
+    assert cobertura["subcategorias_totales"] == 106
+    assert cobertura["categorias_totales"] == 22
+    assert set(cobertura["por_funcion"]) == {"GV", "ID", "PR", "DE", "RS", "RC"}
+    assert "nucleo_csf_version" in body
+
+
 def test_list_organizations_returns_only_my_org(api_client, auth_user):
     response = api_client.get("/orgs")
     assert response.status_code == 200

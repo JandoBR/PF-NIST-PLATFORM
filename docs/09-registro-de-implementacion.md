@@ -2195,8 +2195,7 @@ evaluaciones nuevas registran una versión distinta de las anteriores.
 
 **Verificación:** 570 tests (`tests/test_csf_core_catalog.py` nuevo, con los conteos por categoría y
 la guarda de ids retirados; seis casos negativos nuevos en `tests/test_methodology_loader.py`).
-`ruff check` y `ruff format` limpios. Endpoint comprobado a mano. **No verificado:** la pantalla en el
-navegador — la métrica todavía no se muestra en el frontend. **Preexistente, ajeno a este cambio:**
+`ruff check` y `ruff format` limpios. Endpoint comprobado a mano. (La pantalla llegó en el §71.) **Preexistente, ajeno a este cambio:**
 `test_uploads.py::test_windows_separator_is_rejected` y los dos
 `test_golden.py::test_ansible_adapter_evidence_matches_golden` fallan en Windows también sin estos
 cambios (comprobado sobre el árbol limpio).
@@ -2252,3 +2251,37 @@ Las categorías siguen en 17/22; `categorias_sin_criterio` no se mueve hasta la 
 **Verificación:** 572 tests y `ruff check`/`format` limpios; conteo comprobado contra
 `GET /methodology`. Sigue fallando solo `test_uploads.py::test_windows_separator_is_rejected`,
 preexistente y específico de Windows (los dos de Ansible los arregló el §69).
+
+## 71. La cobertura del catálogo, en pantalla
+
+**Lo que faltaba.** El §68 dejó la cobertura de implementación calculada y servida, pero invisible:
+`getMethodology` existía en `lib/api.ts` **sin un solo consumidor**, y `MethodologyCatalog` ni
+siquiera declaraba los campos nuevos. La Sección VII-C del informe afirma que se reportan dos
+métricas de cobertura; se cumplía en la API y no en la herramienta.
+
+**El 22/22 lo cuenta el sistema.** `CoberturaImplementacion` gana `categorias_cubiertas` y
+`categorias_totales`. Se cuentan en `coverage.py` y no en el consumidor a propósito: "22 de 22" es
+*la* afirmación fuerte del catálogo y no debe salir de una resta con el 22 escrito a mano en la UI.
+`GET /methodology` los expone junto a los demás.
+
+**El panel.** `CatalogCoverage` en `MaturityDashboard.tsx`, debajo de la matriz: el ratio global, el
+desglose por función (cubiertas/totales con barra, reusando `FUNCTION_ACCENTS`) y las categorías sin
+ningún criterio como chips. Cuando esa lista se vacíe, el panel lo dice en positivo: "Las 22
+categorías del marco están representadas". La petición se hace una vez (`useEffect`, sin dependencia
+de la evaluación, porque es metadato constante de la versión de metodología) y **si falla, el panel
+no se pinta**: es metadato y no debe tumbar la matriz.
+
+**Las dos coberturas, separadas por nombre.** La tarjeta que decía "Cobertura Global" ahora dice
+**"Cobertura de evidencia"**, con el subtítulo "criterios con evidencia suficiente en esta
+evaluación". El panel nuevo se titula "Cobertura del catálogo NIST CSF 2.0" y declara en su propio
+texto que describe la herramienta y no la corrida. Dos números llamados "cobertura" en la misma
+pantalla era exactamente lo que `docs/01 §7` prohíbe mezclar.
+
+**Contrato con test.** `test_methodology_exposes_implementation_coverage` fija el conjunto exacto de
+claves de `cobertura_implementacion` y que son hermanas de `criterios`, nunca anidadas en él: la UI
+ya depende de esa forma.
+
+**Verificación:** 573 tests y `ruff` limpios; `npm run typecheck`, `npm run lint` y `npm run build`
+limpios; `GET /methodology` comprobado contra la API corriendo (41/106, 17/22).
+**No verificado:** la pantalla en el navegador — la extensión de Chrome no estaba conectada en esta
+sesión. El panel se ve con la API en `:8000` y `npm run dev` en `:5173`, entrando con `demo/demo123`.

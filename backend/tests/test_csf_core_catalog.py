@@ -100,6 +100,10 @@ def test_coverage_reports_categories_without_any_criterion():
         == set(methodology.nucleo_csf.categoria_ids) - con_criterio
     )
 
+    # El conteo de categorias sale del nucleo, no de un 22 escrito a mano en el consumidor.
+    assert cobertura.categorias_totales == len(methodology.nucleo_csf.categoria_ids) == 22
+    assert cobertura.categorias_cubiertas == 22 - len(cobertura.categorias_sin_criterio)
+
 
 def test_coverage_maps_each_subcategory_to_its_criteria():
     methodology = load_methodology(METHODOLOGY_DIR)
@@ -125,3 +129,5 @@ def test_compute_handles_an_empty_catalog(nucleo):
     assert cobertura.subcategorias_cubiertas == 0
     assert cobertura.ratio == 0.0
     assert len(cobertura.categorias_sin_criterio) == 22
+    assert cobertura.categorias_cubiertas == 0
+    assert cobertura.categorias_totales == 22
