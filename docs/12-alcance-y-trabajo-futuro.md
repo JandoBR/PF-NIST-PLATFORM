@@ -83,6 +83,18 @@ estas medidas no tienen superficie real aquí.
 | AMP-06 | Niveles por función A/B/C/D (Consolidado/Gestionado/…) | El diseño lo marca opcional y no-NIST. | docs/01 §8.4 |
 | AMP-07 | Procedencia de módulos y proveedores de Terraform (`tf.module.source`) como señal técnica de cadena de suministro (GV.SC-07, ID.RA-09) | El adaptador solo lee bloques `resource`; exige una ruta de parseo nueva, un tipo de evidencia y fixtures en los tres paquetes, para una subcategoría que GV.SC ya cubre por vía documental. | docs/04 §3 |
 
+### Subcategorías que el mapeo no puede declarar todavía
+
+Salieron de la Oleada 0 (docs/09 §70): las reglas existentes **no** las evidencian, así que
+declararlas inflaría la cobertura que el propio sistema reporta. Cada una lleva lo que costaría
+hacerla honesta, no "por completitud" sino para que el día que haga falta no se re-razone.
+
+| ID | Subcategoría | Por qué no, y qué costaría |
+|---|---|---|
+| SUB-01 | `ID.RA-04` (impactos y probabilidades registrados) | `process_defined` no tiene ningún campo de impacto ni probabilidad (`ai/extraction.py` `_CONTENT_FIELDS`). Exige campo nuevo en el prompt de U1, un caso en `golden_ai` y un ancla nueva en `CRI-ID-03`. |
+| SUB-02 | `DE.AE-03` (información correlacionada de múltiples fuentes) | Ninguna regla comprueba la multiplicidad de fuentes. `log_patterns.fuentes` existe en la BD (`models/tables.py:223`) pero se colapsa a un único `source_id` al construir la evidencia (`core/assessment_service.py:128`) y no está en el `valor_schema` de `log.pattern`. Exige bump de `evidence_types.yml`, pasar la lista a la evidencia y que `CRI-DE-02` pida ≥2 fuentes. Es el más barato de los tres y mejora el motor de verdad. |
+| SUB-03 | `RS.MA-05` (criterios para iniciar la recuperación) | `rs01_response_plan.py` filtra las afirmaciones a proceso de respuesta/escalamiento y no lee `criterios_activacion`, que sí existe en `process_defined`. Exige ampliar el filtro y un ancla; ojo con no pisar a `CRI-RC-01`, que es el criterio de recuperación. |
+
 *(AMP-04, cobertura de implementación, se promovió al prototipo y está hecha: `methodology/csf_subcategories.yml`
 con las 106 subcategorías, `app/methodology/coverage.py` y `GET /methodology` — ver docs/09 §68.)*
 

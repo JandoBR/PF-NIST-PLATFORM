@@ -21,7 +21,10 @@
 # v11: PR-01/02/03/04 dan 0 ante una ausencia explicita total (antes su piso era 25 y nunca
 #      llegaban a severidad alta); PR-05 exige bloque en todos los buckets; ID-01 no cuenta
 #      recursos de configuracion (docs/09 §65).
-version: 11
+# v12: Oleada 0 - GV-04, ID-03 y RS-02 declaran las subcategorias que sus propias anclas ya
+#      evidencian (GV.OV-02, ID.RA-03/06, RS.AN-06). Sin cambios de regla: solo el mapeo
+#      (docs/09 §70).
+version: 12
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -74,7 +77,7 @@ criterios:
     tipo: proceso
     funcion: GV
     categorias: [GV.OV]
-    subcategorias: [GV.OV-01, GV.OV-03]
+    subcategorias: [GV.OV-01, GV.OV-02, GV.OV-03]
     peso: 3
     ai_adjustable: true
     evidencias: [doc.claim@2]
@@ -119,7 +122,7 @@ criterios:
     tipo: proceso
     funcion: ID
     categorias: [ID.RA]
-    subcategorias: [ID.RA-01, ID.RA-05]
+    subcategorias: [ID.RA-01, ID.RA-03, ID.RA-05, ID.RA-06]
     peso: 4
     ai_adjustable: true
     evidencias: [doc.claim@2]
@@ -304,7 +307,7 @@ criterios:
     tipo: mixto
     funcion: RS
     categorias: [RS.AN]
-    subcategorias: [RS.AN-03, RS.AN-07]
+    subcategorias: [RS.AN-03, RS.AN-06, RS.AN-07]
     peso: 3
     ai_adjustable: true
     evidencias: [doc.claim@2, log.pattern@1]

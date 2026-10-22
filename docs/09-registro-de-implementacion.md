@@ -2218,3 +2218,37 @@ independiente de la máquina. Goldens regenerados: el diff son exactamente 6 lí
 
 **Verificación:** suite completa **573 tests** + `ruff check` y `ruff format` limpios; `test_golden.py`
 pasa desde un checkout en otra ruta (`/tmp/...`), cosa que antes fallaba.
+
+## 70. Oleada 0: declarar lo que las reglas ya evidencian (`criteria.yml` v12)
+
+**Por qué es gratis.** `aggregation.aggregate_by_subcategoria` (`aggregation.py:50`) no tiene ni una
+llamada en todo el repo: los agregados por subcategoría nunca se calculan, ni se persisten, ni están
+en los goldens. Añadir una subcategoría a un criterio existente mueve exactamente dos cosas: la
+salida de `GET /methodology` y el numerador de la cobertura de implementación. Cero reglas, cero
+tests, cero goldens.
+
+**Qué se declaró, y qué lo sostiene.** El campo `subcategorias` no es una etiqueta temática: tiene
+que poder defenderse frente al ancla que lo evidencia.
+
+| Criterio | Subcategoría | Lo que la sostiene |
+|---|---|---|
+| `CRI-GV-04` | `GV.OV-02` | el ancla 100 exige `contenido.ajustes` (`gv04_strategy_review.py:52`), que es literalmente "la estrategia se revisa **y ajusta**" |
+| `CRI-ID-03` | `ID.RA-03`, `ID.RA-06` | `registro_riesgos` (amenazas identificadas y registradas) y `priorizacion` (respuestas al riesgo priorizadas) son las dos claves del ancla 100 (`id03_risk_assessment.py:60-62`) |
+| `CRI-RS-02` | `RS.AN-06` | misma base de evidencia que el ya declarado `RS.AN-07`: el filtro de afirmación admite "evidencia"/"forense" y el ancla 100 habla de conservación (`rs02_incident_analysis.py:23-29,55-63`) |
+
+**Tres que se quedaron fuera.** Esta oleada se había anunciado como siete subcategorías. Al
+contrastar cada una con su regla, `ID.RA-04`, `DE.AE-03` y `RS.MA-05` no están evidenciadas por
+nada: el motivo y el coste de hacerlas honestas quedan en `docs/12 §5`. Preferimos 41 defendibles
+que 44 opinables, porque la cobertura se reporta como métrica del producto.
+
+**Estado: 41 de 106 subcategorías (38,7 %)** — GV 9/31, ID 8/21, PR 6/22, DE 5/11, RS 8/13, RC 5/8.
+Las categorías siguen en 17/22; `categorias_sin_criterio` no se mueve hasta la Oleada A.
+
+**Un test sí observaba el mapeo.** `test_current_catalog_maps_cleanly_onto_nist` fijaba
+`len(declaradas) == 37`, así que rompía con la primera subcategoría añadida. Ahora compara contra
+`cobertura_implementacion().subcategorias_cubiertas`: el conteo vive en un solo sitio
+(`test_csf_core_catalog.py` ya usaba invariantes) y no vuelve a romper en cada oleada.
+
+**Verificación:** 572 tests y `ruff check`/`format` limpios; conteo comprobado contra
+`GET /methodology`. Sigue fallando solo `test_uploads.py::test_windows_separator_is_rejected`,
+preexistente y específico de Windows (los dos de Ansible los arregló el §69).

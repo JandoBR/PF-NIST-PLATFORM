@@ -79,7 +79,7 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** documentar objetivos de riesgo y una declaración de tolerancia usada en decisiones operativas.
 
 ### CRI-GV-04 — Revisión del desempeño y mejora de la estrategia
-- **Subcategorías:** GV.OV-01, GV.OV-03 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T3/T4
+- **Subcategorías:** GV.OV-01, GV.OV-02, GV.OV-03 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T3/T4
 - **Evidencias:** `doc.claim(tipo=policy_review)`, `doc.claim(tipo=process_defined)`
 - **Regla:**
   - 100: proceso de revisión (`process_defined` con `proceso` de revisión/mejora/desempeño) con métricas o con evidencia de ajustes realizados.
@@ -115,7 +115,7 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** clasificar activos por criticidad y usarlo para priorizar controles y esfuerzo.
 
 ### CRI-ID-03 — Identificación y evaluación de riesgos
-- **Subcategorías:** ID.RA-01, ID.RA-05 · **Tipo:** Proceso · **Peso:** 4 · **IA:** sí · **MVP:** sí · **Tier:** T2
+- **Subcategorías:** ID.RA-01, ID.RA-03, ID.RA-05, ID.RA-06 · **Tipo:** Proceso · **Peso:** 4 · **IA:** sí · **MVP:** sí · **Tier:** T2
 - **Evidencias:** `doc.claim(tipo=process_defined)`
 - **Regla:**
   - 100: proceso de evaluación de riesgos documentado, con registro de riesgos y priorización por impacto/probabilidad.
@@ -266,7 +266,7 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** documentar y ensayar el plan de respuesta incluyendo escalamiento y criterios de prioridad.
 
 ### CRI-RS-02 — Análisis de incidentes y preservación de evidencia
-- **Subcategorías:** RS.AN-03, RS.AN-07 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T4
+- **Subcategorías:** RS.AN-03, RS.AN-06, RS.AN-07 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T4
 - **Evidencias:** `doc.claim(tipo=process_defined)`, `log.pattern(incident_declared)`
 - **Regla:**
   - 100: proceso de análisis de causa raíz y conservación de evidencia documentado y evidenciado en el escenario.
