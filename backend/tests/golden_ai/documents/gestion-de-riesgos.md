@@ -6,6 +6,11 @@ La Direccion General declara como objetivo de riesgo mantener la disponibilidad 
 de pagos por encima del 99,5 %. La tolerancia es de hasta cuatro horas de interrupcion por mes. La
 responsable de este objetivo es la Gerente de Operaciones.
 
+El riesgo de ciberseguridad se consolida en el registro de riesgo empresarial que revisa la Junta. La
+estrategia admite cuatro opciones de respuesta: mitigar, transferir, aceptar o evitar. El metodo de
+calculo es unico para toda la organizacion: una matriz de impacto por probabilidad de cinco niveles.
+Cada area reporta el riesgo a su responsable, este al CISO y el CISO al comite de seguridad.
+
 ## Inventario de activos
 
 La organizacion mantiene un inventario de activos que incluye el servidor de aplicaciones, la base

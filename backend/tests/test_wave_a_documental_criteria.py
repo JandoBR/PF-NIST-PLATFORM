@@ -8,6 +8,8 @@ nunca 0 (docs/09 60).
 
 from datetime import UTC, datetime
 
+import pytest
+
 from app.evaluation.rules import gv05_org_context, gv06_supply_chain, pr07_awareness
 from app.evaluation.schemas import Estado
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
@@ -92,26 +94,42 @@ def test_gv06_without_documents_is_insufficient():
     assert gv06_supply_chain.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
 
 
-def test_gv06_program_with_the_three_elements_scores_100():
-    contenido = {
-        "programa": True,
-        "roles": True,
-        "proveedores_priorizados": True,
-        "requisitos_contractuales": True,
-    }
-    assert gv06_supply_chain.evaluate([_claim("supplier_program", contenido)]).final_score == 100
+#: Las nueve facetas de GV.SC que `gv06_supply_chain._CAMPOS` lee, en orden de declaracion.
+_FACETAS_SC = (
+    "roles",
+    "integracion_riesgo",
+    "proveedores_priorizados",
+    "requisitos_contractuales",
+    "debida_diligencia",
+    "riesgos_monitoreados",
+    "en_respuesta_incidentes",
+    "monitoreo_ciclo_vida",
+    "terminacion",
+)
 
 
-def test_gv06_program_with_two_elements_scores_75():
-    contenido = {"programa": True, "roles": True, "requisitos_contractuales": True}
-    result = gv06_supply_chain.evaluate([_claim("supplier_program", contenido)])
-    assert result.final_score == 75
-    assert "GV.SC-04" in result.explanation
+def _programa(n_facetas: int) -> dict:
+    return {"programa": True, **{campo: True for campo in _FACETAS_SC[:n_facetas]}}
 
 
-def test_gv06_bare_program_scores_50():
-    result = gv06_supply_chain.evaluate([_claim("supplier_program", {"programa": True})])
-    assert result.final_score == 50
+@pytest.mark.parametrize(
+    ("facetas", "esperado"),
+    [(9, 100), (7, 100), (6, 75), (4, 75), (3, 50), (1, 50), (0, 25)],
+)
+def test_gv06_scores_by_how_many_practices_the_program_declares(facetas, esperado):
+    """GV.SC es una lista de practicas, no un interruptor: si el 100 dependiera solo de que exista
+    un programa, las diez subcategorias se sostendrian en una sola frase."""
+
+    result = gv06_supply_chain.evaluate([_claim("supplier_program", _programa(facetas))])
+
+    assert result.final_score == esperado
+    assert f"{facetas} de 9 practicas" in result.explanation
+
+
+def test_gv06_names_the_practices_that_are_missing():
+    result = gv06_supply_chain.evaluate([_claim("supplier_program", _programa(4))])
+
+    assert "GV.SC-06" in result.explanation and "GV.SC-10" in result.explanation
 
 
 def test_gv06_suppliers_mentioned_without_a_program_is_silence():

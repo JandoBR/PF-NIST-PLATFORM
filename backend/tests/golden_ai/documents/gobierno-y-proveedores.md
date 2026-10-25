@@ -19,6 +19,14 @@ lado del proveedor. Se mantiene un inventario de proveedores clasificado por cri
 y baja. Los contratos de criticidad alta incorporan requisitos de cifrado, notificacion de
 incidentes en 24 horas y derecho de auditoria.
 
+El riesgo de proveedores entra en el mismo registro de riesgos de ciberseguridad y se reporta al
+comite de riesgo empresarial. Antes de firmar con un proveedor nuevo se hace una evaluacion de
+debida diligencia con cuestionario de seguridad y revision de certificaciones. Durante la relacion
+los riesgos de cada proveedor critico quedan registrados y priorizados con su respuesta acordada, y
+sus practicas de seguridad se monitorean con la revision anual de certificaciones. Los proveedores
+criticos participan en la respuesta y la recuperacion de incidentes, y el contrato obliga a la
+devolucion o borrado certificado de los datos al terminar la relacion.
+
 ## Concienciacion y formacion
 
 El programa de concienciacion en seguridad es obligatorio para todo el personal con una frecuencia

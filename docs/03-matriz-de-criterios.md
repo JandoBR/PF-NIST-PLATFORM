@@ -37,12 +37,14 @@ Resumen de cobertura del catálogo:
 | Recover | 3 | 2 | 1 |
 | **Total** | **28** | **16** | **2** |
 
-> **Estado de implementación:** **28 de 28** criterios implementados (CR-01…CR-05 y la Oleada A,
+> **Estado de implementación:** **28 de 28** criterios implementados (CR-01…CR-05 y las Oleadas A y B,
 > docs/11 §C). Cobertura del marco medida por el propio sistema en `GET /methodology`
-> (`cobertura_implementacion`): **57 de 106 subcategorías (53,8 %) y las 22 categorías del CSF 2.0**,
-> es decir `categorias_sin_criterio` vacía.
+> (`cobertura_implementacion`): **74 de 106 subcategorías (69,8 %) y las 22 categorías del CSF 2.0**,
+> es decir `categorias_sin_criterio` vacía, con la **función Gobernar completa (31/31)**.
 > **Las reglas de esta matriz describen el código** (`backend/app/evaluation/rules/`): si una regla cambia, se
-> actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-02 (docs/09 §59).
+> actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-24 (docs/09 §77); en esa
+> revisión se escribieron las fichas de `CRI-GV-05`, `CRI-GV-06` y `CRI-PR-07`, que la Oleada A
+> había dejado sin documentar.
 > Detalle del código en `09-registro-de-implementacion.md §31–§34`.
 
 ---
@@ -62,22 +64,24 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** formalizar/aprobar la política; definir ciclo de revisión (anual sugerido) y registrar la última revisión.
 
 ### CRI-GV-02 — Roles y responsabilidades definidos
-- **Subcategorías:** GV.RR-01, GV.RR-02 · **Tipo:** Proceso · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Tier:** T2
+- **Subcategorías:** GV.RR-01, GV.RR-02, GV.RR-03, GV.RR-04 · **Tipo:** Proceso · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Tier:** T2
 - **Evidencias:** `doc.claim(tipo=role_assigned)`
 - **Regla:**
-  - 100: responsables nombrados por rol (CISO/responsable de seguridad, dueños de activos), con responsabilidades y autoridad descritas.
-  - 75: responsables definidos sin autoridad explícita.
-  - 50: roles genéricos (“el área de TI”) sin asignación.
+  - 100: responsables nombrados por rol con autoridad descrita, **más** `recursos_asignados` (presupuesto/personal acordes a la estrategia de riesgo, `GV.RR-03`) y `practicas_rh` (la ciberseguridad en contratación, inducción, cambios de rol y salida, `GV.RR-04`).
+  - 75: responsables con autoridad, sin recursos ni prácticas de RH declarados. Nombrar a un CISO no es dotar a la función.
+  - 50: responsables definidos sin autoridad explícita.
+  - 25: roles genéricos (“el área de TI”) sin asignación.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** designar responsable de seguridad y dueños de activos con responsabilidades y autoridad explícitas.
 
-### CRI-GV-03 — Objetivos de riesgo y tolerancia establecidos
-- **Subcategorías:** GV.RM-01, GV.RM-02 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** sí · **Tier:** T3
+### CRI-GV-03 — Estrategia de gestión del riesgo
+- **Subcategorías:** GV.RM-01 … GV.RM-07 (las siete) · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** sí · **Tier:** T3
 - **Evidencias:** `doc.claim(tipo=risk_tolerance)`
-- **Regla:**
-  - 100: objetivos de gestión de riesgo y declaración de tolerancia/apetito documentados y con responsable.
-  - 75: objetivos definidos sin tolerancia explícita.
-  - 50: declaración genérica de “gestionar riesgos”.
+- **Regla:** objetivos y tolerancia son la puerta (`GV.RM-01`/`GV.RM-02`); el tramo alto se decide por **amplitud** sobre las otras cinco facetas: `integracion_empresarial` (`GV.RM-03`), `opciones_respuesta` (`GV.RM-04`), `lineas_comunicacion` (`GV.RM-05`), `metodo_estandarizado` (`GV.RM-06`) y `oportunidades_estrategicas` (`GV.RM-07`).
+  - 100: objetivos + tolerancia + **≥3** de las cinco facetas.
+  - 75: objetivos + tolerancia, sin desarrollar la estrategia. La explicación nombra las que faltan.
+  - 50: objetivos definidos sin tolerancia explícita.
+  - 25: declaración genérica de “gestionar riesgos”.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** documentar objetivos de riesgo y una declaración de tolerancia usada en decisiones operativas.
 
@@ -90,6 +94,26 @@ Resumen de cobertura del catálogo:
   - 50: solo la revisión periódica de la política (`policy_review`). Revisar un documento no es revisar la estrategia (GV.OV), y ese mismo claim ya cuenta para GV-01: no debe cubrir dos requisitos de Tier 3 (docs/09 §60).
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** institucionalizar una revisión periódica de la estrategia basada en resultados y registrar los ajustes.
+
+### CRI-GV-05 — Contexto organizacional
+- **Subcategorías:** GV.OC-01 … GV.OC-05 (las cinco) · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no
+- **Evidencias:** `doc.claim(tipo=org_context)`
+- **Regla:** un campo del contenido por subcategoría —`mision` (`GV.OC-01`), `partes_interesadas` (`GV.OC-02`), `requisitos_legales` (`GV.OC-03`), `servicios_criticos` (`GV.OC-04`), `dependencias` (`GV.OC-05`)—, así que cada una se declara solo si su dato viene.
+  - 100: los cinco campos. · 75: tres o cuatro. · 50: uno o dos.
+  - La explicación nombra siempre los que faltan. Una afirmación de contexto sin ninguno de los cinco datos → `evidencia_insuficiente`.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
+- **Nota de alcance:** `GV.OC-03` nombra los requisitos de privacidad, pero eso es **Govern-P** del PF 1.0 y el cruce declarado del prototipo son Identify-P, Protect-P y los eventos, así que este criterio **no** entra en `PRIVACY_CRITERIA` (AMP-08 en docs/12 §5).
+- **Recomendación:** documentar misión, partes interesadas, requisitos legales, servicios críticos y dependencias externas, y usarlos como entrada de la gestión de riesgo.
+
+### CRI-GV-06 — Programa de riesgo de la cadena de suministro
+- **Subcategorías:** GV.SC-01 … GV.SC-10 (las diez) · **Tipo:** Proceso · **Peso:** 2 · **IA:** sí · **MVP:** no
+- **Evidencias:** `doc.claim(tipo=supplier_program)`
+- **Regla:** `programa` es la puerta (`GV.SC-01`); el puntaje lo decide **cuántas de las nueve prácticas** declara el documento, una por subcategoría: `roles` (`GV.SC-02`), `integracion_riesgo` (`GV.SC-03`), `proveedores_priorizados` (`GV.SC-04`), `requisitos_contractuales` (`GV.SC-05`), `debida_diligencia` (`GV.SC-06`), `riesgos_monitoreados` (`GV.SC-07`), `en_respuesta_incidentes` (`GV.SC-08`), `monitoreo_ciclo_vida` (`GV.SC-09`) y `terminacion` (`GV.SC-10`).
+  - 100: programa + ≥7 prácticas. · 75: + 4–6. · 50: + 1–3. · 25: el programa y nada más.
+  - La explicación siempre nombra las prácticas que faltan.
+  - Mencionar proveedores sin declarar un programa → `evidencia_insuficiente` (no 0): mencionar no es tener.
+- **Nota de amplitud:** si el 100 dependiera solo de que exista un programa, las diez subcategorías se sostendrían en una sola frase. `GV.SC-07` se evidencia por vía documental; la señal técnica de procedencia de módulos de Terraform sigue siendo AMP-07 en docs/12 §5, ahora como mejora de calidad y no de cobertura.
+- **Recomendación:** formalizar el programa de proveedores: roles acordados, inventario priorizado, requisitos en contratos, debida diligencia previa, seguimiento del riesgo durante la relación y disposiciones de cierre.
 
 ---
 
@@ -226,6 +250,17 @@ Resumen de cobertura del catálogo:
   - 0: sin logging declarado.
   - Sin recursos evaluables → insuficiente.
 - **Recomendación:** habilitar CloudTrail multirregión y logging de sistema con retención definida.
+
+### CRI-PR-07 — Concienciación y formación
+- **Subcategorías:** PR.AT-01, PR.AT-02 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no
+- **Evidencias:** `doc.claim(tipo=training_program)`
+- **Regla:** `programa` es la puerta (`PR.AT-01`); `roles_especializados` es lo que sostiene `PR.AT-02` (formación específica para roles con acceso privilegiado o funciones de seguridad).
+  - 100: programa con frecuencia reconocida **y** formación diferenciada por rol.
+  - 75: programa con frecuencia sin formación especializada; o formación por rol sin periodicidad del programa general.
+  - 50: programa declarado sin periodicidad ni alcance por rol.
+  - Mencionar la formación sin declarar un programa → `evidencia_insuficiente`, no 0.
+  - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0** (docs/09 §60).
+- **Recomendación:** formalizar el programa de concienciación con frecuencia definida y formación específica para los roles privilegiados.
 
 ---
 

@@ -2502,3 +2502,58 @@ nueva en `good/respuesta-incidentes.md`. `mid` se queda sin él a propósito: su
 cambios (el pipeline golden no tiene `doc.claim`); `ruff` limpio. **61 de 106 subcategorías
 (57,5 %)**, 22/22 categorías. `docs/12 §5` ya no tiene deuda de la Oleada 0.
 
+## 77. Oleada B (3/4): la función Gobernar completa, 31/31 (`criteria.yml` v17)
+
+**Por qué Gobernar y no un porcentaje.** GV estaba en 18/31 con tres categorías a medias: `GV.RM`
+2/7, `GV.RR` 2/4 y `GV.SC` 4/10. Completar una función entera es una afirmación verificable ("las
+siete subcategorías de la estrategia de riesgo tienen criterio") frente a un porcentaje global, que
+no dice de qué. Y es la función donde el prototipo es más creíble: es toda documental, así que no
+promete observación técnica que no tiene.
+
+**Trece facetas, una por subcategoría.** No se añadió ningún criterio: los tres criterios de GV que
+ya existían pasan a declarar su categoría completa, y cada subcategoría nueva entra con **su propio
+campo** en el contenido de la afirmación. Un campo compartido no serviría: si `GV.SC-09` se declarara
+por el mismo dato que `GV.SC-01`, serían la misma afirmación contada dos veces.
+
+| Criterio | Categoría | Facetas nuevas |
+|---|---|---|
+| `CRI-GV-03` | `GV.RM` 2/7 → **7/7** | `integracion_empresarial`, `opciones_respuesta`, `lineas_comunicacion`, `metodo_estandarizado`, `oportunidades_estrategicas` |
+| `CRI-GV-02` | `GV.RR` 2/4 → **4/4** | `recursos_asignados`, `practicas_rh` |
+| `CRI-GV-06` | `GV.SC` 4/10 → **10/10** | `integracion_riesgo`, `debida_diligencia`, `riesgos_monitoreados`, `en_respuesta_incidentes`, `monitoreo_ciclo_vida`, `terminacion` |
+
+**Anclas de amplitud, y por qué eran obligatorias.** Si el 100 de `CRI-GV-06` siguiera dependiendo
+solo de que exista un programa, las diez subcategorías de `GV.SC` se sostendrían en una sola frase
+del documento: *eso* sería inflar la cobertura. El puntaje mide ahora **cuántas de las nueve
+prácticas declara el texto** (≥7 → 100, 4–6 → 75, 1–3 → 50, el programa pelado → 25), reutilizando
+el patrón `_CAMPOS` que el propio criterio ya traía de la Oleada A. `CRI-GV-03` hace lo mismo con tres
+de cinco facetas para el 100, y `CRI-GV-02` exige las dos: **nombrar a un CISO no es dotar a la
+función**.
+
+**El efecto es a la baja, a propósito.** Un documento que antes sacaba 100 en `CRI-GV-03` por fijar
+objetivos y tolerancia ahora saca 75 si no dice cómo se calculan los riesgos ni por dónde se
+comunican. Los tramos bajos también bajan un escalón (el caso genérico pasa de 50 a 25). Declarar
+más subcategorías tiene que costar más evidencia; si no, la cobertura sube y el puntaje se vuelve más
+fácil al mismo tiempo, que es exactamente la combinación que no se puede defender.
+
+**`docs/03` llevaba tres criterios sin ficha.** `CRI-GV-05`, `CRI-GV-06` y `CRI-PR-07` entraron en la
+Oleada A sin su ficha en la matriz, aunque la cabecera del propio documento dice que las reglas de
+esa matriz **describen el código** y se actualizan en el mismo commit. La tabla decía "Govern | 6" y
+había cuatro fichas. Escritas y contrastadas contra las reglas línea por línea (`gv05_org_context.py`
+da 75 con tres o cuatro campos, no con cuatro; `pr07_awareness.py` da 75 también cuando hay
+formación por rol sin periodicidad). Ahora hay 28 fichas para 28 criterios.
+
+**Un solo bump de prompt.** `extract_v4`, y los dos bloques de facetas van en un commit en vez de
+dos: separarlos obligaba a publicar dos versiones de prompt para un mismo cambio, o a repetir el
+agujero de reproducibilidad que §76 acababa de cerrar. Se eliminó además `extract_v2.txt`, que había
+quedado como copia huérfana: el repositorio mantiene un solo archivo de prompt por paso, el de la
+versión vigente.
+
+**Las fixtures.** `good` gana las trece facetas repartidas en tres documentos (gobierno y
+proveedores, gestión de riesgos, roles). `mid` gana solo la tolerancia y las opciones de respuesta:
+se queda en 75 en `CRI-GV-03`, sus roles siguen sin autoridad (50) y **no tiene programa de
+proveedores**, así que `CRI-GV-06` sigue en silencio documental. `gaps` no se toca.
+
+**Verificación:** 630 tests (`CRI-GV-06` pasa a estar fijado por tramos con `parametrize`, siete
+casos de 0 a 9 prácticas); goldens sin cambios (ninguno de estos criterios tiene evidencia técnica);
+`ruff` limpio. **74 de 106 subcategorías (69,8 %)**, **GV 31/31** y 22/22 categorías.
+

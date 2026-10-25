@@ -7,6 +7,14 @@ pagos por encima del 99,5 % y no exponer datos personales de clientes. La tolera
 cuatro horas de interrupcion por mes y ninguna exposicion de datos personales. La responsable de
 estos objetivos es la Gerente de Operaciones.
 
+El riesgo de ciberseguridad no se gestiona por separado: se consolida en el registro de riesgo
+empresarial que revisa la Junta cada trimestre. La estrategia establece las cuatro opciones de
+respuesta admitidas para cada riesgo -- mitigar, transferir, aceptar o evitar -- y quien puede
+decidir cada una. El metodo de calculo es unico para toda la organizacion: una matriz de impacto por
+probabilidad de cinco niveles, con los mismos criterios de categorizacion y priorizacion para todas
+las areas. Las lineas de comunicacion del riesgo estan definidas: cada area reporta a su responsable
+de riesgo, este al CISO y el CISO al comite de seguridad, con un informe trimestral a la Junta.
+
 ## Proceso de evaluacion de riesgos
 
 El proceso de evaluacion de riesgos se ejecuta cada semestre: se identifican amenazas por activo, se

@@ -94,15 +94,35 @@ def test_gv02_sin_claims_es_insuficiente():
     assert gv02_roles.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
 
 
-def test_gv02_roles_con_autoridad_es_100():
-    evidence = [_claim("role_assigned", {"roles": [{"rol": "CISO", "autoridad": "aprobar"}]})]
+def test_gv02_roles_con_autoridad_recursos_y_practicas_rh_es_100():
+    evidence = [
+        _claim(
+            "role_assigned",
+            {
+                "roles": [{"rol": "CISO", "autoridad": "aprobar"}],
+                "recursos_asignados": True,
+                "practicas_rh": True,
+            },
+        )
+    ]
     result = gv02_roles.evaluate(evidence)
     assert (result.estado, result.final_score) == (Estado.EVALUADO, 100)
 
 
-def test_gv02_roles_sin_autoridad_es_75():
+def test_gv02_nombrar_un_ciso_no_es_dotar_la_funcion():
+    """GV.RR-03/04: con autoridad pero sin recursos ni practicas de RH, el tope es 75."""
+
+    evidence = [_claim("role_assigned", {"roles": [{"rol": "CISO", "autoridad": "aprobar"}]})]
+
+    result = gv02_roles.evaluate(evidence)
+
+    assert result.final_score == 75
+    assert "GV.RR-03" in result.explanation and "GV.RR-04" in result.explanation
+
+
+def test_gv02_roles_sin_autoridad_es_50():
     evidence = [_claim("role_assigned", {"roles": [{"rol": "CISO"}]})]
-    assert gv02_roles.evaluate(evidence).final_score == 75
+    assert gv02_roles.evaluate(evidence).final_score == 50
 
 
 def test_gv02_no_declarado_es_insuficiente_no_0():
@@ -117,19 +137,56 @@ def test_gv02_no_declarado_es_insuficiente_no_0():
 # --- CRI-GV-03 ---
 
 
-def test_gv03_con_tolerancia_es_100():
-    evidence = [_claim("risk_tolerance", {"objetivos_riesgo": "x", "tolerancia": "baja"})]
+def test_gv03_estrategia_desarrollada_es_100():
+    evidence = [
+        _claim(
+            "risk_tolerance",
+            {
+                "objetivos_riesgo": "x",
+                "tolerancia": "baja",
+                "integracion_empresarial": True,
+                "metodo_estandarizado": True,
+                "lineas_comunicacion": True,
+            },
+        )
+    ]
     assert gv03_risk_tolerance.evaluate(evidence).final_score == 100
 
 
-def test_gv03_sin_tolerancia_es_75():
-    evidence = [_claim("risk_tolerance", {"objetivos_riesgo": "x"})]
+def test_gv03_objetivos_y_tolerancia_sin_estrategia_es_75():
+    """GV.RM tiene siete resultados: fijar objetivos y tolerancia cubre dos."""
+
+    evidence = [_claim("risk_tolerance", {"objetivos_riesgo": "x", "tolerancia": "baja"})]
+
+    result = gv03_risk_tolerance.evaluate(evidence)
+
+    assert result.final_score == 75
+    assert "GV.RM-06" in result.explanation
+
+
+def test_gv03_dos_facetas_no_alcanzan_el_100():
+    evidence = [
+        _claim(
+            "risk_tolerance",
+            {
+                "objetivos_riesgo": "x",
+                "tolerancia": "baja",
+                "integracion_empresarial": True,
+                "opciones_respuesta": True,
+            },
+        )
+    ]
     assert gv03_risk_tolerance.evaluate(evidence).final_score == 75
 
 
-def test_gv03_generico_es_50():
-    evidence = [_claim("risk_tolerance", {})]
+def test_gv03_sin_tolerancia_es_50():
+    evidence = [_claim("risk_tolerance", {"objetivos_riesgo": "x"})]
     assert gv03_risk_tolerance.evaluate(evidence).final_score == 50
+
+
+def test_gv03_generico_es_25():
+    evidence = [_claim("risk_tolerance", {})]
+    assert gv03_risk_tolerance.evaluate(evidence).final_score == 25
 
 
 # --- CRI-ID-03 ---
