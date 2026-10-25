@@ -2442,11 +2442,16 @@ propio ("solo siem-corp"). Un sistema que alerta es detección; dos que ven lo m
 explícita. Misma lógica que el silencio documental (§60) — que el dato falte no prueba que la
 práctica falte.
 
-**La demo tuvo que ganar un segundo sistema.** Ningún evento de los paquetes declaraba `fuente`, así
-que todo patrón tenía un solo origen y `good` se habría quedado en 75 sin que ningún test lo notara.
+**La demo tuvo que ganar un segundo sistema.** Ningún evento declaraba `fuente`, así que todo patrón
+tenía un solo origen y el escenario conforme se habría quedado en 75 sin que ningún test lo notara
+(los puntajes documentales no están fijados: `test_demo_bundles` solo fija los técnicos).
 `flujo-correcto-demo.jsonl` ahora tiene el SIEM y un EDR levantando la misma alerta (`e1-006` y
 `e1-006b`), con el segundo **después** del triaje para no mover `alerta.desde` y con ello el
-disparador D2. Los otros dos paquetes quedan con un solo origen a propósito.
+disparador D2. Los otros dos logs quedan con un solo origen a propósito.
+
+Conviene no confundirlos: en la UI el **paquete de evidencia** y el **log de eventos** son dos
+botones independientes (`frontend/src/data/demo.ts`), así que "el escenario conforme" es el paquete
+`good` más el log *Flujo correcto*, no un par fijo.
 
 **Verificación:** 611 tests (tres nuevos de DE-02 y dos de `test_event_source.py`, que comprueban
 que la lista llega al valor de la evidencia y no solo al `source_id`); goldens sin un solo cambio —

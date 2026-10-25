@@ -38,6 +38,9 @@ def _claim(
 
 
 def _pattern(patron: str):
+    """A proposito en `log.pattern@1`, sin `fuentes`: ninguno de estos criterios lee la lista,
+    asi que estos casos son la prueba de que una evaluacion anterior al bump (docs/09 §75) sigue
+    evaluandose igual."""
     return EvidenceInstance(
         type_id="log.pattern",
         type_version=1,
