@@ -37,11 +37,15 @@ def test_methodology_exposes_implementation_coverage(api_client):
         "ratio",
         "categorias_cubiertas",
         "categorias_totales",
+        "categorias_completas",
+        "categorias_incompletas",
         "por_funcion",
         "categorias_sin_criterio",
     }
     assert cobertura["subcategorias_totales"] == 106
     assert cobertura["categorias_totales"] == 22
+    # Completas + incompletas tiene que cerrar contra el total, o la UI mostraria un hueco.
+    assert cobertura["categorias_completas"] + len(cobertura["categorias_incompletas"]) == 22
     assert set(cobertura["por_funcion"]) == {"GV", "ID", "PR", "DE", "RS", "RC"}
     assert "nucleo_csf_version" in body
 

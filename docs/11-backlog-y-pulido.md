@@ -125,14 +125,15 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **28 de 28** criterios de docs/03 (`criteria.yml` v14). Cobertura por función:
+El catálogo implementa **28 de 28** criterios de docs/03 (`criteria.yml` v18). Cobertura por función:
 GV 6/6 · ID 5/5 · PR 7/7 · DE 3/3 · RS 4/4 · RC 3/3.
-- **Cobertura del marco (AMP-04):** **57 de 106 subcategorías (53,8 %) y 22 de 22 categorías**,
-  calculada por el sistema (`GET /methodology`) y visible en el dashboard (docs/09 §70-§73).
-  `categorias_sin_criterio` quedó vacía con la Oleada A: ya no hay ninguna categoría del CSF sin un
-  criterio que la evalúe. Lo que falta para subir el porcentaje son subcategorías dentro de
-  categorías ya cubiertas (sobre todo las seis restantes de `GV.SC` y `PR.DS`), más SUB-01…SUB-03 de
-  docs/12 §5.
+- **Cobertura del marco (AMP-04):** **74 de 106 subcategorías (69,8 %), 22 de 22 categorías y 10
+  completas**, calculada por el sistema (`GET /methodology`) y visible en el dashboard
+  (docs/09 §70-§79). `categorias_sin_criterio` quedó vacía con la Oleada A y la Oleada B dejó la
+  **función Gobernar completa (31/31)**, además de cerrar la deuda de SUB-01…SUB-03 de docs/12 §5.
+  Lo que falta ahora está en `ID`, `PR` y `DE`: las categorías más lejanas son `PR.AA` (1/6),
+  `PR.PS` (2/6), `PR.IR` (1/4), `ID.RA` (4/10) e `ID.AM` (4/7), y en su mayoría pedirían señales
+  técnicas que los adaptadores todavía no leen, no más campos de afirmación.
 - **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
 

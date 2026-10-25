@@ -500,13 +500,26 @@ function CatalogCoverage({ coverage }: { coverage: ImplementationCoverage }) {
           const [cubiertas, totales] = coverage.por_funcion[key] ?? [0, 0];
           const accent = FUNCTION_ACCENTS[key] ?? '#94a3b8';
           const ancho = totales > 0 ? (cubiertas / totales) * 100 : 0;
+          const funcionCompleta = totales > 0 && cubiertas === totales;
           return (
-            <div key={key} className="rounded-lg border border-white/[0.06] bg-ink-900/40 p-3">
+            <div
+              key={key}
+              className={`rounded-lg border bg-ink-900/40 p-3 ${
+                funcionCompleta ? 'border-emerald-500/30' : 'border-white/[0.06]'
+              }`}
+              title={
+                funcionCompleta
+                  ? `Función ${key} completa: sus ${totales} subcategorías tienen criterio`
+                  : `${totales - cubiertas} subcategorías de ${key} todavía sin criterio`
+              }
+            >
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="text-xs font-bold" style={{ color: accent }}>
                   {key}
                 </span>
-                <span className="text-xs text-slate-400">
+                <span
+                  className={`text-xs ${funcionCompleta ? 'text-emerald-300' : 'text-slate-400'}`}
+                >
                   {cubiertas}/{totales}
                 </span>
               </div>
@@ -526,6 +539,15 @@ function CatalogCoverage({ coverage }: { coverage: ImplementationCoverage }) {
           Categorías con criterio:{' '}
           <span className="font-semibold text-slate-300">
             {coverage.categorias_cubiertas} de {coverage.categorias_totales}
+          </span>
+        </span>
+        <span
+          className="text-xs text-slate-500"
+          title="Categorías con TODAS sus subcategorías declaradas, no solo con alguna"
+        >
+          · completas:{' '}
+          <span className="font-semibold text-slate-300">
+            {coverage.categorias_completas} de {coverage.categorias_totales}
           </span>
         </span>
         {completo ? (

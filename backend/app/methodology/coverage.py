@@ -30,6 +30,12 @@ class CoberturaImplementacion:
     #: con el 22 escrito a mano en la UI.
     categorias_cubiertas: int
     categorias_totales: int
+    #: Categorias con **todas** sus subcategorias declaradas. Distinto de `categorias_cubiertas`,
+    #: que solo exige una: desde que ninguna categoria esta vacia, "cubiertas" dejo de distinguir
+    #: nada y la afirmacion que importa es la completitud (p. ej. "la funcion Gobernar completa").
+    categorias_completas: int
+    #: Las que no lo estan, con lo que les falta: `GV.SC -> 0` cuando esta completa, nunca aparece.
+    categorias_incompletas: dict[str, int]
     por_funcion: dict[str, tuple[int, int]]
     categorias_sin_criterio: list[str]
     criterios_por_subcategoria: dict[str, list[str]]
@@ -51,6 +57,7 @@ def compute(
 
     por_funcion: dict[str, tuple[int, int]] = {}
     categorias_sin_criterio: list[str] = []
+    categorias_incompletas: dict[str, int] = {}
     categorias_totales = 0
     for funcion in nucleo.funciones:
         de_la_funcion = 0
@@ -63,6 +70,8 @@ def compute(
             cubiertas_funcion += len(cubiertas_categoria)
             if not cubiertas_categoria:
                 categorias_sin_criterio.append(categoria.id)
+            if len(cubiertas_categoria) < len(ids):
+                categorias_incompletas[categoria.id] = len(ids) - len(cubiertas_categoria)
         por_funcion[funcion.id] = (cubiertas_funcion, de_la_funcion)
 
     return CoberturaImplementacion(
@@ -71,6 +80,8 @@ def compute(
         ratio=len(cubiertas) / totales if totales else 0.0,
         categorias_cubiertas=categorias_totales - len(categorias_sin_criterio),
         categorias_totales=categorias_totales,
+        categorias_completas=categorias_totales - len(categorias_incompletas),
+        categorias_incompletas=categorias_incompletas,
         por_funcion=por_funcion,
         categorias_sin_criterio=categorias_sin_criterio,
         criterios_por_subcategoria=criterios_por_subcategoria,

@@ -105,6 +105,42 @@ def test_coverage_reports_categories_without_any_criterion():
     assert cobertura.categorias_cubiertas == 22 - len(cobertura.categorias_sin_criterio)
 
 
+def test_coverage_distinguishes_a_covered_category_from_a_complete_one():
+    """Desde que ninguna categoria esta vacia, `categorias_cubiertas` dejo de distinguir nada:
+    la afirmacion que importa es cuantas estan completas."""
+
+    methodology = load_methodology(METHODOLOGY_DIR)
+    cobertura = methodology.cobertura_implementacion()
+
+    por_categoria: dict[str, set[str]] = {}
+    for funcion in methodology.nucleo_csf.funciones:
+        for categoria in funcion.categorias:
+            por_categoria[categoria.id] = {s.id for s in categoria.subcategorias}
+    declaradas = set(cobertura.criterios_por_subcategoria)
+
+    esperado = {
+        cid: len(ids - declaradas) for cid, ids in por_categoria.items() if ids - declaradas
+    }
+    assert cobertura.categorias_incompletas == esperado
+    assert cobertura.categorias_completas == 22 - len(esperado)
+    # Una categoria completa nunca aparece en la lista de incompletas, ni con un 0.
+    assert all(faltan > 0 for faltan in cobertura.categorias_incompletas.values())
+
+
+def test_a_complete_function_has_every_one_of_its_categories_complete():
+    """La afirmacion "la funcion Gobernar completa" (docs/09 §77) la cierra el sistema."""
+
+    methodology = load_methodology(METHODOLOGY_DIR)
+    cobertura = methodology.cobertura_implementacion()
+
+    cubiertas, totales = cobertura.por_funcion["GV"]
+    assert cubiertas == totales
+    categorias_gv = {
+        c.id for f in methodology.nucleo_csf.funciones if f.id == "GV" for c in f.categorias
+    }
+    assert categorias_gv.isdisjoint(cobertura.categorias_incompletas)
+
+
 def test_coverage_maps_each_subcategory_to_its_criteria():
     methodology = load_methodology(METHODOLOGY_DIR)
     cobertura = methodology.cobertura_implementacion()
@@ -131,3 +167,5 @@ def test_compute_handles_an_empty_catalog(nucleo):
     assert len(cobertura.categorias_sin_criterio) == 22
     assert cobertura.categorias_cubiertas == 0
     assert cobertura.categorias_totales == 22
+    assert cobertura.categorias_completas == 0
+    assert len(cobertura.categorias_incompletas) == 22
