@@ -17,6 +17,13 @@ decision de declarar o descartar.
 Si el equipo de guardia no contiene el incidente en una hora, se escala al CISO; si no se resuelve en
 cuatro horas, a la Direccion General.
 
+## Cierre de la respuesta e inicio de la recuperacion
+
+La respuesta se da por cerrada y se inicia la recuperacion cuando se cumplen los tres criterios: la
+contencion esta confirmada, no quedan indicadores de compromiso activos y el CISO autoriza el
+restablecimiento del servicio. A partir de ese momento aplica el procedimiento de recuperacion
+descrito en el plan de continuidad.
+
 ## Notificacion
 
 Ante un incidente confirmado se notifica de inmediato al CISO, al Jefe de Infraestructura y al area

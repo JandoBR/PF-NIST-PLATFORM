@@ -3,6 +3,12 @@
 Mixto: plan documentado (`process_defined` de respuesta y/o `escalation_path`) mas evidencia
 operativa (`log.pattern(escalation_done)`). La regla de justicia (docs/06 §5) se mantiene:
 `incident_declared` sin `escalation_done` en una ventana completa es falla de respuesta.
+
+`RS.MA-05` ("se aplican los criterios para iniciar la recuperacion del incidente") entra por
+`contenido.criterios_recuperacion`, un campo propio y **no** `criterios_activacion`: en un
+proceso de respuesta ese campo son los criterios para activar la respuesta, no para pasar a la
+recuperacion, y ademas es el que `CRI-RC-01` ya lee del proceso de recuperacion en su ancla del
+100. Un plan sin el traspaso documentado no llega al 100.
 """
 
 from __future__ import annotations
@@ -12,7 +18,7 @@ from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-RS-01"
-CRITERION_VERSION = 1
+CRITERION_VERSION = 2
 
 
 def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance | None:
@@ -69,12 +75,22 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     contenido = plan.value.get("contenido", {}) if plan is not None else {}
-    completo = bool(plan is not None and contenido.get("pasos") and contenido.get("responsables"))
+    completo = bool(
+        plan is not None
+        and contenido.get("pasos")
+        and contenido.get("responsables")
+        and contenido.get("criterios_recuperacion")
+    )
     ids = [e.id for e in (plan, escalation, escalado, declarado) if e is not None]
 
     if escalado is not None:
         score = 100 if completo else 75
-        detalle = "plan documentado completo" if completo else "plan documentado parcial"
+        detalle = (
+            "plan documentado completo"
+            if completo
+            else "plan documentado parcial (faltan pasos, responsables o los criterios para"
+            " iniciar la recuperacion)"
+        )
         return result(
             CRITERION_ID,
             Estado.EVALUADO,

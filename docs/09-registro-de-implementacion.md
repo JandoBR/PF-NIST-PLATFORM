@@ -2452,3 +2452,53 @@ disparador D2. Los otros dos paquetes quedan con un solo origen a propósito.
 que la lista llega al valor de la evidencia y no solo al `source_id`); goldens sin un solo cambio —
 el pipeline golden es Terraform + Ansible, sin eventos. `ruff` limpio. Sigue fallando solo
 `test_uploads.py::test_windows_separator_is_rejected`, preexistente y de Windows.
+
+## 76. Oleada B (2/4): la deuda de la Oleada 0, cerrada (`criteria.yml` v16)
+
+**Las tres que faltaban.** `docs/12 §5` guardaba `ID.RA-04`, `DE.AE-03` y `RS.MA-05` con el coste de
+hacerlas honestas, para no re-razonarlas. `DE.AE-03` se cerró en §75; aquí van las otras dos, más
+`ID.IM-04`, que la Oleada A había dejado fuera por el mismo motivo (ningún campo la evidenciaba).
+
+| Subcategoría | Campo nuevo | Dónde decide |
+|---|---|---|
+| `ID.RA-04` | `impactos`, `probabilidades` | ancla del 100 de `CRI-ID-03`: registro y priorización ya no bastan |
+| `RS.MA-05` | `criterios_recuperacion` | parte de "plan completo" en `CRI-RS-01` |
+| `ID.IM-04` | `planes_actualizados` | condición del 100 de `CRI-ID-05`, junto al ejercicio observado |
+
+**Una desviación del plan escrito, a propósito.** `docs/12 SUB-03` proponía que `CRI-RS-01` leyera
+`criterios_activacion`, que ya existe. No se hizo: en un proceso de **respuesta**, ese campo son los
+criterios para *activar la respuesta*, no para pasar a la recuperación, que es lo que dice
+`RS.MA-05`. Y es además el campo que `CRI-RC-01` lee del proceso de recuperación en su ancla del 100
+(`rc01_recovery_procedure.py:59-63`) — el choque que el propio documento advertía. Un campo propio
+cuesta una línea más de prompt y deja las dos subcategorías separadas.
+
+**`CRI-ID-03` pasa de tres anclas a cinco.** Cubre cinco subcategorías y no las distinguía: un
+proceso con pasos pero sin registro ni priorización evidencia `ID.RA-01` y nada más, así que baja a
+50 (antes 75), y el caso genérico a 25 (antes 50). Es un ajuste a la baja deliberado: con `ID.RA-04`
+declarada, el tramo alto tiene que costar más.
+
+**El prompt tenía un agujero de reproducibilidad.** `PROMPT_VERSION` nombra el archivo del *system
+prompt*, pero el prompt efectivo lleva además los campos de `_CONTENT_FIELDS`. El salto v1→v2 se hizo
+precisamente por un cambio de campos (`process_defined.proceso` ganó `respuesta`) sin tocar el
+archivo. La Oleada A añadió **tres tipos de afirmación y una opción de enum sin bumpear**, así que
+dos corridas con prompts distintos quedaron anotadas como la misma en el manifiesto de
+`core/reproducibility.py`. Ahora es `extract_v3` y el comentario del módulo dice que un cambio en
+`_CONTENT_FIELDS` obliga a bumpear.
+
+**`"false"` es verdadero en Python.** Con los campos nuevos, las reglas deciden puntaje leyendo
+verdad simple (`contenido.get("impactos")`). Un modelo que responda `"false"` o `"parcialmente, ver
+anexo"` donde se pide un booleano producía un **falso positivo silencioso** justo en el tramo alto.
+`_sanitize_content` normaliza ahora los booleanos declarados (`_BOOL_FIELDS`) y descarta lo que no
+sea interpretable, que queda en `_descartados` como el resto de E5. Es la defensa que hace creíble
+todo lo que viene después, donde casi todo campo nuevo es booleano.
+
+**Las fixtures ya decían dos de las tres cosas.** `good/gestion-de-riesgos.md` ya dice "se estima
+impacto y probabilidad" y su sección de mejora continua ya dice que los ajustes "se incorporan al
+plan de respuesta y al de continuidad". Solo faltaba el traspaso a recuperación, que es una sección
+nueva en `good/respuesta-incidentes.md`. `mid` se queda sin él a propósito: su `CRI-RS-01` baja de
+100 a 75 en una corrida con IA, que es la diferencia que el paquete debe mostrar.
+
+**Verificación:** 615 tests (cuatro anclas nuevas y dos del normalizador de booleanos); goldens sin
+cambios (el pipeline golden no tiene `doc.claim`); `ruff` limpio. **61 de 106 subcategorías
+(57,5 %)**, 22/22 categorías. `docs/12 §5` ya no tiene deuda de la Oleada 0.
+

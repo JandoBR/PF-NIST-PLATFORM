@@ -17,10 +17,18 @@ from app.ai.quotes import quote_in_text
 from app.ai.schemas import ExtractionResponse
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
 
+#: El texto del sistema (`prompts/extract_vN.txt`) no es el prompt completo: `_contenido_esperado`
+#: le agrega los campos de `_CONTENT_FIELDS` para los tipos que pide el catalogo. Un cambio ahi
+#: cambia el prompt efectivo, asi que **bumpea esta version** -- es lo unico que
+#: `core/reproducibility.py` registra de U1, y si no se mueve dos corridas distintas quedan
+#: anotadas como la misma.
 #: v2: `process_defined.proceso` ofrece `respuesta` (plan de respuesta a incidentes). Sin esa
 #: opcion el modelo no podia etiquetar un plan de respuesta y `CRI-RS-01` no lo encontraba
 #: (docs/09 §59).
-PROMPT_VERSION = "extract_v2"
+#: v3: `process_defined` suma impactos/probabilidades (ID.RA-04), criterios_recuperacion
+#: (RS.MA-05) y planes_actualizados (ID.IM-04); regulariza tambien los tipos y la opcion de enum
+#: que la Oleada A habia agregado sin bumpear (docs/09 §76).
+PROMPT_VERSION = "extract_v3"
 
 #: Limitacion de una afirmacion cuya cita no aparece en el texto analizado (E8).
 CITA_NO_LOCALIZABLE = "cita no localizable en el texto analizado: no cuenta para puntuar"
@@ -49,7 +57,13 @@ _CONTENT_FIELDS: dict[str, str] = {
         " pasos (string),"
         " responsables (string|null), criterios_activacion (string|null),"
         " criterios_declaracion (bool|null), registro_riesgos (bool|null),"
-        " priorizacion (bool|null), metricas (bool|null), ajustes (bool|null)"
+        " priorizacion (bool|null), metricas (bool|null), ajustes (bool|null),"
+        " impactos (bool|null: se registran los impactos potenciales de cada riesgo),"
+        " probabilidades (bool|null: se registra la probabilidad de cada riesgo),"
+        " criterios_recuperacion (bool|null: el documento dice cuando se da por terminada la"
+        " respuesta y se inicia la recuperacion),"
+        " planes_actualizados (bool|null: los planes de respuesta y otros planes se mantienen y"
+        " actualizan con lo aprendido)"
     ),
     "backup_policy": (
         "respaldo (bool), verificacion_integridad (bool|null), retencion (string|null)"
@@ -79,6 +93,45 @@ _CONTENT_FIELDS: dict[str, str] = {
     ),
 }
 
+
+#: Campos que las reglas leen como booleanos. Las reglas preguntan por verdad simple
+#: (`contenido.get("programa")`), y en Python un `"false"` **string** es verdadero: un modelo que
+#: responde texto donde se pide un bool produciria un falso positivo silencioso, justo en los
+#: campos que deciden puntaje. Se normalizan aqui, una sola vez, antes de que ninguna regla mire.
+_BOOL_FIELDS: dict[str, frozenset[str]] = {
+    "process_defined": frozenset(
+        {
+            "criterios_declaracion",
+            "registro_riesgos",
+            "priorizacion",
+            "metricas",
+            "ajustes",
+            "impactos",
+            "probabilidades",
+            "criterios_recuperacion",
+            "planes_actualizados",
+        }
+    ),
+    "backup_policy": frozenset({"respaldo", "verificacion_integridad"}),
+    "supplier_program": frozenset(
+        {"programa", "roles", "proveedores_priorizados", "requisitos_contractuales"}
+    ),
+    "training_program": frozenset({"programa", "roles_especializados"}),
+    "exposure_policy": frozenset({"bases_publicas_permitidas"}),
+}
+
+#: Lo que se acepta como bool escrito en texto. Cualquier otra cosa se descarta: inventar una
+#: interpretacion seria peor que tratar el campo como ausente.
+_BOOL_TEXTO = {
+    "true": True,
+    "false": False,
+    "si": True,
+    "sí": True,
+    "no": False,
+    "yes": True,
+    "1": True,
+    "0": False,
+}
 
 #: Frecuencias de revision aceptadas (docs/05 §2.3 E5); otro valor se descarta.
 _FRECUENCIAS = {"mensual", "trimestral", "semestral", "anual"}
@@ -126,6 +179,19 @@ def _sanitize_content(tipo: str, contenido: dict) -> dict:
             if len(validos) != len(roles):
                 descartados.append(f"roles: {len(roles) - len(validos)} entrada(s) invalida(s)")
             limpio["roles"] = validos
+
+    for campo in _BOOL_FIELDS.get(tipo, ()):
+        if campo not in limpio:
+            continue
+        valor = limpio[campo]
+        if valor is None or isinstance(valor, bool):
+            continue
+        normalizado = _BOOL_TEXTO.get(str(valor).strip().lower())
+        if normalizado is None:
+            limpio.pop(campo)
+            descartados.append(f"{campo}={valor!r}: no es un booleano interpretable")
+        else:
+            limpio[campo] = normalizado
 
     if descartados:
         limpio["_descartados"] = descartados

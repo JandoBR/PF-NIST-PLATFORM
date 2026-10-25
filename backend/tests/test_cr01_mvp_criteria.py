@@ -135,16 +135,47 @@ def test_gv03_generico_es_50():
 # --- CRI-ID-03 ---
 
 
-def test_id03_proceso_con_registro_es_100():
+def test_id03_proceso_con_registro_impactos_y_probabilidades_es_100():
     evidence = [
-        _claim("process_defined", {"proceso": "riesgos", "pasos": "x", "registro_riesgos": True})
+        _claim(
+            "process_defined",
+            {
+                "proceso": "riesgos",
+                "pasos": "x",
+                "registro_riesgos": True,
+                "impactos": True,
+                "probabilidades": True,
+            },
+        )
     ]
     assert id03_risk_assessment.evaluate(evidence).final_score == 100
 
 
-def test_id03_proceso_sin_registro_es_75():
+def test_id03_registro_sin_impactos_ni_probabilidades_es_75():
+    """ID.RA-04 pide impactos y probabilidades registrados: un registro de riesgos sin ellos no
+    llega al 100 por muy priorizado que este."""
+
+    evidence = [
+        _claim(
+            "process_defined",
+            {"proceso": "riesgos", "pasos": "x", "registro_riesgos": True, "priorizacion": True},
+        )
+    ]
+
+    resultado = id03_risk_assessment.evaluate(evidence)
+
+    assert resultado.final_score == 75
+    assert "ID.RA-04" in resultado.explanation
+
+
+def test_id03_proceso_sin_registro_es_50():
     evidence = [_claim("process_defined", {"proceso": "riesgos", "pasos": "x"})]
-    assert id03_risk_assessment.evaluate(evidence).final_score == 75
+    assert id03_risk_assessment.evaluate(evidence).final_score == 50
+
+
+def test_id03_proceso_de_riesgos_generico_es_25():
+    evidence = [_claim("process_defined", {"proceso": "riesgos", "registro_riesgos": True})]
+    assert id03_risk_assessment.evaluate(evidence).final_score == 25
 
 
 def test_id03_no_toma_otro_proceso_por_traer_las_claves_en_null():

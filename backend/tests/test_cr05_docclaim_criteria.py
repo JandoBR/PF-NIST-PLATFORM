@@ -149,6 +149,19 @@ def test_pr02_sin_politica_tope_75():
 def _plan_completo() -> EvidenceInstance:
     return _claim(
         "process_defined",
+        {
+            "proceso": "respuesta",
+            "pasos": "1. 2.",
+            "responsables": "CISO",
+            # RS.MA-05: el plan dice cuando se cierra la respuesta y empieza la recuperacion.
+            "criterios_recuperacion": True,
+        },
+    )
+
+
+def _plan_sin_traspaso() -> EvidenceInstance:
+    return _claim(
+        "process_defined",
         {"proceso": "respuesta", "pasos": "1. 2.", "responsables": "CISO"},
     )
 
@@ -160,6 +173,18 @@ def test_rs01_plan_completo_con_escalamiento_scores_100():
 
 def test_rs01_plan_completo_sin_ventana_tope_75():
     assert rs01_response_plan.evaluate([_plan_completo()]).final_score == 75
+
+
+def test_rs01_plan_sin_criterios_de_recuperacion_no_llega_a_100():
+    """RS.MA-05: sin los criterios para iniciar la recuperacion el plan no esta completo, aunque
+    tenga pasos, responsables y escalamiento observado."""
+
+    evidence = [_window(), _pattern("escalation_done"), _plan_sin_traspaso()]
+
+    resultado = rs01_response_plan.evaluate(evidence)
+
+    assert resultado.final_score == 75
+    assert "criterios para iniciar la recuperacion" in resultado.explanation
 
 
 def test_rs01_plan_parcial_sin_ventana_scores_50():

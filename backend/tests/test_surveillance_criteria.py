@@ -287,14 +287,31 @@ def test_id05_without_documents_is_insufficient():
 
 
 def test_id05_improvement_cycle_with_an_observed_exercise_scores_100():
-    """ID.IM-02 (mejoras a partir de ejercicios) solo se sostiene con el ejercicio observado."""
+    """ID.IM-02 (mejoras a partir de ejercicios) solo se sostiene con el ejercicio observado;
+    ID.IM-04 exige ademas que los planes se mantengan con lo aprendido."""
 
+    evidence = [
+        _window(),
+        _pattern("restore_exercise_run"),
+        _claim(
+            "process_defined",
+            {"proceso": "mejora continua", "metricas": True, "planes_actualizados": True},
+        ),
+    ]
+    assert id05_improvement.evaluate(evidence).final_score == 100
+
+
+def test_id05_cycle_that_does_not_touch_the_plans_caps_at_75():
     evidence = [
         _window(),
         _pattern("restore_exercise_run"),
         _claim("process_defined", {"proceso": "mejora continua", "metricas": True}),
     ]
-    assert id05_improvement.evaluate(evidence).final_score == 100
+
+    resultado = id05_improvement.evaluate(evidence)
+
+    assert resultado.final_score == 75
+    assert "ID.IM-04" in resultado.explanation
 
 
 def test_id05_documented_cycle_without_exercise_caps_at_75():
