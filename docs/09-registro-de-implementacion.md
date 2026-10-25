@@ -2557,3 +2557,59 @@ proveedores**, así que `CRI-GV-06` sigue en silencio documental. `gaps` no se t
 casos de 0 a 9 prácticas); goldens sin cambios (ninguno de estos criterios tiene evidencia técnica);
 `ruff` limpio. **74 de 106 subcategorías (69,8 %)**, **GV 31/31** y 22/22 categorías.
 
+## 78. Oleada B (4/4): "10 categorías completas" lo cuenta el sistema
+
+**La métrica se había quedado corta.** `cobertura_implementacion` sabía decir si una categoría tiene
+**al menos** un criterio (`categorias_sin_criterio`, `categorias_cubiertas`). Eso era el indicador
+exacto mientras hubiera categorías vacías: cuando la lista se vaciara, estaría cerrado. Se vació en
+la Oleada A, y desde entonces `categorias_cubiertas` dice siempre 22 de 22 — dejó de distinguir
+nada.
+
+La afirmación de esta oleada es otra: **completitud**. "La función Gobernar completa" y "10 de las 22
+categorías completas" son hechos verificables, y el mismo razonamiento que puso `categorias_cubiertas`
+en el módulo y no en la UI (§71) aplica igual aquí: ese número no puede salir de una resta hecha a
+mano en una pantalla.
+
+**Qué se añadió.** `categorias_completas` (cuántas tienen **todas** sus subcategorías declaradas) y
+`categorias_incompletas` (categoría → cuántas le faltan). Se calculan en el bucle que
+`coverage.py` ya recorría, se exponen en `GET /methodology` y el contrato de la API comprueba que
+`completas + len(incompletas) == 22`, para que la pantalla no pueda mostrar un hueco. Una categoría
+completa **no** aparece en el diccionario, ni con un 0: la lista se lee como "lo que falta".
+
+**En pantalla.** El panel de cobertura del catálogo ya mostraba el desglose por función; ahora una
+función cuyas subcategorías están todas declaradas se marca con borde y cifra en verde, con un
+`title` que lo dice ("Función GV completa: sus 31 subcategorías tienen criterio"), y el pie añade
+"completas: 10 de 22" junto a "con criterio: 22 de 22". Las dos cifras se leen distintas porque
+miden cosas distintas.
+
+**El catálogo decía otra cosa que la matriz.** `CRI-GV-03` pasó a cubrir las siete subcategorías de
+`GV.RM` pero su `titulo` seguía siendo "Objetivos de riesgo y tolerancia establecidos", y las
+recomendaciones de `GV-02`, `GV-03` y `GV-06` seguían pidiendo solo los dos o tres resultados con los
+que entraron. Un criterio que evalúa una categoría entera y recomienda un tercio de ella produce
+planes incompletos, así que `criteria.yml` sube a **v18** con los títulos y las recomendaciones
+alineados a lo que las reglas miden hoy. Se detectó mirando la pantalla, no los tests: ninguno
+compara el título del catálogo con la ficha de `docs/03`.
+
+**Un test fija la afirmación del informe.** `test_a_complete_function_has_every_one_of_its_categories_complete`
+comprueba que `por_funcion["GV"]` cierra y que ninguna categoría de GV aparece como incompleta. Si
+alguien retira una subcategoría de GV, el test cae: la frase "Gobernar completa" no se puede quedar
+en el documento sin el código que la sostiene.
+
+**Estado final de la Oleada B:** **74 de 106 subcategorías (69,8 %)**, **22/22 categorías**, **10
+completas** (`GV.OC`, `GV.RM`, `GV.RR`, `GV.PO`, `GV.OV`, `GV.SC`, `ID.IM`, `PR.AT`, `RS.MA`,
+`RS.MI`) y la **función Gobernar en 31/31**. Lo que queda está en `ID`, `PR` y `DE`, y en su mayoría
+pide señales técnicas nuevas en los adaptadores, no más campos de afirmación documental.
+
+**Lo que esta oleada no puede verificar sola.** Diecisiete campos de afirmación nuevos, y todos
+deciden puntaje. `tests/test_ai_golden.py` usa un cliente oráculo que responde la propia anotación:
+mide el arnés, no al modelo. La corrida real es `python -m app.main eval-ai`, cuesta dinero y
+necesita `DEEPSEEK_API_KEY`. La Oleada A ya dejó tres tipos de afirmación sin medir contra el modelo;
+con esta son **tres tipos y diecisiete campos**, así que correr `eval-ai` antes de la demo pasa de
+recomendable a necesario. Si U1 no extrae estos campos, `GV.RM`, `GV.RR` y `GV.SC` se quedan en los
+tramos bajos y "Gobernar completa" queda cierto en el catálogo y vacío en pantalla — que es
+exactamente la diferencia entre las dos coberturas que `docs/01 §7` obliga a no mezclar.
+
+**Verificación:** 632 tests, `ruff check`/`format` limpios, `typecheck` y `lint` del frontend
+limpios. Sigue fallando solo `test_uploads.py::test_windows_separator_is_rejected`, preexistente y
+específico de Windows.
+

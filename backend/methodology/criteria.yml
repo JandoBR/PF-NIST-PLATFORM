@@ -39,7 +39,9 @@
 # v17: Oleada B (3/4) - la funcion Gobernar queda completa (31/31): GV-02 declara GV.RR-03/04,
 #      GV-03 las siete de GV.RM y GV-06 las diez de GV.SC, con una faceta de afirmacion por
 #      subcategoria y anclas de amplitud (prompt extract_v4, docs/09 §77).
-version: 17
+# v18: Oleada B (4/4) - GV-02, GV-03 y GV-06 ajustan titulo y recomendacion a lo que ahora cubren:
+#      categorias enteras, no los dos o tres resultados con que entraron (docs/09 §78).
+version: 18
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -66,14 +68,14 @@ criterios:
     peso: 5
     ai_adjustable: true
     evidencias: [doc.claim@2]
-    recomendacion: "Designar responsable de seguridad y duenos de activos con responsabilidades y autoridad explicitas."
+    recomendacion: "Designar responsable de seguridad y duenos de activos con autoridad explicita, asignarles recursos acordes a la estrategia de riesgo e incorporar la ciberseguridad a las practicas de personal."
     regla:
       tipo: roles_documental
       tipos_afirmacion: [role_assigned]
 
   - id: CRI-GV-03
     version: 2
-    titulo: "Objetivos de riesgo y tolerancia establecidos"
+    titulo: "Estrategia de gestion del riesgo"
     tipo: proceso
     funcion: GV
     categorias: [GV.RM]
@@ -81,7 +83,7 @@ criterios:
     peso: 3
     ai_adjustable: true
     evidencias: [doc.claim@2]
-    recomendacion: "Documentar objetivos de riesgo y una declaracion de tolerancia usada en decisiones operativas."
+    recomendacion: "Desarrollar la estrategia de riesgo: objetivos y tolerancia, un metodo unico de calculo y priorizacion, las opciones de respuesta admitidas y las lineas de comunicacion del riesgo."
     regla:
       tipo: tolerancia_documental
       tipos_afirmacion: [risk_tolerance]
@@ -127,7 +129,7 @@ criterios:
     peso: 2
     ai_adjustable: true
     evidencias: [doc.claim@2]
-    recomendacion: "Establecer un programa de proveedores con roles acordados, inventario priorizado por criticidad y requisitos de ciberseguridad en los contratos."
+    recomendacion: "Formalizar el programa de proveedores: roles acordados, inventario priorizado, requisitos en contratos, debida diligencia previa, seguimiento del riesgo durante la relacion y disposiciones de cierre."
     regla:
       tipo: cadena_de_suministro
       tipos_afirmacion: [supplier_program]

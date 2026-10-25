@@ -29,7 +29,7 @@ Una plataforma que:
 | Dentro del alcance | Fuera del alcance (prototipo) |
 |---|---|
 | NIST CSF 2.0 completo como estructura de despliegue | Evaluar todas las subcategorías de NIST |
-| Subconjunto de 28 criterios definidos (16 MVP + 2 parciales), 57 de 106 subcategorías y las 22 categorías | Cobertura exhaustiva del framework |
+| Subconjunto de 28 criterios definidos (16 MVP + 2 parciales), 74 de 106 subcategorías, las 22 categorías y la función Gobernar completa | Cobertura exhaustiva del framework |
 | Privacidad secundaria vía solapamiento con Identify-P y Protect-P | Evaluación integral de privacidad (PF 1.0 completo) |
 | Terraform (AWS), Ansible, documentos y logs simulados | Múltiples nubes, agentes reales, SIEM |
 | Configuración declarada y prácticas documentadas | Estado real de la infraestructura desplegada |

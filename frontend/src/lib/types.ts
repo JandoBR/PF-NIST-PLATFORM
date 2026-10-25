@@ -266,6 +266,10 @@ export interface ImplementationCoverage {
   ratio: number;
   categorias_cubiertas: number;
   categorias_totales: number;
+  /** Categorías con TODAS sus subcategorías declaradas (distinto de `categorias_cubiertas`). */
+  categorias_completas: number;
+  /** Categoría → cuántas subcategorías le faltan. Una completa no aparece, ni con un 0. */
+  categorias_incompletas: Record<string, number>;
   /** Por función: [cubiertas, totales]. */
   por_funcion: Record<string, [number, number]>;
   categorias_sin_criterio: string[];

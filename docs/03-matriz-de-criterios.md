@@ -72,7 +72,7 @@ Resumen de cobertura del catálogo:
   - 50: responsables definidos sin autoridad explícita.
   - 25: roles genéricos (“el área de TI”) sin asignación.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
-- **Recomendación:** designar responsable de seguridad y dueños de activos con responsabilidades y autoridad explícitas.
+- **Recomendación:** designar responsable de seguridad y dueños de activos con autoridad explícita, asignarles recursos acordes a la estrategia de riesgo e incorporar la ciberseguridad a las prácticas de personal.
 
 ### CRI-GV-03 — Estrategia de gestión del riesgo
 - **Subcategorías:** GV.RM-01 … GV.RM-07 (las siete) · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** sí · **Tier:** T3
@@ -83,7 +83,7 @@ Resumen de cobertura del catálogo:
   - 50: objetivos definidos sin tolerancia explícita.
   - 25: declaración genérica de “gestionar riesgos”.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
-- **Recomendación:** documentar objetivos de riesgo y una declaración de tolerancia usada en decisiones operativas.
+- **Recomendación:** desarrollar la estrategia de riesgo: objetivos y tolerancia, un método único de cálculo y priorización, las opciones de respuesta admitidas y las líneas de comunicación del riesgo.
 
 ### CRI-GV-04 — Revisión del desempeño y mejora de la estrategia
 - **Subcategorías:** GV.OV-01, GV.OV-02, GV.OV-03 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T3/T4
