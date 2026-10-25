@@ -3,7 +3,11 @@
 ## Objetivos de riesgo
 
 El objetivo de riesgo de la organizacion es mantener disponible la plataforma de clientes y evitar
-la perdida de sus datos.
+la perdida de sus datos. La tolerancia aceptada es de hasta un dia de interrupcion al mes.
+
+Cuando un riesgo se identifica, el responsable de seguridad decide si se mitiga, se acepta o se
+traslada al proveedor. Todavia no hay un metodo unico de calculo ni lineas de comunicacion del
+riesgo definidas por escrito.
 
 ## Proceso de evaluacion de riesgos
 

@@ -28,7 +28,9 @@ from app.schemas.evidence import EvidenceInstance, Locator, Modality
 #: v3: `process_defined` suma impactos/probabilidades (ID.RA-04), criterios_recuperacion
 #: (RS.MA-05) y planes_actualizados (ID.IM-04); regulariza tambien los tipos y la opcion de enum
 #: que la Oleada A habia agregado sin bumpear (docs/09 §76).
-PROMPT_VERSION = "extract_v3"
+#: v4: `supplier_program`, `risk_tolerance` y `role_assigned` suman una faceta por subcategoria de
+#: GV.SC, GV.RM y GV.RR, que quedan completas (docs/09 §77).
+PROMPT_VERSION = "extract_v4"
 
 #: Limitacion de una afirmacion cuya cita no aparece en el texto analizado (E8).
 CITA_NO_LOCALIZABLE = "cita no localizable en el texto analizado: no cuenta para puntuar"
@@ -43,9 +45,25 @@ _CONTENT_FIELDS: dict[str, str] = {
     "policy_review": (
         "frecuencia (mensual|trimestral|semestral|anual), ultima_revision (YYYY-MM-DD|null)"
     ),
-    "role_assigned": "roles: lista de {rol, responsable, autoridad}",
+    "role_assigned": (
+        "roles: lista de {rol, responsable, autoridad},"
+        " recursos_asignados (bool|null: se asignan presupuesto, personal o herramientas acordes a"
+        " la estrategia de riesgo),"
+        " practicas_rh (bool|null: la ciberseguridad esta en las practicas de recursos humanos:"
+        " contratacion, induccion, cambios de rol o salida del personal)"
+    ),
     "risk_tolerance": (
-        "objetivos_riesgo (string), tolerancia (string|null), responsable (string|null)"
+        "objetivos_riesgo (string), tolerancia (string|null), responsable (string|null),"
+        " integracion_empresarial (bool|null: el riesgo de ciberseguridad se gestiona dentro del"
+        " riesgo empresarial, no aparte),"
+        " opciones_respuesta (bool|null: la estrategia dice que se puede mitigar, transferir,"
+        " aceptar o evitar un riesgo),"
+        " lineas_comunicacion (bool|null: hay canales definidos para comunicar el riesgo en la"
+        " organizacion),"
+        " metodo_estandarizado (bool|null: hay un metodo unico para calcular, documentar,"
+        " categorizar y priorizar riesgos),"
+        " oportunidades_estrategicas (bool|null: las oportunidades, y no solo las amenazas, entran"
+        " en la discusion del riesgo)"
     ),
     "data_inventory": (
         "activos (lista de recursos), tipos_datos (lista), clasificacion (string|null),"
@@ -80,7 +98,18 @@ _CONTENT_FIELDS: dict[str, str] = {
         "programa (bool: existe un programa o politica de proveedores/terceros), roles (bool|null:"
         " roles y responsabilidades acordados con proveedores), proveedores_priorizados (bool|null:"
         " inventario de proveedores priorizado por criticidad), requisitos_contractuales"
-        " (bool|null: requisitos de ciberseguridad en los contratos)"
+        " (bool|null: requisitos de ciberseguridad en los contratos),"
+        " integracion_riesgo (bool|null: el riesgo de proveedores se integra al riesgo de"
+        " ciberseguridad y al riesgo empresarial),"
+        " debida_diligencia (bool|null: se evalua al proveedor ANTES de formalizar la relacion),"
+        " riesgos_monitoreados (bool|null: los riesgos de cada proveedor se registran, priorizan y"
+        " se responden durante la relacion),"
+        " en_respuesta_incidentes (bool|null: los proveedores participan en la planificacion,"
+        " respuesta y recuperacion de incidentes),"
+        " monitoreo_ciclo_vida (bool|null: las practicas de seguridad del proveedor se monitorean"
+        " a lo largo de la relacion),"
+        " terminacion (bool|null: hay disposiciones para el cierre de la relacion, p. ej."
+        " devolucion o borrado de datos y revocacion de accesos)"
     ),
     "training_program": (
         "programa (bool: existe un programa de concienciacion o formacion),"
@@ -114,8 +143,29 @@ _BOOL_FIELDS: dict[str, frozenset[str]] = {
     ),
     "backup_policy": frozenset({"respaldo", "verificacion_integridad"}),
     "supplier_program": frozenset(
-        {"programa", "roles", "proveedores_priorizados", "requisitos_contractuales"}
+        {
+            "programa",
+            "roles",
+            "proveedores_priorizados",
+            "requisitos_contractuales",
+            "integracion_riesgo",
+            "debida_diligencia",
+            "riesgos_monitoreados",
+            "en_respuesta_incidentes",
+            "monitoreo_ciclo_vida",
+            "terminacion",
+        }
     ),
+    "risk_tolerance": frozenset(
+        {
+            "integracion_empresarial",
+            "opciones_respuesta",
+            "lineas_comunicacion",
+            "metodo_estandarizado",
+            "oportunidades_estrategicas",
+        }
+    ),
+    "role_assigned": frozenset({"recursos_asignados", "practicas_rh"}),
     "training_program": frozenset({"programa", "roles_especializados"}),
     "exposure_policy": frozenset({"bases_publicas_permitidas"}),
 }

@@ -36,7 +36,10 @@
 # v16: Oleada B (2/4) - ID-03 declara ID.RA-04, RS-01 declara RS.MA-05 e ID-05 declara ID.IM-04,
 #      con cuatro campos nuevos de `process_defined` (prompt extract_v3). Cierra SUB-01 y SUB-03
 #      de docs/12 §5 (docs/09 §76).
-version: 16
+# v17: Oleada B (3/4) - la funcion Gobernar queda completa (31/31): GV-02 declara GV.RR-03/04,
+#      GV-03 las siete de GV.RM y GV-06 las diez de GV.SC, con una faceta de afirmacion por
+#      subcategoria y anclas de amplitud (prompt extract_v4, docs/09 §77).
+version: 17
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -54,12 +57,12 @@ criterios:
       tipos_afirmacion: [policy_exists, policy_review]
 
   - id: CRI-GV-02
-    version: 1
+    version: 2
     titulo: "Roles y responsabilidades definidos"
     tipo: proceso
     funcion: GV
     categorias: [GV.RR]
-    subcategorias: [GV.RR-01, GV.RR-02]
+    subcategorias: [GV.RR-01, GV.RR-02, GV.RR-03, GV.RR-04]
     peso: 5
     ai_adjustable: true
     evidencias: [doc.claim@2]
@@ -69,12 +72,12 @@ criterios:
       tipos_afirmacion: [role_assigned]
 
   - id: CRI-GV-03
-    version: 1
+    version: 2
     titulo: "Objetivos de riesgo y tolerancia establecidos"
     tipo: proceso
     funcion: GV
     categorias: [GV.RM]
-    subcategorias: [GV.RM-01, GV.RM-02]
+    subcategorias: [GV.RM-01, GV.RM-02, GV.RM-03, GV.RM-04, GV.RM-05, GV.RM-06, GV.RM-07]
     peso: 3
     ai_adjustable: true
     evidencias: [doc.claim@2]
@@ -114,12 +117,13 @@ criterios:
       tipos_afirmacion: [org_context]
 
   - id: CRI-GV-06
-    version: 1
+    version: 2
     titulo: "Programa de riesgo de la cadena de suministro"
     tipo: proceso
     funcion: GV
     categorias: [GV.SC]
-    subcategorias: [GV.SC-01, GV.SC-02, GV.SC-04, GV.SC-05]
+    subcategorias: [GV.SC-01, GV.SC-02, GV.SC-03, GV.SC-04, GV.SC-05, GV.SC-06, GV.SC-07, GV.SC-08,
+                     GV.SC-09, GV.SC-10]
     peso: 2
     ai_adjustable: true
     evidencias: [doc.claim@2]

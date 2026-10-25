@@ -34,7 +34,9 @@
                 "rol": "Jefe de Infraestructura",
                 "responsable": "Luis Paredes"
               }
-            ]
+            ],
+            "recursos_asignados": true,
+            "practicas_rh": true
           },
           "cita": "El Oficial de Seguridad de la Informacion (CISO) es Marta Quintero"
         }
@@ -74,7 +76,11 @@
           "tipo": "risk_tolerance",
           "contenido": {
             "objetivos_riesgo": "99,5",
-            "responsable": "Gerente de Operaciones"
+            "responsable": "Gerente de Operaciones",
+            "integracion_empresarial": true,
+            "opciones_respuesta": true,
+            "metodo_estandarizado": true,
+            "lineas_comunicacion": true
           },
           "cita": "La tolerancia es de hasta cuatro horas de interrupcion por mes"
         },
@@ -156,7 +162,14 @@
           "contenido": {
             "programa": true,
             "proveedores_priorizados": true,
-            "requisitos_contractuales": true
+            "requisitos_contractuales": true,
+            "roles": true,
+            "integracion_riesgo": true,
+            "debida_diligencia": true,
+            "riesgos_monitoreados": true,
+            "en_respuesta_incidentes": true,
+            "monitoreo_ciclo_vida": true,
+            "terminacion": true
           },
           "cita": "Existe un programa de gestion del riesgo de proveedores con politicas aprobadas por el comite de"
         },

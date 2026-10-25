@@ -30,6 +30,24 @@ Todos los contratos con proveedores de criticidad alta incorporan requisitos de 
 cifrado de datos en transito y en reposo, notificacion de incidentes en 24 horas, derecho de
 auditoria y devolucion o borrado certificado de los datos al terminar la relacion.
 
+El riesgo de proveedores no se gestiona aparte: entra en el mismo registro de riesgos de
+ciberseguridad y se reporta al comite de riesgo empresarial cada trimestre, con los mismos criterios
+de impacto y probabilidad que el resto.
+
+Antes de firmar con un proveedor nuevo se hace una evaluacion de debida diligencia: cuestionario de
+seguridad, revision de certificaciones vigentes y, para los de criticidad alta, una revision de su
+ultimo informe de auditoria. Ningun contrato se formaliza sin ese paso.
+
+Durante la relacion, cada proveedor critico tiene sus riesgos registrados y priorizados en el
+registro, con un responsable y la respuesta acordada para cada uno; el estado se revisa en la reunion
+trimestral de proveedores. Las practicas de seguridad del proveedor se monitorean a lo largo de toda
+la relacion mediante la revision anual de sus certificaciones, los reportes mensuales de
+disponibilidad y las alertas que entrega el proveedor de monitoreo.
+
+Los proveedores de criticidad alta participan en la planificacion, la respuesta y la recuperacion de
+incidentes: el plan de respuesta los incluye como parte convocada, tienen un canal de contacto de
+24 horas y participan en el ejercicio anual de restauracion.
+
 ## Concienciacion y formacion
 
 Existe un programa de concienciacion en seguridad obligatorio para todo el personal, con una
