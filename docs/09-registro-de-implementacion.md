@@ -2417,3 +2417,38 @@ en cómo se nombraba el resultado.
 comparación real a la que se le quita el resultado de `CRI-RS-04` para simular el catálogo
 anterior), `ruff` limpio, `typecheck`/`lint` limpios, y las dos pantallas y el PDF comprobados en
 una corrida real.
+
+## 75. Oleada B (1/4): `DE.AE-03` — la correlación multi-fuente dejó de ser una promesa
+
+**El defecto, que estaba a la vista.** `core/operations.py:197` calculaba los orígenes de cada
+patrón detectado y los guardaba en `log_patterns.fuentes`. Al construir la evidencia,
+`assessment_service.py:128` los colapsaba a un único `source_id` — porque un `source_id` solo puede
+llevar uno — y la lista se perdía. El dato existía, se calculaba y se tiraba: ninguna regla podía
+preguntar "¿esto lo vieron dos sistemas distintos o uno solo?".
+
+Eso es exactamente `DE.AE-03`, "la información se correlaciona a partir de múltiples fuentes", que la
+Oleada 0 dejó fuera por ese motivo (`docs/12 §5`, SUB-02).
+
+**Qué se cambió.** `log.pattern` pasa a **v2** con `fuentes: [string]`; la v1 queda publicada
+intacta, como se hizo con `doc.claim`. Los ocho criterios que declaraban `log.pattern@1` pasan a
+`@2`, igual que en su día migraron todos a `doc.claim@2`.
+
+**El ancla, y por qué ahí.** `CRI-DE-02` declara `DE.AE-03` y su 100 exige que el patrón positivo
+venga de **dos orígenes distintos**. Con uno solo baja a 75 y la explicación lo dice con nombre
+propio ("solo siem-corp"). Un sistema que alerta es detección; dos que ven lo mismo es correlación.
+
+**Lista vacía ≠ un origen.** Un patrón de `log.pattern@1`, o uno cuyos eventos no declararon
+`fuente`, llega con la lista vacía. Eso **no se penaliza**: el criterio se queda en 75 con la razón
+explícita. Misma lógica que el silencio documental (§60) — que el dato falte no prueba que la
+práctica falte.
+
+**La demo tuvo que ganar un segundo sistema.** Ningún evento de los paquetes declaraba `fuente`, así
+que todo patrón tenía un solo origen y `good` se habría quedado en 75 sin que ningún test lo notara.
+`flujo-correcto-demo.jsonl` ahora tiene el SIEM y un EDR levantando la misma alerta (`e1-006` y
+`e1-006b`), con el segundo **después** del triaje para no mover `alerta.desde` y con ello el
+disparador D2. Los otros dos paquetes quedan con un solo origen a propósito.
+
+**Verificación:** 611 tests (tres nuevos de DE-02 y dos de `test_event_source.py`, que comprueban
+que la lista llega al valor de la evidencia y no solo al `source_id`); goldens sin un solo cambio —
+el pipeline golden es Terraform + Ansible, sin eventos. `ruff` limpio. Sigue fallando solo
+`test_uploads.py::test_windows_separator_is_rejected`, preexistente y de Windows.

@@ -30,7 +30,10 @@
 # v14: Oleada A (2/2) - CRI-GV-05 (GV.OC), CRI-GV-06 (GV.SC) y CRI-PR-07 (PR.AT) con tres tipos de
 #      afirmacion nuevos (org_context, supplier_program, training_program). 22/22 categorias
 #      (docs/09 §73).
-version: 14
+# v15: Oleada B (1/4) - todos los criterios operativos pasan a log.pattern@2 (que conserva los
+#      origenes del patron) y CRI-DE-02 declara DE.AE-03: el 100 exige correlacion desde dos
+#      fuentes distintas (docs/09 §75, cierra SUB-02 de docs/12 §5).
+version: 15
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -191,7 +194,7 @@ criterios:
     subcategorias: [ID.IM-01, ID.IM-02, ID.IM-03]
     peso: 3
     ai_adjustable: true
-    evidencias: [doc.claim@2, log.pattern@1, log.window@1]
+    evidencias: [doc.claim@2, log.pattern@2, log.window@1]
     recomendacion: "Cerrar el ciclo de mejora: registrar las lecciones de evaluaciones y ejercicios y seguir los ajustes con metricas."
     regla:
       tipo: mejora_continua
@@ -320,15 +323,15 @@ criterios:
       tipos_afirmacion: []
 
   - id: CRI-DE-02
-    version: 1
+    version: 2
     titulo: "Analisis de eventos y declaracion de incidentes"
     tipo: mixto
     funcion: DE
     categorias: [DE.AE]
-    subcategorias: [DE.AE-02, DE.AE-08]
+    subcategorias: [DE.AE-02, DE.AE-03, DE.AE-08]
     peso: 4
     ai_adjustable: true
-    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
+    evidencias: [log.pattern@2, log.window@1, doc.claim@2]
     recomendacion: "Definir criterios de declaracion de incidentes y registrar alertas con su analisis."
     regla:
       tipo: patron_con_justicia
@@ -345,7 +348,7 @@ criterios:
     subcategorias: [DE.AE-06]
     peso: 3
     ai_adjustable: true
-    evidencias: [log.pattern@1, doc.claim@2]
+    evidencias: [log.pattern@2, doc.claim@2]
     recomendacion: "Definir destinatarios de alertas y verificar la entrega."
     regla:
       tipo: notificacion_eventos
@@ -360,7 +363,7 @@ criterios:
     subcategorias: [RS.MA-01, RS.MA-02, RS.MA-03, RS.MA-04]
     peso: 5
     ai_adjustable: true
-    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
+    evidencias: [log.pattern@2, log.window@1, doc.claim@2]
     recomendacion: "Documentar y ensayar el plan de respuesta incluyendo escalamiento y criterios de prioridad."
     regla:
       tipo: patron_con_justicia
@@ -377,7 +380,7 @@ criterios:
     subcategorias: [RS.AN-03, RS.AN-06, RS.AN-07]
     peso: 3
     ai_adjustable: true
-    evidencias: [doc.claim@2, log.pattern@1]
+    evidencias: [doc.claim@2, log.pattern@2]
     recomendacion: "Definir analisis de causa raiz y preservacion de evidencia con registros."
     regla:
       tipo: analisis_incidentes
@@ -407,7 +410,7 @@ criterios:
     subcategorias: [RS.MI-01, RS.MI-02]
     peso: 4
     ai_adjustable: true
-    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
+    evidencias: [log.pattern@2, log.window@1, doc.claim@2]
     recomendacion: "Documentar los pasos de contencion y erradicacion y registrar la contencion de cada incidente declarado."
     regla:
       tipo: patron_con_justicia
@@ -439,7 +442,7 @@ criterios:
     subcategorias: [RC.RP-03]
     peso: 4
     ai_adjustable: true
-    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
+    evidencias: [log.pattern@2, log.window@1, doc.claim@2]
     recomendacion: "Verificar integridad de backups antes de restaurar y registrar la prueba."
     regla:
       tipo: restauracion_verificada
@@ -454,7 +457,7 @@ criterios:
     subcategorias: [RC.RP-05, RC.CO-03]
     peso: 3
     ai_adjustable: true
-    evidencias: [log.pattern@1, log.window@1, doc.claim@2]
+    evidencias: [log.pattern@2, log.window@1, doc.claim@2]
     recomendacion: "Confirmar operacion normal tras restaurar y comunicar el estado a los interesados."
     regla:
       tipo: comunicacion_recuperacion

@@ -2,7 +2,9 @@
 # v2: tf.db_exposure.config (accesibilidad publica de bases de datos, docs/02 §5).
 # v3: doc.source.info (documento analizado, docs/05 §2.3 E6).
 # v4: doc.claim@2 guarda la cita textual (docs/09 §60).
-version: 4
+# v5: log.pattern@2 conserva los origenes del patron (`fuentes`), que hasta ahora se
+#     calculaban y se descartaban al construir la evidencia (docs/09 §75).
+version: 5
 tipos:
   - id: tf.resource.present
     version: 1
@@ -302,6 +304,32 @@ tipos:
     notas: >
       Los logs son simulados (docs/02 §7): el valor esta en demostrar el flujo evento -> patron ->
       evidencia -> criterio, no en vigilar un sistema real.
+
+  - id: log.pattern
+    version: 2
+    descripcion: >
+      Igual que la v1, mas los origenes de los eventos que forman el patron (`fuentes`). Sin ese
+      campo el motor no puede distinguir "lo vieron dos sistemas distintos" de "lo vio uno solo",
+      que es justo lo que pide DE.AE-03 (docs/02 §3.4, docs/06 §3).
+    valor_schema:
+      type: object
+      required: [patron, resultado, desde, hasta, conteo]
+      properties:
+        patron: { type: string }
+        resultado: { type: string }
+        desde: { type: string }
+        hasta: { type: string }
+        conteo: { type: integer }
+        fuentes: { type: array, items: { type: string } }
+    modalidad_permitida: [operativa]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-10-24"
+    notas: >
+      `fuentes` sale de la `fuente` declarada por cada evento, o del archivo del que vino si no la
+      declara (docs/06 §2). Una lista vacia significa que ningun evento del patron declaro origen,
+      NO que haya un solo origen: la correlacion solo se afirma con dos o mas nombres distintos.
+      v1 queda publicada para reproducir evaluaciones anteriores.
 
   - id: log.window
     version: 1

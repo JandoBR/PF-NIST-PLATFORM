@@ -243,14 +243,14 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** centralizar logs y definir fuentes mínimas de monitoreo (red, sistema, nube).
 
 ### CRI-DE-02 — Análisis de eventos y declaración de incidentes
-- **Subcategorías:** DE.AE-02, DE.AE-08 · **Tipo:** Mixto · **Peso:** 4 · **IA:** sí · **MVP:** parcial · **Privacidad:** Protect-P + apoyo Detect
-- **Evidencias:** `doc.claim(tipo=process_defined)`, `log.pattern(alert_raised|incident_declared)`
+- **Subcategorías:** DE.AE-02, DE.AE-03, DE.AE-08 · **Tipo:** Mixto · **Peso:** 4 · **IA:** sí · **MVP:** parcial · **Privacidad:** Protect-P + apoyo Detect
+- **Evidencias:** `doc.claim(tipo=process_defined)`, `log.pattern@2(alert_raised|incident_declared)`
 - **Regla:**
   - Sin ventana de eventos completa (igual que RC-02): 75 si hay criterios de declaración documentados, 50 si solo se describe el análisis, `evidencia_insuficiente` si no hay nada documentado.
   - Con ventana completa:
     - 0: hubo actividad que debía alertar (`auth_failures_burst`) y no hubo alerta ni declaración: falla de detección (docs/06 §5).
-    - 100: criterios de declaración documentados + evidencia operativa de alerta/declaración.
-    - 75: criterios documentados sin evidencia operativa, o evidencia operativa sin criterios documentados.
+    - 100: criterios de declaración documentados + evidencia operativa de alerta/declaración **desde dos orígenes distintos** (`log.pattern@2.fuentes`). Es lo que sostiene DE.AE-03: un solo sistema que alerta es detección, no correlación.
+    - 75: criterios documentados sin evidencia operativa; evidencia operativa sin criterios documentados; o los dos pero con la alerta vista por un solo origen.
     - 50: análisis de eventos descrito sin criterios de declaración concretos.
     - Ventana completa sin ningún patrón aplicable ni criterios documentados → `evidencia_insuficiente` (sin oportunidad, no se penaliza).
 - **Recomendación:** definir criterios de declaración de incidentes y registrar alertas con su análisis.

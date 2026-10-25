@@ -126,7 +126,7 @@ Reglas de extracción:
 | ID | value (resumen) | Uso principal |
 |---|---|---|
 | `log.event` | evento individual normalizado (ver doc 06) | **No se emite como evidencia** (docs/09 §57): los eventos viven en la tabla `events` y las evaluaciones consumen sus ventanas y patrones (`log.window`, `log.pattern`; docs/08 §3). |
-| `log.pattern` | `{ patron, resultado, desde, hasta, conteo }` | Evidencia operativa agregada. |
+| `log.pattern` | `{ patron, resultado, desde, hasta, conteo, fuentes }` | Evidencia operativa agregada. `fuentes` (v2) son los orígenes de los eventos que forman el patrón: es lo único que permite afirmar correlación entre sistemas y no solo detección (DE.AE-03, docs/09 §75). Lista vacía = ningún evento declaró origen, **no** "un solo origen". |
 | `log.window` | `{ desde, hasta, completo: bool }` | Completitud de la ventana observada. |
 
 Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_declared`, `escalation_done`,

@@ -93,7 +93,6 @@ hacerla honesta, no "por completitud" sino para que el día que haga falta no se
 | ID | Subcategoría | Por qué no, y qué costaría |
 |---|---|---|
 | SUB-01 | `ID.RA-04` (impactos y probabilidades registrados) | `process_defined` no tiene ningún campo de impacto ni probabilidad (`ai/extraction.py` `_CONTENT_FIELDS`). Exige campo nuevo en el prompt de U1, un caso en `golden_ai` y un ancla nueva en `CRI-ID-03`. |
-| SUB-02 | `DE.AE-03` (información correlacionada de múltiples fuentes) | Ninguna regla comprueba la multiplicidad de fuentes. `log_patterns.fuentes` existe en la BD (`models/tables.py:223`) pero se colapsa a un único `source_id` al construir la evidencia (`core/assessment_service.py:128`) y no está en el `valor_schema` de `log.pattern`. Exige bump de `evidence_types.yml`, pasar la lista a la evidencia y que `CRI-DE-02` pida ≥2 fuentes. Es el más barato de los tres y mejora el motor de verdad. |
 | SUB-03 | `RS.MA-05` (criterios para iniciar la recuperación) | `rs01_response_plan.py` filtra las afirmaciones a proceso de respuesta/escalamiento y no lee `criterios_activacion`, que sí existe en `process_defined`. Exige ampliar el filtro y un ancla; ojo con no pisar a `CRI-RC-01`, que es el criterio de recuperación. |
 
 *(AMP-04, cobertura de implementación, se promovió al prototipo y está hecha: `methodology/csf_subcategories.yml`
