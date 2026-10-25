@@ -37,10 +37,12 @@ def _window(completo: bool = True) -> EvidenceInstance:
     )
 
 
-def _pattern(patron: str, resultado: str = "ok") -> EvidenceInstance:
+def _pattern(
+    patron: str, resultado: str = "ok", fuentes: list[str] | None = None
+) -> EvidenceInstance:
     return EvidenceInstance(
         type_id="log.pattern",
-        type_version=1,
+        type_version=2,
         subject_type="scope",
         subject_ref="entorno:produccion",
         scope="entorno:produccion",
@@ -50,6 +52,7 @@ def _pattern(patron: str, resultado: str = "ok") -> EvidenceInstance:
             "desde": "2026-01-01T00:00:00Z",
             "hasta": "2026-01-01T00:05:00Z",
             "conteo": 1,
+            "fuentes": ["siem-corp", "edr-endpoints"] if fuentes is None else fuentes,
         },
         source_id="test:surveillance",
         locator=LOCATOR,
@@ -88,13 +91,37 @@ def test_de02_no_window_is_insufficient():
     assert result.estado == Estado.EVIDENCIA_INSUFICIENTE
 
 
-def test_de02_doc_criteria_and_evidence_scores_100():
+def test_de02_doc_criteria_and_evidence_from_two_sources_scores_100():
     evidence = [
         _window(),
-        _pattern("alert_raised"),
+        _pattern("alert_raised", fuentes=["siem-corp", "edr-endpoints"]),
         _claim("process_defined", {"proceso": "incidentes", "criterios_declaracion": True}),
     ]
-    assert de02_event_analysis.evaluate(evidence).final_score == 100
+
+    resultado = de02_event_analysis.evaluate(evidence)
+
+    assert resultado.final_score == 100
+    assert "2 fuentes" in resultado.explanation
+
+
+@pytest.mark.parametrize(
+    ("fuentes", "esperado"),
+    [(["siem-corp"], "solo siem-corp"), ([], "ningun evento declara origen")],
+)
+def test_de02_a_single_origin_is_detection_but_not_correlation(fuentes, esperado):
+    """DE.AE-03 pide informacion correlacionada de multiples fuentes: con un solo origen (o con
+    `log.pattern@1`, que no traia la lista) el criterio se queda en 75, no se penaliza."""
+
+    evidence = [
+        _window(),
+        _pattern("alert_raised", fuentes=fuentes),
+        _claim("process_defined", {"proceso": "incidentes", "criterios_declaracion": True}),
+    ]
+
+    resultado = de02_event_analysis.evaluate(evidence)
+
+    assert resultado.final_score == 75
+    assert esperado in resultado.explanation
 
 
 def test_de02_alert_present_scores_75():

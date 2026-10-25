@@ -4,6 +4,10 @@ Combina lo documental (`doc.claim(tipo=process_defined)`, con `contenido.criteri
 lo operativo (`log.pattern`). Aplica la "regla de justicia" (docs/06 §5) literalmente: sin
 `log.window` no se puede concluir nada; con ventana completa, solo se penaliza si hubo una
 oportunidad real (`auth_failures_burst`) que no produjo alerta/declaracion.
+
+`DE.AE-03` ("la informacion se correlaciona a partir de multiples fuentes") es la razon del
+ancla del 100: no basta con que se haya alertado, el patron tiene que venir de **dos origenes
+distintos** (`log.pattern@2.fuentes`). Un solo origen es deteccion, no correlacion.
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-DE-02"
-CRITERION_VERSION = 1
+CRITERION_VERSION = 2
 
 
 def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance | None:
@@ -22,6 +26,14 @@ def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance |
         if item.value["patron"] == patron:
             return item
     return None
+
+
+def _fuentes(patron: EvidenceInstance) -> list[str]:
+    """Origenes del patron. `log.pattern@1` no los traia: ahi la lista es vacia y nunca se
+    afirma correlacion (no se penaliza por ello, solo no se llega al 100)."""
+
+    valor = patron.value.get("fuentes") or []
+    return sorted({str(f) for f in valor if str(f).strip()})
 
 
 def _es_de_declaracion(claim: EvidenceInstance) -> bool:
@@ -84,11 +96,23 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             [ventana[0].id, oportunidad.id],
         )
     if doc_criterios and positivo:
+        fuentes = _fuentes(positivo)
+        if len(fuentes) >= 2:
+            return build(
+                CRITERION_ID,
+                Estado.EVALUADO,
+                100,
+                "Criterios de declaracion documentados y evidencia operativa correlacionada desde"
+                f" {len(fuentes)} fuentes ({', '.join(fuentes)}).",
+                [ventana[0].id, positivo.id, doc_criterios.id],
+            )
+        unica = f" (solo {fuentes[0]})" if fuentes else " (ningun evento declara origen)"
         return build(
             CRITERION_ID,
             Estado.EVALUADO,
-            100,
-            "Criterios de declaracion documentados y evidencia operativa de alerta/declaracion.",
+            75,
+            "Criterios de declaracion documentados y evidencia operativa de alerta/declaracion,"
+            f" pero de un solo origen{unica}: no hay correlacion entre fuentes (DE.AE-03).",
             [ventana[0].id, positivo.id, doc_criterios.id],
         )
     if doc_criterios:

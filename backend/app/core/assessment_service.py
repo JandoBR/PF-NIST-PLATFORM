@@ -114,7 +114,7 @@ def collect_surveillance_evidence(
     pattern_evidence = [
         EvidenceInstance(
             type_id="log.pattern",
-            type_version=1,
+            type_version=2,
             subject_type="scope",
             subject_ref=scope,
             scope=scope,
@@ -124,6 +124,10 @@ def collect_surveillance_evidence(
                 "desde": p.desde.isoformat(),
                 "hasta": p.hasta.isoformat(),
                 "conteo": p.conteo,
+                # Los origenes se guardaban en la fila y se perdian aqui: `source_id` solo puede
+                # llevar uno. Sin la lista ninguna regla puede hablar de correlacion
+                # (log.pattern@2, DE.AE-03).
+                "fuentes": sorted(p.fuentes or []),
             },
             source_id=_origin_source_id(p.fuentes),
             locator=Locator(event_id=p.id),
