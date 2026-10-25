@@ -3,6 +3,11 @@
 Documental (`doc.claim(tipo=process_defined)`): el `contenido.proceso` distingue el proceso de
 riesgos de otros procesos (p. ej. recuperacion, CRI-RC-01) que comparten el mismo tipo de
 afirmacion.
+
+Cinco anclas en vez de tres, porque el criterio cubre cinco subcategorias y antes no las
+distinguia: `impactos`/`probabilidades` son `ID.RA-04` y solo con ellas se llega al 100. Un proceso
+con pasos pero sin registro ni priorizacion evidencia `ID.RA-01` y nada mas, asi que baja a 50
+(antes daba 75).
 """
 
 from __future__ import annotations
@@ -12,7 +17,7 @@ from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-ID-03"
-CRITERION_VERSION = 1
+CRITERION_VERSION = 2
 
 
 def _es_de_riesgos(claim: EvidenceInstance) -> bool:
@@ -57,28 +62,40 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     contenido = mejor.value.get("contenido", {})
-    if contenido.get("pasos") and (
-        contenido.get("registro_riesgos") or contenido.get("priorizacion")
-    ):
+    registrados = contenido.get("registro_riesgos") or contenido.get("priorizacion")
+    # ID.RA-04: "se identifican y registran los impactos y probabilidades potenciales".
+    cuantificados = contenido.get("impactos") or contenido.get("probabilidades")
+
+    if contenido.get("pasos") and registrados and cuantificados:
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
             100,
-            "Proceso de evaluacion de riesgos documentado, con registro y priorizacion.",
+            "Proceso de evaluacion de riesgos documentado, con registro, priorizacion y los"
+            " impactos/probabilidades de cada riesgo.",
+            [mejor.id],
+        )
+    if contenido.get("pasos") and registrados:
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            75,
+            "Proceso de evaluacion de riesgos con registro y priorizacion, pero sin registrar los"
+            " impactos ni las probabilidades potenciales (ID.RA-04).",
             [mejor.id],
         )
     if contenido.get("pasos"):
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
-            75,
-            "Proceso de evaluacion de riesgos definido, sin registro de riesgos.",
+            50,
+            "Proceso de evaluacion de riesgos definido, sin registro ni priorizacion de riesgos.",
             [mejor.id],
         )
     return result(
         CRITERION_ID,
         Estado.EVALUADO,
-        50,
-        "Evaluacion de riesgos descrita de forma generica.",
+        25,
+        "Evaluacion de riesgos descrita de forma generica, sin pasos concretos.",
         [mejor.id],
     )

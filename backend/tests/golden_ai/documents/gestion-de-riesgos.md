@@ -11,3 +11,9 @@ responsable de este objetivo es la Gerente de Operaciones.
 La organizacion mantiene un inventario de activos que incluye el servidor de aplicaciones, la base
 de datos de clientes y el repositorio de documentos. La base de datos de clientes contiene datos
 personales y se clasifica como confidencial; su criticidad es alta.
+
+## Proceso de evaluacion de riesgos
+
+El proceso se ejecuta cada semestre: se identifican las amenazas por activo, se estima el impacto y
+la probabilidad de cada una, y los riesgos se priorizan por su nivel. Todos quedan anotados en el
+registro de riesgos con su responsable. El responsable del proceso es el CISO.

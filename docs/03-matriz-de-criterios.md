@@ -118,12 +118,13 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** clasificar activos por criticidad y usarlo para priorizar controles y esfuerzo.
 
 ### CRI-ID-03 — Identificación y evaluación de riesgos
-- **Subcategorías:** ID.RA-01, ID.RA-03, ID.RA-05, ID.RA-06 · **Tipo:** Proceso · **Peso:** 4 · **IA:** sí · **MVP:** sí · **Tier:** T2
+- **Subcategorías:** ID.RA-01, ID.RA-03, ID.RA-04, ID.RA-05, ID.RA-06 · **Tipo:** Proceso · **Peso:** 4 · **IA:** sí · **MVP:** sí · **Tier:** T2
 - **Evidencias:** `doc.claim(tipo=process_defined)`
 - **Regla:**
-  - 100: proceso de evaluación de riesgos documentado, con registro de riesgos y priorización por impacto/probabilidad.
-  - 75: proceso definido sin registro de riesgos.
-  - 50: evaluación descrita de forma genérica.
+  - 100: proceso documentado con pasos, registro/priorización **y** los impactos o probabilidades de cada riesgo registrados (`impactos`/`probabilidades`). Esto último es lo que sostiene `ID.RA-04`.
+  - 75: proceso con registro y priorización, pero sin impactos ni probabilidades.
+  - 50: proceso definido sin registro ni priorización de riesgos (evidencia `ID.RA-01` y nada más).
+  - 25: evaluación descrita de forma genérica, sin pasos concretos.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** establecer una evaluación de riesgos repetible con registro y priorización.
 
@@ -137,15 +138,15 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** documentar qué datos existen, dónde residen y su clasificación, incluyendo datos personales.
 
 ### CRI-ID-05 — Mejora continua a partir de evaluaciones y ejercicios
-- **Subcategorías:** ID.IM-01, ID.IM-02, ID.IM-03 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T4
+- **Subcategorías:** ID.IM-01, ID.IM-02, ID.IM-03, ID.IM-04 · **Tipo:** Mixto · **Peso:** 3 · **IA:** sí · **MVP:** no · **Tier:** T4
 - **Evidencias:** `doc.claim(tipo=process_defined)` con `contenido.proceso` de mejora/lecciones aprendidas, `log.pattern(restore_exercise_run)`, `log.window`
 - **Regla:**
-  - 100: ciclo de mejora documentado con métricas o ajustes **y** un ejercicio observado en una ventana completa.
-  - 75: ciclo documentado con métricas/ajustes sin ejercicio observado; o proceso documentado y ejercicio observado pero sin métricas ni ajustes.
+  - 100: ciclo de mejora documentado con métricas o ajustes, un ejercicio observado en una ventana completa **y** `planes_actualizados` (los planes se mantienen con lo aprendido, `ID.IM-04`).
+  - 75: lo anterior sin `planes_actualizados`; ciclo documentado con métricas/ajustes sin ejercicio observado; o proceso documentado y ejercicio observado pero sin métricas ni ajustes.
   - 50: mejora descrita de forma genérica; o ejercicio observado sin ningún ciclo de mejora documentado.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
   - Sin documentos ni ejercicio → `evidencia_insuficiente`.
-- **Nota de mapeo:** `ID.IM-02` ("mejoras a partir de pruebas y ejercicios") solo se declara porque la regla consume el ejercicio observado; sin ese patrón sería una afirmación documental sin verificar. `ID.IM-04` (mantener y mejorar los planes) queda fuera: nada lo evidencia.
+- **Nota de mapeo:** `ID.IM-02` ("mejoras a partir de pruebas y ejercicios") solo se declara porque la regla consume el ejercicio observado; sin ese patrón sería una afirmación documental sin verificar. `ID.IM-04` entró en la Oleada B con el campo `planes_actualizados`, que es condición del 100: un ciclo que mide y ajusta pero no toca los planes no la evidencia.
 - **Recomendación:** cerrar el ciclo de mejora: registrar las lecciones de evaluaciones y ejercicios y seguir los ajustes con métricas.
 
 ---
@@ -269,15 +270,16 @@ Resumen de cobertura del catálogo:
 ## 5. RESPOND (RS)
 
 ### CRI-RS-01 — Plan de respuesta con clasificación y escalamiento
-- **Subcategorías:** RS.MA-01, RS.MA-02, RS.MA-03, RS.MA-04 · **Tipo:** Mixto · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Tier:** T3 · **Privacidad:** Protect-P + apoyo Respond
+- **Subcategorías:** RS.MA-01, RS.MA-02, RS.MA-03, RS.MA-04, RS.MA-05 · **Tipo:** Mixto · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Tier:** T3 · **Privacidad:** Protect-P + apoyo Respond
 - **Evidencias:** `doc.claim(tipo=process_defined)`, `doc.claim(tipo=escalation_path)`, `log.pattern(escalation_done|incident_declared)`
 - **Regla:**
-  - Plan completo = `process_defined` de respuesta con pasos y responsables. El escalamiento documentado (`escalation_path`) cuenta como plan parcial.
+  - Plan completo = `process_defined` de respuesta con pasos, responsables **y** `criterios_recuperacion` (cuándo se cierra la respuesta y empieza la recuperación, `RS.MA-05`). El escalamiento documentado (`escalation_path`) cuenta como plan parcial.
   - 100: plan completo + evidencia operativa de escalamiento (`escalation_done`).
   - 75: plan completo sin evidencia operativa; o plan parcial con escalamiento observado; o escalamiento observado sin plan documentado (tope 75).
   - 50: plan parcial sin evidencia operativa.
   - 0: incidente declarado en una ventana completa sin escalamiento: falla de respuesta (docs/06 §5), con o sin plan.
   - Sin plan ni evidencia operativa → `evidencia_insuficiente`.
+- **Nota de mapeo:** `RS.MA-05` usa un campo propio y **no** `criterios_activacion`: en un proceso de respuesta ese campo son los criterios para activar la respuesta, y además es el que `CRI-RC-01` ya lee del proceso de recuperación.
 - **Recomendación:** documentar y ensayar el plan de respuesta incluyendo escalamiento y criterios de prioridad.
 
 ### CRI-RS-02 — Análisis de incidentes y preservación de evidencia

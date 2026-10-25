@@ -89,6 +89,17 @@
             "clasificacion": "confidencial"
           },
           "cita": "se clasifica como confidencial"
+        },
+        {
+          "tipo": "process_defined",
+          "contenido": {
+            "proceso": "riesgos",
+            "registro_riesgos": true,
+            "priorizacion": true,
+            "impactos": true,
+            "probabilidades": true
+          },
+          "cita": "se estima el impacto y\nla probabilidad de cada una"
         }
       ]
     },
@@ -111,6 +122,23 @@
             "niveles": "Direccion General"
           },
           "cita": "se escala al CISO, y si este no\nlo resuelve en cuatro horas, a la Direccion General"
+        },
+        {
+          "tipo": "process_defined",
+          "contenido": {
+            "proceso": "respuesta",
+            "criterios_recuperacion": true
+          },
+          "cita": "La respuesta se cierra y se inicia la recuperacion cuando la contencion esta\nconfirmada"
+        },
+        {
+          "tipo": "process_defined",
+          "contenido": {
+            "proceso": "mejora",
+            "metricas": true,
+            "planes_actualizados": true
+          },
+          "cita": "los ajustes acordados se incorporan al plan de respuesta y al de continuidad"
         }
       ]
     },

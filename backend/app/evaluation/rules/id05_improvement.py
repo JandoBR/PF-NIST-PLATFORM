@@ -7,6 +7,11 @@ ejercicio observado (`log.pattern(restore_exercise_run)`), que es lo unico que p
 
 No exige ventana completa para la via documental: igual que CRI-RC-02, sin eventos se evalua lo
 documental con tope 75.
+
+`ID.IM-04` ("los planes de respuesta y otros planes se establecen, comunican, mantienen y mejoran")
+entra por `contenido.planes_actualizados`. Es condicion del 100: un ciclo de mejora que mide y
+ajusta pero no toca los planes no evidencia esta subcategoria, y era el motivo por el que la
+Oleada A la dejo fuera (docs/09 §72).
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-ID-05"
-CRITERION_VERSION = 1
+CRITERION_VERSION = 2
 
 
 def _es_de_mejora(claim: EvidenceInstance) -> bool:
@@ -75,13 +80,24 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
     contenido = mejor.value.get("contenido") or {}
     con_seguimiento = bool(contenido.get("metricas") or contenido.get("ajustes"))
+    planes = bool(contenido.get("planes_actualizados"))
 
-    if con_seguimiento and ejercicio is not None:
+    if con_seguimiento and ejercicio is not None and planes:
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
             100,
-            "Ciclo de mejora con metricas/ajustes y un ejercicio observado que lo alimenta.",
+            "Ciclo de mejora con metricas/ajustes, un ejercicio observado que lo alimenta y planes"
+            " que se mantienen con lo aprendido.",
+            [mejor.id, ejercicio.id],
+        )
+    if con_seguimiento and ejercicio is not None:
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            75,
+            "Ciclo de mejora con metricas/ajustes y un ejercicio observado, pero no se declara que"
+            " los planes se actualicen con lo aprendido (ID.IM-04).",
             [mejor.id, ejercicio.id],
         )
     if con_seguimiento:

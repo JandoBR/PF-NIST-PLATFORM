@@ -33,7 +33,10 @@
 # v15: Oleada B (1/4) - todos los criterios operativos pasan a log.pattern@2 (que conserva los
 #      origenes del patron) y CRI-DE-02 declara DE.AE-03: el 100 exige correlacion desde dos
 #      fuentes distintas (docs/09 §75, cierra SUB-02 de docs/12 §5).
-version: 15
+# v16: Oleada B (2/4) - ID-03 declara ID.RA-04, RS-01 declara RS.MA-05 e ID-05 declara ID.IM-04,
+#      con cuatro campos nuevos de `process_defined` (prompt extract_v3). Cierra SUB-01 y SUB-03
+#      de docs/12 §5 (docs/09 §76).
+version: 16
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -156,12 +159,12 @@ criterios:
       tipos_afirmacion: [data_inventory]
 
   - id: CRI-ID-03
-    version: 1
+    version: 2
     titulo: "Identificacion y evaluacion de riesgos"
     tipo: proceso
     funcion: ID
     categorias: [ID.RA]
-    subcategorias: [ID.RA-01, ID.RA-03, ID.RA-05, ID.RA-06]
+    subcategorias: [ID.RA-01, ID.RA-03, ID.RA-04, ID.RA-05, ID.RA-06]
     peso: 4
     ai_adjustable: true
     evidencias: [doc.claim@2]
@@ -186,12 +189,12 @@ criterios:
       tipos_afirmacion: [data_inventory]
 
   - id: CRI-ID-05
-    version: 1
+    version: 2
     titulo: "Mejora continua a partir de evaluaciones y ejercicios"
     tipo: mixto
     funcion: ID
     categorias: [ID.IM]
-    subcategorias: [ID.IM-01, ID.IM-02, ID.IM-03]
+    subcategorias: [ID.IM-01, ID.IM-02, ID.IM-03, ID.IM-04]
     peso: 3
     ai_adjustable: true
     evidencias: [doc.claim@2, log.pattern@2, log.window@1]
@@ -355,12 +358,12 @@ criterios:
       tipos_afirmacion: [notification_list]
 
   - id: CRI-RS-01
-    version: 1
+    version: 2
     titulo: "Plan de respuesta con clasificacion y escalamiento"
     tipo: mixto
     funcion: RS
     categorias: [RS.MA]
-    subcategorias: [RS.MA-01, RS.MA-02, RS.MA-03, RS.MA-04]
+    subcategorias: [RS.MA-01, RS.MA-02, RS.MA-03, RS.MA-04, RS.MA-05]
     peso: 5
     ai_adjustable: true
     evidencias: [log.pattern@2, log.window@1, doc.claim@2]

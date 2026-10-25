@@ -174,6 +174,30 @@ def test_invalid_roles_are_filtered():
     assert "4 entrada(s)" in contenido["_descartados"][0]
 
 
+@pytest.mark.parametrize(
+    ("valor", "esperado"),
+    [("true", True), ("false", False), ("Si", True), ("NO", False), (1, True), (0, False)],
+)
+def test_booleans_written_as_text_are_normalized(valor, esperado):
+    """Las reglas preguntan por verdad simple, y en Python `"false"` es verdadero: un modelo que
+    responde texto donde se pide bool daria un falso positivo en un campo que decide puntaje."""
+
+    contenido = _extract({"proceso": "riesgos", "impactos": valor}, tipo="process_defined")
+
+    assert contenido["impactos"] is esperado
+    assert "_descartados" not in contenido
+
+
+def test_a_boolean_that_cannot_be_interpreted_is_dropped_not_guessed():
+    contenido = _extract(
+        {"proceso": "riesgos", "registro_riesgos": "parcialmente, ver anexo"},
+        tipo="process_defined",
+    )
+
+    assert "registro_riesgos" not in contenido
+    assert any("registro_riesgos" in d for d in contenido["_descartados"])
+
+
 # -- tope de ajustes por evaluacion -------------------------------------------------------------
 
 
@@ -259,7 +283,7 @@ def test_assessment_records_model_and_prompt_versions_when_ai_participates(db_se
     ai = assessment.reproducibility["ai"]
     assert ai == {
         "modelo": "deepseek-test",
-        "extraccion": "extract_v2",
+        "extraccion": "extract_v3",
         "ajuste": "adjust_v1",
     }
     assert set(assessment.reproducibility["adapters"]) == {"terraform", "documents"}
