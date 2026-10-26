@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,17 +30,39 @@ class CachingAIClient:
         self._cache_dir = cache_dir
 
     def _cache_file(self, system_prompt: str, user_prompt: str) -> Path:
-        key = hashlib.sha256(f"{system_prompt}\n---\n{user_prompt}".encode()).hexdigest()
+        # El modelo (y la base URL, si el cliente la expone) forma parte del resultado: si cambia
+        # `DEEPSEEK_MODEL`, la misma prompt debe ser un miss, no la respuesta del modelo anterior.
+        modelo = getattr(self._inner, "model", type(self._inner).__name__)
+        base_url = getattr(self._inner, "base_url", "")
+        key = hashlib.sha256(
+            f"{modelo}\n{base_url}\n{system_prompt}\n---\n{user_prompt}".encode()
+        ).hexdigest()
         return self._cache_dir / f"{key}.json"
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
         cache_file = self._cache_file(system_prompt, user_prompt)
         if cache_file.exists():
-            log_call(resultado="cache")
-            return json.loads(cache_file.read_text(encoding="utf-8"))
+            try:
+                cached = json.loads(cache_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                cached = None
+            if isinstance(cached, dict):
+                log_call(resultado="cache")
+                return cached
+            # Entrada corrupta o de otro tipo: se trata como miss y se reescribe abajo.
 
         result = self._inner.complete_json(system_prompt, user_prompt)
         if result is not None:
             self._cache_dir.mkdir(parents=True, exist_ok=True)
-            cache_file.write_text(json.dumps(result), encoding="utf-8")
+            with tempfile.NamedTemporaryFile(
+                "w",
+                dir=self._cache_dir,
+                prefix=cache_file.stem,
+                suffix=".tmp",
+                delete=False,
+                encoding="utf-8",
+            ) as fh:
+                json.dump(result, fh)
+                temporal = Path(fh.name)
+            temporal.replace(cache_file)
         return result

@@ -2305,3 +2305,27 @@ pares alerta/triaje intercalados la comparación de extremos es una aproximació
 todo requiere patrones por evento o por par, que es un cambio de modelo (docs/12).
 
 **Verificación:** suite completa **591 tests** + `ruff check` y `ruff format` limpios.
+
+## 73. Robustez de IA y de los adaptadores (Terraform v9, Ansible v5, Documentos v3)
+
+- **U2 no se aplica si la respuesta no es del criterio.** `AdjustmentResponse` valida rango
+  (`puntaje_base_recibido`/`puntaje_propuesto` 0–100, `confianza` 0–1) y `adjust()` exige que
+  `criterion_id` y `puntaje_base_recibido` coincidan con el criterio evaluado; si no, degrada a
+  `S = B` con `degradado=True`. Un `NaN`/`Infinity` que `json.loads` acepta ya no llega a
+  `round()`: Pydantic lo rechaza y se degrada. U1 también rechaza confianzas fuera de rango.
+- **Caché de IA.** La clave incluye modelo y base URL (cambiar `DEEPSEEK_MODEL` ya no devuelve la
+  respuesta del modelo anterior). Una entrada corrupta o no-dict se trata como miss; la escritura
+  es atómica (temp + replace).
+- **Ansible.** `_AnsibleLoader` acepta `!vault`/`!unsafe` y cualquier tag `!...` como opaco (no
+  descifra secretos, no tumba la evaluación); `!vault` se guarda como `<vault>`. Las fechas YAML
+  se convierten a texto (`line: 2025-01-01` no rompe el JSON de la evidencia) y `hosts` siempre es
+  un array de strings (`hosts: [web, db]` ya no queda anidado).
+- **BOM y documentos.** Terraform, Ansible y Markdown leen con `utf-8-sig`; un BOM ya no rompe el
+  `.tf` ni pierde el primer encabezado. Los encabezados `#` dentro de bloques ```/~~~ no son
+  secciones. Un PDF cifrado con contraseña se omite (cero secciones), no deja la evaluación
+  `fallida`.
+
+**Versiones de adaptador:** Terraform **v9**, Ansible **v5**, Documentos **v3** (cambia la
+evidencia emitida; `assessments.reproducibility` lo registra). No cambia `methodology_version`.
+
+**Verificación:** suite completa **601 tests** + `ruff check` y `ruff format` limpios.

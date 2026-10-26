@@ -166,6 +166,16 @@ def test_security_group_cidr_expression_does_not_crash_nor_invent_a_cidr(tmp_pat
     assert atributos.count("cidr_blocks") == 2
 
 
+def test_utf8_bom_in_terraform_does_not_break_parsing(tmp_path):
+    tf_file = tmp_path / "main.tf"
+    tf_file.write_text(
+        '\ufeffresource "aws_db_instance" "db" {\n  storage_encrypted = true\n}\n',
+        encoding="utf-8",
+    )
+    evidence = TerraformAdapter(source_id="test:bom", scope="s").parse_path(tf_file)
+    assert _of(evidence, "tf.encryption.config")
+
+
 def test_dynamic_ingress_is_unknown_not_absent(tmp_path):
     """`dynamic "ingress"` no vive en `attrs["ingress"]`; no puede quedar como "sin reglas"."""
 

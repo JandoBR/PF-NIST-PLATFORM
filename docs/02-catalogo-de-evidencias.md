@@ -203,4 +203,7 @@ documentos con retención o frecuencia de revisión distintas.
 - No resuelve módulos remotos de Terraform ni expresiones complejas.
 - No ejecuta Ansible ni Terraform; no consulta la nube.
 - No interpreta imágenes, escaneos ni PDFs sin capa de texto (se puede declarar límite si aparece).
+  Un PDF cifrado con contraseña se omite (cero secciones), no tumba la evaluación.
+- Acepta BOM UTF-8 y los tags `!vault`/`!unsafe` de Ansible como valores opacos; no descifra vaults.
+  Un encabezado Markdown dentro de un bloque de código no se trata como sección.
 - Los logs son simulados; su valor está en demostrar el flujo, no en vigilar un sistema real.

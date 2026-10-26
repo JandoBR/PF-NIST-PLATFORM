@@ -165,13 +165,50 @@ def test_no_implementado_is_never_adjusted_upward():
     result = _result(criterion_id="CRI-GV-01", estado=Estado.NO_IMPLEMENTADO, base_score=0.0)
     # La IA propone subirlo a 60; J2 lo recorta a 0 antes de aplicar la formula.
     client = FakeAIClient(
-        {"CRI-GV-01": _fake_response(criterion_id="CRI-GV-01", puntaje_propuesto=60)}
+        {
+            "CRI-GV-01": _fake_response(
+                criterion_id="CRI-GV-01", puntaje_base_recibido=0, puntaje_propuesto=60
+            )
+        }
     )
 
     out = adjust(client, criterion, result, _evidence_by_id(), {}, ALPHA, D)
 
     assert out.final_score == 0.0
     assert out.degradado is False
+
+
+def test_non_finite_proposal_degrades_instead_of_crashing():
+    methodology = _methodology()
+    criterion = methodology.criterios["CRI-PR-01"]
+    result = _result()
+    client = FakeAIClient({"CRI-PR-01": _fake_response(puntaje_propuesto=float("nan"))})
+
+    out = adjust(client, criterion, result, _evidence_by_id(), {}, ALPHA, D)
+
+    assert (out.final_score, out.degradado) == (25.0, True)
+
+
+def test_response_for_another_criterion_degrades():
+    methodology = _methodology()
+    criterion = methodology.criterios["CRI-PR-01"]
+    result = _result()
+    client = FakeAIClient({"CRI-PR-01": _fake_response(criterion_id="CRI-PR-02")})
+
+    out = adjust(client, criterion, result, _evidence_by_id(), {}, ALPHA, D)
+
+    assert (out.final_score, out.degradado) == (25.0, True)
+
+
+def test_response_with_a_wrong_base_score_degrades():
+    methodology = _methodology()
+    criterion = methodology.criterios["CRI-PR-01"]
+    result = _result()
+    client = FakeAIClient({"CRI-PR-01": _fake_response(puntaje_base_recibido=99)})
+
+    out = adjust(client, criterion, result, _evidence_by_id(), {}, ALPHA, D)
+
+    assert (out.final_score, out.degradado) == (25.0, True)
 
 
 def test_no_change_is_still_recorded_in_explanation():
@@ -232,6 +269,7 @@ def test_ai_cannot_raise_an_observed_failure_scored_by_the_engine():
         {
             "CRI-RC-02": _fake_response(
                 criterion_id="CRI-RC-02",
+                puntaje_base_recibido=0,
                 puntaje_propuesto=20,
                 evidencias_referenciadas=[rc02.evidence_ids[0]],
             )

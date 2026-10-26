@@ -259,9 +259,9 @@ Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extrac
 |---|---|
 | Prompt injection en documentos/logs | Contenido en secciones delimitadas y etiquetadas como datos; instrucción explícita de no seguirlas; el modelo no tiene herramientas de ejecución. |
 | Exfiltración de datos sensibles | **Pendiente para uso real** (docs/12 SEC-07): el prototipo no redacta secretos; el documento se envía tal cual a la IA. |
-| Alucinación de evidencia | U1 exige cita; U2 exige IDs existentes; validación de esquema; sin cita/ID → descarte. |
-| Respuestas vacías o truncadas | Manejo explícito, reintentos limitados, degradación controlada. |
-| Costos | Límite de chunks por documento, límite de tokens, caché de extracción por `sha256` del documento. |
+| Alucinación de evidencia | U1 exige cita; U2 exige IDs existentes y que `criterion_id`/`puntaje_base_recibido` coincidan con lo enviado; validación de esquema; sin cita/ID → descarte. |
+| Respuestas vacías, truncadas o no finitas | Manejo explícito, reintentos limitados, degradación controlada. Puntajes y confianza se validan en rango (`0–100`, `0–1`); `NaN`/`Infinity` degradan a `S = B`, no rompen la evaluación. |
+| Costos | Límite de chunks por documento, límite de tokens, caché de extracción por hash del prompt **+ modelo + base URL**. Una entrada de caché corrupta se trata como miss, no tumba la evaluación. |
 | Envenenamiento del contexto | El contexto del formulario se valida y no puede contradecir hechos técnicos. |
 
 Principio operativo: **si la IA desaparece, el sistema sigue funcionando** con `S = B` y extracción

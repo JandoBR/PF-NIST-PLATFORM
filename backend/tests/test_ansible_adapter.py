@@ -72,6 +72,40 @@ def test_gaps_fixture_flags_insecure_directive_and_uninterpreted_command():
     assert service.value == {"servicio": "ufw", "estado": "deshabilitado"}
 
 
+def test_vault_unsafe_and_yaml_scalars_do_not_crash(tmp_path):
+    playbook = tmp_path / "tags.yml"
+    playbook.write_text(
+        """
+- hosts: [web, db]
+  vars:
+    db_password: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      616263
+  tasks:
+    - name: Endurecer SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: !unsafe "PermitRootLogin no"
+
+    - name: Fecha sin comillas
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: 2025-01-01
+""",
+        encoding="utf-8",
+    )
+    evidence = AnsibleAdapter(source_id="test:tags", scope="s").parse_path(playbook)
+
+    playbook_ev = _by_type(evidence, "an.playbook.present")[0]
+    assert playbook_ev.value["hosts"] == ["web", "db"]
+    lineas = {
+        t.value["parametros"]["line"]
+        for t in _by_type(evidence, "an.task.config")
+        if "line" in t.value["parametros"]
+    }
+    assert lineas == {"PermitRootLogin no", "2025-01-01"}
+
+
 def test_task_with_only_control_keys_produces_no_evidence(tmp_path):
     playbook = tmp_path / "noop.yml"
     playbook.write_text(

@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pypdf import PdfReader
+from pypdf.errors import FileNotDecryptedError, PdfReadError
 
 from app.schemas.evidence import Locator
 
@@ -26,15 +27,21 @@ class Chunk:
 def chunk_markdown(path: Path) -> list[Chunk]:
     """Una secciones por encabezado `#`..`######`; sin encabezados, el documento entero."""
 
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8-sig")
     lines = text.splitlines()
 
     sections: list[tuple[str | None, list[str]]] = []
     current_heading: str | None = None
     current_lines: list[str] = []
+    en_bloque = False
 
     for line in lines:
-        match = _HEADING_PATTERN.match(line)
+        # Un `#` dentro de un bloque de codigo (``` o ~~~) es un comentario, no un encabezado.
+        if line.lstrip().startswith(("```", "~~~")):
+            en_bloque = not en_bloque
+            current_lines.append(line)
+            continue
+        match = None if en_bloque else _HEADING_PATTERN.match(line)
         if match:
             if current_lines:
                 sections.append((current_heading, current_lines))
@@ -58,10 +65,20 @@ def chunk_markdown(path: Path) -> list[Chunk]:
 def chunk_pdf(path: Path) -> list[Chunk]:
     """Una pagina por chunk; paginas sin capa de texto se omiten."""
 
-    reader = PdfReader(str(path))
+    try:
+        reader = PdfReader(str(path))
+        paginas = list(reader.pages)
+    except (FileNotDecryptedError, PdfReadError):
+        # PDF valido pero protegido con contrasena: no se puede leer sin credenciales. Se omite
+        # el documento (el adaptador lo reporta con cero secciones), no se tumba la evaluacion.
+        return []
+
     chunks = []
-    for page_number, page in enumerate(reader.pages, start=1):
-        text = (page.extract_text() or "").strip()
+    for page_number, page in enumerate(paginas, start=1):
+        try:
+            text = (page.extract_text() or "").strip()
+        except (FileNotDecryptedError, PdfReadError):
+            continue
         if not text:
             continue
         chunks.append(Chunk(text=text, locator=Locator(file=str(path), page=page_number)))

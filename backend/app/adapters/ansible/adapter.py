@@ -7,13 +7,51 @@ Alcance declarado: modulos `lineinfile`, `copy`, `template` (solo rutas), `file`
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
+
+
+class _AnsibleLoader(yaml.SafeLoader):
+    """SafeLoader que acepta los tags de Ansible (`!vault`, `!unsafe`, ...) sin resolverlos.
+
+    `!vault` es un secreto cifrado que el adaptador no necesita descifrar; `!unsafe` es texto
+    literal. Cualquier otro tag `!...` se vuelve opaco en vez de tumbar la evaluacion entera.
+    """
+
+
+def _opaque_tag(loader: _AnsibleLoader, tag: str, node: yaml.Node) -> Any:
+    if tag == "vault":
+        return "<vault>"
+    if isinstance(node, yaml.ScalarNode):
+        return loader.construct_scalar(node)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node)
+    return None
+
+
+_AnsibleLoader.add_multi_constructor("!", _opaque_tag)
+
+
+def _json_safe(value: Any) -> Any:
+    """Convierte escalares nativos de YAML (fechas) a JSON, sin cambiar str/int/float/bool."""
+
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
 
 _SUPPORTED_MODULES = {"lineinfile", "copy", "template", "file", "service", "ufw", "iptables"}
 
@@ -65,7 +103,9 @@ def _any_module_key(task: dict) -> str | None:
 #: v3: `an.file.permissions.modo` es siempre octal, aunque el YAML lo traiga sin comillas.
 #: v4: `state` manda sobre `enabled` (un `stopped` no es "habilitado"); `restarted`/`reloaded`
 #: cuentan como servicio corriendo.
-ADAPTER_VERSION = "4"
+#: v5: acepta `!vault`/`!unsafe` y otros tags `!...`; normaliza fechas YAML a texto; `hosts`
+#: siempre es un array de strings y el BOM UTF-8 no rompe el playbook.
+ADAPTER_VERSION = "5"
 
 
 def _modo_octal(modo: Any) -> str:
@@ -134,11 +174,11 @@ class AnsibleAdapter:
         return evidence
 
     def _parse_file(self, file_path: Path) -> list[EvidenceInstance]:
-        text = file_path.read_text(encoding="utf-8")
-        plays = yaml.safe_load(text)
+        text = file_path.read_text(encoding="utf-8-sig")
+        plays = yaml.load(text, Loader=_AnsibleLoader)
         if not isinstance(plays, list):
             return []
-        nodos = _task_nodes(yaml.compose(text))
+        nodos = _task_nodes(yaml.compose(text, Loader=_AnsibleLoader))
         lineas = text.splitlines()
 
         self._lines = None
@@ -158,7 +198,17 @@ class AnsibleAdapter:
         return evidence
 
     def _playbook_present(self, file_path: Path, plays: list) -> EvidenceInstance:
-        hosts = [p.get("hosts") for p in plays if isinstance(p, dict) and p.get("hosts")]
+        # `hosts` es un array de strings en el contrato (docs/02 §3.2); `hosts: [web, db]` no
+        # puede quedar anidado como `[["web", "db"]]`.
+        hosts: list[str] = []
+        for play in plays:
+            if not isinstance(play, dict):
+                continue
+            valor = play.get("hosts")
+            if isinstance(valor, list):
+                hosts.extend(str(item) for item in valor)
+            elif valor:
+                hosts.append(str(valor))
         return self._make_evidence(
             type_id="an.playbook.present",
             subject_type="playbook",
@@ -168,7 +218,7 @@ class AnsibleAdapter:
         )
 
     def _evidence_for_task(self, file_path: Path, task: dict) -> list[EvidenceInstance]:
-        tarea = task.get("name", "<sin nombre>")
+        tarea = str(task.get("name") or "<sin nombre>")
         found = _module_key(task)
 
         if found is None:
@@ -186,7 +236,7 @@ class AnsibleAdapter:
             ]
 
         modulo, original_key = found
-        parametros = task[original_key] or {}
+        parametros = _json_safe(task[original_key] or {})
         if not isinstance(parametros, dict):
             parametros = {"valor": parametros}
 
@@ -219,6 +269,7 @@ class AnsibleAdapter:
         modo = parametros.get("mode")
         if ruta is None or modo is None:
             return [self._task_config(file_path, tarea, "file", parametros)]
+        ruta = str(ruta)
         return [
             self._make_evidence(
                 type_id="an.file.permissions",
@@ -232,7 +283,7 @@ class AnsibleAdapter:
     def _service_state(
         self, file_path: Path, tarea: str, parametros: dict[str, Any]
     ) -> EvidenceInstance:
-        servicio = parametros.get("name", "")
+        servicio = str(parametros.get("name", ""))
         enabled = parametros.get("enabled")
         state = parametros.get("state")
         # `state` describe el estado actual y manda sobre `enabled` (que solo dice si arranca al

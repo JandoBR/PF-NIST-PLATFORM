@@ -202,7 +202,8 @@ def _strip_meta(block: dict) -> dict:
 #: v7: `backup_retention_period = 7.0` se lee como 7 dias; la configuracion SSE de S3 usa la
 #: primera `rule` que declare `apply_server_side_encryption_by_default`, no siempre `rules[0]`.
 #: v8: `dynamic "ingress"/"egress"` se emite como regla con CIDR desconocido (no se ignora).
-ADAPTER_VERSION = "8"
+#: v9: se acepta un `.tf` con BOM UTF-8 (`utf-8-sig`).
+ADAPTER_VERSION = "9"
 
 
 class TerraformAdapter:
@@ -230,7 +231,7 @@ class TerraformAdapter:
         options = SerializationOptions(strip_string_quotes=True)
         archivos = []
         for file_path in self.list_files(path):
-            text = file_path.read_text(encoding="utf-8")
+            text = file_path.read_text(encoding="utf-8-sig")
             raw = hcl2.loads(text, serialization_options=options)
             archivos.append((file_path, self._flatten_resources(raw), resource_line_ranges(text)))
         todos = [recurso for _, recursos, _ in archivos for recurso in recursos]
