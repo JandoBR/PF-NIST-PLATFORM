@@ -28,6 +28,27 @@ def test_resource_line_ranges_handles_nesting_strings_and_comments():
     }
 
 
+def test_line_ranges_ignore_block_comments_and_heredocs_and_accept_next_line_brace():
+    texto = (
+        "/* comentario con } */\n"  # 1
+        'resource "aws_s3_bucket" "b" {\n'  # 2
+        "  description = <<EOF\n"  # 3
+        "  } esto no cierra el bloque\n"  # 4
+        "EOF\n"  # 5
+        "}\n"  # 6
+        "\n"  # 7
+        'resource "aws_db_instance" "d"\n'  # 8
+        "{\n"  # 9
+        "  storage_encrypted = true\n"  # 10
+        "}\n"  # 11
+    )
+
+    assert resource_line_ranges(texto) == {
+        ("aws_s3_bucket", "b"): (2, 6),
+        ("aws_db_instance", "d"): (8, 11),
+    }
+
+
 def test_an_unclosed_block_extends_to_the_end_of_the_file():
     assert resource_line_ranges('resource "aws_s3_bucket" "b" {\n  bucket = "x"\n') == {
         ("aws_s3_bucket", "b"): (1, 2)

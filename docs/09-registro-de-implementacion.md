@@ -2423,3 +2423,14 @@ evidencia emitida; `assessments.reproducibility` lo registra). No cambia `method
 docs/03 §3 y README/docs/11 quedan alineados.
 
 **Verificación:** suite completa **622 tests** + `ruff check` y `ruff format` limpios.
+
+## 78. Rangos de línea de Terraform (Terraform v10)
+
+`resource_line_ranges` contaba llaves sobre el texto crudo: un `}` dentro de un comentario
+`/* ... */` o de un heredoc cerraba el bloque antes de tiempo, y una llave en la línea siguiente al
+`resource` no se detectaba (el recurso quedaba sin locator). `_clean_hcl` blanquea comentarios y
+cuerpos de heredoc conservando líneas y longitud; la apertura se busca con `_has_open_brace` y el
+cierre con `_brace_delta`. Terraform pasa a **v10** (cambian los locators, no los valores).
+Test: `test_line_ranges_ignore_block_comments_and_heredocs_and_accept_next_line_brace`.
+
+**Verificación:** suite completa **623 tests** + `ruff check` y `ruff format` limpios.

@@ -133,7 +133,91 @@ def _cidrs(value: Any) -> list[str]:
     return [CIDR_DESCONOCIDO if _is_expression(item) else item for item in value]
 
 
-_RESOURCE_START = re.compile(r'^\s*resource\s+"([^"]+)"\s+"([^"]+)"\s*\{')
+_RESOURCE_START = re.compile(r'^\s*resource\s+"([^"]+)"\s+"([^"]+)"')
+
+
+def _clean_hcl(text: str) -> str:
+    """Blanquea comentarios y cuerpos de heredoc conservando lineas y longitud.
+
+    `python-hcl2` no entrega posiciones y el conteo de llaves no debe ver `}` dentro de un
+    comentario `/* ... */` ni de un heredoc. Se reemplaza por espacios, no se elimina, para que
+    los numeros de linea sigan siendo los del archivo.
+    """
+
+    out: list[str] = []
+    i, n = 0, len(text)
+    en_bloque = False
+    heredoc: str | None = None
+
+    while i < n:
+        char = text[i]
+
+        if heredoc is not None:
+            fin = text.find("\n", i)
+            linea = text[i : fin if fin != -1 else n]
+            if linea.strip() == heredoc:
+                heredoc = None
+            out.append(" " * len(linea))
+            if fin == -1:
+                i = n
+            else:
+                out.append("\n")
+                i = fin + 1
+            continue
+
+        if en_bloque:
+            if text.startswith("*/", i):
+                en_bloque = False
+                out.append("  ")
+                i += 2
+            else:
+                out.append("\n" if char == "\n" else " ")
+                i += 1
+            continue
+
+        if char == '"':
+            out.append(char)
+            i += 1
+            while i < n:
+                out.append(text[i])
+                if text[i] == "\\" and i + 1 < n:
+                    out.append(text[i + 1])
+                    i += 2
+                    continue
+                if text[i] == '"':
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        if text.startswith("/*", i):
+            en_bloque = True
+            out.append("  ")
+            i += 2
+            continue
+
+        if char == "#" or text.startswith("//", i):
+            fin = text.find("\n", i)
+            if fin == -1:
+                out.append(" " * (n - i))
+                i = n
+            else:
+                out.append(" " * (fin - i))
+                i = fin
+            continue
+
+        if text.startswith("<<", i):
+            match = re.match(r"<<-?\s*([A-Za-z_]\w*)", text[i:])
+            if match:
+                heredoc = match.group(1)
+                out.append(" " * len(match.group(0)))
+                i += len(match.group(0))
+                continue
+
+        out.append(char)
+        i += 1
+
+    return "".join(out)
 
 
 def _brace_delta(line: str) -> int:
@@ -159,13 +243,34 @@ def _brace_delta(line: str) -> int:
     return delta
 
 
+def _has_open_brace(line: str) -> bool:
+    """Si la linea abre un bloque (una llave fuera de strings y comentarios)."""
+
+    in_string, i = False, 0
+    while i < len(line):
+        char = line[i]
+        if in_string:
+            if char == "\\":
+                i += 1
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == "#" or line.startswith("//", i):
+            break
+        elif char == "{":
+            return True
+        i += 1
+    return False
+
+
 def resource_line_ranges(text: str) -> dict[tuple[str, str], tuple[int, int]]:
     """(tipo, nombre) -> (linea inicial, linea final), 1-based, de cada bloque `resource`.
 
     `python-hcl2` no entrega posiciones, asi que se calculan sobre el texto: el bloque empieza en la
     linea `resource "tipo" "nombre" {` y termina donde se cierra su llave (docs/11 OP-15)."""
 
-    lineas = text.splitlines()
+    lineas = _clean_hcl(text).splitlines()
     rangos: dict[tuple[str, str], tuple[int, int]] = {}
     i = 0
     while i < len(lineas):
@@ -173,8 +278,16 @@ def resource_line_ranges(text: str) -> dict[tuple[str, str], tuple[int, int]]:
         if inicio is None:
             i += 1
             continue
-        profundidad, fin = 0, i
-        for j in range(i, len(lineas)):
+
+        # La llave puede estar en la misma linea o en la siguiente (HCL lo permite). Se busca la
+        # primera linea que abra un bloque, ignorando llaves dentro de strings.
+        apertura = next((j for j in range(i, len(lineas)) if _has_open_brace(lineas[j])), None)
+        if apertura is None:
+            i += 1
+            continue
+
+        profundidad, fin = 0, len(lineas) - 1
+        for j in range(apertura, len(lineas)):
             profundidad += _brace_delta(lineas[j])
             if profundidad <= 0:
                 fin = j
@@ -203,7 +316,8 @@ def _strip_meta(block: dict) -> dict:
 #: primera `rule` que declare `apply_server_side_encryption_by_default`, no siempre `rules[0]`.
 #: v8: `dynamic "ingress"/"egress"` se emite como regla con CIDR desconocido (no se ignora).
 #: v9: se acepta un `.tf` con BOM UTF-8 (`utf-8-sig`).
-ADAPTER_VERSION = "9"
+#: v10: los rangos de linea ignoran `/* */` y heredocs y aceptan `{` en la linea siguiente.
+ADAPTER_VERSION = "10"
 
 
 class TerraformAdapter:
