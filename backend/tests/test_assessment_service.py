@@ -262,6 +262,48 @@ def test_generate_plans_unknown_assessment_raises(db_session, methodology):
         svc.generate_plans(db_session, methodology, "no-existe")
 
 
+def test_enqueue_refresh_falls_back_to_full_run_when_methodology_changed(
+    db_session, methodology, fake_redis
+):
+    org = "Empresa Refresh Metodologia"
+    previous = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name=org,
+        scope="entorno:produccion",
+        terraform_path=FIXTURES / "gaps",
+    )
+    previous.methodology_version = "criterios=1,tipos=1,settings=1,csf=1"
+    db_session.commit()
+
+    _, job = refresh.enqueue_surveillance_refresh(db_session, methodology, fake_redis, previous.id)
+
+    assert "selective_refresh" not in job.payload
+    assert job.payload["terraform_path"]
+    assert job.payload["ai_requested"] is False
+
+
+def test_selective_refresh_refuses_a_different_methodology(db_session, methodology):
+    org = "Empresa Refresh Guardia"
+    previous = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name=org,
+        scope="entorno:produccion",
+        terraform_path=FIXTURES / "gaps",
+    )
+    previous.methodology_version = "criterios=1,tipos=1,settings=1,csf=1"
+    db_session.commit()
+    refreshed, _paths = svc.create_pending_reevaluation(db_session, methodology, previous.id)
+
+    with pytest.raises(ValueError, match="misma metodologia"):
+        refresh.run_surveillance_refresh(db_session, methodology, refreshed.id, previous.id)
+
+    db_session.refresh(refreshed)
+    assert refreshed.estado == "fallida"
+    assert "misma metodologia" in refreshed.error
+
+
 def test_surveillance_refresh_reuses_unaffected_and_recomputes_operational(db_session, methodology):
     """Refresco selectivo (docs/06 §6, FN-06): conserva lo no operativo (incluida la IA) y
     recalcula solo los criterios de vigilancia."""

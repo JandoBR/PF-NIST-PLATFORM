@@ -318,8 +318,9 @@ def reevaluate_assessment(
     redis_client: redis.Redis = Depends(get_redis),
 ) -> AssessmentAccepted:
     _require_assessment(session, assessment_id, user)
+    tiene_documentos = svc.has_documents(session, assessment_id)
     guard_error = check_live_ai_guard(
-        ai_adjust, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai
+        ai_adjust or tiene_documentos, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai
     )
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
@@ -331,6 +332,7 @@ def reevaluate_assessment(
         redis_client,
         assessment_id,
         apply_ai_adjustment=ai_adjust,
+        request_documents_ai=tiene_documentos,
         context=contexto,
     )
 

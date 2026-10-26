@@ -216,6 +216,31 @@ def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
     assert body["hallazgos_resueltos"] == [] and body["hallazgos_nuevos"] == []
 
 
+def test_reevaluating_documents_requests_ai(api_client, db_session, methodology, fake_redis):
+    """Sin U1, la reevaluacion volveria a leer los documentos y perderia todos los doc.claim."""
+
+    from app.models.tables import Job, Source
+
+    before = _create_and_complete(api_client, db_session, methodology, fake_redis, "good")
+    db_session.add(
+        Source(
+            assessment_id=before["id"],
+            tipo="documents",
+            ruta="/tmp/documento.md",
+            sha256="0" * 64,
+        )
+    )
+    db_session.commit()
+
+    accepted = api_client.post(
+        f"/assessments/{before['id']}/reevaluate", params={"confirm_live_ai": "true"}
+    )
+
+    assert accepted.status_code == 202
+    job = db_session.get(Job, accepted.json()["job_id"])
+    assert job.payload["ai_requested"] is True
+
+
 def test_reevaluate_inherits_plan_follow_up_state(api_client, db_session, methodology, fake_redis):
     """Una reevaluacion hereda el seguimiento desde la evaluacion anterior (docs/05 §4.4)."""
 

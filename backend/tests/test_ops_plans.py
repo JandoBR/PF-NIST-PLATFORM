@@ -49,6 +49,12 @@ def test_skips_unknown_criterion_and_uses_the_next_one(methodology):
     assert plan.criterion_id == "CRI-DE-02"
 
 
+def test_ai_client_without_content_is_labelled_template(methodology):
+    plan = generate_incident_plan(methodology, _trigger(), client=FakeAIClient({}))
+
+    assert plan.generado_por == "plantilla"
+
+
 def test_uses_ai_content_when_available(methodology):
     client = FakeAIClient(
         {

@@ -60,6 +60,8 @@ def generate_plan_content(
         return _template_fallback(criterion)
 
     try:
-        return PlanContentResponse.model_validate(raw)
+        content = PlanContentResponse.model_validate(raw)
     except ValidationError:
         return _template_fallback(criterion)
+    # El contenido vino de la IA, aunque el modelo haya intentado mandar otro `generado_por`.
+    return content.model_copy(update={"generado_por": "ai:plan_v1"})

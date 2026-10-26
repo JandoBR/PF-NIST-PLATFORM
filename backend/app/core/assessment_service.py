@@ -338,6 +338,15 @@ def run_assessment(
     )
 
 
+def has_documents(session: Session, assessment_id: str) -> bool:
+    """Si la evaluacion tiene una fuente documental (para pedir U1 al reevaluar)."""
+
+    return (
+        session.query(Source).filter_by(assessment_id=assessment_id, tipo="documents").first()
+        is not None
+    )
+
+
 def _resolve_previous_sources(previous: Assessment) -> dict[str, Path | None]:
     terraform_path: Path | None = None
     ansible_path: Path | None = None
@@ -410,10 +419,12 @@ def enqueue_reevaluation(
     previous_assessment_id: str,
     *,
     apply_ai_adjustment: bool = False,
+    request_documents_ai: bool = False,
     context: dict[str, Any] | None = None,
 ) -> tuple[Assessment, Job]:
     """Crea una reevaluacion y encola su `assessment_run` en la cola del core. Lo usan
-    `POST /assessments/{id}/reevaluate` y el refresco automatico de madurez (docs/08 §8)."""
+    `POST /assessments/{id}/reevaluate`, el refresco automatico de madurez (docs/08 §8) y el
+    fallback del refresco cuando cambia la metodologia."""
 
     assessment, paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
     job = dispatch_job(
@@ -425,7 +436,9 @@ def enqueue_reevaluation(
             "terraform_path": str(paths["terraform_path"]) if paths["terraform_path"] else None,
             "ansible_path": str(paths["ansible_path"]) if paths["ansible_path"] else None,
             "documents_path": str(paths["documents_path"]) if paths["documents_path"] else None,
-            "ai_requested": apply_ai_adjustment,
+            # U1 se necesita si hay documentos: sin IA, la reevaluacion perderia todos los
+            # `doc.claim` de la evaluacion anterior (docs/09 §74).
+            "ai_requested": apply_ai_adjustment or request_documents_ai,
             "apply_ai_adjustment": apply_ai_adjustment,
             "context": context or {},
         },

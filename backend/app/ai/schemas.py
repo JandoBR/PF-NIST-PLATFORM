@@ -47,3 +47,5 @@ class PlanContentResponse(BaseModel):
     pasos: list[str] = Field(default_factory=list)
     verificacion: str
     dependencias: list[str] = Field(default_factory=list)
+    #: Lo fija `generate_plan_content`: la IA no decide si el contenido es suyo o la plantilla.
+    generado_por: str = "plantilla"

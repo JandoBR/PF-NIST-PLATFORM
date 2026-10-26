@@ -2329,3 +2329,27 @@ todo requiere patrones por evento o por par, que es un cambio de modelo (docs/12
 evidencia emitida; `assessments.reproducibility` lo registra). No cambia `methodology_version`.
 
 **Verificación:** suite completa **601 tests** + `ruff check` y `ruff format` limpios.
+
+## 74. Reevaluación con documentos, refresco y procedencia de planes
+
+- **La API de reevaluación pedía U1 solo si `ai_adjust`.** `enqueue_reevaluation` ponía
+  `ai_requested = apply_ai_adjustment`; si la evaluación anterior tenía documentos, el worker
+  re-leía los PDFs/Markdown con `NullAIClient` y perdía todos los `doc.claim`: GV-01 pasaba de 100 a
+  `evidencia_insuficiente`. Ahora la ruta detecta `Source(tipo="documents")`, aplica el guard de IA
+  real con `confirm_live_ai` y encola `ai_requested=True` (el CLI ya lo hacía). Test:
+  `test_reevaluating_documents_requests_ai`.
+- **Refresco selectivo con otra metodología.** `run_surveillance_refresh` copiaba resultados de la
+  evaluación anterior sin mirar `methodology_version`: una evaluación con 6 criterios se completaba
+  con 13/23 resultados, se marcaba con la versión nueva y `provisional=False`. Ahora
+  `enqueue_surveillance_refresh` detecta el cambio y hace un **re-run completo** con las mismas
+  fuentes (y U1 si hay documentos); `run_surveillance_refresh` además falla el job si un refresco
+  selectivo viejo llega tras el deploy. Tests:
+  `test_enqueue_refresh_falls_back_to_full_run_when_methodology_changed` y
+  `test_selective_refresh_refuses_a_different_methodology`.
+- **Procedencia de planes.** `generado_por` se decidía por la clase del cliente: un cliente de IA
+  que caía a la plantilla se grababa como `ai:plan_v1`. Ahora `generate_plan_content` marca el
+  contenido (`generado_por`), y `recommendations/plans`/`ops/plans` lo copian; un fallback queda
+  como `plantilla`. Tests: `test_ai_client_without_content_is_labelled_template` en ambos módulos.
+  docs/04 §6 y docs/06 §6 quedan alineados.
+
+**Verificación:** suite completa **606 tests** + `ruff check` y `ruff format` limpios.

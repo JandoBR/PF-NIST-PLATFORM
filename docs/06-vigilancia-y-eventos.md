@@ -176,6 +176,9 @@ Cargar eventos (event_time en orden)
 
 - Nunca se sobrescribe una evaluación previa: se crea la nueva y se muestra el diff.
 - El recálculo solo toca criterios afectados; el resto conserva su puntaje y versión.
+- Si la metodología cambió desde la evaluación anterior, **no** se hace refresco selectivo: se
+  re-ejecuta el pipeline completo con las mismas fuentes (y U1 si hay documentos), porque mezclar
+  resultados de dos versiones dejaría fuera criterios nuevos (docs/09 §74).
 - El diff responde: “¿qué cambió y por qué?” (evidencia nueva, patrón detectado, estado).
 
 **Automático (docs/08 §8).** La nueva evaluación **no la pide el usuario**: al procesar una ingesta,

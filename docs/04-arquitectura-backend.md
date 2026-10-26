@@ -214,7 +214,7 @@ persiste la evidencia y evalúa todos los criterios. El **refresco selectivo** t
 | `GET` | `/incidents/{id}` | Detalle, timeline y hechos del incidente. |
 | `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |
 | `PATCH` | `/incidents/{id}` | Cambia el estado del incidente (`open`…`closed`). Un paso por vez, sin retroceder; `closed` (terminal, desde cualquier estado abierto) exige `motivo` y lo mueve al historial. Transición inválida o sin motivo → 409 (docs/08 §4, docs/09 §52). |
-| `POST` | `/assessments/{id}/reevaluate` | Crea nueva evaluación heredando fuentes. |
+| `POST` | `/assessments/{id}/reevaluate` | Crea nueva evaluación heredando fuentes; si la anterior tiene documentos, pide U1 de nuevo (y exige `confirm_live_ai` si hay clave real). |
 | `GET` | `/assessments/{id}/compare/{other_id}` | Por criterio: estado, puntaje, `direccion` del cambio y la explicación de antes y de después. Además el puntaje global, si ambas usan la misma metodología y alcance, y los hallazgos que ya no aparecen o son nuevos (docs/09 §67). |
 | `GET` | `/methodology` | Catálogo vigente: `methodology_version`, `nucleo_csf_version`, `cobertura_implementacion` (metadato del producto, docs/01 §7), `criterios` y `tipos_evidencia`. |
 | `GET` | `/health` | Liveness/readiness. |
