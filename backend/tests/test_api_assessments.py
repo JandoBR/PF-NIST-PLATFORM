@@ -184,6 +184,14 @@ def test_plan_follow_up_invalid_state_is_422(api_client, db_session, methodology
     assert response.status_code == 422
 
 
+def test_context_with_a_huge_number_is_422_not_500(api_client):
+    """`json.loads` lanza ValueError con enteros de >4300 digitos; no debe escapar como 500."""
+
+    context = '{"a": 1' + "0" * 5000 + "}"
+    response = _upload_terraform(api_client, "good", context=context)
+    assert response.status_code == 422
+
+
 def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
     api_client, db_session, methodology, fake_redis
 ):

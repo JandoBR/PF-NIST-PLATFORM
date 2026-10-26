@@ -111,7 +111,9 @@ def _parse_context(context: str) -> dict:
 
     try:
         parsed = json.loads(context)
-    except json.JSONDecodeError as exc:
+    except (ValueError, RecursionError) as exc:
+        # `JSONDecodeError` es un ValueError; un entero de >4300 digitos lanza ValueError y un
+        # objeto muy anidado, RecursionError. Ninguno debe escapar como 500 (docs/04 §6).
         raise HTTPException(status_code=422, detail=f"`context` no es JSON valido: {exc}") from exc
     if not isinstance(parsed, dict):
         raise HTTPException(status_code=422, detail="`context` debe ser un objeto JSON.")

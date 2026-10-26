@@ -72,12 +72,28 @@ def decode_token(token: str) -> dict | None:
         body, signature = token.split(".")
     except ValueError:
         return None
-    if not hmac.compare_digest(signature, _sign(body)):
+    try:
+        if not hmac.compare_digest(signature, _sign(body)):
+            return None
+    except (TypeError, ValueError):
+        # `compare_digest` no acepta str con bytes no ASCII: un header manipulado es 401, no 500.
         return None
     try:
         payload = json.loads(_unb64url(body))
-    except (ValueError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return None
-    if not isinstance(payload, dict) or payload.get("exp", 0) < datetime.now(UTC).timestamp():
+    if not isinstance(payload, dict):
+        return None
+
+    exp = payload.get("exp")
+    if not isinstance(exp, (int, float)) or isinstance(exp, bool):
+        return None
+    if exp < datetime.now(UTC).timestamp():
+        return None
+    sub = payload.get("sub")
+    if not isinstance(sub, str) or not sub:
+        return None
+    org = payload.get("org")
+    if org is not None and not isinstance(org, str):
         return None
     return payload

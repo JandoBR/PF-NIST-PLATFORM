@@ -44,7 +44,10 @@ Nueva tabla `users` (una organización tiene N usuarios):
     `api`/workers compartan el mismo secreto sin estado compartido.
   - `AUTH_TOKEN_TTL_HOURS` (env, default 72) controla la expiración.
 - El cliente manda `Authorization: Bearer <token>` en cada request.
-- Error 401 si falta el token, la firma no valida, o expiró.
+- Error 401 si falta el token, la firma no valida, expiró o el payload está malformado
+  (`exp` no numérico, `sub` no string, etc.). Nunca 500 por un header manipulado.
+- Un usuario inexistente ejecuta igualmente un hash de relleno: el tiempo de respuesta no revela
+  si el usuario existe (enumeración por tiempo).
 
 ## 4. Aislamiento por organización (scoping)
 

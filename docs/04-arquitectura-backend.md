@@ -347,7 +347,7 @@ Reglas:
 | Prompt injection en documentos | El contenido va delimitado y etiquetado como datos; ver doc 05 §7. |
 | Secretos en archivos | **Pendiente para uso real** (docs/12 SEC-07): hoy el documento se envía tal cual a la IA; no hay detección ni redacción de secretos. |
 | Tamaño de archivos | **Fuera del prototipo** (docs/12 SEC-08): no hay límite por archivo ni por evaluación. |
-| Traversal / archivos comprimidos | Nombre reducido a *basename* y validado contra lista blanca de extensiones; inválido → 422. Sin descompresión recursiva (docs/09 §35). |
+| Traversal / archivos comprimidos | Nombre reducido a *basename*, validado contra lista blanca de extensiones y longitud (≤255 bytes); inválido → 422. Sin descompresión recursiva (docs/09 §35, §75). |
 
 ## 10. Decisiones Diferidas
 

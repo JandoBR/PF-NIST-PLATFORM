@@ -32,3 +32,8 @@ def test_extension_whitelist_per_type():
 def test_empty_or_invalid_names_are_rejected(name):
     with pytest.raises(ValueError):
         safe_filename(name, tipo="terraform")
+
+
+def test_overlong_name_is_rejected():
+    with pytest.raises(ValueError, match="demasiado largo"):
+        safe_filename("a" * 300 + ".md", tipo="documents")

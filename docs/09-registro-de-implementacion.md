@@ -2353,3 +2353,22 @@ evidencia emitida; `assessments.reproducibility` lo registra). No cambia `method
   docs/04 §6 y docs/06 §6 quedan alineados.
 
 **Verificación:** suite completa **606 tests** + `ruff check` y `ruff format` limpios.
+
+## 75. Entradas hostiles: 401/422 en vez de 500
+
+- **Firma no ASCII.** `hmac.compare_digest(str, str)` lanza `TypeError` con caracteres no ASCII;
+  cualquier cliente sin token podía provocar un 500. `decode_token` lo captura y devuelve `None`
+  (401). Test: `test_non_ascii_signature_is_rejected_not_500`.
+- **Payload firmado malformado.** `exp` como string (`TypeError` al comparar), `sub` como lista
+  (`session.get` revienta) u `org` no-string ahora se rechazan en `decode_token` como 401, no 500.
+  Test: `test_token_with_a_malformed_payload_is_rejected`.
+- **Login sin enumeración por tiempo.** Un usuario inexistente no saltaba PBKDF2 (~3 ms vs ~37 ms).
+  Ahora ejecuta un hash de relleno cacheado al importar; el tiempo es comparable. Test:
+  `test_unknown_user_still_runs_the_password_hash`.
+- **`context` con un entero de >4300 dígitos** (o un objeto muy anidado) lanzaba `ValueError`/
+  `RecursionError` fuera del `JSONDecodeError` capturado: 500. Ahora ambos son 422 antes de crear
+  nada. Test: `test_context_with_a_huge_number_is_422_not_500`.
+- **Nombre de archivo de >255 bytes.** Pasaba el saneo y `write_bytes` lanzaba `OSError` (500).
+  `safe_filename` lo rechaza con 422. Test: `test_overlong_name_is_rejected`.
+
+**Verificación:** suite completa **611 tests** + `ruff check` y `ruff format` limpios.
