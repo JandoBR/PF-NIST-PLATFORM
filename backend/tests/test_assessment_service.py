@@ -262,6 +262,48 @@ def test_generate_plans_unknown_assessment_raises(db_session, methodology):
         svc.generate_plans(db_session, methodology, "no-existe")
 
 
+def test_assessment_is_not_published_as_completed_before_plans(
+    monkeypatch, db_session, methodology
+):
+    visto = {}
+    original = svc.generate_plans
+
+    def espia(session, methodology, assessment_id, **kwargs):
+        visto["estado"] = session.get(Assessment, assessment_id).estado
+        return original(session, methodology, assessment_id, **kwargs)
+
+    monkeypatch.setattr(svc, "generate_plans", espia)
+
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Orden Planes",
+        scope="entorno:produccion",
+        terraform_path=FIXTURES / "gaps",
+    )
+
+    assert visto["estado"] == "en_progreso"
+    assert assessment.estado == "completada"
+
+
+def test_methodology_version_is_stamped_when_the_worker_runs(db_session, methodology):
+    assessment = svc.create_pending_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Version Tardia",
+        scope="entorno:produccion",
+    )
+    assessment.methodology_version = "criterios=1,tipos=1,settings=1,csf=1"
+    db_session.commit()
+
+    svc.run_pending_assessment(
+        db_session, methodology, assessment.id, terraform_path=FIXTURES / "gaps"
+    )
+
+    db_session.refresh(assessment)
+    assert assessment.methodology_version == methodology.methodology_version
+
+
 def test_enqueue_refresh_falls_back_to_full_run_when_methodology_changed(
     db_session, methodology, fake_redis
 ):

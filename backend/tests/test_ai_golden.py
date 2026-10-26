@@ -12,6 +12,8 @@ import pytest
 
 from app.ai.client import NullAIClient
 from app.ai.golden_eval import (
+    DocReport,
+    _check_citations,
     _matches,
     _norm,
     evaluate_extraction,
@@ -185,6 +187,33 @@ def test_degraded_ai_reports_it_instead_of_crashing(methodology):
     assert report.recall == 0.0 and not report.passed
     assert report.llamadas > 0 and report.llamadas_degradadas == report.llamadas
     assert "degradadas" in format_report(report)
+
+
+def test_check_citations_ignores_non_objects_and_punctuation_only():
+    doc = DocReport(documento="x")
+
+    _check_citations(
+        [
+            ["no es un objeto"],
+            {"afirmaciones": "no es una lista"},
+            {
+                "afirmaciones": [
+                    {"encontrado": True, "tipo": "policy_exists", "cita": {"fragmento": "..."}},
+                    {
+                        "encontrado": True,
+                        "tipo": "policy_exists",
+                        "cita": {"fragmento": "texto real"},
+                    },
+                ]
+            },
+        ],
+        "texto real",
+        ["policy_exists"],
+        doc,
+    )
+
+    assert doc.citas_total == 1
+    assert doc.citas_no_localizables == []
 
 
 def test_content_matching_rules():

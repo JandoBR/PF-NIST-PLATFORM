@@ -250,8 +250,18 @@ export interface CriterionDefinition {
   recomendacion: string;
 }
 
+export interface MethodologyCoverage {
+  subcategorias_cubiertas: number;
+  subcategorias_totales: number;
+  ratio: number;
+  por_funcion: Record<string, number[]>;
+  categorias_sin_criterio: string[];
+}
+
 export interface MethodologyCatalog {
-  methodology_version: number;
+  methodology_version: string;
+  nucleo_csf_version: number;
+  cobertura_implementacion: MethodologyCoverage;
   criterios: CriterionDefinition[];
   tipos_evidencia: string[];
 }

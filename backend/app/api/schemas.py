@@ -69,6 +69,17 @@ class PlanUpdate(BaseModel):
     estado: str
 
 
+class IngestJobResult(BaseModel):
+    """Resumen de una ingesta (FN-03). Los campos ausentes quedan en 0, no en `undefined`."""
+
+    eventos_leidos: int = 0
+    eventos_nuevos: int = 0
+    eventos_existentes: int = 0
+    patrones_nuevos: int = 0
+    incidentes_nuevos: int = 0
+    incidentes_actualizados: int = 0
+
+
 class JobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -83,16 +94,20 @@ class JobOut(BaseModel):
     tomado_en: datetime | None
     actualizado_en: datetime
     #: Que hizo el job al terminar, si lo reporta: la ingesta de eventos da nuevos vs existentes.
-    resultado: dict | None = None
-    #: Fallido y con las entradas guardadas (`POST /jobs/{id}/retry`, docs/11 FN-09).
+    resultado: IngestJobResult | None = None
+    #: Fallido, con entradas guardadas y con la evaluacion aun fallida (`POST /jobs/{id}/retry`).
     reintentable: bool = False
     #: El reintento volveria a llamar a la IA real (cuesta dinero).
     usa_ia: bool = False
 
     @classmethod
-    def from_job(cls, job) -> JobOut:
+    def from_job(cls, job, assessment_estado: str | None = None) -> JobOut:
         out = cls.model_validate(job)
         out.reintentable = job.estado == "fallido" and job.payload is not None
+        if out.reintentable and job.assessment_id is not None:
+            # Un reintento exitoso deja la evaluacion completada; el job viejo sigue `fallido`,
+            # pero ya no se puede reintentar (dispatch responde 409). El campo debe reflejarlo.
+            out.reintentable = assessment_estado == "fallida"
         out.usa_ia = bool((job.payload or {}).get("ai_requested"))
         return out
 

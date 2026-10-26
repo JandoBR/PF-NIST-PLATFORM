@@ -258,6 +258,9 @@ def run_pending_assessment(
         raise AssessmentNotFoundError(assessment_id)
 
     assessment.estado = "en_progreso"
+    # La version se fija cuando el worker ejecuta, no cuando la API encola: si la metodologia
+    # cambio entre ambos, la fila debe reflejar la que realmente calculo (docs/01 §10).
+    assessment.methodology_version = methodology.methodology_version
     session.commit()
 
     try:
@@ -294,12 +297,11 @@ def run_pending_assessment(
         for result in results:
             session.add(result_to_row(assessment.id, result))
 
+        # Los planes se generan antes de publicar `completada`, con la plantilla determinista y
+        # sin IA (docs/11 UI-02): nadie debe ver una evaluacion completada con cero planes.
+        generate_plans(session, methodology, assessment.id)
         assessment.estado = "completada"
         session.commit()
-        # Los planes se generan solos al completar, con la plantilla determinista y sin IA
-        # (docs/11 UI-02): el usuario no tiene que pedirlos. La IA sigue siendo explicita via
-        # `POST /assessments/{id}/plans?use_ai=true`, que los recalcula.
-        generate_plans(session, methodology, assessment.id)
     except Exception as exc:
         assessment.estado = "fallida"
         assessment.error = str(exc)

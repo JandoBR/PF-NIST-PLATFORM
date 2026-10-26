@@ -284,5 +284,7 @@ Una evaluación registra:
 - Modelo y versión de prompt de IA (para ajustes y extracción).
 
 Implementado en `assessments.reproducibility` (adaptador y parser por fuente; modelo y prompt de
-IA solo si participó), docs/09 §37. Con eso, dos evaluaciones son comparables y un cambio de puntaje se puede atribuir a: nueva evidencia,
-nuevo criterio, nuevo parser o nuevo modelo.
+IA solo si participó), docs/09 §37. `methodology_version` se fija al ejecutar el pipeline (no al
+encolar), para que la evaluación registre la versión que realmente usó (docs/09 §76). Con eso, dos
+evaluaciones son comparables y un cambio de puntaje se puede atribuir a: nueva evidencia, nuevo
+criterio, nuevo parser o nuevo modelo.

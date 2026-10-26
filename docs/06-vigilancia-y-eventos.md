@@ -40,7 +40,8 @@ Formato JSONL, un evento por línea:
 > (docs/04 §4). Los demás campos se conservan.
 
 Campos obligatorios: `event_id`, `event_time`, `tipo`, `recurso`, `scope`.
-`event_time` es el **tiempo del evento**, no el de reproducción.
+`event_time` es el **tiempo del evento**, no el de reproducción. Se normaliza a UTC: un valor sin
+zona se interpreta como UTC, y mezclar naive con aware en el mismo archivo ya no rompe la ingesta.
 Los eventos pertenecen a una **organización** (`org_id`): se cargan vía `/orgs/{org_id}/events` y el
 `scope` identifica el entorno dentro de ella. No pertenecen a una evaluación.
 

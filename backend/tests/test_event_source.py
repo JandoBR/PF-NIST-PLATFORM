@@ -9,6 +9,38 @@ from app.models.tables import Event, LogPatternRow
 SCOPE = "entorno:produccion"
 
 
+def test_mixed_naive_and_aware_event_times_are_normalized(tmp_path):
+    from app.surveillance.events import load_events_jsonl
+
+    archivo = tmp_path / "mixto.jsonl"
+    archivo.write_text(
+        "\n".join(
+            json.dumps(evento)
+            for evento in (
+                {
+                    "event_id": "naive",
+                    "event_time": "2026-09-20T03:10:00",
+                    "tipo": "auth_failure",
+                    "recurso": "srv-app-01",
+                    "scope": SCOPE,
+                },
+                {
+                    "event_id": "aware",
+                    "event_time": "2026-09-20T03:11:00+00:00",
+                    "tipo": "auth_failure",
+                    "recurso": "srv-app-01",
+                    "scope": SCOPE,
+                },
+            )
+        )
+    )
+
+    events = load_events_jsonl(archivo)
+
+    assert [e.event_id for e in events] == ["naive", "aware"]
+    assert all(e.event_time.tzinfo is not None for e in events)
+
+
 def _fallos(tmp_path, nombre, fuente, n=6, desde=0):
     lineas = []
     for i in range(n):

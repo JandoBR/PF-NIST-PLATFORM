@@ -2372,3 +2372,29 @@ evidencia emitida; `assessments.reproducibility` lo registra). No cambia `method
   `safe_filename` lo rechaza con 422. Test: `test_overlong_name_is_rejected`.
 
 **Verificación:** suite completa **611 tests** + `ruff check` y `ruff format` limpios.
+
+## 76. Ciclo de vida, contratos de jobs y determinismo
+
+- **Plan antes de `completada`.** Se marcaba `completada` y se hacía commit antes de
+  `generate_plans`; una lectura concurrente veía la evaluación terminada con cero planes. Ahora los
+  planes se generan antes y recién entonces se publica `completada`. Test:
+  `test_assessment_is_not_published_as_completed_before_plans`.
+- **`methodology_version` al ejecutar.** Se copiaba en `create_pending_assessment`; un job encolado
+  antes de un deploy corría las reglas nuevas pero registraba la versión vieja. Ahora el worker la
+  fija al empezar. Test: `test_methodology_version_is_stamped_when_the_worker_runs`.
+- **Contrato de `JobOut`.** `resultado` pasa de `dict` libre a `IngestJobResult` con defaults 0 (la
+  UI no recibe `undefined`) y `reintentable` exige que la evaluación siga `fallida`: tras un
+  reintento exitoso el job viejo deja de ofrecer "Reintentar" (antes el botón siempre daba 409).
+  Tests: `test_job_result_is_exposed_by_the_api` y la aserción nueva en `test_job_retry.py`.
+- **Fechas de eventos.** `event_time` se normaliza a UTC al parsear; mezclar naive y aware lanzaba
+  `TypeError` y tumbaba la ingesta. Test: `test_mixed_naive_and_aware_event_times_are_normalized`.
+- **`best_found` determinista.** En empate de confianza decide el `subject_ref` y luego el
+  contenido, no el orden de la lista. Tests: `test_rules_common.py`.
+- **Golden set.** Una respuesta no-objeto o un `afirmaciones` no-lista ya no rompen el arnés; una
+  cita que normaliza a vacío (`"..."`) no cuenta como localizable. Test nuevo en
+  `test_ai_golden.py`.
+- **Frontend.** `MethodologyCatalog.methodology_version` es `string` (no `number`) e incluye
+  `nucleo_csf_version` y `cobertura_implementacion`.
+
+**Verificación:** suite completa **617 tests** + `ruff check` y `ruff format` limpios; frontend
+`typecheck`, `lint` y `build` limpios.

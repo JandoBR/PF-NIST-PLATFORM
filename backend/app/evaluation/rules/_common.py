@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from functools import wraps
 
@@ -37,12 +38,23 @@ def best_found_with(claims: list[EvidenceInstance], campo: str) -> EvidenceInsta
 
 
 def best_found(claims: list[EvidenceInstance]) -> EvidenceInstance | None:
-    """La afirmacion `encontrado=true` con mayor confianza, o `None` si ninguna declara el hecho."""
+    """La afirmacion `encontrado=true` con mayor confianza, o `None` si ninguna declara el hecho.
+
+    En empate decide el documento y despues el contenido, no el orden de la lista: el motor es
+    deterministico (docs/00 §7) y dos corridas con la misma evidencia deben citar lo mismo.
+    """
 
     encontradas = [c for c in claims if c.value.get("encontrado")]
     if not encontradas:
         return None
-    return max(encontradas, key=lambda c: c.value.get("confianza", 0))
+    return min(
+        encontradas,
+        key=lambda c: (
+            -c.value.get("confianza", 0),
+            c.subject_ref,
+            json.dumps(c.value.get("contenido", {}), sort_keys=True, ensure_ascii=False),
+        ),
+    )
 
 
 def result(

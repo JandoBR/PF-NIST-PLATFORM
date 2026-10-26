@@ -167,6 +167,9 @@ pendiente ──► en_progreso ──► completada
 - La evaluación encolada queda `pendiente`; el worker la pasa a `en_progreso` y la cierra como
   `completada` o `fallida`. La granularidad mayor (`ingestando`/`analizando`/`ajustando_ia`…) se
   descartó: la evaluación es atómica y un fallo se ve por `job.error` (docs/12 §1, OP-10).
+- Los planes se generan **antes** de publicar `completada`: nunca se observa una evaluación
+  completada con cero planes. `methodology_version` se fija cuando el worker ejecuta, no cuando la
+  API encola, para que la fila registre la versión que realmente calculó (docs/09 §76).
 - Una evaluación completada es **inmutable**; “reevaluar” crea una evaluación nueva que hereda fuentes.
 - Si el ajuste de IA falla, la evaluación igual completa con `base_score = final_score` y marca `degradado`.
 

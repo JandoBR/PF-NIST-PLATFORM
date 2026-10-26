@@ -30,7 +30,7 @@ from typing import Any
 from app.adapters.documents.extraction_text import chunk_document
 from app.ai.client import AIClient
 from app.ai.extraction import extract_claims
-from app.ai.quotes import normalize
+from app.ai.quotes import normalize, quote_in_text
 from app.methodology.loader import Methodology
 from app.schemas.evidence import EvidenceInstance
 
@@ -173,19 +173,23 @@ def _describe(tipo: str, contenido: dict) -> str:
 def _check_citations(
     respuestas: list[dict | None], chunk_text: str, tipos: list[str], doc: DocReport
 ) -> None:
-    texto = _norm(chunk_text)
     for respuesta in respuestas:
-        for afirmacion in (respuesta or {}).get("afirmaciones", []):
+        if not isinstance(respuesta, dict):
+            continue  # una respuesta no-objeto es invalida, no un crash del arnes
+        afirmaciones = respuesta.get("afirmaciones", [])
+        if not isinstance(afirmaciones, list):
+            continue
+        for afirmacion in afirmaciones:
             if not isinstance(afirmacion, dict) or not afirmacion.get("encontrado"):
                 continue
             if afirmacion.get("tipo") not in tipos:
                 continue
             cita = afirmacion.get("cita")
             fragmento = cita.get("fragmento") if isinstance(cita, dict) else None
-            if not isinstance(fragmento, str) or not fragmento.strip():
-                continue  # sin cita: extract_claims ya la descarta (E2), no hay nada que verificar
+            if not isinstance(fragmento, str) or not _norm(fragmento):
+                continue  # sin cita (o solo puntuacion): extract_claims ya la descarta (E2)
             doc.citas_total += 1
-            if _norm(fragmento) not in texto:
+            if not quote_in_text(fragmento, chunk_text):
                 doc.citas_no_localizables.append(f"{afirmacion.get('tipo')}: {fragmento!r}")
 
 
