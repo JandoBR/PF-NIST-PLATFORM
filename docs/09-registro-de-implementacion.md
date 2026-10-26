@@ -2218,3 +2218,65 @@ independiente de la máquina. Goldens regenerados: el diff son exactamente 6 lí
 
 **Verificación:** suite completa **573 tests** + `ruff check` y `ruff format` limpios; `test_golden.py`
 pasa desde un checkout en otra ruta (`/tmp/...`), cosa que antes fallaba.
+
+## 70. Endurecimiento de GV-02, RS-03 y RS-01 (`criteria.yml` v12)
+
+Decisión de producto: un **100 exige evidencia completa**. No se concede por aproximación ni por
+un dato parcial; sigue siendo alcanzable con documentos reales, porque solo se pide que el dato
+declarado esté, no que la organización sea perfecta.
+
+- **GV-02 (roles).** El 100 anterior miraba solo `autoridad`, así que `{rol: CISO, autoridad: …}`
+  bastaba. Ahora exige **responsable nombrado + responsabilidades + autoridad**; 75 si hay
+  responsable pero falta responsabilidades o autoridad; 50 si solo hay roles genéricos o ningún
+  responsable. `role_assigned` incorpora `responsabilidades` a `_CONTENT_FIELDS`
+  (`app/ai/extraction.py`), el campo que la regla necesitaba y el esquema no pedía.
+- **RS-03 (notificación).** El 100 anterior solo miraba `plazos`, aunque docs/03 exige “criterios y
+  plazos”. Ahora el 100 exige destinatarios + criterios + plazos; con destinatarios pero sin uno de
+  los dos, 75. No se reintroduce el tramo 50 que §47 eliminó.
+- **RS-01 (respuesta).** El 100 anterior aceptaba cualquier `escalation_done`, incluso anterior al
+  `incident_declared`. Ahora exige que el último evento del patrón sea **posterior** a la
+  declaración (misma lógica que D3, docs/08 §5); sin declaración, o con escalamiento anterior, el
+  plan completo se queda en 75 y un incidente declarado en ventana completa sin escalamiento
+  posterior vuelve al 0 de la regla de justicia. Se usa `hasta` del patrón para admitir varias
+  escalaciones: si la última es posterior, hay al menos una que lo es.
+
+**Tests:** `test_gv02_rol_completo_es_100`, `test_gv02_responsable_sin_responsabilidades_es_75`,
+`test_gv02_responsable_sin_autoridad_es_75`, `test_gv02_rol_sin_responsable_es_50`,
+`test_gv02_rol_generico_sin_responsable_es_50`, `test_gv02_elige_el_rol_completo_entre_varios`;
+`test_rs03_con_criterios_y_plazos_es_100`, `test_rs03_sin_criterios_es_75`,
+`test_rs03_sin_plazos_es_75`; `test_rs01_plan_completo_con_escalamiento_posterior_scores_100`,
+`test_rs01_escalamiento_anterior_a_la_declaracion_scores_0`,
+`test_rs01_plan_completo_con_escalamiento_sin_declaracion_tope_75`. Se actualizaron las
+aserciones que bendecían el comportamiento laxo.
+
+**Versión:** `criteria.yml` pasa a **v12** (cambian resultados y `methodology_version`; comparar una
+evaluación vieja con una nueva mostrará esos criterios como modificados). `docs/03` §1/§5 y
+`docs/02` §3.3 quedan alineados con la regla estricta.
+
+**Verificación:** suite completa **580 tests** + `ruff check` y `ruff format` limpios.
+
+## 71. Otras correcciones de estricta puntuación (Terraform v7, Ansible v4)
+
+Misma regla de producto: no se concede un 100 si falta evidencia de un recurso o requisito aplicable.
+
+- **PR-05 con flags sin resolver.** `con_bloque` se construía con todos los `tf.public_access.config`
+  (incluidos los `unknown`), así que un bucket con los cuatro flags sin resolver no aparecía como
+  “sin bloque” si otro bucket estaba completo: 100. Ahora solo cuenta un bloqueo **resuelto**; un
+  bucket con bloqueo incompleto o sin bloque queda `evidencia_insuficiente` (docs/03 §3).
+  Test: `test_pr05_an_unresolved_block_prevents_the_100`.
+- **`state` de Ansible manda sobre `enabled`.** `enabled: true` + `state: stopped` se leía como
+  “habilitado” (100 en PR-06/DE-01), y `state: restarted`/`reloaded` quedaba `desconocido`.
+  Ahora se evalúa primero `state`; `enabled` solo es el respaldo cuando no hay `state`. Test:
+  `test_service_state_wins_over_enabled`.
+- **Retención HCL integral.** `backup_retention_period = 7.0` (número válido en HCL) se descartaba
+  por `isinstance(..., int)` y PR-02 quedaba `evidencia_insuficiente`. Ahora un float integral se
+  normaliza a días. Test: `test_integral_float_retention_is_read_as_days`.
+- **S3 con varias `rule`.** Se miraba siempre `rules[0]`; si la primera era un `filter` y la
+  configuración por defecto iba después, el cifrado quedaba `unknown`. Ahora se usa la primera
+  `rule` que declare `apply_server_side_encryption_by_default`. Test:
+  `test_s3_encryption_uses_the_rule_that_defines_sse`.
+
+**Versiones de adaptador:** Terraform pasa a **v7** y Ansible a **v4** (cambia la evidencia emitida;
+`assessments.reproducibility` lo registra). No cambia `methodology_version` por esto.
+
+**Verificación:** suite completa **584 tests** + `ruff check` y `ruff format` limpios.

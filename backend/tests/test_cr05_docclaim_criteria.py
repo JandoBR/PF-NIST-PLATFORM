@@ -32,7 +32,13 @@ def _window(completo: bool = True) -> EvidenceInstance:
     )
 
 
-def _pattern(patron: str, resultado: str = "ok") -> EvidenceInstance:
+def _pattern(
+    patron: str,
+    resultado: str = "ok",
+    *,
+    desde: str = "2026-01-01T00:00:00Z",
+    hasta: str = "2026-01-01T00:05:00Z",
+) -> EvidenceInstance:
     return EvidenceInstance(
         type_id="log.pattern",
         type_version=1,
@@ -42,8 +48,8 @@ def _pattern(patron: str, resultado: str = "ok") -> EvidenceInstance:
         value={
             "patron": patron,
             "resultado": resultado,
-            "desde": "2026-01-01T00:00:00Z",
-            "hasta": "2026-01-01T00:05:00Z",
+            "desde": desde,
+            "hasta": hasta,
             "conteo": 1,
         },
         source_id="test:cr05",
@@ -153,9 +159,47 @@ def _plan_completo() -> EvidenceInstance:
     )
 
 
-def test_rs01_plan_completo_con_escalamiento_scores_100():
-    evidence = [_window(), _pattern("escalation_done"), _plan_completo()]
+def test_rs01_plan_completo_con_escalamiento_posterior_scores_100():
+    evidence = [
+        _window(),
+        _pattern(
+            "incident_declared",
+            desde="2026-01-01T00:00:00Z",
+            hasta="2026-01-01T00:01:00Z",
+        ),
+        _pattern(
+            "escalation_done",
+            desde="2026-01-01T00:02:00Z",
+            hasta="2026-01-01T00:03:00Z",
+        ),
+        _plan_completo(),
+    ]
     assert rs01_response_plan.evaluate(evidence).final_score == 100
+
+
+def test_rs01_escalamiento_anterior_a_la_declaracion_scores_0():
+    """Un escalamiento previo no es respuesta a este incidente (docs/08 §5, D3)."""
+
+    evidence = [
+        _window(),
+        _pattern(
+            "incident_declared",
+            desde="2026-01-01T00:02:00Z",
+            hasta="2026-01-01T00:03:00Z",
+        ),
+        _pattern(
+            "escalation_done",
+            desde="2026-01-01T00:00:00Z",
+            hasta="2026-01-01T00:01:00Z",
+        ),
+        _plan_completo(),
+    ]
+    assert rs01_response_plan.evaluate(evidence).final_score == 0
+
+
+def test_rs01_plan_completo_con_escalamiento_sin_declaracion_tope_75():
+    evidence = [_window(), _pattern("escalation_done"), _plan_completo()]
+    assert rs01_response_plan.evaluate(evidence).final_score == 75
 
 
 def test_rs01_plan_completo_sin_ventana_tope_75():

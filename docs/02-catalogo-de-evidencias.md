@@ -104,10 +104,10 @@ Tipos de afirmación (`tipo_afirmacion`) usados por los criterios:
 |---|---|
 | `policy_exists` | `{ nombre, aprobada_por?, fecha? }` |
 | `policy_review` | `{ frecuencia, ultima_revision? }` |
-| `role_assigned` | `{ roles: [{ rol, responsable, autoridad }] }` |
+| `role_assigned` | `{ roles: [{ rol, responsable, responsabilidades, autoridad }] }` |
 | `risk_tolerance` | `{ objetivos_riesgo, tolerancia?, responsable? }` |
-| `process_defined` | `{ proceso, pasos, responsables?, criterios_activacion?, criterios_declaracion?, metricas?, ajustes? }` |
-| `escalation_path` | `{ niveles[], criterios[] }` *(declarado; aún no extraído por U1)* |
+| `process_defined` | `{ proceso, pasos, responsables?, criterios_activacion?, criterios_declaracion?, registro_riesgos?, priorizacion?, metricas?, ajustes? }` |
+| `escalation_path` | `{ niveles: string, criterios?: string\|null }` (extraído por U1 desde CR-05) |
 | `notification_list` | `{ destinatarios[], criterios?, plazos? }` |
 | `backup_policy` | `{ respaldo, verificacion_integridad?, retencion? }` |
 | `exposure_policy` | `{ bases_publicas_permitidas: bool\|null, descripcion? }` (PR-05; contradicción con `tf.db_exposure.config`) |
@@ -119,7 +119,7 @@ Reglas de extracción:
 - Cada afirmación exige **fragmento textual y localización** (página/sección). Sin cita → se descarta.
 - `encontrado: false` es válido: significa “el documento no lo declara”, no “no existe”.
 - La confianza baja (`< umbral`) se marca como limitación y no se usa como evidencia suficiente.
-- Nunca se extraen credenciales, claves ni datos personales de los documentos; se redactan antes de enviar.
+- No se piden ni se persisten credenciales, claves ni datos personales: el modelo solo extrae los campos declarados. La **redacción de secretos antes de enviar** está pendiente para uso real (docs/12 SEC-07).
 
 ### 3.4 Logs (`log.*`)
 
@@ -129,8 +129,9 @@ Reglas de extracción:
 | `log.pattern` | `{ patron, resultado, desde, hasta, conteo }` | Evidencia operativa agregada. |
 | `log.window` | `{ desde, hasta, completo: bool }` | Completitud de la ventana observada. |
 
-Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_declared`, `escalation_done`,
-`restore_exercise_run`, `restore_verified`, `recovery_communicated`.
+Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_triaged`, `containment_done`,
+`incident_declared`, `escalation_done`, `restore_exercise_run`, `restore_verified`,
+`recovery_communicated` (docs/06 §3, docs/09 §53).
 
 ### 3.5 Contexto (`ctx.*`)
 

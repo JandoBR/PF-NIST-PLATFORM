@@ -62,9 +62,9 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** GV.RR-01, GV.RR-02 · **Tipo:** Proceso · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Tier:** T2
 - **Evidencias:** `doc.claim(tipo=role_assigned)`
 - **Regla:**
-  - 100: responsables nombrados por rol (CISO/responsable de seguridad, dueños de activos), con responsabilidades y autoridad descritas.
-  - 75: responsables definidos sin autoridad explícita.
-  - 50: roles genéricos (“el área de TI”) sin asignación.
+  - 100: rol con **responsable nombrado**, **responsabilidades** y **autoridad** descritas (CISO/responsable de seguridad, dueños de activos).
+  - 75: responsable nombrado, pero sin responsabilidades o sin autoridad explícitas.
+  - 50: roles genéricos (“el área de TI”) o roles sin un responsable nombrado.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** designar responsable de seguridad y dueños de activos con responsabilidades y autoridad explícitas.
 
@@ -258,10 +258,10 @@ Resumen de cobertura del catálogo:
 - **Evidencias:** `doc.claim(tipo=process_defined)`, `doc.claim(tipo=escalation_path)`, `log.pattern(escalation_done|incident_declared)`
 - **Regla:**
   - Plan completo = `process_defined` de respuesta con pasos y responsables. El escalamiento documentado (`escalation_path`) cuenta como plan parcial.
-  - 100: plan completo + evidencia operativa de escalamiento (`escalation_done`).
-  - 75: plan completo sin evidencia operativa; o plan parcial con escalamiento observado; o escalamiento observado sin plan documentado (tope 75).
+  - 100: plan completo + `escalation_done` **posterior** al `incident_declared` (docs/08 §5, D3). Un escalamiento anterior a la declaración no es respuesta a ese incidente.
+  - 75: plan completo sin escalamiento asociado; o plan parcial con escalamiento posterior; o escalamiento observado sin plan documentado (tope 75).
   - 50: plan parcial sin evidencia operativa.
-  - 0: incidente declarado en una ventana completa sin escalamiento: falla de respuesta (docs/06 §5), con o sin plan.
+  - 0: incidente declarado en una ventana completa sin escalamiento posterior: falla de respuesta (docs/06 §5, docs/08 §5), con o sin plan.
   - Sin plan ni evidencia operativa → `evidencia_insuficiente`.
 - **Recomendación:** documentar y ensayar el plan de respuesta incluyendo escalamiento y criterios de prioridad.
 
@@ -278,8 +278,8 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** RS.CO-02 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no · **Privacidad:** Protect-P + apoyo Respond
 - **Evidencias:** `doc.claim(tipo=notification_list)`
 - **Regla:**
-  - 100: lista de notificación interna/externa con criterios y plazos.
-  - 75: lista definida sin plazos.
+  - 100: lista de notificación interna/externa con **destinatarios, criterios y plazos**.
+  - 75: lista con destinatarios, pero sin criterios o sin plazos (no hay tramo 50: docs/09 §47).
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** definir a quién, cuándo y cómo se notifica un incidente.
 

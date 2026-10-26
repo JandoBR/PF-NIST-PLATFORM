@@ -63,7 +63,9 @@ def _any_module_key(task: dict) -> str | None:
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
 #: v2: el locator trae `line_start`/`line_end` de la tarea (docs/11 OP-15).
 #: v3: `an.file.permissions.modo` es siempre octal, aunque el YAML lo traiga sin comillas.
-ADAPTER_VERSION = "3"
+#: v4: `state` manda sobre `enabled` (un `stopped` no es "habilitado"); `restarted`/`reloaded`
+#: cuentan como servicio corriendo.
+ADAPTER_VERSION = "4"
 
 
 def _modo_octal(modo: Any) -> str:
@@ -233,9 +235,17 @@ class AnsibleAdapter:
         servicio = parametros.get("name", "")
         enabled = parametros.get("enabled")
         state = parametros.get("state")
-        if enabled is True or state in ("started", "running"):
+        # `state` describe el estado actual y manda sobre `enabled` (que solo dice si arranca al
+        # boot). Un `state: stopped` no puede volverse "habilitado" porque `enabled: true`.
+        if state in ("started", "running", "restarted", "reloaded"):
             estado = "habilitado"
-        elif enabled is False or state in ("stopped",):
+        elif state == "stopped":
+            estado = "deshabilitado"
+        elif state is not None:
+            estado = "desconocido"
+        elif enabled is True:
+            estado = "habilitado"
+        elif enabled is False:
             estado = "deshabilitado"
         else:
             estado = "desconocido"

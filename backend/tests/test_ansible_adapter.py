@@ -28,6 +28,34 @@ def test_good_fixture_detects_ssh_hardening_and_rsyslog():
     assert playbook.value["hosts"] == ["servidores_app"]
 
 
+def test_service_state_wins_over_enabled(tmp_path):
+    """`state` describe el estado actual; `enabled` solo dice si arranca al boot."""
+
+    playbook = tmp_path / "services.yml"
+    playbook.write_text(
+        """
+- hosts: all
+  tasks:
+    - name: Detenido pero habilitado al boot
+      service:
+        name: rsyslog
+        state: stopped
+        enabled: true
+
+    - name: Reiniciado
+      service:
+        name: syslog-ng
+        state: restarted
+""",
+        encoding="utf-8",
+    )
+    evidence = AnsibleAdapter(source_id="test:svc", scope="s").parse_path(playbook)
+    estados = {
+        e.value["servicio"]: e.value["estado"] for e in _by_type(evidence, "an.service.state")
+    }
+    assert estados == {"rsyslog": "deshabilitado", "syslog-ng": "habilitado"}
+
+
 def test_gaps_fixture_flags_insecure_directive_and_uninterpreted_command():
     adapter = AnsibleAdapter(source_id="test:gaps", scope="entorno:produccion")
     evidence = adapter.parse_path(FIXTURES / "gaps")

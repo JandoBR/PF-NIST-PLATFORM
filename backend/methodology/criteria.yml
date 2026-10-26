@@ -21,7 +21,11 @@
 # v11: PR-01/02/03/04 dan 0 ante una ausencia explicita total (antes su piso era 25 y nunca
 #      llegaban a severidad alta); PR-05 exige bloque en todos los buckets; ID-01 no cuenta
 #      recursos de configuracion (docs/09 §65).
-version: 11
+# v12: GV-02 exige responsable, responsabilidades y autoridad para el 100; RS-03 exige criterios
+#      y plazos; RS-01 exige escalamiento posterior a la declaracion; PR-05 no da 100 con bloqueo
+#      sin resolver (docs/09 §70-71). Los adaptadores Terraform v7 y Ansible v4 corrigen retencion
+#      HCL integral, varias `rule` de S3 y `state` vs `enabled` (no cambian criteria.yml).
+version: 12
 criterios:
   - id: CRI-GV-01
     version: 1

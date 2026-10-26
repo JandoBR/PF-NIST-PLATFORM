@@ -199,6 +199,24 @@ def test_pr05_a_bucket_without_a_block_prevents_the_100(tmp_path):
 # -- Terraform: referencias entre archivos ------------------------------------------------------
 
 
+def test_pr05_an_unresolved_block_prevents_the_100(tmp_path):
+    buckets = (
+        'resource "aws_s3_bucket" "a" {\n  bucket = "a"\n}\n'
+        'resource "aws_s3_bucket" "b" {\n  bucket = "b"\n}\n'
+    )
+    bloque_b = """resource "aws_s3_bucket_public_access_block" "b" {
+  bucket                  = aws_s3_bucket.b.id
+  block_public_acls       = var.block_acls
+  block_public_policy     = var.block_policy
+  ignore_public_acls      = var.ignore_acls
+  restrict_public_buckets = var.restrict_buckets
+}
+"""
+    result = pr05_public_access.evaluate(_tf(tmp_path, main=buckets + _BLOQUE + bloque_b))
+    assert result.estado == Estado.EVIDENCIA_INSUFICIENTE
+    assert "aws_s3_bucket.b" in result.explanation
+
+
 def test_terraform_resolves_a_bucket_declared_in_another_file(tmp_path):
     evidence = _tf(
         tmp_path, storage='resource "aws_s3_bucket" "a" {\n  bucket = "a"\n}\n', security=_BLOQUE

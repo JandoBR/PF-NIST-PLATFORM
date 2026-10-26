@@ -65,6 +65,48 @@ def test_rds_expression_is_unresolved_not_absent(tmp_path):
     assert all(e.value["recurso"] == "aws_db_instance.db" for e in unresolved)
 
 
+def test_integral_float_retention_is_read_as_days(tmp_path):
+    """HCL no distingue `7` de `7.0`; python-hcl2 puede devolver float."""
+
+    evidence = _parse(
+        tmp_path,
+        """
+        resource "aws_db_instance" "db" {
+          storage_encrypted       = true
+          backup_retention_period = 7.0
+        }
+        """,
+    )
+    backup = _of(evidence, "tf.backup.config")[0]
+    assert backup.value["retencion_dias"] == 7
+    assert backup.value["habilitado"] is True
+
+
+def test_s3_encryption_uses_the_rule_that_defines_sse(tmp_path):
+    """Varias `rule`: la primera puede ser un filtro; la configuracion por defecto va despues."""
+
+    evidence = _parse(
+        tmp_path,
+        """
+        resource "aws_s3_bucket" "b" { bucket = "b" }
+        resource "aws_s3_bucket_server_side_encryption_configuration" "e" {
+          bucket = aws_s3_bucket.b.id
+          rule {
+            filter { prefix = "logs/" }
+          }
+          rule {
+            apply_server_side_encryption_by_default {
+              sse_algorithm = "aws:kms"
+            }
+          }
+        }
+        """,
+    )
+    encryption = _of(evidence, "tf.encryption.config")[0]
+    assert encryption.value["estado"] == "enabled"
+    assert encryption.value["mecanismo"] == "aws:kms"
+
+
 def test_literal_values_emit_no_unresolved(tmp_path):
     evidence = _parse(
         tmp_path,

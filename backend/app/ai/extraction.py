@@ -35,7 +35,7 @@ _CONTENT_FIELDS: dict[str, str] = {
     "policy_review": (
         "frecuencia (mensual|trimestral|semestral|anual), ultima_revision (YYYY-MM-DD|null)"
     ),
-    "role_assigned": "roles: lista de {rol, responsable, autoridad}",
+    "role_assigned": "roles: lista de {rol, responsable, responsabilidades, autoridad}",
     "risk_tolerance": (
         "objetivos_riesgo (string), tolerancia (string|null), responsable (string|null)"
     ),

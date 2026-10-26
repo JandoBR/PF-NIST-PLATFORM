@@ -94,15 +94,82 @@ def test_gv02_sin_claims_es_insuficiente():
     assert gv02_roles.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
 
 
-def test_gv02_roles_con_autoridad_es_100():
-    evidence = [_claim("role_assigned", {"roles": [{"rol": "CISO", "autoridad": "aprobar"}]})]
+def test_gv02_rol_completo_es_100():
+    evidence = [
+        _claim(
+            "role_assigned",
+            {
+                "roles": [
+                    {
+                        "rol": "CISO",
+                        "responsable": "Ana Perez",
+                        "responsabilidades": "aprobar politicas y supervisar riesgos",
+                        "autoridad": "aprobar excepciones",
+                    }
+                ]
+            },
+        )
+    ]
     result = gv02_roles.evaluate(evidence)
     assert (result.estado, result.final_score) == (Estado.EVALUADO, 100)
 
 
-def test_gv02_roles_sin_autoridad_es_75():
-    evidence = [_claim("role_assigned", {"roles": [{"rol": "CISO"}]})]
+def test_gv02_responsable_sin_responsabilidades_es_75():
+    evidence = [
+        _claim(
+            "role_assigned",
+            {"roles": [{"rol": "CISO", "responsable": "Ana Perez", "autoridad": "aprobar"}]},
+        )
+    ]
     assert gv02_roles.evaluate(evidence).final_score == 75
+
+
+def test_gv02_responsable_sin_autoridad_es_75():
+    evidence = [
+        _claim(
+            "role_assigned",
+            {
+                "roles": [
+                    {
+                        "rol": "CISO",
+                        "responsable": "Ana Perez",
+                        "responsabilidades": "supervisar riesgos",
+                    }
+                ]
+            },
+        )
+    ]
+    assert gv02_roles.evaluate(evidence).final_score == 75
+
+
+def test_gv02_rol_sin_responsable_es_50():
+    evidence = [_claim("role_assigned", {"roles": [{"rol": "CISO", "autoridad": "aprobar"}]})]
+    assert gv02_roles.evaluate(evidence).final_score == 50
+
+
+def test_gv02_rol_generico_sin_responsable_es_50():
+    evidence = [_claim("role_assigned", {"roles": [{"rol": "el area de TI"}]})]
+    assert gv02_roles.evaluate(evidence).final_score == 50
+
+
+def test_gv02_elige_el_rol_completo_entre_varios():
+    evidence = [
+        _claim(
+            "role_assigned",
+            {
+                "roles": [
+                    {"rol": "CISO", "autoridad": "aprobar"},
+                    {
+                        "rol": "DPO",
+                        "responsable": "Luis Gomez",
+                        "responsabilidades": "vigilar datos personales",
+                        "autoridad": "bloquear tratamientos",
+                    },
+                ]
+            },
+        )
+    ]
+    assert gv02_roles.evaluate(evidence).final_score == 100
 
 
 def test_gv02_no_declarado_es_insuficiente_no_0():

@@ -199,7 +199,9 @@ def _strip_meta(block: dict) -> dict:
 #: omitirse.
 #: v6: las referencias a un bucket se resuelven entre los `.tf` del directorio, no solo dentro del
 #: mismo archivo.
-ADAPTER_VERSION = "6"
+#: v7: `backup_retention_period = 7.0` se lee como 7 dias; la configuracion SSE de S3 usa la
+#: primera `rule` que declare `apply_server_side_encryption_by_default`, no siempre `rules[0]`.
+ADAPTER_VERSION = "7"
 
 
 class TerraformAdapter:
@@ -455,7 +457,16 @@ class TerraformAdapter:
     def _rds_backup(self, file_path: Path, subject_ref: str, attrs: dict) -> list[EvidenceInstance]:
         retencion = attrs.get("backup_retention_period")
         backup_window = attrs.get("backup_window")
-        if not isinstance(retencion, int):
+        # HCL no distingue `7` de `7.0`: ambos son numeros validos y python-hcl2 puede devolver
+        # float. Solo un entero real (o un float integral) es una retencion interpretable.
+        dias = (
+            int(retencion)
+            if isinstance(retencion, int) and not isinstance(retencion, bool)
+            else int(retencion)
+            if isinstance(retencion, float) and retencion.is_integer()
+            else None
+        )
+        if dias is None:
             value = {"retencion_dias": None, "habilitado": None, "ventana": None}
             limitations = (
                 "expresion_no_resuelta: backup_retention_period"
@@ -464,8 +475,8 @@ class TerraformAdapter:
             )
         else:
             value = {
-                "retencion_dias": retencion,
-                "habilitado": retencion > 0,
+                "retencion_dias": dias,
+                "habilitado": dias > 0,
                 "ventana": backup_window if not _is_expression(backup_window) else None,
             }
             limitations = None
@@ -484,8 +495,16 @@ class TerraformAdapter:
 
     def _s3_encryption(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
         rules = attrs.get("rule") or []
-        rule = rules[0] if rules else {}
-        default_rule = (rule.get("apply_server_side_encryption_by_default") or [{}])[0]
+        # S3 admite varias `rule` (p. ej. una por prefijo). Se usa la primera que declare una
+        # configuracion por defecto; quedarse con `rules[0]` ignoraba una regla KMS posterior.
+        default_rule: dict = {}
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            candidato = (rule.get("apply_server_side_encryption_by_default") or [{}])[0]
+            if isinstance(candidato, dict) and candidato.get("sse_algorithm") is not None:
+                default_rule = candidato
+                break
         sse_algorithm = default_rule.get("sse_algorithm")
         if _is_expression(sse_algorithm):
             sse_algorithm = None
