@@ -277,7 +277,8 @@ Salida visible: `CRI-PR-01 = 28`, con explicación “ajuste contextual: +3” y
 
 Una evaluación registra:
 
-- `methodology_version` (criterios, pesos, umbrales, α, D).
+- `methodology_version` (versión de criterios, de tipos de evidencia, de settings —pesos,
+  umbrales, α, D— y del núcleo CSF).
 - Versiones de tipos de evidencia usadas.
 - Versión de adaptadores/parsers.
 - Modelo y versión de prompt de IA (para ajustes y extracción).

@@ -38,8 +38,8 @@ vive en PostgreSQL.
                     └──────────────────────────────────────────────────┘
 ```
 
-La ingesta de logs corre por su propio pipeline con colas dedicadas (`log_ingest`, `log_aggregate`) y
-una frontera extraíble a contenedor independiente — ver [§3.1](#31-frontera-del-pipeline-de-logs-extraíble).
+La ingesta de logs corre por su propio pipeline (una cola `pf:jobs:logs` con el job `event_ingest`)
+y una frontera extraíble a contenedor independiente — ver [§3.1](#31-frontera-del-pipeline-de-logs-extraíble).
 De ese mismo stream cuelgan dos consumidores: **madurez** (evidencia por ventana) y **operativo**
 (incidentes y planes en vivo, módulo `ops`); ver `08-motor-operativo.md`.
 
@@ -128,38 +128,45 @@ porque toca el modelo de evidencias.
 |---|---|
 | `organizations` | `id`, `nombre`, `contexto jsonb` |
 | `users` | `id`, `org_id`, `username`, `password_salt`, `password_hash`, `role`, `creado_en` (doc 10) |
-| `assessments` | `id`, `org_id`, `estado`, `methodology_version`, `scope`, `previous_assessment_id?` (auto-referencia a la evaluación anterior del mismo org+scope, para heredar seguimiento — docs/05 §4.4), `error?`, `creado_en` |
+| `assessments` | `id`, `org_id`, `estado` (`pendiente`\|`en_progreso`\|`completada`\|`fallida`), `methodology_version`, `scope`, `previous_assessment_id?` (auto-referencia a la evaluación anterior del mismo org+scope, para heredar seguimiento — docs/05 §4.4), `reproducibility? jsonb` (adaptadores/parsers/IA, docs/01 §10), `error?`, `creado_en` |
 | `sources` | `id`, `assessment_id`, `tipo` (`terraform`\|`ansible`\|`documents`), `ruta`, `sha256` (un `Source` por adaptador, no por archivo — docs/09 §11) |
 | `evidence_definitions` | `id`, `version`, `descripcion`, `schema jsonb`, `estado`, `publicado_en` (catálogo, no por evaluación) |
 | `evidence` | `id`, `assessment_id`, `type_id`, `type_version`, `subject_type`, `subject_ref`, `scope`, `value jsonb`, `source_id`, `locator jsonb`, `observed_at`, `modality`, `limitations`, `created_by` |
 | `criteria_catalog` | `id`, `version`, `titulo`, `tipo`, `funcion`, `categorias[]`, `subcategorias[]`, `peso`, `ai_adjustable`, `regla jsonb`, `recomendacion`, `estado` |
-| `criterion_results` | `id`, `assessment_id`, `criterion_id`, `criterion_version`, `estado`, `base_score`, `final_score`, `explanation`, `evidence_ids[]`, `computed_en` |
+| `criterion_results` | `id`, `assessment_id`, `criterion_id`, `criterion_version`, `estado`, `base_score`, `final_score`, `explanation`, `evidence_ids[]`, `degradado bool` |
 | `ai_adjustments` | `id`, `assessment_id`, `criterion_id`, `modelo`, `prompt_version`, `propuesta`, `justificacion`, `evidence_refs[]`, `clamped`, `aplicado bool`, `degradado bool`, `creado_en` |
 | `score_aggregates` | `id`, `assessment_id`, `nivel` (`subcategoria`\|`categoria`\|`funcion`\|`global`), `ref`, `score`, `base_score`, `cobertura`, `conteo_estados jsonb` |
 | `tier_estimates` | `id`, `assessment_id`, `tier`, `provisional bool`, `justificacion`, `faltantes jsonb` |
 | `findings` | `id`, `assessment_id`, `criterion_id`, `tipo` (`brecha`\|`contradiccion`\|`limitacion`), `titulo`, `detalle`, `severidad`, `evidence_ids[]` |
-| `plans` | `id`, `incident_id?`, `assessment_id?`, `criterion_id`, `origen` (`criterio`\|`evento`), `titulo`, `prioridad`, `pasos jsonb`, `verificacion`, `estado` (`pendiente`\|`en_progreso`\|`hecho`, **seguimiento, no puntaje** — docs/05 §4.4), `generado_por` |
+| `plans` | `id`, `incident_id?`, `assessment_id?`, `criterion_id`, `origen` (`criterio`\|`evento`), `titulo`, `prioridad`, `objetivo`, `pasos jsonb`, `verificacion`, `dependencias jsonb`, `estado` (`pendiente`\|`en_progreso`\|`hecho`, **seguimiento, no puntaje** — docs/05 §4.4), `generado_por`, `diagnostico_observable?`, `hipotesis jsonb`, `comprobaciones_seguras jsonb`, `advertencia?`, `creado_en` |
 | `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id` |
-| `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `evidence_id` |
-| `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `pattern_ids[]`, `criterios[]`, `timeline jsonb`, `creado_en`, `actualizado_en`. Único por (`org_id`, `correlation_key`): la clave sale de los eventos y dos organizaciones pueden compartirla (docs/09 §62) |
-| `jobs` | `id`, `assessment_id?`, `org_id?`, `tipo`, `estado`, `progreso`, `error`, `payload?` (entradas para reintentar, docs/09 §46), `creado_en`, `tomado_en`, `actualizado_en` |
+| `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `fuentes[]` (origen de los eventos, FN-07), `creado_en` |
+| `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `criterios[]`, `timeline jsonb`, `motivo_cierre?`, `creado_en`, `actualizado_en`. Único por (`org_id`, `correlation_key`): la clave sale de los eventos y dos organizaciones pueden compartirla (docs/09 §62) |
+| `jobs` | `id`, `assessment_id?`, `org_id?`, `tipo`, `estado`, `progreso`, `error`, `payload?` (entradas para reintentar, docs/09 §46), `resultado?` (resumen de la ingesta, FN-03), `creado_en`, `tomado_en`, `actualizado_en` |
+
+> `evidence_definitions`, `criteria_catalog`, `ai_adjustments`, `findings`, `score_aggregates` y
+> `tier_estimates` son parte del diseño, **no tablas persistidas**: la metodología es YAML-only y
+> los ajustes, hallazgos, agregados y Tier se derivan al consultar. Tampoco se persisten
+> `incidents.pattern_ids` ni `log_patterns.evidence_id` (docs/12 §2, OP-02/OP-03/OP-13).
 
 ### Reglas de integridad
 
 - `evidence` es **append-only** (sin UPDATE/DELETE salvo borrado en cascada de la evaluación).
 - `criterion_results` referencia la versión exacta del criterio usada.
-- Los catálogos (`evidence_definitions`, `criteria_catalog`) se cargan desde YAML versionado.
+- La metodología (`criteria.yml`, `evidence_types.yml`, `settings.yml`, `csf_subcategories.yml`) se carga desde YAML versionado.
 - `events`, `log_patterns` e `incidents` tienen alcance **organización/entorno** (`org_id` + `scope`), no evaluación; una evaluación consume ventanas de ellos.
 
 ## 5. Ciclo de Vida de una Evaluación
 
 ```text
-creada ──► ingestando ──► analizando ──► evaluando ──► ajustando_ia ──► completada
-                                              │
-                                              └──► fallida (parcial o total, con detalle)
+pendiente ──► en_progreso ──► completada
+                   │
+                   └──► fallida (con el detalle en `error`)
 ```
 
-- Cada transición corresponde a un `job`.
+- La evaluación encolada queda `pendiente`; el worker la pasa a `en_progreso` y la cierra como
+  `completada` o `fallida`. La granularidad mayor (`ingestando`/`analizando`/`ajustando_ia`…) se
+  descartó: la evaluación es atómica y un fallo se ve por `job.error` (docs/12 §1, OP-10).
 - Una evaluación completada es **inmutable**; “reevaluar” crea una evaluación nueva que hereda fuentes.
 - Si el ajuste de IA falla, la evaluación igual completa con `base_score = final_score` y marca `degradado`.
 
@@ -176,8 +183,9 @@ El diseño contemplaba una granularidad mayor (`assess`/`reevaluate`/`compare`/`
 `log_aggregate`/`ops_evaluate`/`plan_generate`); el prototipo la resolvió con dos jobs porque el
 pipeline completo ya corre de una vez (docs/09 §11, docs/12 §1).
 
-Las colas y el stream se implementan sobre Redis; el core consume sus mensajes para persistir
-evidencia y recalcular solo los criterios afectados.
+Las colas se implementan sobre Redis (listas `RPUSH`/`BLPOP`, sin consumer groups); el worker core
+persiste la evidencia y evalúa todos los criterios. El **refresco selectivo** tras una ingesta es el
+único que recalcula solo los criterios de vigilancia (docs/06 §6).
 
 ## 6. API REST (borrador)
 
@@ -208,7 +216,7 @@ evidencia y recalcular solo los criterios afectados.
 | `PATCH` | `/incidents/{id}` | Cambia el estado del incidente (`open`…`closed`). Un paso por vez, sin retroceder; `closed` (terminal, desde cualquier estado abierto) exige `motivo` y lo mueve al historial. Transición inválida o sin motivo → 409 (docs/08 §4, docs/09 §52). |
 | `POST` | `/assessments/{id}/reevaluate` | Crea nueva evaluación heredando fuentes. |
 | `GET` | `/assessments/{id}/compare/{other_id}` | Por criterio: estado, puntaje, `direccion` del cambio y la explicación de antes y de después. Además el puntaje global, si ambas usan la misma metodología y alcance, y los hallazgos que ya no aparecen o son nuevos (docs/09 §67). |
-| `GET` | `/methodology` | Catálogo de criterios y tipos de evidencia vigentes. |
+| `GET` | `/methodology` | Catálogo vigente: `methodology_version`, `nucleo_csf_version`, `cobertura_implementacion` (metadato del producto, docs/01 §7), `criterios` y `tipos_evidencia`. |
 | `GET` | `/health` | Liveness/readiness. |
 
 > Descartados para el prototipo (docs/12 §1): API-01 (`POST /sources` + `/run` separados) y API-02
@@ -225,7 +233,7 @@ Convenciones:
 
 ## 7. Estructura de Carpetas
 
-Estructura real del código (revisada el 2026-10-02):
+Estructura real del código (revisada el 2026-10-25):
 
 ```text
 backend/
@@ -256,7 +264,7 @@ backend/
 │   ├── ops/                 # motor operativo: disparadores, incidentes, planes de incidente (doc 08)
 │   ├── reports/             # informes PDF
 │   └── workers/             # consumidores de Redis: core.py (evaluaciones) y logs.py (eventos)
-├── methodology/             # criteria.yml, evidence_types.yml, settings.yml
+├── methodology/             # criteria.yml, evidence_types.yml, settings.yml, csf_subcategories.yml
 ├── tests/
 │   ├── fixtures/            # Terraform, Ansible, documentos y escenarios de eventos
 │   ├── golden/              # salida esperada de adaptadores y pipeline (TS-01)
@@ -275,7 +283,7 @@ En la raíz del proyecto: `deploy/docker-compose.yml` y `deploy/.env.example` (v
 `methodology/criteria.yml` (extracto):
 
 ```yaml
-version: 1
+version: 11
 criterios:
   - id: CRI-PR-01
     version: 1
@@ -286,11 +294,12 @@ criterios:
     subcategorias: [PR.DS-01]
     peso: 5
     ai_adjustable: true
-    evidencias: [tf.encryption.config@1, doc.claim@1]
-    recomendacion: "Habilitar cifrado gestionado por KMS en RDS y S3."
+    evidencias: [tf.encryption.config@1, doc.claim@2]
+    recomendacion: "Habilitar cifrado gestionado por KMS en RDS y S3; verificar mecanismo y llave."
     regla:
       tipo: umbral_por_recurso
       estados: { all_enabled: 100, any_disabled: 25, any_unknown: insuficiente }
+      tipos_afirmacion: [policy_exists]
 ```
 
 `methodology/settings.yml` — **fuente canónica** de los umbrales de Tier (α, D y umbrales de confianza
@@ -298,23 +307,34 @@ incluidos). Las tablas de `01-modelo-de-evaluacion.md §8.2` y `03-matriz-de-cri
 ilustrativas de este archivo para lectura humana; en caso de discrepancia, manda el YAML:
 
 ```yaml
-version: 1
+version: 2
 ia:
   alpha: 0.25
   divergencia_maxima: 20
   umbral_confianza_documental: 0.6
+  # max_criterios_ajustados_por_evaluacion: 10   # omitido = sin limite
 tier:
   t2: { CRI-GV-01: 50, CRI-GV-02: 50, CRI-ID-03: 50 }
   t3: { CRI-GV-01: 75, CRI-GV-03: 75, CRI-GV-04: 75, CRI-DE-01: 75,
         CRI-RS-01: 75, CRI-RC-01: 75, CRI-RC-02: 75 }
   t4: { CRI-GV-04: 100, CRI-RS-02: 75, CRI-RC-03: 75, CRI-ID-04: 75 }
 funciones: { GV: 1, ID: 1, PR: 1, DE: 1, RS: 1, RC: 1 }
+cobertura: { umbral_provisional: 0.5 }
+planes: { umbral_brecha: 75 }
+vigilancia:
+  auth_failures_burst: { n: 5, ventana_minutos: 5 }
+  plazo_escalamiento_minutos: 30
+  plazo_triaje_minutos: 30
+  refresco_min_patrones_nuevos: 3
 ```
 
 Reglas:
 
 - El cargador valida el YAML contra esquema Pydantic al arrancar; un error impide iniciar (fallo rápido).
-- Cambiar cualquier valor en `methodology/` genera `methodology_version` nueva.
+  Además comprueba que cada categoría/subcategoría de `criteria.yml` exista en
+  `csf_subcategories.yml` y que la subcategoría liste su categoría padre (docs/09 §68).
+- `methodology_version` concatena las versiones de `criteria.yml`, `evidence_types.yml`,
+  `settings.yml` y `csf_subcategories.yml`; subir cualquiera de ellas cambia la versión.
 - Las evaluaciones guardan la versión; nunca se recalculan con la versión actual.
 
 ## 9. Manejo de Archivos y Datos No Confiables
@@ -325,9 +345,9 @@ Reglas:
 | HCL/YAML con payloads | Parsers en modo datos; sin eval, sin templates, sin include remoto. |
 | PDFs con macros/contenido activo | Solo extracción de texto; sin renderizado. |
 | Prompt injection en documentos | El contenido va delimitado y etiquetado como datos; ver doc 05 §7. |
-| Secretos en archivos | Detección básica de patrones (claves, tokens) y redacción antes de enviar a IA. |
-| Tamaño de archivos | Límites por fuente y por evaluación; rechazo explícito con error. |
-| Traversal / archivos comprimidos | Lista blanca de extensiones; sin descompresión recursiva. |
+| Secretos en archivos | **Pendiente para uso real** (docs/12 SEC-07): hoy el documento se envía tal cual a la IA; no hay detección ni redacción de secretos. |
+| Tamaño de archivos | **Fuera del prototipo** (docs/12 SEC-08): no hay límite por archivo ni por evaluación. |
+| Traversal / archivos comprimidos | Nombre reducido a *basename* y validado contra lista blanca de extensiones; inválido → 422. Sin descompresión recursiva (docs/09 §35). |
 
 ## 10. Decisiones Diferidas
 
@@ -357,7 +377,7 @@ prototipo (cola de trabajos) sin añadir complejidad de orquestación.
 | `redis` | `redis:7` | Cola de trabajos (listas). | — |
 | `api` | `docker/Dockerfile.api` | FastAPI; encola trabajos y sirve lecturas. | db, redis |
 | `worker-core` | `docker/Dockerfile.worker` | Evaluación, adaptadores, IA. | db, redis |
-| `worker-logs` | `docker/Dockerfile.worker` | Pipeline de logs (`log_ingest`, `log_aggregate`) y `ops`. | db, redis |
+| `worker-logs` | `docker/Dockerfile.worker` | Pipeline de logs (job `event_ingest`) y motor `ops`. | db, redis |
 | `migrate` | `docker/Dockerfile.api` | Job de una sola ejecución: `alembic upgrade head`. | db |
 | `frontend` | `docker/Dockerfile.frontend` | React/Vite servido por Nginx. | api |
 

@@ -77,7 +77,9 @@ La capa de vigilancia agrega eventos en `log.pattern`:
 | `restore_verified` | Verificación posterior con confirmación | CRI-RC-02, CRI-RC-03 |
 | `recovery_communicated` | Comunicación de recuperación a stakeholders | CRI-RC-03 |
 
-Cada patrón guarda `desde`, `hasta`, `conteo`, `resultado` y la referencia al `evidence_id` generado.
+Cada patrón guarda `desde`, `hasta`, `conteo`, `resultado` y `fuentes[]` (el origen de los eventos,
+FN-07). La evidencia `log.pattern` se genera por evaluación con un id nuevo; el patrón no referencia
+un `evidence_id` (docs/12 §2, OP-13).
 
 Los patrones se detectan sobre **todos los eventos guardados** de la organización y el scope, no solo sobre
 el archivo recién ingerido: describen la misma ventana que `log.window`. Hay una fila por patrón y por scope,
