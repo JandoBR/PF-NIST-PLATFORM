@@ -61,7 +61,7 @@ def upsert_incident(
 
     incident = (
         session.query(Incident)
-        .filter_by(org_id=org_id, correlation_key=trigger.correlation_key)
+        .filter_by(org_id=org_id, scope=scope, correlation_key=trigger.correlation_key)
         .one_or_none()
     )
 

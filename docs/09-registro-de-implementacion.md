@@ -2434,3 +2434,29 @@ cierre con `_brace_delta`. Terraform pasa a **v10** (cambian los locators, no lo
 Test: `test_line_ranges_ignore_block_comments_and_heredocs_and_accept_next_line_brace`.
 
 **Verificación:** suite completa **623 tests** + `ruff check` y `ruff format` limpios.
+
+## 79. Incidentes únicos por organización **y scope**
+
+La clave de correlación sale del recurso y la hora del evento (`auth-burst:srv-app-01:2026-09-20…`),
+no del entorno. La restricción era `(org_id, correlation_key)`, así que un mismo host/hora en
+producción y staging se fusionaba: el incidente de producción recibía los `event_ids` y el
+`last_event_time` de staging. `docs/08 §3` ya definía los incidentes como org+scope; faltaba la
+restricción.
+
+- **Modelo/consulta:** `Incident.__table_args__` pasa a
+  `(org_id, scope, correlation_key)` y `upsert_incident` filtra también por `scope`.
+- **Migración:** `f3a1c9d2e4b7` (rev. `b7e2f4c19d55`) recrea la restricción. Es solo esquema:
+  agregar `scope` relaja la unicidad, así que las filas existentes son válidas. Una fila ya
+  fusionada no se puede separar retroactivamente; desde esta versión, una ingesta nueva crea el
+  incidente correcto. `downgrade` falla si hay dos scopes con la misma clave, porque volver atrás
+  exigiría fusionarlos.
+- **Ejemplos:** no necesitan migración de datos. Los paquetes/escenarios son JSONL y no guardan
+  incidentes; se re-ingieren y crean las filas. La BD SQLite local de desarrollo (`.data/pf.db`)
+  tenía **0 incidentes** y un esquema anterior a `b7e2f4c19d55`; se puede recrear (o dejar que
+  Alembic la migre, si se creó con Alembic). El compose usa Postgres y la migración se aplica con
+  el job `migrate`.
+- **Verificación de la migración:** `alembic upgrade head` sobre SQLite limpio y sobre una BD
+  detenida en `b7e2f4c19d55` con un incidente; tras el upgrade se pudo insertar el mismo
+  `correlation_key` en otro scope. Test: `test_same_correlation_key_in_another_scope_is_a_separate_incident`.
+
+**Verificación:** suite completa **624 tests** + `ruff check` y `ruff format` limpios.
