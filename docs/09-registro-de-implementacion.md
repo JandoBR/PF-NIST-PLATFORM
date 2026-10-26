@@ -2280,3 +2280,28 @@ Misma regla de producto: no se concede un 100 si falta evidencia de un recurso o
 `assessments.reproducibility` lo registra). No cambia `methodology_version` por esto.
 
 **Verificación:** suite completa **584 tests** + `ruff check` y `ruff format` limpios.
+
+## 72. Security groups dinámicos y disparadores con varios eventos (Terraform v8)
+
+- **`dynamic "ingress"/"egress"`.** python-hcl2 no los deja en `attrs["ingress"]`, así que el
+  adaptador no emitía ninguna regla: PR-03 veía una lista vacía y devolvía 100. Ahora se emite una
+  regla con `cidr: unknown` (los puertos del `content`, si están), y PR-03 la trata como
+  indeterminada → `evidencia_insuficiente`. No se expande `for_each` (puede ser una variable).
+  Terraform pasa a **v8**. Test: `test_dynamic_ingress_is_unknown_not_absent`.
+- **D1/D2/D3/D5 con varios eventos.** Los patrones guardan el primero y el último evento del tipo;
+  los disparadores comparaban los `desde`, así que un triaje/escalamiento/alerta/comunicación
+  viejo ocultaba uno nuevo. Ahora comparan los `hasta` (último evento de cada patrón):
+  - D1 solo se silencia con una alerta posterior al inicio de la ráfaga.
+  - D2 mide el triaje posterior contra la última alerta.
+  - D3 mide el escalamiento posterior contra la última declaración.
+  - D5 solo se silencia con una comunicación posterior a la verificación.
+  Tests: los seis casos nuevos en `test_ops_triggers.py` (triaje viejo + alerta nueva, alerta
+  vieja + triaje nuevo, escalamiento viejo + declaración nueva, declaración vieja + escalamiento
+  viejo, alerta vieja + ráfaga nueva, comunicación vieja + verificación nueva). docs/08 §5 y
+  docs/02 §4 quedan alineados.
+
+**Límite conocido:** sigue habiendo una fila por patrón y scope (docs/06 §3), así que con varios
+pares alerta/triaje intercalados la comparación de extremos es una aproximación. Resolverlo del
+todo requiere patrones por evento o por par, que es un cambio de modelo (docs/12).
+
+**Verificación:** suite completa **591 tests** + `ruff check` y `ruff format` limpios.

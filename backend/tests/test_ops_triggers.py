@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -5,7 +6,7 @@ import pytest
 from app.methodology.loader import load_methodology
 from app.ops.triggers import evaluate_triggers
 from app.surveillance.events import load_events_jsonl
-from app.surveillance.patterns import detect_patterns
+from app.surveillance.patterns import PatternMatch, detect_patterns
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "scenarios"
 METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
@@ -21,6 +22,10 @@ def _triggers(scenario, vigilancia_settings):
     events = load_events_jsonl(FIXTURES / scenario)
     matches = detect_patterns(events, vigilancia_settings)
     return evaluate_triggers(matches, vigilancia_settings, SCOPE)
+
+
+def _patron(nombre: str, desde: datetime, hasta: datetime) -> PatternMatch:
+    return PatternMatch(nombre, "ok", desde, hasta, 1, [nombre], "srv-app-01")
 
 
 # Tabla de aceptacion de docs/08 §9, exactamente.
@@ -69,6 +74,95 @@ def test_d5_fires_when_e3_is_missing_its_communication_step(vigilancia_settings)
 
     assert [t.disparador for t in triggers] == ["D5"]
     assert triggers[0].severidad == "baja"
+
+
+def test_d1_an_old_alert_does_not_silence_a_new_burst(vigilancia_settings):
+    burst = _patron(
+        "auth_failures_burst",
+        datetime(2026, 9, 21, 3, 10, tzinfo=UTC),
+        datetime(2026, 9, 21, 3, 12, tzinfo=UTC),
+    )
+    alerta_vieja = _patron(
+        "alert_raised",
+        datetime(2026, 9, 21, 1, 0, tzinfo=UTC),
+        datetime(2026, 9, 21, 1, 0, tzinfo=UTC),
+    )
+    triggers = evaluate_triggers([burst, alerta_vieja], vigilancia_settings, SCOPE)
+    # La alerta vieja no silencia D1; ademas abre D2 porque esa alerta no fue triajeada.
+    assert [t.disparador for t in triggers if t.disparador == "D1"] == ["D1"]
+
+
+def test_d2_a_stale_triage_does_not_hide_a_new_alert(vigilancia_settings):
+    alerta = datetime(2026, 9, 21, 3, 12, tzinfo=UTC)
+    triaje = _patron(
+        "incident_triaged",
+        datetime(2026, 9, 21, 1, 0, tzinfo=UTC),
+        datetime(2026, 9, 21, 3, 13, tzinfo=UTC),
+    )
+    triggers = evaluate_triggers(
+        [_patron("alert_raised", alerta, alerta), triaje], vigilancia_settings, SCOPE
+    )
+    assert triggers == []
+
+
+def test_d2_a_stale_alert_does_not_turn_a_new_triage_late(vigilancia_settings):
+    alerta = _patron(
+        "alert_raised",
+        datetime(2026, 9, 21, 1, 0, tzinfo=UTC),
+        datetime(2026, 9, 21, 3, 12, tzinfo=UTC),
+    )
+    triaje = _patron(
+        "incident_triaged",
+        datetime(2026, 9, 21, 1, 1, tzinfo=UTC),
+        datetime(2026, 9, 21, 1, 1, tzinfo=UTC),
+    )
+    triggers = evaluate_triggers([alerta, triaje], vigilancia_settings, SCOPE)
+    assert [t.disparador for t in triggers] == ["D2"]
+
+
+def test_d3_a_stale_escalation_does_not_hide_a_new_declaration(vigilancia_settings):
+    declarado = datetime(2026, 9, 21, 3, 14, tzinfo=UTC)
+    escalado = _patron(
+        "escalation_done",
+        datetime(2026, 9, 21, 1, 0, tzinfo=UTC),
+        datetime(2026, 9, 21, 3, 20, tzinfo=UTC),
+    )
+    triggers = evaluate_triggers(
+        [_patron("incident_declared", declarado, declarado), escalado],
+        vigilancia_settings,
+        SCOPE,
+    )
+    assert triggers == []
+
+
+def test_d3_a_stale_declaration_does_not_hide_a_new_one(vigilancia_settings):
+    declarado = _patron(
+        "incident_declared",
+        datetime(2026, 9, 21, 1, 0, tzinfo=UTC),
+        datetime(2026, 9, 21, 3, 14, tzinfo=UTC),
+    )
+    escalado = _patron(
+        "escalation_done",
+        datetime(2026, 9, 21, 1, 5, tzinfo=UTC),
+        datetime(2026, 9, 21, 1, 5, tzinfo=UTC),
+    )
+    triggers = evaluate_triggers([declarado, escalado], vigilancia_settings, SCOPE)
+    assert [t.disparador for t in triggers] == ["D3"]
+
+
+def test_d5_an_old_communication_does_not_silence_a_new_verification(vigilancia_settings):
+    verificado = _patron(
+        "restore_verified",
+        datetime(2026, 9, 21, 3, 0, tzinfo=UTC),
+        datetime(2026, 9, 21, 3, 0, tzinfo=UTC),
+    )
+    comunicacion = _patron(
+        "recovery_communicated",
+        datetime(2026, 9, 21, 1, 0, tzinfo=UTC),
+        datetime(2026, 9, 21, 1, 0, tzinfo=UTC),
+    )
+    triggers = evaluate_triggers([verificado, comunicacion], vigilancia_settings, SCOPE)
+    assert [t.disparador for t in triggers] == ["D5"]
 
 
 def test_d3_does_not_fire_when_escalation_is_within_deadline(vigilancia_settings):

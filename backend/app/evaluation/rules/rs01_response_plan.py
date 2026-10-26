@@ -53,7 +53,7 @@ def _escalamiento_posterior(
     ultima es posterior, hay al menos una que lo es.
     """
 
-    inicio = _momento(declarado, "desde")
+    inicio = _momento(declarado, "hasta")
     fin = _momento(escalado, "hasta")
     return inicio is not None and fin is not None and fin > inicio
 

@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from app.adapters.terraform.adapter import TerraformAdapter
+from app.adapters.terraform.adapter import CIDR_DESCONOCIDO, TerraformAdapter
 from app.evaluation.rules import (
     de01_monitoring,
     pr01_encryption,
@@ -164,6 +164,30 @@ def test_security_group_cidr_expression_does_not_crash_nor_invent_a_cidr(tmp_pat
     assert [r["cidr"] for r in rules] == ["unknown", "10.0.0.0/16", "unknown"]
     atributos = [e.value["atributo"] for e in _of(evidence, "tf.expression.unresolved")]
     assert atributos.count("cidr_blocks") == 2
+
+
+def test_dynamic_ingress_is_unknown_not_absent(tmp_path):
+    """`dynamic "ingress"` no vive en `attrs["ingress"]`; no puede quedar como "sin reglas"."""
+
+    evidence = _parse(
+        tmp_path,
+        """
+        resource "aws_security_group" "sg" {
+          dynamic "ingress" {
+            for_each = var.admin_cidrs
+            content {
+              from_port   = 22
+              to_port     = 22
+              protocol    = "tcp"
+              cidr_blocks = [ingress.value]
+            }
+          }
+        }
+        """,
+    )
+    rules = _of(evidence, "tf.security_group.rules")[0].value
+    assert any(r["cidr"] == CIDR_DESCONOCIDO for r in rules)
+    assert pr03_admin_access.evaluate(evidence).estado == Estado.EVIDENCIA_INSUFICIENTE
 
 
 def test_cloudtrail_enable_logging_expression_is_unknown_not_true(tmp_path):

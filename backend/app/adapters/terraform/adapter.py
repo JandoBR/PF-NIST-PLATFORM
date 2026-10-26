@@ -201,7 +201,8 @@ def _strip_meta(block: dict) -> dict:
 #: mismo archivo.
 #: v7: `backup_retention_period = 7.0` se lee como 7 dias; la configuracion SSE de S3 usa la
 #: primera `rule` que declare `apply_server_side_encryption_by_default`, no siempre `rules[0]`.
-ADAPTER_VERSION = "7"
+#: v8: `dynamic "ingress"/"egress"` se emite como regla con CIDR desconocido (no se ignora).
+ADAPTER_VERSION = "8"
 
 
 class TerraformAdapter:
@@ -606,6 +607,31 @@ class TerraformAdapter:
                             "cidr": cidr,
                         }
                     )
+
+        # `dynamic "ingress"` no vive en `attrs["ingress"]`: python-hcl2 lo deja en `dynamic`.
+        # No se expande `for_each` (puede ser una variable), pero tampoco se ignora: una regla
+        # dinámica con origen desconocido impide afirmar que no hay exposición (docs/02 §4).
+        for bloque in attrs.get("dynamic") or []:
+            if not isinstance(bloque, dict):
+                continue
+            for direccion in ("ingress", "egress"):
+                definicion = bloque.get(direccion) or bloque.get(f'"{direccion}"')
+                if not isinstance(definicion, dict):
+                    continue
+                contenido = (definicion.get("content") or [{}])[0]
+                rules.append(
+                    {
+                        "direccion": direccion,
+                        "protocolo": (
+                            str(contenido.get("protocol"))
+                            if contenido.get("protocol") is not None
+                            else None
+                        ),
+                        "puerto_desde": contenido.get("from_port"),
+                        "puerto_hasta": contenido.get("to_port"),
+                        "cidr": CIDR_DESCONOCIDO,
+                    }
+                )
         return self._make_evidence(
             type_id="tf.security_group.rules",
             subject_type="aws_security_group",
