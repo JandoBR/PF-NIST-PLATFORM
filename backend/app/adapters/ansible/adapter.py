@@ -7,6 +7,7 @@ Alcance declarado: modulos `lineinfile`, `copy`, `template` (solo rutas), `file`
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -105,16 +106,40 @@ def _any_module_key(task: dict) -> str | None:
 #: cuentan como servicio corriendo.
 #: v5: acepta `!vault`/`!unsafe` y otros tags `!...`; normaliza fechas YAML a texto; `hosts`
 #: siempre es un array de strings y el BOM UTF-8 no rompe el playbook.
-ADAPTER_VERSION = "5"
+#: v6: traduce modos simbolicos absolutos (`u=rw,g=r`) a octal; los relativos quedan `unknown`.
+ADAPTER_VERSION = "6"
+
+
+_SYMBOLIC_MODE = re.compile(r"^(?:[ugoa]=[rwxXst]*)(?:,(?:[ugoa]=[rwxXst]*))*$")
+_MODE_BITS = {
+    "u": {"r": 0o400, "w": 0o200, "x": 0o100, "X": 0o100},
+    "g": {"r": 0o040, "w": 0o020, "x": 0o010, "X": 0o010},
+    "o": {"r": 0o004, "w": 0o002, "x": 0o001, "X": 0o001},
+}
 
 
 def _modo_octal(modo: Any) -> str:
     """El modo como texto octal. YAML lee `mode: 0644` (sin comillas) como el entero 420; tomarlo
-    tal cual lo convertia en "420", que leido como octal son otros permisos."""
+    tal cual lo convertia en "420", que leido como octal son otros permisos.
+
+    Los modos simbolicos absolutos (`u=rw,g=r,o=`) se traducen; los relativos (`u+rwx`, que
+    dependen de los permisos actuales) quedan como `unknown` y el criterio no puede dar 100.
+    """
 
     if isinstance(modo, int) and not isinstance(modo, bool):
         return format(modo, "04o")
-    return str(modo)
+    texto = str(modo).strip()
+    if re.fullmatch(r"[0-7]{3,4}", texto):
+        return texto.zfill(4)
+    if _SYMBOLIC_MODE.fullmatch(texto):
+        bits = 0
+        for clausula in texto.split(","):
+            quien, permisos = clausula.split("=", 1)
+            for destino in "ugo" if quien == "a" else quien:
+                for permiso in permisos:
+                    bits |= _MODE_BITS[destino].get(permiso, 0)
+        return format(bits, "04o")
+    return "unknown"
 
 
 def _node_lines(node: yaml.Node, lineas: list[str]) -> tuple[int, int]:

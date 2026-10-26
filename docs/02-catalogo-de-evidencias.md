@@ -78,6 +78,10 @@ Alcance del adaptador: recursos **`aws_db_instance`, `aws_s3_bucket` (+ `aws_s3_
 `aws_security_group`, `aws_cloudtrail`**. Todo otro recurso produce `tf.resource.present` si se
 reconoce el bloque, o se ignora registrando la limitación.
 
+> Un bucket sin `aws_s3_bucket_server_side_encryption_configuration` explícito no se asume
+> cifrado: `tf.resource.present` lo delata y PR-01 lo trata como `unknown`/insuficiente
+> (docs/03 §3). El adaptador no inventa un `tf.encryption.config` que el usuario no declaró.
+
 ### 3.2 Ansible (`an.*`)
 
 | ID | value (resumen) | Uso principal |

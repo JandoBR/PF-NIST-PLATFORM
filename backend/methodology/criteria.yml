@@ -25,7 +25,9 @@
 #      y plazos; RS-01 exige escalamiento posterior a la declaracion; PR-05 no da 100 con bloqueo
 #      sin resolver (docs/09 §70-71). Los adaptadores Terraform v7 y Ansible v4 corrigen retencion
 #      HCL integral, varias `rule` de S3 y `state` vs `enabled` (no cambian criteria.yml).
-version: 12
+# v13: PR-01 no da 100 si un recurso aplicable (bucket/BD) no tiene evidencia de cifrado; PR-04
+#      no da 100 con un modo simbolico relativo no interpretable (docs/09 §77).
+version: 13
 criterios:
   - id: CRI-GV-01
     version: 1

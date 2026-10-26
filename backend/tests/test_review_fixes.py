@@ -174,6 +174,47 @@ def test_pr04_ignores_the_regexp_when_reading_the_value(tmp_path):
     assert result.final_score == 25  # antes 100: el "no" del regexp se tomaba como el valor
 
 
+# -- PR-04: permisos simbolicos -----------------------------------------------------------------
+
+
+def test_pr04_symbolic_mode_caps_at_25(tmp_path):
+    tareas = """
+    - name: Permisos
+      file:
+        path: /etc/ssh/sshd_config
+        mode: "u=rw,g=rw,o=rw"
+    - name: Root
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "PermitRootLogin no"
+    - name: Password
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "PasswordAuthentication no"
+"""
+    result = pr04_ssh_hardening.evaluate(_ansible(tmp_path, tareas))
+    assert result.final_score == 25
+
+
+def test_pr04_relative_symbolic_mode_is_insufficient(tmp_path):
+    tareas = """
+    - name: Permisos
+      file:
+        path: /etc/ssh/sshd_config
+        mode: "u+rwx"
+    - name: Root
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "PermitRootLogin no"
+    - name: Password
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "PasswordAuthentication no"
+"""
+    result = pr04_ssh_hardening.evaluate(_ansible(tmp_path, tareas))
+    assert result.estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
 # -- PR-05: un bucket sin bloque declarado no puede dar 100 -------------------------------------
 
 _BLOQUE = """resource "aws_s3_bucket_public_access_block" "a" {

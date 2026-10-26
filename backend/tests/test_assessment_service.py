@@ -41,8 +41,20 @@ SCENARIOS = Path(__file__).resolve().parent / "fixtures" / "scenarios"
 
 
 def _fix_rds_encryption(main_tf: Path) -> None:
-    text = main_tf.read_text()
-    main_tf.write_text(text.replace("storage_encrypted       = false", "storage_encrypted = true"))
+    text = main_tf.read_text().replace(
+        "storage_encrypted       = false", "storage_encrypted = true"
+    )
+    # El fixture tambien tiene un bucket sin cifrado explicito: PR-01 exige evidencia de todos
+    # los recursos, no solo de RDS (docs/03 §3).
+    text += """
+resource "aws_s3_bucket_server_side_encryption_configuration" "backups" {
+  bucket = aws_s3_bucket.backups.id
+  rule {
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+  }
+}
+"""
+    main_tf.write_text(text)
 
 
 @pytest.fixture(scope="module")

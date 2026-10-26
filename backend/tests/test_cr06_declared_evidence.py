@@ -166,6 +166,30 @@ def test_security_group_cidr_expression_does_not_crash_nor_invent_a_cidr(tmp_pat
     assert atributos.count("cidr_blocks") == 2
 
 
+def test_bucket_without_encryption_evidence_is_insufficient(tmp_path):
+    evidence = _parse(tmp_path, 'resource "aws_s3_bucket" "b" { bucket = "b" }')
+
+    assert pr01_encryption.evaluate(evidence).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+def test_plain_bucket_next_to_an_encrypted_one_is_not_100(tmp_path):
+    evidence = _parse(
+        tmp_path,
+        """
+        resource "aws_s3_bucket" "a" { bucket = "a" }
+        resource "aws_s3_bucket" "b" { bucket = "b" }
+        resource "aws_s3_bucket_server_side_encryption_configuration" "e" {
+          bucket = aws_s3_bucket.a.id
+          rule {
+            apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+          }
+        }
+        """,
+    )
+
+    assert pr01_encryption.evaluate(evidence).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
 def test_utf8_bom_in_terraform_does_not_break_parsing(tmp_path):
     tf_file = tmp_path / "main.tf"
     tf_file.write_text(
@@ -216,7 +240,7 @@ def test_cloudtrail_enable_logging_expression_is_unknown_not_true(tmp_path):
 # -- reglas: la limitacion se declara y no se inventa un puntaje --------------------------
 
 
-def test_rule_notes_unresolved_expressions_and_scores_only_the_resolved(tmp_path):
+def test_rule_does_not_award_100_with_an_unresolved_resource(tmp_path):
     evidence = _parse(
         tmp_path,
         """
@@ -225,9 +249,10 @@ def test_rule_notes_unresolved_expressions_and_scores_only_the_resolved(tmp_path
         """,
     )
     resultado = pr01_encryption.evaluate(evidence)
-    assert resultado.final_score == 100
+    assert resultado.estado == Estado.EVIDENCIA_INSUFICIENTE
+    assert resultado.final_score is None
+    assert "aws_db_instance.var" in resultado.explanation
     assert "Limitacion" in resultado.explanation
-    assert "aws_db_instance.var.storage_encrypted" in resultado.explanation
 
 
 def test_rule_without_unresolved_has_no_limitation_note(tmp_path):

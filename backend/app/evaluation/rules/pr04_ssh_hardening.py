@@ -40,25 +40,51 @@ def _directive_value(tasks: list[EvidenceInstance], directive: str) -> bool | No
     return valor
 
 
-def _permisos_inseguros(evidence: list[EvidenceInstance]) -> list[EvidenceInstance]:
-    """`an.file.permissions` sobre `sshd_config` con escritura para grupo u otros (modo octal)."""
+def _permisos(
+    evidence: list[EvidenceInstance],
+) -> tuple[list[EvidenceInstance], list[EvidenceInstance]]:
+    """`an.file.permissions` sobre `sshd_config`: (inseguros, no interpretables).
 
-    inseguros = []
+    Un modo simbolico relativo (`u+rwx`) no se puede traducir sin conocer los permisos actuales:
+    no es seguro asumir que es inocuo, asi que el criterio no puede dar 100.
+    """
+
+    inseguros: list[EvidenceInstance] = []
+    no_interpretables: list[EvidenceInstance] = []
     for e in by_type(evidence, "an.file.permissions"):
         if "sshd_config" not in e.value["ruta"]:
             continue
         try:
             modo = int(str(e.value["modo"]), 8)
         except ValueError:
+            no_interpretables.append(e)
             continue
         if modo & 0o022:
             inseguros.append(e)
-    return inseguros
+    return inseguros, no_interpretables
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     resultado = _evaluate_directives(evidence)
-    inseguros = _permisos_inseguros(evidence)
+    inseguros, no_interpretables = _permisos(evidence)
+
+    if (
+        no_interpretables
+        and resultado.estado == Estado.EVALUADO
+        and (resultado.base_score or 0) > 25
+    ):
+        return CriterionResult(
+            criterion_id=CRITERION_ID,
+            criterion_version=CRITERION_VERSION,
+            estado=Estado.EVIDENCIA_INSUFICIENTE,
+            explanation=(
+                "Permisos de sshd_config en un formato no interpretable ("
+                + ", ".join(str(e.value["modo"]) for e in no_interpretables)
+                + "): no se puede afirmar que sean seguros."
+            ),
+            evidence_ids=[e.id for e in no_interpretables],
+        )
+
     if not inseguros or resultado.estado != Estado.EVALUADO:
         return resultado
     score = min(resultado.base_score or 0, 25)

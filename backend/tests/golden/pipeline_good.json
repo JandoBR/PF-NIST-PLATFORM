@@ -98,7 +98,7 @@
         "tf.encryption.config|aws_db_instance.principal",
         "tf.encryption.config|aws_s3_bucket.documentos"
       ],
-      "explanation": "Cifrado habilitado en todos los recursos resueltos: aws_db_instance.principal, aws_s3_bucket.documentos",
+      "explanation": "Cifrado habilitado en todos los recursos: aws_db_instance.principal, aws_s3_bucket.documentos.",
       "final_score": 100.0
     },
     {

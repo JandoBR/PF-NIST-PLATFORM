@@ -2398,3 +2398,28 @@ evidencia emitida; `assessments.reproducibility` lo registra). No cambia `method
 
 **Verificación:** suite completa **617 tests** + `ruff check` y `ruff format` limpios; frontend
 `typecheck`, `lint` y `build` limpios.
+
+## 77. PR-01 sin evidencia de cifrado y PR-04 con modos simbólicos (`criteria.yml` v13)
+
+- **PR-01.** Un `aws_s3_bucket` sin `aws_s3_bucket_server_side_encryption_configuration` no emitía
+  `tf.encryption.config`; PR-01 veía una lista vacía y devolvía `no_aplicable` (o 100 si otro
+  recurso cifraba). Ahora cruza `tf.encryption.config` con `tf.resource.present` de buckets y bases:
+  un recurso aplicable sin evidencia es `evidencia_insuficiente`, no 100. Tampoco da 100 un recurso
+  con estado `unknown` (`storage_encrypted = var.enc`), que antes se puntuaba "sobre los resueltos".
+  Un `disabled` explícito sigue prevaleciendo (0/25). Tests:
+  `test_bucket_without_encryption_evidence_is_insufficient`,
+  `test_plain_bucket_next_to_an_encrypted_one_is_not_100` y
+  `test_rule_does_not_award_100_with_an_unresolved_resource`; los tests que arreglaban solo RDS
+  ahora agregan también SSE al bucket. Golden `pipeline_good` regenerado (solo cambia la
+  explicación: el fixture sí tiene SSE en ambos recursos).
+- **PR-04.** `_modo_octal` traducía enteros pero dejaba los simbólicos tal cual; `int(modo, 8)`
+  fallaba y la regla ignoraba el permiso, dando 100 con `u=rw,g=rw,o=rw` (0666). Ahora traduce los
+  modos simbólicos absolutos (`u=rw,g=rw,o=rw` → `0666`) y marca los relativos (`u+rwx`) como
+  `unknown`; PR-04 no da 100 con un modo no interpretable. Ansible pasa a **v6**. Tests:
+  `test_symbolic_modes_are_translated_or_marked_unknown`,
+  `test_pr04_symbolic_mode_caps_at_25`, `test_pr04_relative_symbolic_mode_is_insufficient`.
+
+**Versión:** `criteria.yml` **v13** (cambian resultados y `methodology_version`). docs/02 §4,
+docs/03 §3 y README/docs/11 quedan alineados.
+
+**Verificación:** suite completa **622 tests** + `ruff check` y `ruff format` limpios.

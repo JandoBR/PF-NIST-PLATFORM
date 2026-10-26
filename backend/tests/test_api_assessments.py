@@ -302,6 +302,14 @@ def test_reevaluate_after_editing_the_persisted_upload_shows_the_fix(
 
     text = uploaded_main_tf.read_text()
     fixed = text.replace("storage_encrypted       = false", "storage_encrypted = true")
+    fixed += """
+resource "aws_s3_bucket_server_side_encryption_configuration" "backups" {
+  bucket = aws_s3_bucket.backups.id
+  rule {
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+  }
+}
+"""
     uploaded_main_tf.write_text(fixed)
 
     reeval_accepted = api_client.post(f"/assessments/{before['id']}/reevaluate").json()

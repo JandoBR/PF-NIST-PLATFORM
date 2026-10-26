@@ -28,6 +28,30 @@ def test_good_fixture_detects_ssh_hardening_and_rsyslog():
     assert playbook.value["hosts"] == ["servidores_app"]
 
 
+def test_symbolic_modes_are_translated_or_marked_unknown(tmp_path):
+    playbook = tmp_path / "modes.yml"
+    playbook.write_text(
+        """
+- hosts: all
+  tasks:
+    - name: Modo simbolico absoluto
+      file:
+        path: /etc/ssh/sshd_config
+        mode: "u=rw,g=rw,o=rw"
+
+    - name: Modo simbolico relativo
+      file:
+        path: /etc/ssh/sshd_config
+        mode: "u+rwx"
+""",
+        encoding="utf-8",
+    )
+    evidence = AnsibleAdapter(source_id="test:modes", scope="s").parse_path(playbook)
+    modos = [e.value["modo"] for e in _by_type(evidence, "an.file.permissions")]
+
+    assert modos == ["0666", "unknown"]
+
+
 def test_service_state_wins_over_enabled(tmp_path):
     """`state` describe el estado actual; `enabled` solo dice si arranca al boot."""
 

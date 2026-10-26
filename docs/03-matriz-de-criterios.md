@@ -141,10 +141,12 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** PR.DS-01 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Privacidad:** Protect-P
 - **Evidencias:** `tf.encryption.config` (RDS, S3), `doc.claim(tipo=policy_exists)`
 - **Regla (por recurso soportado):**
-  - Todos `enabled` → 100.
+  - Todos los recursos aplicables con evidencia `enabled` → 100.
   - Alguno `disabled` y alguno `enabled` → 25: implementación parcial (prevalece sobre la política).
   - Ningún recurso resuelto cifra (todos `disabled`) → 0: ausencia explícita.
-  - `unknown` → el recurso pasa a `evidencia_insuficiente`; se puntúa sobre los resueltos y se registra la limitación.
+  - Un recurso aplicable **sin evidencia de cifrado** o con estado `unknown` (p. ej. un bucket sin
+    `aws_s3_bucket_server_side_encryption_configuration` explícito) → `evidencia_insuficiente`: no
+    se puede afirmar el 100. Un `disabled` explícito sí prevalece (0/25) y se informa.
   - Sin recursos del tipo → `no_aplicable` con motivo.
   - Política documental sin recursos: no eleva el puntaje técnico; alimenta contexto y el hallazgo.
 - **Recomendación:** habilitar cifrado gestionado por KMS en RDS y S3; verificar mecanismo y llave.
@@ -180,7 +182,10 @@ Resumen de cobertura del catálogo:
   - 100: `PermitRootLogin no` y `PasswordAuthentication no` declarados.
   - 75: solo uno de los dos endurecido.
   - 50: SSH configurado sin opciones explícitas de endurecimiento.
-  - 25: `PermitRootLogin yes` o `PasswordAuthentication yes` explícito.
+  - 25: `PermitRootLogin yes` o `PasswordAuthentication yes` explícito; o permisos de
+    `sshd_config` con escritura para grupo/otros (incluye modo simbólico absoluto traducible).
+  - Un modo simbólico **relativo** (`u+rwx`, que depende de los permisos actuales) no es
+    interpretable: `evidencia_insuficiente`, nunca 100.
   - 0: los dos en `yes` explícito.
   - El valor se lee de `line` (lo que queda escrito), nunca de `regexp`.
   - `an.file.permissions` sobre `sshd_config` con escritura para grupo/otros → tope 25.

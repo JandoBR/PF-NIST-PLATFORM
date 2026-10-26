@@ -125,7 +125,7 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **23 de 23** criterios de docs/03 (`criteria.yml` v12). Cobertura por función:
+El catálogo implementa **23 de 23** criterios de docs/03 (`criteria.yml` v13). Cobertura por función:
 GV 4/4 · ID 4/4 · PR 6/6 · DE 3/3 · RS 3/3 · RC 3/3.
 - **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
