@@ -28,6 +28,58 @@ def test_good_fixture_detects_ssh_hardening_and_rsyslog():
     assert playbook.value["hosts"] == ["servidores_app"]
 
 
+def test_symbolic_modes_are_translated_or_marked_unknown(tmp_path):
+    playbook = tmp_path / "modes.yml"
+    playbook.write_text(
+        """
+- hosts: all
+  tasks:
+    - name: Modo simbolico absoluto
+      file:
+        path: /etc/ssh/sshd_config
+        mode: "u=rw,g=rw,o=rw"
+
+    - name: Modo simbolico relativo
+      file:
+        path: /etc/ssh/sshd_config
+        mode: "u+rwx"
+""",
+        encoding="utf-8",
+    )
+    evidence = AnsibleAdapter(source_id="test:modes", scope="s").parse_path(playbook)
+    modos = [e.value["modo"] for e in _by_type(evidence, "an.file.permissions")]
+
+    assert modos == ["0666", "unknown"]
+
+
+def test_service_state_wins_over_enabled(tmp_path):
+    """`state` describe el estado actual; `enabled` solo dice si arranca al boot."""
+
+    playbook = tmp_path / "services.yml"
+    playbook.write_text(
+        """
+- hosts: all
+  tasks:
+    - name: Detenido pero habilitado al boot
+      service:
+        name: rsyslog
+        state: stopped
+        enabled: true
+
+    - name: Reiniciado
+      service:
+        name: syslog-ng
+        state: restarted
+""",
+        encoding="utf-8",
+    )
+    evidence = AnsibleAdapter(source_id="test:svc", scope="s").parse_path(playbook)
+    estados = {
+        e.value["servicio"]: e.value["estado"] for e in _by_type(evidence, "an.service.state")
+    }
+    assert estados == {"rsyslog": "deshabilitado", "syslog-ng": "habilitado"}
+
+
 def test_gaps_fixture_flags_insecure_directive_and_uninterpreted_command():
     adapter = AnsibleAdapter(source_id="test:gaps", scope="entorno:produccion")
     evidence = adapter.parse_path(FIXTURES / "gaps")
@@ -42,6 +94,40 @@ def test_gaps_fixture_flags_insecure_directive_and_uninterpreted_command():
 
     service = _by_type(evidence, "an.service.state")[0]
     assert service.value == {"servicio": "ufw", "estado": "deshabilitado"}
+
+
+def test_vault_unsafe_and_yaml_scalars_do_not_crash(tmp_path):
+    playbook = tmp_path / "tags.yml"
+    playbook.write_text(
+        """
+- hosts: [web, db]
+  vars:
+    db_password: !vault |
+      $ANSIBLE_VAULT;1.1;AES256
+      616263
+  tasks:
+    - name: Endurecer SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: !unsafe "PermitRootLogin no"
+
+    - name: Fecha sin comillas
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: 2025-01-01
+""",
+        encoding="utf-8",
+    )
+    evidence = AnsibleAdapter(source_id="test:tags", scope="s").parse_path(playbook)
+
+    playbook_ev = _by_type(evidence, "an.playbook.present")[0]
+    assert playbook_ev.value["hosts"] == ["web", "db"]
+    lineas = {
+        t.value["parametros"]["line"]
+        for t in _by_type(evidence, "an.task.config")
+        if "line" in t.value["parametros"]
+    }
+    assert lineas == {"PermitRootLogin no", "2025-01-01"}
 
 
 def test_task_with_only_control_keys_produces_no_evidence(tmp_path):

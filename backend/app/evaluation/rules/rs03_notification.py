@@ -36,7 +36,11 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             [c.id for c in claims],
         )
 
-    if mejor.value["contenido"].get("plazos"):
+    contenido = mejor.value["contenido"]
+    criterios = bool(contenido.get("criterios"))
+    plazos = bool(contenido.get("plazos"))
+
+    if criterios and plazos:
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
@@ -44,10 +48,13 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Lista de notificacion con destinatarios, criterios y plazos.",
             [mejor.id],
         )
-    return result(
-        CRITERION_ID,
-        Estado.EVALUADO,
-        75,
-        "Lista de notificacion definida, sin plazos.",
-        [mejor.id],
+
+    # 100 exige los tres datos: una lista sin criterios no dice cuando notificar, y una sin
+    # plazos no dice en cuanto tiempo. Cualquier lista con destinatarios sigue siendo 75.
+    faltan = "criterios" if not criterios else "plazos"
+    detalle = (
+        f"Lista de notificacion definida, sin {faltan}."
+        if criterios or plazos
+        else "Lista de notificacion definida, sin criterios ni plazos."
     )
+    return result(CRITERION_ID, Estado.EVALUADO, 75, detalle, [mejor.id])

@@ -79,7 +79,6 @@ def generate_incident_plan(
         pasos, verificacion, dependencias = [], "", []
 
     diagnostico_tpl, hipotesis, comprobaciones = _PLANTILLAS[trigger.disparador]
-    ia_activa = type(active_client).__name__ != "NullAIClient"
 
     return Plan(
         criterion_id=criterion_id,
@@ -89,7 +88,7 @@ def generate_incident_plan(
         pasos=pasos,
         verificacion=verificacion,
         dependencias=dependencias,
-        generado_por="ai:plan_v1" if ia_activa else "plantilla",
+        generado_por=content.generado_por if criterion is not None else "plantilla",
         origen="evento",
         diagnostico_observable=diagnostico_tpl.format(recurso=trigger.recurso),
         hipotesis=hipotesis,

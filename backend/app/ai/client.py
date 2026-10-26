@@ -55,6 +55,8 @@ class DeepSeekClient:
         base_url = base_url or os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
         self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
         self.model = model or os.environ.get("DEEPSEEK_MODEL", DEFAULT_MODEL)
+        #: Se incluye en la clave de cache junto al modelo: cambiar de endpoint cambia el resultado.
+        self.base_url = base_url
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
         inicio = time.monotonic()

@@ -158,8 +158,9 @@ def test_job_result_is_exposed_by_the_api(db_session, api_client, auth_user):
     job = job_service.create_job(db_session, "event_ingest", org_id=auth_user.org_id)
     job_service.mark_done(db_session, job, {"eventos_nuevos": 4, "eventos_existentes": 2})
 
-    assert api_client.get(f"/jobs/{job.id}").json()["resultado"] == {
-        "eventos_nuevos": 4,
-        "eventos_existentes": 2,
-    }
+    resultado = api_client.get(f"/jobs/{job.id}").json()["resultado"]
+    assert resultado["eventos_nuevos"] == 4
+    assert resultado["eventos_existentes"] == 2
+    # Los campos que el job no reporto se normalizan a 0, no quedan ausentes.
+    assert resultado["eventos_leidos"] == 0 and resultado["patrones_nuevos"] == 0
     assert api_client.get("/jobs").json()[0]["resultado"]["eventos_nuevos"] == 4

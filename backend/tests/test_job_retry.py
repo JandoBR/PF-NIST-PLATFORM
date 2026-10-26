@@ -97,6 +97,8 @@ def test_retrying_a_failed_assessment_job_completes_it(
     assert detail["estado"] == "completada" and detail["error"] is None
     assert db_session.get(Job, new["id"]).estado == "completado"
     assert db_session.get(Job, failed.id).estado == "fallido"  # el intento original queda
+    listed_after = next(j for j in api_client.get("/jobs").json() if j["id"] == failed.id)
+    assert listed_after["reintentable"] is False  # la evaluacion ya no esta fallida
 
 
 def test_a_failed_job_can_only_be_retried_once(

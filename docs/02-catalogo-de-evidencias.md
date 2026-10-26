@@ -78,6 +78,10 @@ Alcance del adaptador: recursos **`aws_db_instance`, `aws_s3_bucket` (+ `aws_s3_
 `aws_security_group`, `aws_cloudtrail`**. Todo otro recurso produce `tf.resource.present` si se
 reconoce el bloque, o se ignora registrando la limitación.
 
+> Un bucket sin `aws_s3_bucket_server_side_encryption_configuration` explícito no se asume
+> cifrado: `tf.resource.present` lo delata y PR-01 lo trata como `unknown`/insuficiente
+> (docs/03 §3). El adaptador no inventa un `tf.encryption.config` que el usuario no declaró.
+
 ### 3.2 Ansible (`an.*`)
 
 | ID | value (resumen) | Uso principal |
@@ -104,10 +108,10 @@ Tipos de afirmación (`tipo_afirmacion`) usados por los criterios:
 |---|---|
 | `policy_exists` | `{ nombre, aprobada_por?, fecha? }` |
 | `policy_review` | `{ frecuencia, ultima_revision? }` |
-| `role_assigned` | `{ roles: [{ rol, responsable, autoridad }] }` |
+| `role_assigned` | `{ roles: [{ rol, responsable, responsabilidades, autoridad }] }` |
 | `risk_tolerance` | `{ objetivos_riesgo, tolerancia?, responsable? }` |
-| `process_defined` | `{ proceso, pasos, responsables?, criterios_activacion?, criterios_declaracion?, metricas?, ajustes? }` |
-| `escalation_path` | `{ niveles[], criterios[] }` *(declarado; aún no extraído por U1)* |
+| `process_defined` | `{ proceso, pasos, responsables?, criterios_activacion?, criterios_declaracion?, registro_riesgos?, priorizacion?, metricas?, ajustes? }` |
+| `escalation_path` | `{ niveles: string, criterios?: string\|null }` (extraído por U1 desde CR-05) |
 | `notification_list` | `{ destinatarios[], criterios?, plazos? }` |
 | `backup_policy` | `{ respaldo, verificacion_integridad?, retencion? }` |
 | `exposure_policy` | `{ bases_publicas_permitidas: bool\|null, descripcion? }` (PR-05; contradicción con `tf.db_exposure.config`) |
@@ -119,7 +123,7 @@ Reglas de extracción:
 - Cada afirmación exige **fragmento textual y localización** (página/sección). Sin cita → se descarta.
 - `encontrado: false` es válido: significa “el documento no lo declara”, no “no existe”.
 - La confianza baja (`< umbral`) se marca como limitación y no se usa como evidencia suficiente.
-- Nunca se extraen credenciales, claves ni datos personales de los documentos; se redactan antes de enviar.
+- No se piden ni se persisten credenciales, claves ni datos personales: el modelo solo extrae los campos declarados. La **redacción de secretos antes de enviar** está pendiente para uso real (docs/12 SEC-07).
 
 ### 3.4 Logs (`log.*`)
 
@@ -129,8 +133,9 @@ Reglas de extracción:
 | `log.pattern` | `{ patron, resultado, desde, hasta, conteo, fuentes }` | Evidencia operativa agregada. `fuentes` (v2) son los orígenes de los eventos que forman el patrón: es lo único que permite afirmar correlación entre sistemas y no solo detección (DE.AE-03, docs/09 §75). Lista vacía = ningún evento declaró origen, **no** "un solo origen". |
 | `log.window` | `{ desde, hasta, completo: bool }` | Completitud de la ventana observada. |
 
-Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_declared`, `escalation_done`,
-`restore_exercise_run`, `restore_verified`, `recovery_communicated`.
+Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_triaged`, `containment_done`,
+`incident_declared`, `escalation_done`, `restore_exercise_run`, `restore_verified`,
+`recovery_communicated` (docs/06 §3, docs/09 §53).
 
 ### 3.5 Contexto (`ctx.*`)
 
@@ -144,7 +149,7 @@ Patrones iniciales: `auth_failures_burst`, `alert_raised`, `incident_declared`, 
 | Situación | Tratamiento |
 |---|---|
 | Atributo con expresión simple resoluble (variable local literal) | **No se resuelve** (decisión deliberada, docs/09 §54): una variable cuenta como expresión no resuelta (fila siguiente) y el criterio decide con `unknown`. Lo único que el adaptador resuelve es la referencia directa de un recurso S3 de configuración a su `aws_s3_bucket` local; la evidencia queda ligada al bucket (`subject_ref`), sin marca aparte. |
-| Atributo con función, `for_each`, `count`, módulo o referencia remota | `unknown` + `tf.expression.unresolved` con motivo (emitido por el adaptador sobre los atributos que deciden un puntaje; docs/09 §36). |
+| Atributo con función, `for_each`, `count`, módulo o referencia remota | `unknown` + `tf.expression.unresolved` con motivo (emitido por el adaptador sobre los atributos que deciden un puntaje; docs/09 §36). Un bloque `dynamic "ingress"/"egress"` se emite además como regla con `cidr: unknown`, no se omite. |
 | Ansible con `command`, `shell`, plantilla compleja, `when` no evaluable | `an.task.uninterpreted`. |
 | Atributo simplemente ausente | **No** se asume `false`; produce `unknown` con motivo `atributo_ausente`, salvo default documentado del proveedor. |
 | Default conocido del proveedor (ej. S3 cifra nuevas cargas por defecto) | Se registra como `unknown` y el criterio decide; no se asume cumplimiento automático. |
@@ -202,4 +207,7 @@ documentos con retención o frecuencia de revisión distintas.
 - No resuelve módulos remotos de Terraform ni expresiones complejas.
 - No ejecuta Ansible ni Terraform; no consulta la nube.
 - No interpreta imágenes, escaneos ni PDFs sin capa de texto (se puede declarar límite si aparece).
+  Un PDF cifrado con contraseña se omite (cero secciones), no tumba la evaluación.
+- Acepta BOM UTF-8 y los tags `!vault`/`!unsafe` de Ansible como valores opacos; no descifra vaults.
+  Un encabezado Markdown dentro de un bloque de código no se trata como sección.
 - Los logs son simulados; su valor está en demostrar el flujo, no en vigilar un sistema real.

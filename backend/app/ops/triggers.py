@@ -3,6 +3,9 @@ solo sintetiza el plan despues (O1: "deteccion deterministica primero").
 
 D2 (`alert_raised` sin `incident_triaged` a tiempo) se agrego despues (docs/11 OP-05, docs/09 §53)
 junto con el patron `incident_triaged` (FN-08).
+
+Las comparaciones usan `hasta` (el ultimo evento del patron), no `desde`: un triaje/escalamiento/
+comunicacion viejo no puede ocultar un hecho nuevo del mismo tipo (docs/09 §72).
 """
 
 from __future__ import annotations
@@ -36,7 +39,8 @@ def _by_patron(matches: list[PatternMatch], patron: str) -> PatternMatch | None:
 
 def _d1_sin_alerta(matches: list[PatternMatch], scope: str) -> TriggerMatch | None:
     burst = _by_patron(matches, "auth_failures_burst")
-    if burst is None or _by_patron(matches, "alert_raised") is not None:
+    alerta = _by_patron(matches, "alert_raised")
+    if burst is None or (alerta is not None and alerta.hasta >= burst.desde):
         return None
     recurso = burst.recurso or scope
     return TriggerMatch(
@@ -63,7 +67,9 @@ def _d2_sin_triaje(
 
     triaje = _by_patron(matches, "incident_triaged")
     if triaje is not None:
-        delta_segundos = (triaje.desde - alerta.desde).total_seconds()
+        # Se comparan los ultimos eventos de cada patron: un triaje viejo no oculta una alerta
+        # nueva, y una alerta vieja no hace pasar por tardio un triaje nuevo.
+        delta_segundos = (triaje.hasta - alerta.hasta).total_seconds()
         if 0 <= delta_segundos <= settings.plazo_triaje_minutos * 60:
             return None  # triajeo a tiempo: sin disparador
 
@@ -91,8 +97,9 @@ def _d3_sin_escalar(
 
     escalado = _by_patron(matches, "escalation_done")
     if escalado is not None:
-        delta_segundos = (escalado.desde - declarado.desde).total_seconds()
-        # Como en D2: un escalamiento anterior a la declaracion no es el de este incidente.
+        # Como en D2: se comparan los ultimos eventos; un escalamiento anterior a la ultima
+        # declaracion no es el de este incidente.
+        delta_segundos = (escalado.hasta - declarado.hasta).total_seconds()
         if 0 <= delta_segundos <= settings.plazo_escalamiento_minutos * 60:
             return None  # escalo a tiempo: sin disparador
 
@@ -131,7 +138,8 @@ def _d4_restauracion_fallida(matches: list[PatternMatch], scope: str) -> Trigger
 
 def _d5_sin_comunicar(matches: list[PatternMatch], scope: str) -> TriggerMatch | None:
     verificado = _by_patron(matches, "restore_verified")
-    if verificado is None or _by_patron(matches, "recovery_communicated") is not None:
+    comunicacion = _by_patron(matches, "recovery_communicated")
+    if verificado is None or (comunicacion is not None and comunicacion.hasta >= verificado.desde):
         return None
     recurso = verificado.recurso or scope
     return TriggerMatch(

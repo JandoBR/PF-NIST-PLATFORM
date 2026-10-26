@@ -4,7 +4,7 @@ archivo JSONL no requiere nada mas que el archivo mismo."""
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
@@ -39,8 +39,16 @@ def load_events_jsonl(path: Path) -> list[RawEvent]:
             except json.JSONDecodeError as exc:
                 raise SurveillanceError(f"{path}:{line_number}: JSON invalido: {exc}") from exc
             try:
-                events.append(RawEvent.model_validate(raw))
+                event = RawEvent.model_validate(raw)
             except ValidationError as exc:
                 raise SurveillanceError(f"{path}:{line_number}: evento invalido: {exc}") from exc
+            # Un `event_time` sin zona se interpreta como UTC. Sin normalizar, ordenar una mezcla
+            # de naive y aware lanza TypeError y tumba la ingesta entera.
+            event.event_time = (
+                event.event_time.replace(tzinfo=UTC)
+                if event.event_time.tzinfo is None
+                else event.event_time.astimezone(UTC)
+            )
+            events.append(event)
 
     return sorted(events, key=lambda e: e.event_time)

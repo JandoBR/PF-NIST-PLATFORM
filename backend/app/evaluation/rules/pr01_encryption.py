@@ -38,7 +38,17 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
 
 def _evaluate_technical(evidence: list[EvidenceInstance]) -> CriterionResult:
     relevant = by_type(evidence, "tf.encryption.config")
-    if not relevant:
+    # Un bucket o una base existen aunque no tengan configuracion de cifrado explicita: eso es
+    # `unknown`, no "no aplicable" ni "no existe" (docs/02 §4).
+    presentes = {
+        e.subject_ref
+        for e in by_type(evidence, "tf.resource.present")
+        if e.subject_type in ("aws_s3_bucket", "aws_db_instance")
+    }
+    cubiertos = {e.subject_ref for e in relevant}
+    sin_evidencia = sorted(presentes - cubiertos)
+
+    if not relevant and not presentes:
         return CriterionResult(
             criterion_id=CRITERION_ID,
             criterion_version=CRITERION_VERSION,
@@ -49,6 +59,17 @@ def _evaluate_technical(evidence: list[EvidenceInstance]) -> CriterionResult:
     disabled = [e for e in relevant if e.value["estado"] == "disabled"]
     enabled = [e for e in relevant if e.value["estado"] == "enabled"]
     unknown = [e for e in relevant if e.value["estado"] == "unknown"]
+
+    if sin_evidencia and not disabled:
+        # Sin una observacion de fallo explicita, no se puede afirmar que todos cifren: 100 seria
+        # una suposicion. Se puntua como insuficiente y se nombran los recursos sin evidencia.
+        return CriterionResult(
+            criterion_id=CRITERION_ID,
+            criterion_version=CRITERION_VERSION,
+            estado=Estado.EVIDENCIA_INSUFICIENTE,
+            explanation="Sin evidencia de cifrado para: " + ", ".join(sin_evidencia) + ".",
+            evidence_ids=[e.id for e in relevant],
+        )
 
     if disabled:
         explanation = (
@@ -69,22 +90,29 @@ def _evaluate_technical(evidence: list[EvidenceInstance]) -> CriterionResult:
             evidence_ids=[e.id for e in disabled + enabled],
         )
 
-    if enabled:
-        explanation = "Cifrado habilitado en todos los recursos resueltos: " + ", ".join(
-            e.subject_ref for e in enabled
+    if unknown:
+        # Con un recurso aplicable en `unknown` no se puede afirmar que todo cifre: 100 seria una
+        # suposicion (docs/03 §3).
+        return CriterionResult(
+            criterion_id=CRITERION_ID,
+            criterion_version=CRITERION_VERSION,
+            estado=Estado.EVIDENCIA_INSUFICIENTE,
+            explanation="Cifrado desconocido en: "
+            + ", ".join(e.subject_ref for e in unknown)
+            + ". No se puede afirmar el 100.",
+            evidence_ids=[e.id for e in enabled + unknown],
         )
-        if unknown:
-            explanation += (
-                f". {len(unknown)} recurso(s) con estado desconocido quedan como limitacion"
-                " y no se puntuan."
-            )
+
+    if enabled:
         return CriterionResult(
             criterion_id=CRITERION_ID,
             criterion_version=CRITERION_VERSION,
             estado=Estado.EVALUADO,
             base_score=100,
             final_score=100,
-            explanation=explanation,
+            explanation="Cifrado habilitado en todos los recursos: "
+            + ", ".join(e.subject_ref for e in enabled)
+            + ".",
             evidence_ids=[e.id for e in enabled],
         )
 

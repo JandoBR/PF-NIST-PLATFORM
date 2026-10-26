@@ -45,6 +45,15 @@ def test_without_ai_client_falls_back_to_template(methodology):
     assert plans[0].objetivo == methodology.criterios["CRI-PR-01"].recomendacion
 
 
+def test_ai_client_without_content_is_labelled_template(methodology):
+    """Tener un cliente de IA no basta: si no devolvio contenido, el plan es plantilla."""
+
+    plans = generate_plans(methodology, [_result("CRI-PR-01", 10.0)], client=FakeAIClient({}))
+
+    assert plans[0].generado_por == "plantilla"
+    assert plans[0].objetivo == methodology.criterios["CRI-PR-01"].recomendacion
+
+
 def test_with_ai_client_uses_generated_content(methodology):
     client = FakeAIClient(
         {

@@ -12,6 +12,11 @@ from app.models.tables import User
 
 router = APIRouter(tags=["auth"])
 
+#: Hash de relleno para usuario inexistente: el login no debe responder mas rapido cuando el
+#: usuario no existe (enumeracion por tiempo). Se calcula una vez al importar.
+_DUMMY_SALT = "00" * 16
+_DUMMY_HASH = auth_service.hash_password("dummy-password-not-used", _DUMMY_SALT)[1]
+
 
 class LoginRequest(BaseModel):
     username: str
@@ -44,9 +49,11 @@ def _user_out(user: User) -> UserOut:
 @router.post("/auth/login", response_model=LoginResponse)
 def login(body: LoginRequest, session: Session = Depends(get_session)) -> LoginResponse:
     user = session.query(User).filter_by(username=body.username).one_or_none()
-    if user is None or not auth_service.verify_password(
-        body.password, user.password_salt, user.password_hash
-    ):
+    if user is None:
+        # Mismo trabajo de hash que con un usuario real: el tiempo no revela cual fallo.
+        auth_service.verify_password(body.password, _DUMMY_SALT, _DUMMY_HASH)
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
+    if not auth_service.verify_password(body.password, user.password_salt, user.password_hash):
         # Mismo mensaje para usuario inexistente y contrasena incorrecta: no revelar cual fallo.
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
     return LoginResponse(

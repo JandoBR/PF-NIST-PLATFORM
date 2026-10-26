@@ -133,7 +133,91 @@ def _cidrs(value: Any) -> list[str]:
     return [CIDR_DESCONOCIDO if _is_expression(item) else item for item in value]
 
 
-_RESOURCE_START = re.compile(r'^\s*resource\s+"([^"]+)"\s+"([^"]+)"\s*\{')
+_RESOURCE_START = re.compile(r'^\s*resource\s+"([^"]+)"\s+"([^"]+)"')
+
+
+def _clean_hcl(text: str) -> str:
+    """Blanquea comentarios y cuerpos de heredoc conservando lineas y longitud.
+
+    `python-hcl2` no entrega posiciones y el conteo de llaves no debe ver `}` dentro de un
+    comentario `/* ... */` ni de un heredoc. Se reemplaza por espacios, no se elimina, para que
+    los numeros de linea sigan siendo los del archivo.
+    """
+
+    out: list[str] = []
+    i, n = 0, len(text)
+    en_bloque = False
+    heredoc: str | None = None
+
+    while i < n:
+        char = text[i]
+
+        if heredoc is not None:
+            fin = text.find("\n", i)
+            linea = text[i : fin if fin != -1 else n]
+            if linea.strip() == heredoc:
+                heredoc = None
+            out.append(" " * len(linea))
+            if fin == -1:
+                i = n
+            else:
+                out.append("\n")
+                i = fin + 1
+            continue
+
+        if en_bloque:
+            if text.startswith("*/", i):
+                en_bloque = False
+                out.append("  ")
+                i += 2
+            else:
+                out.append("\n" if char == "\n" else " ")
+                i += 1
+            continue
+
+        if char == '"':
+            out.append(char)
+            i += 1
+            while i < n:
+                out.append(text[i])
+                if text[i] == "\\" and i + 1 < n:
+                    out.append(text[i + 1])
+                    i += 2
+                    continue
+                if text[i] == '"':
+                    i += 1
+                    break
+                i += 1
+            continue
+
+        if text.startswith("/*", i):
+            en_bloque = True
+            out.append("  ")
+            i += 2
+            continue
+
+        if char == "#" or text.startswith("//", i):
+            fin = text.find("\n", i)
+            if fin == -1:
+                out.append(" " * (n - i))
+                i = n
+            else:
+                out.append(" " * (fin - i))
+                i = fin
+            continue
+
+        if text.startswith("<<", i):
+            match = re.match(r"<<-?\s*([A-Za-z_]\w*)", text[i:])
+            if match:
+                heredoc = match.group(1)
+                out.append(" " * len(match.group(0)))
+                i += len(match.group(0))
+                continue
+
+        out.append(char)
+        i += 1
+
+    return "".join(out)
 
 
 def _brace_delta(line: str) -> int:
@@ -159,13 +243,34 @@ def _brace_delta(line: str) -> int:
     return delta
 
 
+def _has_open_brace(line: str) -> bool:
+    """Si la linea abre un bloque (una llave fuera de strings y comentarios)."""
+
+    in_string, i = False, 0
+    while i < len(line):
+        char = line[i]
+        if in_string:
+            if char == "\\":
+                i += 1
+            elif char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == "#" or line.startswith("//", i):
+            break
+        elif char == "{":
+            return True
+        i += 1
+    return False
+
+
 def resource_line_ranges(text: str) -> dict[tuple[str, str], tuple[int, int]]:
     """(tipo, nombre) -> (linea inicial, linea final), 1-based, de cada bloque `resource`.
 
     `python-hcl2` no entrega posiciones, asi que se calculan sobre el texto: el bloque empieza en la
     linea `resource "tipo" "nombre" {` y termina donde se cierra su llave (docs/11 OP-15)."""
 
-    lineas = text.splitlines()
+    lineas = _clean_hcl(text).splitlines()
     rangos: dict[tuple[str, str], tuple[int, int]] = {}
     i = 0
     while i < len(lineas):
@@ -173,8 +278,16 @@ def resource_line_ranges(text: str) -> dict[tuple[str, str], tuple[int, int]]:
         if inicio is None:
             i += 1
             continue
-        profundidad, fin = 0, i
-        for j in range(i, len(lineas)):
+
+        # La llave puede estar en la misma linea o en la siguiente (HCL lo permite). Se busca la
+        # primera linea que abra un bloque, ignorando llaves dentro de strings.
+        apertura = next((j for j in range(i, len(lineas)) if _has_open_brace(lineas[j])), None)
+        if apertura is None:
+            i += 1
+            continue
+
+        profundidad, fin = 0, len(lineas) - 1
+        for j in range(apertura, len(lineas)):
             profundidad += _brace_delta(lineas[j])
             if profundidad <= 0:
                 fin = j
@@ -199,7 +312,12 @@ def _strip_meta(block: dict) -> dict:
 #: omitirse.
 #: v6: las referencias a un bucket se resuelven entre los `.tf` del directorio, no solo dentro del
 #: mismo archivo.
-ADAPTER_VERSION = "6"
+#: v7: `backup_retention_period = 7.0` se lee como 7 dias; la configuracion SSE de S3 usa la
+#: primera `rule` que declare `apply_server_side_encryption_by_default`, no siempre `rules[0]`.
+#: v8: `dynamic "ingress"/"egress"` se emite como regla con CIDR desconocido (no se ignora).
+#: v9: se acepta un `.tf` con BOM UTF-8 (`utf-8-sig`).
+#: v10: los rangos de linea ignoran `/* */` y heredocs y aceptan `{` en la linea siguiente.
+ADAPTER_VERSION = "10"
 
 
 class TerraformAdapter:
@@ -227,7 +345,7 @@ class TerraformAdapter:
         options = SerializationOptions(strip_string_quotes=True)
         archivos = []
         for file_path in self.list_files(path):
-            text = file_path.read_text(encoding="utf-8")
+            text = file_path.read_text(encoding="utf-8-sig")
             raw = hcl2.loads(text, serialization_options=options)
             archivos.append((file_path, self._flatten_resources(raw), resource_line_ranges(text)))
         todos = [recurso for _, recursos, _ in archivos for recurso in recursos]
@@ -455,7 +573,16 @@ class TerraformAdapter:
     def _rds_backup(self, file_path: Path, subject_ref: str, attrs: dict) -> list[EvidenceInstance]:
         retencion = attrs.get("backup_retention_period")
         backup_window = attrs.get("backup_window")
-        if not isinstance(retencion, int):
+        # HCL no distingue `7` de `7.0`: ambos son numeros validos y python-hcl2 puede devolver
+        # float. Solo un entero real (o un float integral) es una retencion interpretable.
+        dias = (
+            int(retencion)
+            if isinstance(retencion, int) and not isinstance(retencion, bool)
+            else int(retencion)
+            if isinstance(retencion, float) and retencion.is_integer()
+            else None
+        )
+        if dias is None:
             value = {"retencion_dias": None, "habilitado": None, "ventana": None}
             limitations = (
                 "expresion_no_resuelta: backup_retention_period"
@@ -464,8 +591,8 @@ class TerraformAdapter:
             )
         else:
             value = {
-                "retencion_dias": retencion,
-                "habilitado": retencion > 0,
+                "retencion_dias": dias,
+                "habilitado": dias > 0,
                 "ventana": backup_window if not _is_expression(backup_window) else None,
             }
             limitations = None
@@ -484,8 +611,16 @@ class TerraformAdapter:
 
     def _s3_encryption(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
         rules = attrs.get("rule") or []
-        rule = rules[0] if rules else {}
-        default_rule = (rule.get("apply_server_side_encryption_by_default") or [{}])[0]
+        # S3 admite varias `rule` (p. ej. una por prefijo). Se usa la primera que declare una
+        # configuracion por defecto; quedarse con `rules[0]` ignoraba una regla KMS posterior.
+        default_rule: dict = {}
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            candidato = (rule.get("apply_server_side_encryption_by_default") or [{}])[0]
+            if isinstance(candidato, dict) and candidato.get("sse_algorithm") is not None:
+                default_rule = candidato
+                break
         sse_algorithm = default_rule.get("sse_algorithm")
         if _is_expression(sse_algorithm):
             sse_algorithm = None
@@ -587,6 +722,31 @@ class TerraformAdapter:
                             "cidr": cidr,
                         }
                     )
+
+        # `dynamic "ingress"` no vive en `attrs["ingress"]`: python-hcl2 lo deja en `dynamic`.
+        # No se expande `for_each` (puede ser una variable), pero tampoco se ignora: una regla
+        # dinámica con origen desconocido impide afirmar que no hay exposición (docs/02 §4).
+        for bloque in attrs.get("dynamic") or []:
+            if not isinstance(bloque, dict):
+                continue
+            for direccion in ("ingress", "egress"):
+                definicion = bloque.get(direccion) or bloque.get(f'"{direccion}"')
+                if not isinstance(definicion, dict):
+                    continue
+                contenido = (definicion.get("content") or [{}])[0]
+                rules.append(
+                    {
+                        "direccion": direccion,
+                        "protocolo": (
+                            str(contenido.get("protocol"))
+                            if contenido.get("protocol") is not None
+                            else None
+                        ),
+                        "puerto_desde": contenido.get("from_port"),
+                        "puerto_hasta": contenido.get("to_port"),
+                        "cidr": CIDR_DESCONOCIDO,
+                    }
+                )
         return self._make_evidence(
             type_id="tf.security_group.rules",
             subject_type="aws_security_group",

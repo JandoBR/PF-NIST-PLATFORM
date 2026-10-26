@@ -125,7 +125,7 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **28 de 28** criterios de docs/03 (`criteria.yml` v18). Cobertura por función:
+El catálogo implementa **28 de 28** criterios de docs/03 (`criteria.yml` v19). Cobertura por función:
 GV 6/6 · ID 5/5 · PR 7/7 · DE 3/3 · RS 4/4 · RC 3/3.
 - **Cobertura del marco (AMP-04):** **74 de 106 subcategorías (69,8 %), 22 de 22 categorías y 10
   completas**, calculada por el sistema (`GET /methodology`) y visible en el dashboard

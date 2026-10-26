@@ -40,7 +40,8 @@ Formato JSONL, un evento por línea:
 > (docs/04 §4). Los demás campos se conservan.
 
 Campos obligatorios: `event_id`, `event_time`, `tipo`, `recurso`, `scope`.
-`event_time` es el **tiempo del evento**, no el de reproducción.
+`event_time` es el **tiempo del evento**, no el de reproducción. Se normaliza a UTC: un valor sin
+zona se interpreta como UTC, y mezclar naive con aware en el mismo archivo ya no rompe la ingesta.
 Los eventos pertenecen a una **organización** (`org_id`): se cargan vía `/orgs/{org_id}/events` y el
 `scope` identifica el entorno dentro de ella. No pertenecen a una evaluación.
 
@@ -77,7 +78,9 @@ La capa de vigilancia agrega eventos en `log.pattern`:
 | `restore_verified` | Verificación posterior con confirmación | CRI-RC-02, CRI-RC-03 |
 | `recovery_communicated` | Comunicación de recuperación a stakeholders | CRI-RC-03 |
 
-Cada patrón guarda `desde`, `hasta`, `conteo`, `resultado` y la referencia al `evidence_id` generado.
+Cada patrón guarda `desde`, `hasta`, `conteo`, `resultado` y `fuentes[]` (el origen de los eventos,
+FN-07). La evidencia `log.pattern` se genera por evaluación con un id nuevo; el patrón no referencia
+un `evidence_id` (docs/12 §2, OP-13).
 
 Los patrones se detectan sobre **todos los eventos guardados** de la organización y el scope, no solo sobre
 el archivo recién ingerido: describen la misma ventana que `log.window`. Hay una fila por patrón y por scope,
@@ -174,6 +177,9 @@ Cargar eventos (event_time en orden)
 
 - Nunca se sobrescribe una evaluación previa: se crea la nueva y se muestra el diff.
 - El recálculo solo toca criterios afectados; el resto conserva su puntaje y versión.
+- Si la metodología cambió desde la evaluación anterior, **no** se hace refresco selectivo: se
+  re-ejecuta el pipeline completo con las mismas fuentes (y U1 si hay documentos), porque mezclar
+  resultados de dos versiones dejaría fuera criterios nuevos (docs/09 §83).
 - El diff responde: “¿qué cambió y por qué?” (evidencia nueva, patrón detectado, estado).
 
 **Automático (docs/08 §8).** La nueva evaluación **no la pide el usuario**: al procesar una ingesta,

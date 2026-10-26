@@ -67,10 +67,10 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** GV.RR-01, GV.RR-02, GV.RR-03, GV.RR-04 · **Tipo:** Proceso · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Tier:** T2
 - **Evidencias:** `doc.claim(tipo=role_assigned)`
 - **Regla:**
-  - 100: responsables nombrados por rol con autoridad descrita, **más** `recursos_asignados` (presupuesto/personal acordes a la estrategia de riesgo, `GV.RR-03`) y `practicas_rh` (la ciberseguridad en contratación, inducción, cambios de rol y salida, `GV.RR-04`).
-  - 75: responsables con autoridad, sin recursos ni prácticas de RH declarados. Nombrar a un CISO no es dotar a la función.
-  - 50: responsables definidos sin autoridad explícita.
-  - 25: roles genéricos (“el área de TI”) sin asignación.
+  - 100: rol con **responsable nombrado**, **responsabilidades** y **autoridad** descritas, **más** `recursos_asignados` (presupuesto/personal acordes a la estrategia de riesgo, `GV.RR-03`) y `practicas_rh` (la ciberseguridad en contratación, inducción, cambios de rol y salida, `GV.RR-04`).
+  - 75: hay autoridad declarada, pero falta el responsable nombrado, las responsabilidades, los recursos o las prácticas de RH. La explicación nombra lo que falta. Nombrar a un CISO no es dotar a la función.
+  - 50: roles definidos sin autoridad explícita.
+  - 25: roles genéricos (“el área de TI”) o sin un responsable nombrado.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** designar responsable de seguridad y dueños de activos con autoridad explícita, asignarles recursos acordes a la estrategia de riesgo e incorporar la ciberseguridad a las prácticas de personal.
 
@@ -181,10 +181,12 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** PR.DS-01 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Privacidad:** Protect-P
 - **Evidencias:** `tf.encryption.config` (RDS, S3), `doc.claim(tipo=policy_exists)`
 - **Regla (por recurso soportado):**
-  - Todos `enabled` → 100.
+  - Todos los recursos aplicables con evidencia `enabled` → 100.
   - Alguno `disabled` y alguno `enabled` → 25: implementación parcial (prevalece sobre la política).
   - Ningún recurso resuelto cifra (todos `disabled`) → 0: ausencia explícita.
-  - `unknown` → el recurso pasa a `evidencia_insuficiente`; se puntúa sobre los resueltos y se registra la limitación.
+  - Un recurso aplicable **sin evidencia de cifrado** o con estado `unknown` (p. ej. un bucket sin
+    `aws_s3_bucket_server_side_encryption_configuration` explícito) → `evidencia_insuficiente`: no
+    se puede afirmar el 100. Un `disabled` explícito sí prevalece (0/25) y se informa.
   - Sin recursos del tipo → `no_aplicable` con motivo.
   - Política documental sin recursos: no eleva el puntaje técnico; alimenta contexto y el hallazgo.
 - **Recomendación:** habilitar cifrado gestionado por KMS en RDS y S3; verificar mecanismo y llave.
@@ -220,7 +222,10 @@ Resumen de cobertura del catálogo:
   - 100: `PermitRootLogin no` y `PasswordAuthentication no` declarados.
   - 75: solo uno de los dos endurecido.
   - 50: SSH configurado sin opciones explícitas de endurecimiento.
-  - 25: `PermitRootLogin yes` o `PasswordAuthentication yes` explícito.
+  - 25: `PermitRootLogin yes` o `PasswordAuthentication yes` explícito; o permisos de
+    `sshd_config` con escritura para grupo/otros (incluye modo simbólico absoluto traducible).
+  - Un modo simbólico **relativo** (`u+rwx`, que depende de los permisos actuales) no es
+    interpretable: `evidencia_insuficiente`, nunca 100.
   - 0: los dos en `yes` explícito.
   - El valor se lee de `line` (lo que queda escrito), nunca de `regexp`.
   - `an.file.permissions` sobre `sshd_config` con escritura para grupo/otros → tope 25.
@@ -309,10 +314,10 @@ Resumen de cobertura del catálogo:
 - **Evidencias:** `doc.claim(tipo=process_defined)`, `doc.claim(tipo=escalation_path)`, `log.pattern(escalation_done|incident_declared)`
 - **Regla:**
   - Plan completo = `process_defined` de respuesta con pasos, responsables **y** `criterios_recuperacion` (cuándo se cierra la respuesta y empieza la recuperación, `RS.MA-05`). El escalamiento documentado (`escalation_path`) cuenta como plan parcial.
-  - 100: plan completo + evidencia operativa de escalamiento (`escalation_done`).
-  - 75: plan completo sin evidencia operativa; o plan parcial con escalamiento observado; o escalamiento observado sin plan documentado (tope 75).
+  - 100: plan completo + `escalation_done` **posterior** al `incident_declared` (docs/08 §5, D3). Un escalamiento anterior a la declaración no es respuesta a ese incidente.
+  - 75: plan completo sin escalamiento asociado; o plan parcial con escalamiento posterior; o escalamiento observado sin plan documentado (tope 75).
   - 50: plan parcial sin evidencia operativa.
-  - 0: incidente declarado en una ventana completa sin escalamiento: falla de respuesta (docs/06 §5), con o sin plan.
+  - 0: incidente declarado en una ventana completa sin escalamiento posterior: falla de respuesta (docs/06 §5, docs/08 §5), con o sin plan.
   - Sin plan ni evidencia operativa → `evidencia_insuficiente`.
 - **Nota de mapeo:** `RS.MA-05` usa un campo propio y **no** `criterios_activacion`: en un proceso de respuesta ese campo son los criterios para activar la respuesta, y además es el que `CRI-RC-01` ya lee del proceso de recuperación.
 - **Recomendación:** documentar y ensayar el plan de respuesta incluyendo escalamiento y criterios de prioridad.
@@ -330,8 +335,8 @@ Resumen de cobertura del catálogo:
 - **Subcategorías:** RS.CO-02 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no · **Privacidad:** Protect-P + apoyo Respond
 - **Evidencias:** `doc.claim(tipo=notification_list)`
 - **Regla:**
-  - 100: lista de notificación interna/externa con criterios y plazos.
-  - 75: lista definida sin plazos.
+  - 100: lista de notificación interna/externa con **destinatarios, criterios y plazos**.
+  - 75: lista con destinatarios, pero sin criterios o sin plazos (no hay tramo 50: docs/09 §47).
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** definir a quién, cuándo y cómo se notifica un incidente.
 

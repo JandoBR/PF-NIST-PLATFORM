@@ -231,10 +231,16 @@ class Incident(Base):
     crea por un disparador y se actualiza por hechos posteriores; el motor nunca los fabrica."""
 
     __tablename__ = "incidents"
-    #: La clave de correlacion sale de los eventos (recurso + hora), asi que dos organizaciones que
-    #: ingieren el mismo log la comparten: es unica por organizacion, no global.
+    #: La clave de correlacion sale de los eventos (recurso + hora), no del entorno: es unica por
+    #: organizacion **y scope**. Sin el scope, el mismo host/hora en produccion y staging se
+    #: fusionaba en un incidente (docs/04 §4, docs/08 §3).
     __table_args__ = (
-        UniqueConstraint("org_id", "correlation_key", name="uq_incidents_org_correlation_key"),
+        UniqueConstraint(
+            "org_id",
+            "scope",
+            "correlation_key",
+            name="uq_incidents_org_scope_correlation_key",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)

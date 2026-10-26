@@ -262,6 +262,9 @@ def run_pending_assessment(
         raise AssessmentNotFoundError(assessment_id)
 
     assessment.estado = "en_progreso"
+    # La version se fija cuando el worker ejecuta, no cuando la API encola: si la metodologia
+    # cambio entre ambos, la fila debe reflejar la que realmente calculo (docs/01 §10).
+    assessment.methodology_version = methodology.methodology_version
     session.commit()
 
     try:
@@ -298,12 +301,11 @@ def run_pending_assessment(
         for result in results:
             session.add(result_to_row(assessment.id, result))
 
+        # Los planes se generan antes de publicar `completada`, con la plantilla determinista y
+        # sin IA (docs/11 UI-02): nadie debe ver una evaluacion completada con cero planes.
+        generate_plans(session, methodology, assessment.id)
         assessment.estado = "completada"
         session.commit()
-        # Los planes se generan solos al completar, con la plantilla determinista y sin IA
-        # (docs/11 UI-02): el usuario no tiene que pedirlos. La IA sigue siendo explicita via
-        # `POST /assessments/{id}/plans?use_ai=true`, que los recalcula.
-        generate_plans(session, methodology, assessment.id)
     except Exception as exc:
         assessment.estado = "fallida"
         assessment.error = str(exc)
@@ -339,6 +341,15 @@ def run_assessment(
         ai_client=ai_client,
         apply_ai_adjustment=apply_ai_adjustment,
         context=context,
+    )
+
+
+def has_documents(session: Session, assessment_id: str) -> bool:
+    """Si la evaluacion tiene una fuente documental (para pedir U1 al reevaluar)."""
+
+    return (
+        session.query(Source).filter_by(assessment_id=assessment_id, tipo="documents").first()
+        is not None
     )
 
 
@@ -414,10 +425,12 @@ def enqueue_reevaluation(
     previous_assessment_id: str,
     *,
     apply_ai_adjustment: bool = False,
+    request_documents_ai: bool = False,
     context: dict[str, Any] | None = None,
 ) -> tuple[Assessment, Job]:
     """Crea una reevaluacion y encola su `assessment_run` en la cola del core. Lo usan
-    `POST /assessments/{id}/reevaluate` y el refresco automatico de madurez (docs/08 §8)."""
+    `POST /assessments/{id}/reevaluate`, el refresco automatico de madurez (docs/08 §8) y el
+    fallback del refresco cuando cambia la metodologia."""
 
     assessment, paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
     job = dispatch_job(
@@ -429,7 +442,9 @@ def enqueue_reevaluation(
             "terraform_path": str(paths["terraform_path"]) if paths["terraform_path"] else None,
             "ansible_path": str(paths["ansible_path"]) if paths["ansible_path"] else None,
             "documents_path": str(paths["documents_path"]) if paths["documents_path"] else None,
-            "ai_requested": apply_ai_adjustment,
+            # U1 se necesita si hay documentos: sin IA, la reevaluacion perderia todos los
+            # `doc.claim` de la evaluacion anterior (docs/09 §74).
+            "ai_requested": apply_ai_adjustment or request_documents_ai,
             "apply_ai_adjustment": apply_ai_adjustment,
             "context": context or {},
         },

@@ -33,6 +33,9 @@ def safe_filename(name: str | None, *, tipo: str = "default") -> str:
     base = Path(original).name
     if base in ("", ".", "..") or "/" in base or "\\" in base:
         raise ValueError("Nombre de archivo invalido.")
+    if len(base.encode("utf-8")) > 255:
+        # `NAME_MAX` en Linux; sin esto, `write_bytes` revienta con OSError (500) en vez de 422.
+        raise ValueError("Nombre de archivo demasiado largo.")
     suffix = Path(base).suffix.lower()
     allowed = ALLOWED_SUFFIXES.get(tipo, ALLOWED_SUFFIXES["default"])
     if suffix not in allowed:

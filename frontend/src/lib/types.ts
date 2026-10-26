@@ -276,7 +276,7 @@ export interface ImplementationCoverage {
 }
 
 export interface MethodologyCatalog {
-  methodology_version: number;
+  methodology_version: string;
   nucleo_csf_version: number;
   cobertura_implementacion: ImplementationCoverage;
   criterios: CriterionDefinition[];

@@ -104,6 +104,11 @@ def adjust(
     except ValidationError:
         return _degraded(result)
 
+    # El prompt pide ecoar el criterio y el puntaje recibido. Si no coinciden, la respuesta es de
+    # otro criterio (o invento la base): no se aplica, se degrada a S = B (J4/R5).
+    if parsed.criterion_id != criterion.id or parsed.puntaje_base_recibido != result.base_score:
+        return _degraded(result)
+
     if not parsed.evidencias_referenciadas:
         return _degraded(result)  # J5: la justificacion debe citar evidencia existente
     mostradas = {eid for eid in result.evidence_ids if eid in evidence_by_id}

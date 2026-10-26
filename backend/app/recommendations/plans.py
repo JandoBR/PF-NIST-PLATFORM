@@ -60,7 +60,7 @@ def _build_plan(methodology: Methodology, client: AIClient, finding: Finding) ->
         pasos=content.pasos,
         verificacion=content.verificacion,
         dependencias=content.dependencias,
-        generado_por="ai:plan_v1" if type(client).__name__ != "NullAIClient" else "plantilla",
+        generado_por=content.generado_por,
     )
 
 

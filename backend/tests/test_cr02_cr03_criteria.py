@@ -132,13 +132,37 @@ def test_rs02_sin_proceso_es_insuficiente():
 # --- CRI-RS-03 ---
 
 
-def test_rs03_con_plazos_es_100():
-    evidence = [_claim("notification_list", {"destinatarios": ["externo"], "plazos": "24h"})]
+def test_rs03_con_criterios_y_plazos_es_100():
+    evidence = [
+        _claim(
+            "notification_list",
+            {
+                "destinatarios": ["externo"],
+                "criterios": "brecha de datos personales",
+                "plazos": "24h",
+            },
+        )
+    ]
     assert rs03_notification.evaluate(evidence).final_score == 100
 
 
+def test_rs03_sin_criterios_es_75():
+    evidence = [
+        _claim(
+            "notification_list",
+            {"destinatarios": ["externo"], "plazos": "24h"},
+        )
+    ]
+    assert rs03_notification.evaluate(evidence).final_score == 75
+
+
 def test_rs03_sin_plazos_es_75():
-    evidence = [_claim("notification_list", {"destinatarios": ["externo"]})]
+    evidence = [
+        _claim(
+            "notification_list",
+            {"destinatarios": ["externo"], "criterios": "brecha de datos personales"},
+        )
+    ]
     assert rs03_notification.evaluate(evidence).final_score == 75
 
 
@@ -155,7 +179,11 @@ def test_rs03_una_afirmacion_callada_no_tapa_a_la_que_declara_destinatarios():
     """Mas confianza no basta si la afirmacion no trae el dato (p. ej. un manual de operaciones)."""
 
     callada = _claim("notification_list", {"destinatarios": []}, confianza=0.95)
-    util = _claim("notification_list", {"destinatarios": ["CISO"], "plazos": "72h"}, confianza=0.7)
+    util = _claim(
+        "notification_list",
+        {"destinatarios": ["CISO"], "criterios": "brecha confirmada", "plazos": "72h"},
+        confianza=0.7,
+    )
 
     resultado = rs03_notification.evaluate([callada, util])
 

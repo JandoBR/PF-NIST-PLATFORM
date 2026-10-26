@@ -24,7 +24,7 @@ from app.api.schemas import JobOut
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
 from app.core.dispatch import JobRetryError, retry_job
-from app.models.tables import Job, User
+from app.models.tables import Assessment, Job, User
 
 router = APIRouter(tags=["jobs"])
 
@@ -74,7 +74,17 @@ def list_jobs(
     ):
         _reap_if_stale(session, job)
     jobs = job_service.list_jobs(session, user.org_id, estado=estado, tipo=tipo, limit=limit)
-    return [JobOut.from_job(job) for job in jobs]
+    assessment_ids = {job.assessment_id for job in jobs if job.assessment_id}
+    estados = (
+        dict(
+            session.query(Assessment.id, Assessment.estado)
+            .filter(Assessment.id.in_(assessment_ids))
+            .all()
+        )
+        if assessment_ids
+        else {}
+    )
+    return [JobOut.from_job(job, assessment_estado=estados.get(job.assessment_id)) for job in jobs]
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)
@@ -89,7 +99,8 @@ def get_job(
     _require_job_owned(session, job, user)
 
     _reap_if_stale(session, job)
-    return JobOut.from_job(job)
+    assessment = session.get(Assessment, job.assessment_id) if job.assessment_id else None
+    return JobOut.from_job(job, assessment_estado=assessment.estado if assessment else None)
 
 
 @router.post("/jobs/{job_id}/retry", response_model=JobOut, status_code=202)

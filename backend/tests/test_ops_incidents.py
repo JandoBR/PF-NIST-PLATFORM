@@ -51,6 +51,22 @@ def test_repeated_trigger_with_same_correlation_key_updates_not_duplicates(db_se
     assert len(second.timeline) == 2
 
 
+def test_same_correlation_key_in_another_scope_is_a_separate_incident(db_session):
+    """El entorno forma parte de la identidad: produccion y staging no se contaminan."""
+
+    org = _org(db_session)
+    produccion, _ = upsert_incident(
+        db_session, org.id, "entorno:produccion", _trigger(correlation_key="ck-shared")
+    )
+    staging, es_nuevo = upsert_incident(
+        db_session, org.id, "entorno:staging", _trigger(correlation_key="ck-shared")
+    )
+
+    assert es_nuevo is True
+    assert produccion.id != staging.id
+    assert db_session.query(Incident).filter_by(org_id=org.id).count() == 2
+
+
 def test_different_correlation_keys_create_separate_incidents(db_session):
     org = _org(db_session)
     upsert_incident(db_session, org.id, "s", _trigger(correlation_key="ck-a"))

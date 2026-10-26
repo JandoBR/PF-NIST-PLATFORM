@@ -184,6 +184,14 @@ def test_plan_follow_up_invalid_state_is_422(api_client, db_session, methodology
     assert response.status_code == 422
 
 
+def test_context_with_a_huge_number_is_422_not_500(api_client):
+    """`json.loads` lanza ValueError con enteros de >4300 digitos; no debe escapar como 500."""
+
+    context = '{"a": 1' + "0" * 5000 + "}"
+    response = _upload_terraform(api_client, "good", context=context)
+    assert response.status_code == 422
+
+
 def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
     api_client, db_session, methodology, fake_redis
 ):
@@ -214,6 +222,31 @@ def test_reevaluate_picks_up_a_fix_to_the_uploaded_file(
     assert all(d["explicacion_antes"] == d["explicacion_despues"] for d in body["diffs"])
     assert body["misma_metodologia"] and body["mismo_scope"]
     assert body["hallazgos_resueltos"] == [] and body["hallazgos_nuevos"] == []
+
+
+def test_reevaluating_documents_requests_ai(api_client, db_session, methodology, fake_redis):
+    """Sin U1, la reevaluacion volveria a leer los documentos y perderia todos los doc.claim."""
+
+    from app.models.tables import Job, Source
+
+    before = _create_and_complete(api_client, db_session, methodology, fake_redis, "good")
+    db_session.add(
+        Source(
+            assessment_id=before["id"],
+            tipo="documents",
+            ruta="/tmp/documento.md",
+            sha256="0" * 64,
+        )
+    )
+    db_session.commit()
+
+    accepted = api_client.post(
+        f"/assessments/{before['id']}/reevaluate", params={"confirm_live_ai": "true"}
+    )
+
+    assert accepted.status_code == 202
+    job = db_session.get(Job, accepted.json()["job_id"])
+    assert job.payload["ai_requested"] is True
 
 
 def test_reevaluate_inherits_plan_follow_up_state(api_client, db_session, methodology, fake_redis):
@@ -269,6 +302,14 @@ def test_reevaluate_after_editing_the_persisted_upload_shows_the_fix(
 
     text = uploaded_main_tf.read_text()
     fixed = text.replace("storage_encrypted       = false", "storage_encrypted = true")
+    fixed += """
+resource "aws_s3_bucket_server_side_encryption_configuration" "backups" {
+  bucket = aws_s3_bucket.backups.id
+  rule {
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+  }
+}
+"""
     uploaded_main_tf.write_text(fixed)
 
     reeval_accepted = api_client.post(f"/assessments/{before['id']}/reevaluate").json()

@@ -111,7 +111,9 @@ def _parse_context(context: str) -> dict:
 
     try:
         parsed = json.loads(context)
-    except json.JSONDecodeError as exc:
+    except (ValueError, RecursionError) as exc:
+        # `JSONDecodeError` es un ValueError; un entero de >4300 digitos lanza ValueError y un
+        # objeto muy anidado, RecursionError. Ninguno debe escapar como 500 (docs/04 §6).
         raise HTTPException(status_code=422, detail=f"`context` no es JSON valido: {exc}") from exc
     if not isinstance(parsed, dict):
         raise HTTPException(status_code=422, detail="`context` debe ser un objeto JSON.")
@@ -318,8 +320,9 @@ def reevaluate_assessment(
     redis_client: redis.Redis = Depends(get_redis),
 ) -> AssessmentAccepted:
     _require_assessment(session, assessment_id, user)
+    tiene_documentos = svc.has_documents(session, assessment_id)
     guard_error = check_live_ai_guard(
-        ai_adjust, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai
+        ai_adjust or tiene_documentos, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai
     )
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
@@ -331,6 +334,7 @@ def reevaluate_assessment(
         redis_client,
         assessment_id,
         apply_ai_adjustment=ai_adjust,
+        request_documents_ai=tiene_documentos,
         context=contexto,
     )
 

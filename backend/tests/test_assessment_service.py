@@ -41,8 +41,20 @@ SCENARIOS = Path(__file__).resolve().parent / "fixtures" / "scenarios"
 
 
 def _fix_rds_encryption(main_tf: Path) -> None:
-    text = main_tf.read_text()
-    main_tf.write_text(text.replace("storage_encrypted       = false", "storage_encrypted = true"))
+    text = main_tf.read_text().replace(
+        "storage_encrypted       = false", "storage_encrypted = true"
+    )
+    # El fixture tambien tiene un bucket sin cifrado explicito: PR-01 exige evidencia de todos
+    # los recursos, no solo de RDS (docs/03 §3).
+    text += """
+resource "aws_s3_bucket_server_side_encryption_configuration" "backups" {
+  bucket = aws_s3_bucket.backups.id
+  rule {
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+  }
+}
+"""
+    main_tf.write_text(text)
 
 
 @pytest.fixture(scope="module")
@@ -260,6 +272,90 @@ def test_generate_plans_is_idempotent(db_session, methodology):
 def test_generate_plans_unknown_assessment_raises(db_session, methodology):
     with pytest.raises(svc.AssessmentNotFoundError):
         svc.generate_plans(db_session, methodology, "no-existe")
+
+
+def test_assessment_is_not_published_as_completed_before_plans(
+    monkeypatch, db_session, methodology
+):
+    visto = {}
+    original = svc.generate_plans
+
+    def espia(session, methodology, assessment_id, **kwargs):
+        visto["estado"] = session.get(Assessment, assessment_id).estado
+        return original(session, methodology, assessment_id, **kwargs)
+
+    monkeypatch.setattr(svc, "generate_plans", espia)
+
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Orden Planes",
+        scope="entorno:produccion",
+        terraform_path=FIXTURES / "gaps",
+    )
+
+    assert visto["estado"] == "en_progreso"
+    assert assessment.estado == "completada"
+
+
+def test_methodology_version_is_stamped_when_the_worker_runs(db_session, methodology):
+    assessment = svc.create_pending_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Version Tardia",
+        scope="entorno:produccion",
+    )
+    assessment.methodology_version = "criterios=1,tipos=1,settings=1,csf=1"
+    db_session.commit()
+
+    svc.run_pending_assessment(
+        db_session, methodology, assessment.id, terraform_path=FIXTURES / "gaps"
+    )
+
+    db_session.refresh(assessment)
+    assert assessment.methodology_version == methodology.methodology_version
+
+
+def test_enqueue_refresh_falls_back_to_full_run_when_methodology_changed(
+    db_session, methodology, fake_redis
+):
+    org = "Empresa Refresh Metodologia"
+    previous = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name=org,
+        scope="entorno:produccion",
+        terraform_path=FIXTURES / "gaps",
+    )
+    previous.methodology_version = "criterios=1,tipos=1,settings=1,csf=1"
+    db_session.commit()
+
+    _, job = refresh.enqueue_surveillance_refresh(db_session, methodology, fake_redis, previous.id)
+
+    assert "selective_refresh" not in job.payload
+    assert job.payload["terraform_path"]
+    assert job.payload["ai_requested"] is False
+
+
+def test_selective_refresh_refuses_a_different_methodology(db_session, methodology):
+    org = "Empresa Refresh Guardia"
+    previous = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name=org,
+        scope="entorno:produccion",
+        terraform_path=FIXTURES / "gaps",
+    )
+    previous.methodology_version = "criterios=1,tipos=1,settings=1,csf=1"
+    db_session.commit()
+    refreshed, _paths = svc.create_pending_reevaluation(db_session, methodology, previous.id)
+
+    with pytest.raises(ValueError, match="misma metodologia"):
+        refresh.run_surveillance_refresh(db_session, methodology, refreshed.id, previous.id)
+
+    db_session.refresh(refreshed)
+    assert refreshed.estado == "fallida"
+    assert "misma metodologia" in refreshed.error
 
 
 def test_surveillance_refresh_reuses_unaffected_and_recomputes_operational(db_session, methodology):

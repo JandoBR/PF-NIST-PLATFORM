@@ -2618,3 +2618,278 @@ exactamente la diferencia entre las dos coberturas que `docs/01 §7` obliga a no
 limpios. Sigue fallando solo `test_uploads.py::test_windows_separator_is_rejected`, preexistente y
 específico de Windows.
 
+## 79. Endurecimiento de GV-02, RS-03 y RS-01 (integrado en `criteria.yml` v19)
+
+Decisión de producto: un **100 exige evidencia completa**. No se concede por aproximación ni por
+un dato parcial; sigue siendo alcanzable con documentos reales, porque solo se pide que el dato
+declarado esté, no que la organización sea perfecta.
+
+- **GV-02 (roles).** El 100 anterior miraba solo `autoridad`, así que `{rol: CISO, autoridad: …}`
+  bastaba. Ahora exige **responsable nombrado + responsabilidades + autoridad**, además de
+  `recursos_asignados` y `practicas_rh` (GV.RR-03/04 de la Oleada B). 75 si hay autoridad pero
+  falta alguna de esas piezas; 50 si hay roles sin autoridad; 25 si solo hay roles genéricos.
+  `role_assigned` incorpora `responsabilidades` a `_CONTENT_FIELDS` (`app/ai/extraction.py`), el
+  campo que la regla necesitaba y el esquema no pedía.
+- **RS-03 (notificación).** El 100 anterior solo miraba `plazos`, aunque docs/03 exige “criterios y
+  plazos”. Ahora el 100 exige destinatarios + criterios + plazos; con destinatarios pero sin uno de
+  los dos, 75. No se reintroduce el tramo 50 que §47 eliminó.
+- **RS-01 (respuesta).** El 100 anterior aceptaba cualquier `escalation_done`, incluso anterior al
+  `incident_declared`. Ahora exige que el último evento del patrón sea **posterior** a la
+  declaración (misma lógica que D3, docs/08 §5); sin declaración, o con escalamiento anterior, el
+  plan completo se queda en 75 y un incidente declarado en ventana completa sin escalamiento
+  posterior vuelve al 0 de la regla de justicia. Se usa `hasta` del patrón para admitir varias
+  escalaciones: si la última es posterior, hay al menos una que lo es.
+
+**Tests:** `test_gv02_rol_completo_con_recursos_y_practicas_rh_es_100`,
+`test_gv02_nombrar_un_ciso_no_es_dotar_la_funcion`,
+`test_gv02_responsable_sin_responsabilidades_es_75`, `test_gv02_sin_autoridad_es_50`,
+`test_gv02_rol_sin_responsable_es_75`, `test_gv02_rol_generico_sin_responsable_es_50`,
+`test_gv02_elige_el_rol_completo_entre_varios`; `test_rs03_con_criterios_y_plazos_es_100`,
+`test_rs03_sin_criterios_es_75`, `test_rs03_sin_plazos_es_75`;
+`test_rs01_plan_completo_con_escalamiento_posterior_scores_100`,
+`test_rs01_escalamiento_anterior_a_la_declaracion_scores_0`,
+`test_rs01_plan_completo_con_escalamiento_sin_declaracion_tope_75`. Se actualizaron las
+aserciones que bendecían el comportamiento laxo.
+
+**Versión:** estos cambios se integran en **`criteria.yml` v19** (v18 de GitHub + el
+endurecimiento). `docs/03` §1/§5 y `docs/02` §3.3 quedan alineados.
+
+**Verificación:** en su corte, suite completa **580 tests** + `ruff check`/`format` limpios; la
+integración final se verifica en §89.
+
+## 80. Otras correcciones de estricta puntuación (Terraform v7, Ansible v4)
+
+Misma regla de producto: no se concede un 100 si falta evidencia de un recurso o requisito aplicable.
+
+- **PR-05 con flags sin resolver.** `con_bloque` se construía con todos los `tf.public_access.config`
+  (incluidos los `unknown`), así que un bucket con los cuatro flags sin resolver no aparecía como
+  “sin bloque” si otro bucket estaba completo: 100. Ahora solo cuenta un bloqueo **resuelto**; un
+  bucket con bloqueo incompleto o sin bloque queda `evidencia_insuficiente` (docs/03 §3).
+  Test: `test_pr05_an_unresolved_block_prevents_the_100`.
+- **`state` de Ansible manda sobre `enabled`.** `enabled: true` + `state: stopped` se leía como
+  “habilitado” (100 en PR-06/DE-01), y `state: restarted`/`reloaded` quedaba `desconocido`.
+  Ahora se evalúa primero `state`; `enabled` solo es el respaldo cuando no hay `state`. Test:
+  `test_service_state_wins_over_enabled`.
+- **Retención HCL integral.** `backup_retention_period = 7.0` (número válido en HCL) se descartaba
+  por `isinstance(..., int)` y PR-02 quedaba `evidencia_insuficiente`. Ahora un float integral se
+  normaliza a días. Test: `test_integral_float_retention_is_read_as_days`.
+- **S3 con varias `rule`.** Se miraba siempre `rules[0]`; si la primera era un `filter` y la
+  configuración por defecto iba después, el cifrado quedaba `unknown`. Ahora se usa la primera
+  `rule` que declare `apply_server_side_encryption_by_default`. Test:
+  `test_s3_encryption_uses_the_rule_that_defines_sse`.
+
+**Versiones de adaptador:** Terraform pasa a **v7** y Ansible a **v4** (cambia la evidencia emitida;
+`assessments.reproducibility` lo registra). No cambia `methodology_version` por esto.
+
+**Verificación:** suite completa **584 tests** + `ruff check` y `ruff format` limpios.
+
+## 81. Security groups dinámicos y disparadores con varios eventos (Terraform v8)
+
+- **`dynamic "ingress"/"egress"`.** python-hcl2 no los deja en `attrs["ingress"]`, así que el
+  adaptador no emitía ninguna regla: PR-03 veía una lista vacía y devolvía 100. Ahora se emite una
+  regla con `cidr: unknown` (los puertos del `content`, si están), y PR-03 la trata como
+  indeterminada → `evidencia_insuficiente`. No se expande `for_each` (puede ser una variable).
+  Terraform pasa a **v8**. Test: `test_dynamic_ingress_is_unknown_not_absent`.
+- **D1/D2/D3/D5 con varios eventos.** Los patrones guardan el primero y el último evento del tipo;
+  los disparadores comparaban los `desde`, así que un triaje/escalamiento/alerta/comunicación
+  viejo ocultaba uno nuevo. Ahora comparan los `hasta` (último evento de cada patrón):
+  - D1 solo se silencia con una alerta posterior al inicio de la ráfaga.
+  - D2 mide el triaje posterior contra la última alerta.
+  - D3 mide el escalamiento posterior contra la última declaración.
+  - D5 solo se silencia con una comunicación posterior a la verificación.
+  Tests: los seis casos nuevos en `test_ops_triggers.py` (triaje viejo + alerta nueva, alerta
+  vieja + triaje nuevo, escalamiento viejo + declaración nueva, declaración vieja + escalamiento
+  viejo, alerta vieja + ráfaga nueva, comunicación vieja + verificación nueva). docs/08 §5 y
+  docs/02 §4 quedan alineados.
+
+**Límite conocido:** sigue habiendo una fila por patrón y scope (docs/06 §3), así que con varios
+pares alerta/triaje intercalados la comparación de extremos es una aproximación. Resolverlo del
+todo requiere patrones por evento o por par, que es un cambio de modelo (docs/12).
+
+**Verificación:** suite completa **591 tests** + `ruff check` y `ruff format` limpios.
+
+## 82. Robustez de IA y de los adaptadores (Terraform v9, Ansible v5, Documentos v3)
+
+- **U2 no se aplica si la respuesta no es del criterio.** `AdjustmentResponse` valida rango
+  (`puntaje_base_recibido`/`puntaje_propuesto` 0–100, `confianza` 0–1) y `adjust()` exige que
+  `criterion_id` y `puntaje_base_recibido` coincidan con el criterio evaluado; si no, degrada a
+  `S = B` con `degradado=True`. Un `NaN`/`Infinity` que `json.loads` acepta ya no llega a
+  `round()`: Pydantic lo rechaza y se degrada. U1 también rechaza confianzas fuera de rango.
+- **Caché de IA.** La clave incluye modelo y base URL (cambiar `DEEPSEEK_MODEL` ya no devuelve la
+  respuesta del modelo anterior). Una entrada corrupta o no-dict se trata como miss; la escritura
+  es atómica (temp + replace).
+- **Ansible.** `_AnsibleLoader` acepta `!vault`/`!unsafe` y cualquier tag `!...` como opaco (no
+  descifra secretos, no tumba la evaluación); `!vault` se guarda como `<vault>`. Las fechas YAML
+  se convierten a texto (`line: 2025-01-01` no rompe el JSON de la evidencia) y `hosts` siempre es
+  un array de strings (`hosts: [web, db]` ya no queda anidado).
+- **BOM y documentos.** Terraform, Ansible y Markdown leen con `utf-8-sig`; un BOM ya no rompe el
+  `.tf` ni pierde el primer encabezado. Los encabezados `#` dentro de bloques ```/~~~ no son
+  secciones. Un PDF cifrado con contraseña se omite (cero secciones), no deja la evaluación
+  `fallida`.
+
+**Versiones de adaptador:** Terraform **v9**, Ansible **v5**, Documentos **v3** (cambia la
+evidencia emitida; `assessments.reproducibility` lo registra). No cambia `methodology_version`.
+
+**Verificación:** suite completa **601 tests** + `ruff check` y `ruff format` limpios.
+
+## 83. Reevaluación con documentos, refresco y procedencia de planes
+
+- **La API de reevaluación pedía U1 solo si `ai_adjust`.** `enqueue_reevaluation` ponía
+  `ai_requested = apply_ai_adjustment`; si la evaluación anterior tenía documentos, el worker
+  re-leía los PDFs/Markdown con `NullAIClient` y perdía todos los `doc.claim`: GV-01 pasaba de 100 a
+  `evidencia_insuficiente`. Ahora la ruta detecta `Source(tipo="documents")`, aplica el guard de IA
+  real con `confirm_live_ai` y encola `ai_requested=True` (el CLI ya lo hacía). Test:
+  `test_reevaluating_documents_requests_ai`.
+- **Refresco selectivo con otra metodología.** `run_surveillance_refresh` copiaba resultados de la
+  evaluación anterior sin mirar `methodology_version`: una evaluación con 6 criterios se completaba
+  con 13/23 resultados, se marcaba con la versión nueva y `provisional=False`. Ahora
+  `enqueue_surveillance_refresh` detecta el cambio y hace un **re-run completo** con las mismas
+  fuentes (y U1 si hay documentos); `run_surveillance_refresh` además falla el job si un refresco
+  selectivo viejo llega tras el deploy. Tests:
+  `test_enqueue_refresh_falls_back_to_full_run_when_methodology_changed` y
+  `test_selective_refresh_refuses_a_different_methodology`.
+- **Procedencia de planes.** `generado_por` se decidía por la clase del cliente: un cliente de IA
+  que caía a la plantilla se grababa como `ai:plan_v1`. Ahora `generate_plan_content` marca el
+  contenido (`generado_por`), y `recommendations/plans`/`ops/plans` lo copian; un fallback queda
+  como `plantilla`. Tests: `test_ai_client_without_content_is_labelled_template` en ambos módulos.
+  docs/04 §6 y docs/06 §6 quedan alineados.
+
+**Verificación:** suite completa **606 tests** + `ruff check` y `ruff format` limpios.
+
+## 84. Entradas hostiles: 401/422 en vez de 500
+
+- **Firma no ASCII.** `hmac.compare_digest(str, str)` lanza `TypeError` con caracteres no ASCII;
+  cualquier cliente sin token podía provocar un 500. `decode_token` lo captura y devuelve `None`
+  (401). Test: `test_non_ascii_signature_is_rejected_not_500`.
+- **Payload firmado malformado.** `exp` como string (`TypeError` al comparar), `sub` como lista
+  (`session.get` revienta) u `org` no-string ahora se rechazan en `decode_token` como 401, no 500.
+  Test: `test_token_with_a_malformed_payload_is_rejected`.
+- **Login sin enumeración por tiempo.** Un usuario inexistente no saltaba PBKDF2 (~3 ms vs ~37 ms).
+  Ahora ejecuta un hash de relleno cacheado al importar; el tiempo es comparable. Test:
+  `test_unknown_user_still_runs_the_password_hash`.
+- **`context` con un entero de >4300 dígitos** (o un objeto muy anidado) lanzaba `ValueError`/
+  `RecursionError` fuera del `JSONDecodeError` capturado: 500. Ahora ambos son 422 antes de crear
+  nada. Test: `test_context_with_a_huge_number_is_422_not_500`.
+- **Nombre de archivo de >255 bytes.** Pasaba el saneo y `write_bytes` lanzaba `OSError` (500).
+  `safe_filename` lo rechaza con 422. Test: `test_overlong_name_is_rejected`.
+
+**Verificación:** suite completa **611 tests** + `ruff check` y `ruff format` limpios.
+
+## 85. Ciclo de vida, contratos de jobs y determinismo
+
+- **Plan antes de `completada`.** Se marcaba `completada` y se hacía commit antes de
+  `generate_plans`; una lectura concurrente veía la evaluación terminada con cero planes. Ahora los
+  planes se generan antes y recién entonces se publica `completada`. Test:
+  `test_assessment_is_not_published_as_completed_before_plans`.
+- **`methodology_version` al ejecutar.** Se copiaba en `create_pending_assessment`; un job encolado
+  antes de un deploy corría las reglas nuevas pero registraba la versión vieja. Ahora el worker la
+  fija al empezar. Test: `test_methodology_version_is_stamped_when_the_worker_runs`.
+- **Contrato de `JobOut`.** `resultado` pasa de `dict` libre a `IngestJobResult` con defaults 0 (la
+  UI no recibe `undefined`) y `reintentable` exige que la evaluación siga `fallida`: tras un
+  reintento exitoso el job viejo deja de ofrecer "Reintentar" (antes el botón siempre daba 409).
+  Tests: `test_job_result_is_exposed_by_the_api` y la aserción nueva en `test_job_retry.py`.
+- **Fechas de eventos.** `event_time` se normaliza a UTC al parsear; mezclar naive y aware lanzaba
+  `TypeError` y tumbaba la ingesta. Test: `test_mixed_naive_and_aware_event_times_are_normalized`.
+- **`best_found` determinista.** En empate de confianza decide el `subject_ref` y luego el
+  contenido, no el orden de la lista. Tests: `test_rules_common.py`.
+- **Golden set.** Una respuesta no-objeto o un `afirmaciones` no-lista ya no rompen el arnés; una
+  cita que normaliza a vacío (`"..."`) no cuenta como localizable. Test nuevo en
+  `test_ai_golden.py`.
+- **Frontend.** `MethodologyCatalog.methodology_version` es `string` (no `number`) e incluye
+  `nucleo_csf_version` y `cobertura_implementacion`.
+
+**Verificación:** suite completa **617 tests** + `ruff check` y `ruff format` limpios; frontend
+`typecheck`, `lint` y `build` limpios.
+
+## 86. PR-01 sin evidencia de cifrado y PR-04 con modos simbólicos (integrado en `criteria.yml` v19)
+
+- **PR-01.** Un `aws_s3_bucket` sin `aws_s3_bucket_server_side_encryption_configuration` no emitía
+  `tf.encryption.config`; PR-01 veía una lista vacía y devolvía `no_aplicable` (o 100 si otro
+  recurso cifraba). Ahora cruza `tf.encryption.config` con `tf.resource.present` de buckets y bases:
+  un recurso aplicable sin evidencia es `evidencia_insuficiente`, no 100. Tampoco da 100 un recurso
+  con estado `unknown` (`storage_encrypted = var.enc`), que antes se puntuaba "sobre los resueltos".
+  Un `disabled` explícito sigue prevaleciendo (0/25). Tests:
+  `test_bucket_without_encryption_evidence_is_insufficient`,
+  `test_plain_bucket_next_to_an_encrypted_one_is_not_100` y
+  `test_rule_does_not_award_100_with_an_unresolved_resource`; los tests que arreglaban solo RDS
+  ahora agregan también SSE al bucket. Golden `pipeline_good` regenerado (solo cambia la
+  explicación: el fixture sí tiene SSE en ambos recursos).
+- **PR-04.** `_modo_octal` traducía enteros pero dejaba los simbólicos tal cual; `int(modo, 8)`
+  fallaba y la regla ignoraba el permiso, dando 100 con `u=rw,g=rw,o=rw` (0666). Ahora traduce los
+  modos simbólicos absolutos (`u=rw,g=rw,o=rw` → `0666`) y marca los relativos (`u+rwx`) como
+  `unknown`; PR-04 no da 100 con un modo no interpretable. Ansible pasa a **v6**. Tests:
+  `test_symbolic_modes_are_translated_or_marked_unknown`,
+  `test_pr04_symbolic_mode_caps_at_25`, `test_pr04_relative_symbolic_mode_is_insufficient`.
+
+**Versión:** estos cambios se integran en **`criteria.yml` v19**. docs/02 §4, docs/03 §3 y
+README/docs/11 quedan alineados.
+
+**Verificación:** en su corte, suite completa **622 tests** + `ruff check`/`format` limpios; la
+integración final se verifica en §89.
+
+## 87. Rangos de línea de Terraform (Terraform v10)
+
+`resource_line_ranges` contaba llaves sobre el texto crudo: un `}` dentro de un comentario
+`/* ... */` o de un heredoc cerraba el bloque antes de tiempo, y una llave en la línea siguiente al
+`resource` no se detectaba (el recurso quedaba sin locator). `_clean_hcl` blanquea comentarios y
+cuerpos de heredoc conservando líneas y longitud; la apertura se busca con `_has_open_brace` y el
+cierre con `_brace_delta`. Terraform pasa a **v10** (cambian los locators, no los valores).
+Test: `test_line_ranges_ignore_block_comments_and_heredocs_and_accept_next_line_brace`.
+
+**Verificación:** suite completa **623 tests** + `ruff check` y `ruff format` limpios.
+
+## 88. Incidentes únicos por organización **y scope**
+
+La clave de correlación sale del recurso y la hora del evento (`auth-burst:srv-app-01:2026-09-20…`),
+no del entorno. La restricción era `(org_id, correlation_key)`, así que un mismo host/hora en
+producción y staging se fusionaba: el incidente de producción recibía los `event_ids` y el
+`last_event_time` de staging. `docs/08 §3` ya definía los incidentes como org+scope; faltaba la
+restricción.
+
+- **Modelo/consulta:** `Incident.__table_args__` pasa a
+  `(org_id, scope, correlation_key)` y `upsert_incident` filtra también por `scope`.
+- **Migración:** `f3a1c9d2e4b7` (rev. `b7e2f4c19d55`) recrea la restricción. Es solo esquema:
+  agregar `scope` relaja la unicidad, así que las filas existentes son válidas. Una fila ya
+  fusionada no se puede separar retroactivamente; desde esta versión, una ingesta nueva crea el
+  incidente correcto. `downgrade` falla si hay dos scopes con la misma clave, porque volver atrás
+  exigiría fusionarlos.
+- **Ejemplos:** no necesitan migración de datos. Los paquetes/escenarios son JSONL y no guardan
+  incidentes; se re-ingieren y crean las filas. La BD SQLite local de desarrollo (`.data/pf.db`)
+  tenía **0 incidentes** y un esquema anterior a `b7e2f4c19d55`; se puede recrear (o dejar que
+  Alembic la migre, si se creó con Alembic). El compose usa Postgres y la migración se aplica con
+  el job `migrate`.
+- **Verificación de la migración:** `alembic upgrade head` sobre SQLite limpio y sobre una BD
+  detenida en `b7e2f4c19d55` con un incidente; tras el upgrade se pudo insertar el mismo
+  `correlation_key` en otro scope. Test: `test_same_correlation_key_in_another_scope_is_a_separate_incident`.
+
+**Verificación:** suite completa **624 tests** + `ruff check` y `ruff format` limpios.
+
+## 89. Integración con GitHub: catálogo v18 + endurecimiento (v19)
+
+GitHub era la línea principal (10 commits, docs/09 §70–§78, `criteria.yml` v18, 28 criterios y la
+cobertura en el dashboard); la rama local tenía 10 commits de correcciones sobre §69. Se integró
+con un **merge**, no rebase ni force-push: el commit de merge tiene ambas líneas como padres y es
+fast-forward para los dos remotos.
+
+**Qué aporta GitHub:** 28 criterios (GV-05/06, ID-05, PR-07, RS-04), correlación multi-fuente
+(`log.pattern@2`), cobertura de implementación en la UI, comparación de catálogos, prompt U1 v4 y
+los campos de afirmación de las Oleadas A/B.
+
+**Qué se re-aplicó encima:** el endurecimiento de GV-02 (responsable + responsabilidades +
+autoridad + recursos/RH), RS-03 (criterios y plazos), RS-01 (escalamiento posterior a la
+declaración, combinado con `criterios_recuperacion` de RS.MA-05), PR-01 (evidencia por recurso),
+PR-04 (modos simbólicos), PR-05 (bloqueo resuelto), D1–D5 con el último evento, la robustez de IA y
+adaptadores, auth/entrada 4xx, el orden plan→completada, la versión al ejecutar y la migración de
+incidentes por org+scope.
+
+**Conflictos resueltos:** `criteria.yml` (v18 → **v19**), GV-02 y RS-01 (reglas y tests), docs/03,
+docs/09 (nuestras secciones renumeradas §79–§88), docs/11, README y `frontend/src/lib/types.ts`
+(`ImplementationCoverage` de GitHub + `methodology_version: string`).
+
+**Versiones finales:** `criteria.yml` **v19**, `settings.yml` **v3**, Terraform **v10**, Ansible
+**v6**, Documentos **v3**. La migración de incidentes `f3a1c9d2e4b7` sigue siendo la cabeza y se
+aplicó sobre el esquema de GitHub sin cambios.
+
+**Verificación:** suite completa **685 tests** + 2 skipped; `ruff check` y `ruff format --check`
+limpios; frontend `typecheck`, `lint` y `build` limpios; `alembic upgrade head` sobre SQLite limpio
+con la restricción `(org_id, scope, correlation_key)`.

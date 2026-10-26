@@ -19,7 +19,9 @@ DEFAULT_MAX_CHUNKS_PER_DOCUMENT = 20
 
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
 #: v2: emite `doc.source.info` por documento analizado (docs/11 CR-07).
-ADAPTER_VERSION = "2"
+#: v3: BOM UTF-8, encabezados Markdown dentro de bloques de codigo y PDFs cifrados que se omiten
+#: en vez de tumbar la evaluacion.
+ADAPTER_VERSION = "3"
 
 
 class _CountingClient:

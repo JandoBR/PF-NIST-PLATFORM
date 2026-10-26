@@ -46,7 +46,7 @@ _CONTENT_FIELDS: dict[str, str] = {
         "frecuencia (mensual|trimestral|semestral|anual), ultima_revision (YYYY-MM-DD|null)"
     ),
     "role_assigned": (
-        "roles: lista de {rol, responsable, autoridad},"
+        "roles: lista de {rol, responsable, responsabilidades, autoridad},"
         " recursos_asignados (bool|null: se asignan presupuesto, personal o herramientas acordes a"
         " la estrategia de riesgo),"
         " practicas_rh (bool|null: la ciberseguridad esta en las practicas de recursos humanos:"

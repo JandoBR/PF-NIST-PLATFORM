@@ -41,7 +41,11 @@
 #      subcategoria y anclas de amplitud (prompt extract_v4, docs/09 §77).
 # v18: Oleada B (4/4) - GV-02, GV-03 y GV-06 ajustan titulo y recomendacion a lo que ahora cubren:
 #      categorias enteras, no los dos o tres resultados con que entraron (docs/09 §78).
-version: 18
+# v19: GV-02 exige responsable nombrado, responsabilidades y autoridad; RS-03 exige criterios y
+#      plazos; RS-01 exige escalamiento posterior; PR-01 exige evidencia de cifrado por recurso;
+#      PR-04 no da 100 con un modo relativo; PR-05 no da 100 con bloqueo sin resolver
+#      (docs/09 §79-88).
+version: 19
 criterios:
   - id: CRI-GV-01
     version: 1

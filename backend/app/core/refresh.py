@@ -15,6 +15,8 @@ from app.core.assessment_service import (
     AssessmentNotFoundError,
     collect_surveillance_evidence,
     create_pending_reevaluation,
+    enqueue_reevaluation,
+    has_documents,
     load_criterion_results,
     load_evidence,
 )
@@ -93,6 +95,22 @@ def enqueue_surveillance_refresh(
     worker corre `run_surveillance_refresh` (reusa lo previo, recalcula solo lo operativo) en vez
     del pipeline completo y sin IA."""
 
+    previous = session.get(Assessment, previous_assessment_id)
+    if previous is None:
+        raise AssessmentNotFoundError(previous_assessment_id)
+
+    if previous.methodology_version != methodology.methodology_version:
+        # La metodologia cambio desde la evaluacion anterior: reusar sus resultados mezclaria
+        # versiones y dejaria fuera criterios nuevos. Se hace un re-run completo con las mismas
+        # fuentes (y U1 si hay documentos), en vez de un refresco selectivo (docs/09 §74).
+        return enqueue_reevaluation(
+            session,
+            methodology,
+            redis_client,
+            previous_assessment_id,
+            request_documents_ai=has_documents(session, previous_assessment_id),
+        )
+
     assessment, _paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
     job = dispatch_job(
         session,
@@ -139,6 +157,17 @@ def run_surveillance_refresh(
     previous = session.get(Assessment, previous_assessment_id)
     if previous is None:
         raise AssessmentNotFoundError(previous_assessment_id)
+
+    if previous.methodology_version != methodology.methodology_version:
+        # Defensa en profundidad: un job selectivo encolado antes de un deploy de metodologia no
+        # puede completar una evaluacion mezclando versiones.
+        assessment.estado = "fallida"
+        assessment.error = (
+            "El refresco selectivo requiere la misma metodologia que la evaluacion anterior"
+            f" ({previous.methodology_version} != {methodology.methodology_version})."
+        )
+        session.commit()
+        raise ValueError(assessment.error)
 
     assessment.estado = "en_progreso"
     session.commit()

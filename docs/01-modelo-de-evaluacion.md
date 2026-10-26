@@ -278,11 +278,14 @@ Salida visible: `CRI-PR-01 = 28`, con explicación “ajuste contextual: +3” y
 
 Una evaluación registra:
 
-- `methodology_version` (criterios, pesos, umbrales, α, D).
+- `methodology_version` (versión de criterios, de tipos de evidencia, de settings —pesos,
+  umbrales, α, D— y del núcleo CSF).
 - Versiones de tipos de evidencia usadas.
 - Versión de adaptadores/parsers.
 - Modelo y versión de prompt de IA (para ajustes y extracción).
 
 Implementado en `assessments.reproducibility` (adaptador y parser por fuente; modelo y prompt de
-IA solo si participó), docs/09 §37. Con eso, dos evaluaciones son comparables y un cambio de puntaje se puede atribuir a: nueva evidencia,
-nuevo criterio, nuevo parser o nuevo modelo.
+IA solo si participó), docs/09 §37. `methodology_version` se fija al ejecutar el pipeline (no al
+encolar), para que la evaluación registre la versión que realmente usó (docs/09 §85). Con eso, dos
+evaluaciones son comparables y un cambio de puntaje se puede atribuir a: nueva evidencia, nuevo
+criterio, nuevo parser o nuevo modelo.

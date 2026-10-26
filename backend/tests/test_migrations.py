@@ -6,7 +6,7 @@
 from pathlib import Path
 
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 from alembic import command
 
@@ -26,11 +26,15 @@ EXPECTED_TABLES = {
 }
 
 
-def _upgrade_head() -> None:
+def _upgrade(revision: str) -> None:
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     cfg.set_main_option("prepend_sys_path", str(BACKEND_DIR))
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, revision)
+
+
+def _upgrade_head() -> None:
+    _upgrade("head")
 
 
 def test_alembic_upgrade_head_creates_expected_schema(tmp_path, monkeypatch):
@@ -109,4 +113,37 @@ def test_migrated_incidents_correlation_key_is_unique_per_organization(tmp_path,
 
     inspector = inspect(create_engine(f"sqlite:///{db_path}"))
     unicas = [sorted(u["column_names"]) for u in inspector.get_unique_constraints("incidents")]
-    assert unicas == [["correlation_key", "org_id"]]
+    assert unicas == [["correlation_key", "org_id", "scope"]]
+
+
+def test_existing_incidents_survive_the_scope_migration(tmp_path, monkeypatch):
+    """La migracion agrega scope a la clave sin tocar las filas existentes."""
+
+    db_path = tmp_path / "scope.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    _upgrade("b7e2f4c19d55")
+
+    columnas = (
+        "id, org_id, scope, correlation_key, titulo, estado, severidad, first_event_time,"
+        " last_event_time, event_ids, criterios, timeline, creado_en, actualizado_en"
+    )
+
+    def incidente(ident: str, scope: str) -> str:
+        return (
+            f"INSERT INTO incidents ({columnas}) VALUES ("
+            f"'{ident}', 'o1', '{scope}', 'ck', 't', 'open', 'media', '2026-01-01',"
+            " '2026-01-01', '[]', '[]', '[]', '2026-01-01', '2026-01-01')"
+        )
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO organizations (id, nombre) VALUES ('o1', 'Org')"))
+        conn.execute(text(incidente("i1", "entorno:produccion")))
+
+    _upgrade_head()
+
+    with engine.begin() as conn:
+        conn.execute(text(incidente("i2", "entorno:staging")))
+        total = conn.execute(text("SELECT count(*) FROM incidents")).scalar_one()
+
+    assert total == 2

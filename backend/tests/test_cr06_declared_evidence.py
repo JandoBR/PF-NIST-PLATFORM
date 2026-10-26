@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from app.adapters.terraform.adapter import TerraformAdapter
+from app.adapters.terraform.adapter import CIDR_DESCONOCIDO, TerraformAdapter
 from app.evaluation.rules import (
     de01_monitoring,
     pr01_encryption,
@@ -65,6 +65,48 @@ def test_rds_expression_is_unresolved_not_absent(tmp_path):
     assert all(e.value["recurso"] == "aws_db_instance.db" for e in unresolved)
 
 
+def test_integral_float_retention_is_read_as_days(tmp_path):
+    """HCL no distingue `7` de `7.0`; python-hcl2 puede devolver float."""
+
+    evidence = _parse(
+        tmp_path,
+        """
+        resource "aws_db_instance" "db" {
+          storage_encrypted       = true
+          backup_retention_period = 7.0
+        }
+        """,
+    )
+    backup = _of(evidence, "tf.backup.config")[0]
+    assert backup.value["retencion_dias"] == 7
+    assert backup.value["habilitado"] is True
+
+
+def test_s3_encryption_uses_the_rule_that_defines_sse(tmp_path):
+    """Varias `rule`: la primera puede ser un filtro; la configuracion por defecto va despues."""
+
+    evidence = _parse(
+        tmp_path,
+        """
+        resource "aws_s3_bucket" "b" { bucket = "b" }
+        resource "aws_s3_bucket_server_side_encryption_configuration" "e" {
+          bucket = aws_s3_bucket.b.id
+          rule {
+            filter { prefix = "logs/" }
+          }
+          rule {
+            apply_server_side_encryption_by_default {
+              sse_algorithm = "aws:kms"
+            }
+          }
+        }
+        """,
+    )
+    encryption = _of(evidence, "tf.encryption.config")[0]
+    assert encryption.value["estado"] == "enabled"
+    assert encryption.value["mecanismo"] == "aws:kms"
+
+
 def test_literal_values_emit_no_unresolved(tmp_path):
     evidence = _parse(
         tmp_path,
@@ -124,6 +166,64 @@ def test_security_group_cidr_expression_does_not_crash_nor_invent_a_cidr(tmp_pat
     assert atributos.count("cidr_blocks") == 2
 
 
+def test_bucket_without_encryption_evidence_is_insufficient(tmp_path):
+    evidence = _parse(tmp_path, 'resource "aws_s3_bucket" "b" { bucket = "b" }')
+
+    assert pr01_encryption.evaluate(evidence).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+def test_plain_bucket_next_to_an_encrypted_one_is_not_100(tmp_path):
+    evidence = _parse(
+        tmp_path,
+        """
+        resource "aws_s3_bucket" "a" { bucket = "a" }
+        resource "aws_s3_bucket" "b" { bucket = "b" }
+        resource "aws_s3_bucket_server_side_encryption_configuration" "e" {
+          bucket = aws_s3_bucket.a.id
+          rule {
+            apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+          }
+        }
+        """,
+    )
+
+    assert pr01_encryption.evaluate(evidence).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+def test_utf8_bom_in_terraform_does_not_break_parsing(tmp_path):
+    tf_file = tmp_path / "main.tf"
+    tf_file.write_text(
+        '\ufeffresource "aws_db_instance" "db" {\n  storage_encrypted = true\n}\n',
+        encoding="utf-8",
+    )
+    evidence = TerraformAdapter(source_id="test:bom", scope="s").parse_path(tf_file)
+    assert _of(evidence, "tf.encryption.config")
+
+
+def test_dynamic_ingress_is_unknown_not_absent(tmp_path):
+    """`dynamic "ingress"` no vive en `attrs["ingress"]`; no puede quedar como "sin reglas"."""
+
+    evidence = _parse(
+        tmp_path,
+        """
+        resource "aws_security_group" "sg" {
+          dynamic "ingress" {
+            for_each = var.admin_cidrs
+            content {
+              from_port   = 22
+              to_port     = 22
+              protocol    = "tcp"
+              cidr_blocks = [ingress.value]
+            }
+          }
+        }
+        """,
+    )
+    rules = _of(evidence, "tf.security_group.rules")[0].value
+    assert any(r["cidr"] == CIDR_DESCONOCIDO for r in rules)
+    assert pr03_admin_access.evaluate(evidence).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
 def test_cloudtrail_enable_logging_expression_is_unknown_not_true(tmp_path):
     evidence = _parse(
         tmp_path,
@@ -140,7 +240,7 @@ def test_cloudtrail_enable_logging_expression_is_unknown_not_true(tmp_path):
 # -- reglas: la limitacion se declara y no se inventa un puntaje --------------------------
 
 
-def test_rule_notes_unresolved_expressions_and_scores_only_the_resolved(tmp_path):
+def test_rule_does_not_award_100_with_an_unresolved_resource(tmp_path):
     evidence = _parse(
         tmp_path,
         """
@@ -149,9 +249,10 @@ def test_rule_notes_unresolved_expressions_and_scores_only_the_resolved(tmp_path
         """,
     )
     resultado = pr01_encryption.evaluate(evidence)
-    assert resultado.final_score == 100
+    assert resultado.estado == Estado.EVIDENCIA_INSUFICIENTE
+    assert resultado.final_score is None
+    assert "aws_db_instance.var" in resultado.explanation
     assert "Limitacion" in resultado.explanation
-    assert "aws_db_instance.var.storage_encrypted" in resultado.explanation
 
 
 def test_rule_without_unresolved_has_no_limitation_note(tmp_path):
