@@ -363,8 +363,10 @@ class _ArchivoParseado(NamedTuple):
 _FUENTES_GIT = ("git::", "git@", "github.com/", "bitbucket.org/", "gitlab.com/")
 #: Prefijos de un archivo descargado por HTTP o de un bucket: externo, pero no git ni registry.
 _FUENTES_EXTERNAS = ("http://", "https://", "s3::", "gcs::")
-#: `namespace/nombre/proveedor`, con un `//submodulo` opcional: la forma del Terraform Registry.
-_FUENTE_REGISTRY = re.compile(r"^[\w.-]+(/[\w.-]+){2}(//[\w./-]+)?$")
+#: Terraform Registry: `namespace/nombre/proveedor` (publico) o `host/namespace/nombre/proveedor`
+#: (privado, p. ej. `app.terraform.io/...`), con un `//submodulo` opcional. El host se distingue de
+#: un namespace porque lleva un punto, asi que `terraform-aws-modules/vpc/aws` sigue siendo publico.
+_FUENTE_REGISTRY = re.compile(r"^([\w.-]+\.[\w-]+/)?[\w.-]+(/[\w.-]+){2}(//[\w./-]+)?$")
 
 
 def module_origin(source: Any) -> str:
@@ -415,11 +417,17 @@ def module_pinned(source: Any, version: Any) -> bool:
 
     `version` es como se fija un modulo del registry; un `source` de git se fija con un
     `?ref=<tag|sha>` en la propia URL, donde el argumento `version` no aplica.
+
+    Un `source` que no es literal nunca cuenta como fijado, aunque traiga `version`: fijar la
+    version de un modulo que no se sabe cual es no hace reproducible su procedencia, y dejarlo en
+    `True` contradecia al `estado: unknown` que ese mismo caso emite.
     """
 
+    if not isinstance(source, str) or _is_expression(source) or not source.strip():
+        return False
     if isinstance(version, str) and version.strip() and not _is_expression(version):
         return True
-    return isinstance(source, str) and "?ref=" in source
+    return "?ref=" in source
 
 
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
@@ -444,7 +452,9 @@ def module_pinned(source: Any, version: Any) -> bool:
 #: `aws_autoscaling_group` (alta disponibilidad y capacidad elastica).
 #: v14: `tf.transit_encryption.config` desde el `protocol`/`ssl_policy` de un `aws_lb_listener` y
 #: desde `rds.force_ssl` en un `aws_db_parameter_group`.
-ADAPTER_VERSION = "14"
+#: v15: un modulo de registry privado (`app.terraform.io/ns/nombre/proveedor`) se reconoce como
+#: `registry` en vez de `desconocido`, y un `source` no literal nunca queda `fijada: true`.
+ADAPTER_VERSION = "15"
 
 
 class TerraformAdapter:

@@ -3142,3 +3142,47 @@ leer el IaC, así que los tests las fijan de verdad. Es la primera oleada de la 
 
 Lo que la oleada **no** declaró, y por qué, está en `docs/12 §5`: no se quedó en la cabeza de nadie.
 
+## 95. Lo que encontró revisar la Oleada C
+
+Tres hallazgos, y los tres del mismo tipo: cosas que la suite no podía ver porque nada las miraba.
+
+**Un módulo de registry privado se reportaba como ilegible.** El patrón de `module_origin` aceptaba
+`namespace/nombre/proveedor` y nada más, así que `app.terraform.io/acme/vpc/aws` —la forma
+documentada de Terraform Cloud, `host/namespace/nombre/proveedor`— caía en `desconocido` y emitía
+`estado: "unknown"` con el hallazgo *"source no literal: procedencia no determinable"*, cuando el
+`source` **sí** era literal y la `version` **sí** estaba fijada. En pantalla eso es una limitación
+falsa en un proyecto que no tiene ninguna.
+
+El puntaje no se movía (`desconocido` ya contaba como externo, y `fijada` seguía siendo cierto),
+así que ningún test lo habría detectado nunca: solo se vio probando formas de `source` a mano. De
+paso dejaba la contradicción **`fijada: true` con `estado: "unknown"`**, exactamente la que §90
+había corregido para los módulos locales, reaparecida por otra puerta.
+
+Arreglado en dos sitios, porque eran dos errores: el patrón reconoce el host (se distingue de un
+namespace porque lleva un punto, así que el registry público de tres segmentos sigue igual), y
+`module_pinned` devuelve `false` cuando el `source` no es literal — fijar la versión de un módulo
+que no se sabe cuál es no hace reproducible su procedencia. Terraform **v15**.
+
+**Dos fichas de `docs/03` con el título truncado**, y son de cosecha propia: las escribió la Oleada B
+(§77) al cubrir las tres que faltaban. `CRI-GV-05` decía "Contexto organizacional" por "Contexto
+organizacional declarado" y `CRI-PR-07` "Concienciación y formación" por "Concienciación y formación
+en seguridad". Es **el mismo fallo que esa oleada denunció** para `CRI-GV-03` y arregló a mano
+(§78), reintroducido en dos de las tres fichas nuevas en el mismo commit que lo arreglaba.
+
+**Tres veces el mismo fallo es un test que falta, no mala suerte.** La cabecera de `docs/03` afirma
+que "las reglas de esta matriz describen el código" y que se actualiza en el mismo commit;
+`tests/test_criteria_matrix_doc.py` hace que esa afirmación cueste algo: una ficha por criterio, el
+título de cada ficha igual al del catálogo, y ninguna ficha sin subcategorías, evidencias o regla.
+Comprobado contra una mutación —truncar un título a mano— antes de darlo por bueno. Encontró de
+paso que `CRI-RC-03` escribe su regla como `**Regla** (...)` en vez de `**Regla:**`: eso no era un
+defecto del documento sino del patrón del test, y se relajó el patrón, no el documento.
+
+**Lo que se comprobó y estaba bien:** los seis tipos de evidencia nuevos tienen productor y
+consumidor; ningún criterio declara evidencia que su regla no lea; las cifras de `docs/01`,
+`docs/00`, `README` y `docs/11` coinciden con las que calcula `GET /methodology`; no hay referencias
+rotas a secciones de `docs/09`; `demo.ts` lista exactamente los archivos que existen; los fixtures
+de Ansible siguen idénticos byte a byte a los de la demo y los de Terraform mantienen el recorte
+documentado; y los tres paquetes progresan de verdad —global 18,3 / 59,5 / 97,1 y PROTECT 11,6 /
+53,5 / 91,4—, con los tres criterios nuevos repartidos por toda la escala en vez de amontonados.
+
+**Estado final: 778 tests**, 2 skipped, `ruff` y frontend limpios.

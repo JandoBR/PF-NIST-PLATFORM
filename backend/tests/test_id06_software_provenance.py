@@ -80,6 +80,10 @@ def _proveedor(nombre: str, *, fijada: bool) -> EvidenceInstance:
     [
         ("terraform-aws-modules/vpc/aws", "registry"),
         ("terraform-aws-modules/vpc/aws//modules/subnets", "registry"),
+        # Registry privado: `host/namespace/nombre/proveedor`. El host se distingue de un
+        # namespace por el punto, asi que el publico de tres segmentos sigue funcionando.
+        ("app.terraform.io/acme/vpc/aws", "registry"),
+        ("registry.acme.local/infra/red/aws", "registry"),
         ("github.com/acme/red", "git"),
         ("git::https://git.acme.local/infra/red.git", "git"),
         ("git@github.com:acme/red.git", "git"),
@@ -105,6 +109,10 @@ def test_module_origin_classifies_the_source(source, esperado):
         ("git::https://git.acme.local/red.git", None, False),
         # Una version que es una expresion no fija nada: no se sabe a que resuelve.
         ("terraform-aws-modules/vpc/aws", "${var.v}", False),
+        # Y una version literal sobre un `source` que no lo es tampoco: fijar la version de un
+        # modulo que no se sabe cual es no hace reproducible su procedencia.
+        ("${var.fuente}", "1.0.0", False),
+        ("app.terraform.io/acme/vpc/aws", "1.0.0", True),
     ],
 )
 def test_module_pinned_needs_something_reproducible(source, version, esperado):
@@ -277,3 +285,22 @@ def test_every_cited_evidence_is_real():
     resultado = regla.evaluate(evidencia)
 
     assert set(resultado.evidence_ids) == {e.id for e in evidencia}
+
+
+def test_a_pinned_module_is_never_reported_as_unreadable():
+    """`fijada: true` con `estado: "unknown"` se contradecia en la cara.
+
+    Un modulo de registry privado traia `source` literal y `version`, pero caia en `desconocido`
+    porque el patron solo aceptaba tres segmentos: emitia un hallazgo diciendo que el `source` no
+    era literal cuando si lo era. Apareció revisando la Oleada C.
+    """
+
+    for source, version in [
+        ("app.terraform.io/acme/vpc/aws", "1.0.0"),
+        ("terraform-aws-modules/vpc/aws", "5.8.1"),
+        ("git::https://g.local/red.git?ref=v1.0", None),
+        ("${var.fuente}", "1.0.0"),
+    ]:
+        origen = module_origin(source)
+        fijada = module_pinned(source, version)
+        assert not (fijada and origen == "desconocido"), (source, version)
