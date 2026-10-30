@@ -33,6 +33,7 @@ ESPERADO = {
         "CRI-PR-05": 0,  # base publica y bucket con un flag en false
         "CRI-PR-06": INSUFICIENTE,
         "CRI-PR-08": 0,  # politica de contrasenas de 6 caracteres declarada en el IaC
+        "CRI-PR-09": 0,  # multi_az = false explicito y sin autoescalado
         "CRI-DE-01": INSUFICIENTE,
     },
     "mid": {
@@ -44,6 +45,7 @@ ESPERADO = {
         "CRI-PR-05": INSUFICIENTE,  # el bucket de exportes no tiene bloque
         "CRI-PR-06": 75,  # CloudTrail de una sola region
         "CRI-PR-08": 25,  # 10 caracteres: por debajo de los 14 del CIS AWS
+        "CRI-PR-09": 50,  # el grupo crece, pero ninguna base declara multi_az
         "CRI-DE-01": 75,
     },
     "good": {
@@ -55,6 +57,7 @@ ESPERADO = {
         "CRI-PR-05": 50,  # bloqueo parcial en el bucket de logs
         "CRI-PR-06": 100,
         "CRI-PR-08": 100,  # 14 caracteres y una politica que exige MFA
+        "CRI-PR-09": 100,  # multi_az y un grupo de 2 a 6
         "CRI-DE-01": 100,
     },
 }

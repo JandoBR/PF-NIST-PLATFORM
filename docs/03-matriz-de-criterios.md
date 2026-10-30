@@ -31,15 +31,15 @@ Resumen de cobertura del catálogo:
 |---|---|---|---|
 | Govern | 6 | 3 | 0 |
 | Identify | 6 | 3 | 0 |
-| Protect | 8 | 6 | 0 |
+| Protect | 9 | 6 | 0 |
 | Detect | 3 | 1 | 1 |
 | Respond | 4 | 1 | 0 |
 | Recover | 3 | 2 | 1 |
-| **Total** | **30** | **16** | **2** |
+| **Total** | **31** | **16** | **2** |
 
-> **Estado de implementación:** **30 de 30** criterios implementados (CR-01…CR-05 y las Oleadas A, B
+> **Estado de implementación:** **31 de 31** criterios implementados (CR-01…CR-05 y las Oleadas A, B
 > y C, docs/11 §C). Cobertura del marco medida por el propio sistema en `GET /methodology`
-> (`cobertura_implementacion`): **77 de 106 subcategorías (72,6 %) y las 22 categorías del CSF 2.0**,
+> (`cobertura_implementacion`): **79 de 106 subcategorías (74,5 %) y las 22 categorías del CSF 2.0**,
 > es decir `categorias_sin_criterio` vacía, con la **función Gobernar completa (31/31)**.
 > **Las reglas de esta matriz describen el código** (`backend/app/evaluation/rules/`): si una regla cambia, se
 > actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-24 (docs/09 §77); en esa
@@ -227,6 +227,23 @@ Resumen de cobertura del catálogo:
   señal técnica.
 - **Recomendación:** declarar las identidades en IaC y endurecer la autenticación — política de al
   menos 14 caracteres y una política que exija MFA.
+
+### CRI-PR-09 — Resiliencia y capacidad de la plataforma
+- **Subcategorías:** PR.IR-03, PR.IR-04 · **Tipo:** Técnico · **Peso:** 3 · **IA:** no · **MVP:** no · **Privacidad:** —
+- **Evidencias:** `tf.resilience.config`
+- **Regla:**
+  - 100: alta disponibilidad (`multi_az` o réplica) **y** un grupo de autoescalado que puede crecer.
+  - 75: alta disponibilidad sin capacidad elástica.
+  - 50: capacidad elástica y ninguna base que declare `multi_az` ni sea réplica.
+  - 25: capacidad elástica con `multi_az = false` explícito.
+  - 0: `multi_az = false` explícito y sin capacidad elástica.
+  - Sin bases ni grupos de autoescalado → no aplicable; todo declarado sin valor literal → `evidencia_insuficiente`.
+- **Notas:** son dos cosas que suenan parecidas y no lo son — `PR.IR-03` es sobrevivir a la caída de
+  una zona, `PR.IR-04` es aguantar la carga. Un `min_size` igual al `max_size` **no** cuenta como
+  capacidad elástica: es capacidad fija con otro nombre. Un `multi_az` ausente no cuenta como
+  `false` aunque ese sea el defecto de AWS.
+- **Recomendación:** declarar alta disponibilidad (`multi_az` o réplica de lectura) y un grupo de
+  autoescalado con `max_size` mayor que `min_size`.
 
 ### CRI-PR-02 — Backups configurados y protegidos
 - **Subcategorías:** PR.DS-11 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí

@@ -4,7 +4,7 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 10,
+      "line_end": 11,
       "line_start": 1
     },
     "modality": "declarada",
@@ -24,7 +24,7 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 10,
+      "line_end": 11,
       "line_start": 1
     },
     "modality": "declarada",
@@ -42,7 +42,7 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 10,
+      "line_end": 11,
       "line_start": 1
     },
     "modality": "declarada",
@@ -62,8 +62,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 25,
-      "line_start": 16
+      "line_end": 26,
+      "line_start": 17
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -132,8 +132,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 74,
-      "line_start": 69
+      "line_end": 75,
+      "line_start": 70
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -219,8 +219,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 33,
-      "line_start": 27
+      "line_end": 34,
+      "line_start": 28
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -237,9 +237,73 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
+      "file": "plataforma.tf",
+      "line_end": 59,
+      "line_start": 54
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_autoscaling_group.aplicacion",
+    "subject_type": "aws_autoscaling_group",
+    "type_id": "tf.resilience.config",
+    "type_version": 1,
+    "value": {
+      "capacidad_maxima": 6,
+      "capacidad_minima": 2,
+      "estado": "declarado",
+      "habilitado": true,
+      "mecanismo": "autoescalado"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
       "file": "main.tf",
-      "line_end": 74,
-      "line_start": 69
+      "line_end": 11,
+      "line_start": 1
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_db_instance.principal",
+    "subject_type": "aws_db_instance",
+    "type_id": "tf.resilience.config",
+    "type_version": 1,
+    "value": {
+      "capacidad_maxima": null,
+      "capacidad_minima": null,
+      "estado": "declarado",
+      "habilitado": true,
+      "mecanismo": "multi_az"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 59,
+      "line_start": 54
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_autoscaling_group.aplicacion",
+    "subject_type": "aws_autoscaling_group",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "aplicacion",
+      "tipo": "aws_autoscaling_group"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "main.tf",
+      "line_end": 75,
+      "line_start": 70
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -258,7 +322,7 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 10,
+      "line_end": 11,
       "line_start": 1
     },
     "modality": "declarada",
@@ -338,8 +402,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 14,
-      "line_start": 12
+      "line_end": 15,
+      "line_start": 13
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -358,8 +422,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 33,
-      "line_start": 27
+      "line_end": 34,
+      "line_start": 28
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -378,8 +442,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 25,
-      "line_start": 16
+      "line_end": 26,
+      "line_start": 17
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -398,8 +462,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 41,
-      "line_start": 35
+      "line_end": 42,
+      "line_start": 36
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -418,8 +482,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 67,
-      "line_start": 43
+      "line_end": 68,
+      "line_start": 44
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -438,8 +502,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 67,
-      "line_start": 43
+      "line_end": 68,
+      "line_start": 44
     },
     "modality": "declarada",
     "scope": "entorno:produccion",
@@ -476,8 +540,8 @@
     "limitations": null,
     "locator": {
       "file": "main.tf",
-      "line_end": 41,
-      "line_start": 35
+      "line_end": 42,
+      "line_start": 36
     },
     "modality": "declarada",
     "scope": "entorno:produccion",

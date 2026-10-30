@@ -211,6 +211,17 @@
       "final_score": 100.0
     },
     {
+      "base_score": 100.0,
+      "criterion_id": "CRI-PR-09",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.resilience.config|aws_autoscaling_group.aplicacion",
+        "tf.resilience.config|aws_db_instance.principal"
+      ],
+      "explanation": "Alta disponibilidad declarada (aws_db_instance.principal) y capacidad elastica (aws_autoscaling_group.aplicacion): el servicio sobrevive a la perdida de una zona y puede crecer con la carga.",
+      "final_score": 100.0
+    },
+    {
       "base_score": null,
       "criterion_id": "CRI-RC-01",
       "estado": "evidencia_insuficiente",
@@ -301,15 +312,15 @@
       "score": 100.0
     },
     {
-      "cobertura": 0.875,
+      "cobertura": 0.8889,
       "conteo_estados": {
-        "evaluado": 7,
+        "evaluado": 8,
         "evidencia_insuficiente": 1
       },
       "nivel": "funcion",
       "provisional": false,
       "ref": "PR",
-      "score": 95.69
+      "score": 96.09
     },
     {
       "cobertura": 0.0,
@@ -333,15 +344,15 @@
     }
   ],
   "global": {
-    "cobertura": 0.3,
+    "cobertura": 0.3226,
     "conteo_estados": {
-      "evaluado": 9,
+      "evaluado": 10,
       "evidencia_insuficiente": 21
     },
     "nivel": "global",
     "provisional": true,
     "ref": "global",
-    "score": 98.56
+    "score": 98.7
   },
   "tier": {
     "estimable": false,

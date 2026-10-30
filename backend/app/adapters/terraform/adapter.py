@@ -33,6 +33,7 @@ _HANDLED_TYPES = {
     "aws_cloudtrail",
     "aws_iam_account_password_policy",
     "aws_iam_policy",
+    "aws_autoscaling_group",
 }
 
 
@@ -87,6 +88,7 @@ _WATCHED_ATTRS: dict[str, set[str]] = {
     "aws_s3_bucket_versioning": {"status"},
     "aws_security_group": {"cidr_blocks", "ipv6_cidr_blocks", "from_port", "to_port"},
     "aws_cloudtrail": {"enable_logging", "is_multi_region_trail"},
+    "aws_autoscaling_group": {"min_size", "max_size", "desired_capacity"},
     "aws_iam_account_password_policy": {
         "minimum_password_length",
         "require_symbols",
@@ -424,7 +426,9 @@ def module_pinned(source: Any, version: Any) -> bool:
 #: emiten `tf.module.source` y `tf.provider.version` (procedencia del codigo de terceros).
 #: v12: `aws_iam_account_password_policy` y `aws_iam_policy` emiten `tf.identity.config`
 #: (politica de contrasenas y exigencia de MFA leida del documento de la politica).
-ADAPTER_VERSION = "12"
+#: v13: `tf.resilience.config` desde `multi_az`/`replicate_source_db` de RDS y desde
+#: `aws_autoscaling_group` (alta disponibilidad y capacidad elastica).
+ADAPTER_VERSION = "13"
 
 
 class TerraformAdapter:
@@ -651,6 +655,7 @@ class TerraformAdapter:
                 *self._rds_encryption(file_path, subject_ref, attrs),
                 *self._rds_backup(file_path, subject_ref, attrs),
                 self._rds_exposure(file_path, subject_ref, attrs),
+                self._rds_resilience(file_path, subject_ref, attrs),
                 *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
             ]
 
@@ -663,6 +668,12 @@ class TerraformAdapter:
         if resource_type == "aws_cloudtrail":
             return [
                 self._cloudtrail_logging(file_path, subject_ref, attrs),
+                *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
+            ]
+
+        if resource_type == "aws_autoscaling_group":
+            return [
+                self._autoscaling_capacity(file_path, subject_ref, attrs),
                 *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
             ]
 
@@ -882,6 +893,79 @@ class TerraformAdapter:
             value=value,
             file_path=file_path,
             limitations=limitations,
+        )
+
+    def _rds_resilience(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
+        """Alta disponibilidad de una base: `multi_az` o ser replica de otra (PR.IR-03).
+
+        `multi_az` ausente queda sin valor, no en `false`. El defecto de AWS es `false`, pero
+        suponerlo convertiria el silencio del `.tf` en un incumplimiento observado, y la rubrica
+        trata esos dos casos distinto a proposito (docs/09 §91).
+
+        El estado es `no_declarado`, **no** `unknown`: `unknown` significa en este adaptador "el
+        parser no pudo leer el valor" y hace aparecer un hallazgo de limitacion
+        (`recommendations/limitations.py`). Un atributo que simplemente no esta escrito no es un
+        valor ilegible, y `multi_az` se omite en casi todo `.tf` real: marcarlo `unknown` llenaria
+        la lista de hallazgos de ruido sobre algo que la explicacion del criterio ya dice.
+        """
+
+        replica = attrs.get("replicate_source_db")
+        if replica is not None:
+            mecanismo, habilitado, estado = "replica", True, "declarado"
+        else:
+            multi_az = _booleano(attrs.get("multi_az"))
+            mecanismo = "multi_az"
+            habilitado = multi_az
+            estado = "declarado" if multi_az is not None else "no_declarado"
+        return self._make_evidence(
+            type_id="tf.resilience.config",
+            subject_type="aws_db_instance",
+            subject_ref=subject_ref,
+            value={
+                "mecanismo": mecanismo,
+                "habilitado": habilitado,
+                "capacidad_minima": None,
+                "capacidad_maxima": None,
+                "estado": estado,
+            },
+            file_path=file_path,
+            limitations=(
+                None if estado == "declarado" else "multi_az no declarado: no se supone su defecto"
+            ),
+        )
+
+    def _autoscaling_capacity(
+        self, file_path: Path, subject_ref: str, attrs: dict
+    ) -> EvidenceInstance:
+        """Capacidad elastica de un grupo de autoescalado (PR.IR-04).
+
+        `habilitado` es cierto solo si el grupo puede *crecer*: un `min_size == max_size` es
+        capacidad fija con otro nombre, y no sostiene "se mantiene capacidad adecuada".
+        """
+
+        minimo = _entero(attrs.get("min_size"))
+        maximo = _entero(attrs.get("max_size"))
+        if minimo is None or maximo is None:
+            habilitado, estado = None, "no_declarado"
+        else:
+            habilitado, estado = maximo > minimo, "declarado"
+        return self._make_evidence(
+            type_id="tf.resilience.config",
+            subject_type="aws_autoscaling_group",
+            subject_ref=subject_ref,
+            value={
+                "mecanismo": "autoescalado",
+                "habilitado": habilitado,
+                "capacidad_minima": minimo,
+                "capacidad_maxima": maximo,
+                "estado": estado,
+            },
+            file_path=file_path,
+            limitations=(
+                None
+                if estado == "declarado"
+                else "min_size/max_size ausentes o no literales: la capacidad no se puede valorar"
+            ),
         )
 
     def _password_policy(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:

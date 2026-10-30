@@ -202,6 +202,16 @@
       "final_score": 0.0
     },
     {
+      "base_score": 0.0,
+      "criterion_id": "CRI-PR-09",
+      "estado": "no_implementado",
+      "evidence": [
+        "tf.resilience.config|aws_db_instance.legacy"
+      ],
+      "explanation": "La alta disponibilidad esta explicitamente desactivada (aws_db_instance.legacy: `multi_az = false`) y no hay capacidad elastica declarada.",
+      "final_score": 0.0
+    },
+    {
       "base_score": null,
       "criterion_id": "CRI-RC-01",
       "estado": "evidencia_insuficiente",
@@ -291,16 +301,16 @@
       "score": 25.0
     },
     {
-      "cobertura": 0.75,
+      "cobertura": 0.7778,
       "conteo_estados": {
         "evaluado": 1,
         "evidencia_insuficiente": 2,
-        "no_implementado": 5
+        "no_implementado": 6
       },
       "nivel": "funcion",
       "provisional": false,
       "ref": "PR",
-      "score": 3.0
+      "score": 2.68
     },
     {
       "cobertura": 0.0,
@@ -324,16 +334,16 @@
     }
   ],
   "global": {
-    "cobertura": 0.2333,
+    "cobertura": 0.2581,
     "conteo_estados": {
       "evaluado": 2,
       "evidencia_insuficiente": 23,
-      "no_implementado": 5
+      "no_implementado": 6
     },
     "nivel": "global",
     "provisional": true,
     "ref": "global",
-    "score": 14.0
+    "score": 13.84
   },
   "tier": {
     "estimable": false,

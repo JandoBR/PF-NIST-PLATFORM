@@ -49,3 +49,11 @@ resource "aws_iam_policy" "exigir_mfa" {
 }
 EOF
 }
+
+# Capacidad elastica: el grupo puede crecer de 2 a 6 instancias con la carga.
+resource "aws_autoscaling_group" "aplicacion" {
+  name             = "aplicacion-produccion"
+  min_size         = 2
+  max_size         = 6
+  desired_capacity = 2
+}

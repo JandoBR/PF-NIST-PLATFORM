@@ -7,6 +7,7 @@ resource "aws_db_instance" "principal" {
   kms_key_id              = "alias/aws/rds"
   backup_retention_period = 14
   publicly_accessible     = false
+  multi_az                = true
 }
 
 resource "aws_s3_bucket" "documentos" {
