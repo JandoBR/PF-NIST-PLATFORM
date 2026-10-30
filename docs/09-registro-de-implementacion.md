@@ -3095,3 +3095,50 @@ por el denominador de `CRI-ID-01`, y conviene decirlo: **cada señal técnica nu
 pipeline es la explicación —el 100 se sostiene con la evidencia nueva— y en el de evidencia solo hay
 adiciones. `PR.DS` pasa de 2/4 a 3/4 y la cobertura a **80/106 (75,5 %)**, con PROTECT en 13/22.
 
+## 94. Oleada C (5/5): un `sshd_config` endurecido sobre un sistema sin parchear
+
+`apt` caía en `an.task.uninterpreted`. El adaptador de Ansible reconocía siete módulos —
+`lineinfile`, `copy`, `template`, `file`, `service`, `ufw`, `iptables` — y **ningún gestor de
+paquetes**, así que la señal más directa de "el software se mantiene" (`PR.PS-02`) se registraba
+como "módulo no soportado" y se perdía.
+
+**`an.package.state` lee la intención, no el módulo.** `apt`, `yum`, `dnf` y `package` son cuatro
+módulos para lo mismo, y lo que decide es qué hace la tarea: `actualiza` (`upgrade`, o
+`state: latest`), `instala`, `elimina` o `desconocido`. **Solo `actualiza` sostiene `PR.PS-02`**: un
+`state: present` deja instalada la versión que ya hubiera, y confundir "el paquete está" con "el
+paquete está al día" sería exactamente el tipo de atajo que esta oleada ha ido evitando.
+
+**Sin criterio nuevo, y con el título corregido.** `CRI-PR-04` pasa a "Configuración y
+mantenimiento seguro del servidor" y a `version: 2`. Las dos mitades son lo mismo visto dos veces:
+`PR.PS-01` es cómo está configurado el servidor, `PR.PS-02` es si sigue estándolo el mes que viene.
+
+**El orden de las tres reglas importa, y es el único detalle fino de este commit.** El tope por
+permisos inseguros (25) se aplica **antes** de la compuerta de mantenimiento, y la compuerta solo
+toca el 100:
+
+1. Si el SSH no está endurecido, ese es el problema — el estado de los paquetes no lo mejora ni lo
+   empeora.
+2. Si `sshd_config` es escribible por otros, tope 25 aunque el sistema esté al día.
+3. Solo con las dos directivas endurecidas y los permisos correctos decide `PR.PS-02`: 100 con una
+   tarea que actualice, 75 sin ella.
+
+Los tres pasos tienen su test, porque un reordenamiento accidental no se vería en el puntaje de la
+demo (`mid` y `gaps` están en 25 por el SSH y no llegan a la compuerta).
+
+**Tres tests de otros archivos pedían el 100 antiguo** y bajaron a 75 sin tocar la regla, igual que
+en §93. Uno de ellos, el parametrizado de modos octales de `test_review_fixes.py`, lo que fija es la
+lectura del modo y no el tramo: se dejó anotado para que no se lea como una regresión.
+
+**`good` 100** (`apt: upgrade: safe` con `update_cache`), **`mid` 25** (sigue dominando
+`PasswordAuthentication yes`; su tarea nueva solo instala un agente) y **`gaps` 25**. Que `mid` no se
+mueva es la demostración de que la compuerta no toca los tramos bajos.
+
+## Cierre de la Oleada C
+
+**81 de 106 subcategorías (76,4 %)**, **31 criterios**, **PROTECT de 8/22 a 14/22** y las 22
+categorías con criterio. Siete subcategorías nuevas —`ID.RA-09`, `PR.AA-01`, `PR.AA-03`, `PR.IR-03`,
+`PR.IR-04`, `PR.DS-02`, `PR.PS-02`— y **ninguna depende de que la IA extraiga nada**: todas salen de
+leer el IaC, así que los tests las fijan de verdad. Es la primera oleada de la que se puede decir eso.
+
+Lo que la oleada **no** declaró, y por qué, está en `docs/12 §5`: no se quedó en la cabeza de nadie.
+

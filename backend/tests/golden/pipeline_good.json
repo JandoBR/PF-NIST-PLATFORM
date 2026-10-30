@@ -164,10 +164,11 @@
       "criterion_id": "CRI-PR-04",
       "estado": "evaluado",
       "evidence": [
+        "an.package.state|Mantener el sistema al dia",
         "an.task.config|Deshabilitar autenticacion por contrasena",
         "an.task.config|Deshabilitar login de root por SSH"
       ],
-      "explanation": "PermitRootLogin no y PasswordAuthentication no declarados en sshd_config.",
+      "explanation": "PermitRootLogin no y PasswordAuthentication no declarados en sshd_config. El software se mantiene al dia (apt).",
       "final_score": 100.0
     },
     {

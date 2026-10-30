@@ -24,3 +24,8 @@
         name: rsyslog
         state: started
         enabled: true
+
+    - name: Asegurar que el agente de monitoreo este instalado
+      apt:
+        name: telegraf
+        state: present

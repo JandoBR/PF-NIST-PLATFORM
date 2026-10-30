@@ -39,7 +39,7 @@ Resumen de cobertura del catálogo:
 
 > **Estado de implementación:** **31 de 31** criterios implementados (CR-01…CR-05 y las Oleadas A, B
 > y C, docs/11 §C). Cobertura del marco medida por el propio sistema en `GET /methodology`
-> (`cobertura_implementacion`): **80 de 106 subcategorías (75,5 %) y las 22 categorías del CSF 2.0**,
+> (`cobertura_implementacion`): **81 de 106 subcategorías (76,4 %) y las 22 categorías del CSF 2.0**,
 > es decir `categorias_sin_criterio` vacía, con la **función Gobernar completa (31/31)**.
 > **Las reglas de esta matriz describen el código** (`backend/app/evaluation/rules/`): si una regla cambia, se
 > actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-24 (docs/09 §77); en esa
@@ -278,11 +278,12 @@ Resumen de cobertura del catálogo:
   - Sin security groups evaluables → insuficiente.
 - **Recomendación:** restringir puertos administrativos a rangos corporativos/VPN y eliminar reglas `0.0.0.0/0`.
 
-### CRI-PR-04 — Configuración segura del servidor (SSH)
-- **Subcategorías:** PR.PS-01 · **Tipo:** Técnico · **Peso:** 3 · **IA:** no · **MVP:** sí
-- **Evidencias:** `an.task.config` (sshd_config: `PermitRootLogin`, `PasswordAuthentication`), `an.file.permissions`
-- **Regla:**
-  - 100: `PermitRootLogin no` y `PasswordAuthentication no` declarados.
+### CRI-PR-04 — Configuración y mantenimiento seguro del servidor
+- **Subcategorías:** PR.PS-01, PR.PS-02 · **Tipo:** Técnico · **Peso:** 3 · **IA:** no · **MVP:** sí
+- **Evidencias:** `an.task.config` (sshd_config: `PermitRootLogin`, `PasswordAuthentication`), `an.file.permissions`, `an.package.state`
+- **Regla (`PR.PS-01`, configuración):**
+  - 100: `PermitRootLogin no` y `PasswordAuthentication no` declarados, **y** una tarea que
+    mantenga el software al día (ver abajo).
   - 75: solo uno de los dos endurecido.
   - 50: SSH configurado sin opciones explícitas de endurecimiento.
   - 25: `PermitRootLogin yes` o `PasswordAuthentication yes` explícito; o permisos de
@@ -293,7 +294,18 @@ Resumen de cobertura del catálogo:
   - El valor se lee de `line` (lo que queda escrito), nunca de `regexp`.
   - `an.file.permissions` sobre `sshd_config` con escritura para grupo/otros → tope 25.
   - Sin tareas de SSH interpretadas → insuficiente.
-- **Recomendación:** deshabilitar login de root y autenticación por contraseña; usar claves.
+- **Compuerta de `PR.PS-02` (mantenimiento), solo sobre el 100:**
+  - 100 si alguna tarea de `apt`/`yum`/`dnf`/`package` **actualiza versiones** (`upgrade`, o
+    `state: latest`).
+  - 75 si no hay ninguna, o si las que hay solo instalan o eliminan: un `state: present` deja la
+    versión que ya hubiera instalada.
+  - No toca los tramos bajos: si el SSH no está endurecido, ese es el problema, y el tope por
+    permisos inseguros (25) se aplica **antes** de la compuerta.
+- **Notas:** un `sshd_config` endurecido sobre un sistema sin parchear no es un servidor mantenido,
+  y por eso el 100 lo exige. El criterio se retituló al declarar `PR.PS-02`: su nombre tiene que
+  decir lo que evalúa (docs/09 §78, §94).
+- **Recomendación:** deshabilitar login de root y autenticación por contraseña, usar claves, y
+  mantener el software al día con una tarea que actualice versiones.
 
 ### CRI-PR-05 — Almacenamiento protegido contra acceso público
 - **Subcategorías:** PR.DS-01 · **Tipo:** Técnico · **Peso:** 3 · **IA:** no · **MVP:** sí · **Privacidad:** Protect-P

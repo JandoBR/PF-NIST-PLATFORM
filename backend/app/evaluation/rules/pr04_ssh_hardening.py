@@ -1,8 +1,17 @@
-"""CRI-PR-04 — Configuracion segura del servidor (SSH) (docs/03 §3).
+"""CRI-PR-04 — Configuracion y mantenimiento seguro del servidor (PR.PS-01, PR.PS-02; docs/03 §3).
 
-Solo mira tareas `lineinfile` sobre `sshd_config`. Un `PermitRootLogin yes` o
-`PasswordAuthentication yes` explicito domina sobre cualquier otro endurecimiento (igual que D7
-en los criterios de Terraform: la observacion tecnica explicita de exposicion prevalece).
+Dos mitades de "el servidor esta en buen estado", y la segunda la añadio la Oleada C:
+
+- **`PR.PS-01`** (practicas de gestion de la configuracion): tareas `lineinfile` sobre
+  `sshd_config`. Un `PermitRootLogin yes` o `PasswordAuthentication yes` explicito domina sobre
+  cualquier otro endurecimiento (igual que D7 en Terraform: la exposicion explicita prevalece).
+- **`PR.PS-02`** ("el software se mantiene, reemplaza y retira"): una tarea de gestor de paquetes
+  que **actualice versiones**. Es compuerta del 100, no una rama aparte: un `sshd_config`
+  endurecido sobre un sistema sin parchear no es un servidor mantenido.
+
+Un `state: present` no cuenta: deja la version que ya hubiera instalada. Y el tope por permisos
+inseguros (25) se aplica **antes** de la compuerta: si el archivo es escribible por otros, el estado
+de los paquetes no es lo que decide el puntaje.
 """
 
 from __future__ import annotations
@@ -14,7 +23,7 @@ from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-PR-04"
-CRITERION_VERSION = 1
+CRITERION_VERSION = 2
 
 
 def _directive_value(tasks: list[EvidenceInstance], directive: str) -> bool | None:
@@ -85,18 +94,65 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             evidence_ids=[e.id for e in no_interpretables],
         )
 
-    if not inseguros or resultado.estado != Estado.EVALUADO:
+    if inseguros and resultado.estado == Estado.EVALUADO:
+        score = min(resultado.base_score or 0, 25)
+        return resultado.model_copy(
+            update={
+                "base_score": score,
+                "final_score": score,
+                "explanation": (
+                    f"{resultado.explanation} sshd_config con permisos de escritura para grupo u"
+                    " otros ("
+                    + ", ".join(e.value["modo"] for e in inseguros)
+                    + "): puntaje maximo 25."
+                ),
+                "evidence_ids": [*resultado.evidence_ids, *(e.id for e in inseguros)],
+            }
+        )
+
+    return _con_mantenimiento(evidence, resultado)
+
+
+def _con_mantenimiento(
+    evidence: list[EvidenceInstance], resultado: CriterionResult
+) -> CriterionResult:
+    """El 100 exige ademas una tarea que mantenga el software al dia (PR.PS-02).
+
+    Solo toca el tramo alto: si el SSH ya no esta endurecido, ese es el problema y el estado de los
+    paquetes no lo empeora ni lo arregla.
+    """
+
+    if resultado.estado != Estado.EVALUADO or resultado.base_score != 100:
         return resultado
-    score = min(resultado.base_score or 0, 25)
+
+    paquetes = by_type(evidence, "an.package.state")
+    actualizan = [e for e in paquetes if e.value.get("intencion") == "actualiza"]
+    if actualizan:
+        return resultado.model_copy(
+            update={
+                "explanation": (
+                    f"{resultado.explanation} El software se mantiene al dia ("
+                    + ", ".join(sorted({e.value["modulo"] for e in actualizan}))
+                    + ")."
+                ),
+                "evidence_ids": [*resultado.evidence_ids, *(e.id for e in actualizan)],
+            }
+        )
+
+    detalle = (
+        "las tareas de paquetes solo instalan o eliminan, no actualizan versiones"
+        if paquetes
+        else "ninguna tarea actualiza paquetes"
+    )
     return resultado.model_copy(
         update={
-            "base_score": score,
-            "final_score": score,
+            "base_score": 75,
+            "final_score": 75,
             "explanation": (
-                f"{resultado.explanation} sshd_config con permisos de escritura para grupo u"
-                " otros (" + ", ".join(e.value["modo"] for e in inseguros) + "): puntaje maximo 25."
+                f"{resultado.explanation} Pero {detalle}: un sshd_config endurecido sobre un"
+                " sistema sin parchear no es un servidor mantenido (PR.PS-02)."
             ),
-            "evidence_ids": [*resultado.evidence_ids, *(e.id for e in inseguros)],
+            "evidence_ids": [*resultado.evidence_ids, *(e.id for e in paquetes)],
         }
     )
 

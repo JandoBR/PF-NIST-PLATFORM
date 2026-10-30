@@ -29,3 +29,8 @@
       copy:
         src: files/banner.txt
         dest: /etc/issue.net
+
+    - name: Mantener el sistema al dia
+      apt:
+        upgrade: safe
+        update_cache: true
