@@ -31,15 +31,15 @@ Resumen de cobertura del catálogo:
 |---|---|---|---|
 | Govern | 6 | 3 | 0 |
 | Identify | 6 | 3 | 0 |
-| Protect | 7 | 6 | 0 |
+| Protect | 8 | 6 | 0 |
 | Detect | 3 | 1 | 1 |
 | Respond | 4 | 1 | 0 |
 | Recover | 3 | 2 | 1 |
-| **Total** | **29** | **16** | **2** |
+| **Total** | **30** | **16** | **2** |
 
-> **Estado de implementación:** **29 de 29** criterios implementados (CR-01…CR-05 y las Oleadas A, B
+> **Estado de implementación:** **30 de 30** criterios implementados (CR-01…CR-05 y las Oleadas A, B
 > y C, docs/11 §C). Cobertura del marco medida por el propio sistema en `GET /methodology`
-> (`cobertura_implementacion`): **75 de 106 subcategorías (70,8 %) y las 22 categorías del CSF 2.0**,
+> (`cobertura_implementacion`): **77 de 106 subcategorías (72,6 %) y las 22 categorías del CSF 2.0**,
 > es decir `categorias_sin_criterio` vacía, con la **función Gobernar completa (31/31)**.
 > **Las reglas de esta matriz describen el código** (`backend/app/evaluation/rules/`): si una regla cambia, se
 > actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-24 (docs/09 §77); en esa
@@ -207,6 +207,26 @@ Resumen de cobertura del catálogo:
   - Sin recursos del tipo → `no_aplicable` con motivo.
   - Política documental sin recursos: no eleva el puntaje técnico; alimenta contexto y el hallazgo.
 - **Recomendación:** habilitar cifrado gestionado por KMS en RDS y S3; verificar mecanismo y llave.
+
+### CRI-PR-08 — Gestión de identidades y autenticación
+- **Subcategorías:** PR.AA-01, PR.AA-03 · **Tipo:** Técnico · **Peso:** 5 · **IA:** no · **MVP:** no · **Privacidad:** Protect-P
+- **Evidencias:** `tf.identity.config`, `tf.resource.present` (recursos `aws_iam_*`)
+- **Regla:**
+  - 100: identidades declaradas en IaC, política de contraseñas ≥ 14 caracteres **y** una política que exige `aws:MultiFactorAuthPresent`.
+  - 75: política ≥ 14 pero ninguna que exija MFA (la contraseña sigue siendo el único factor).
+  - 50: identidades declaradas y **sin** política de contraseñas en el IaC (o con longitud no literal).
+  - 25: política declarada con 8–13 caracteres, por debajo del umbral del CIS AWS Foundations Benchmark.
+  - 0: política declarada con menos de 8 caracteres.
+  - Sin ningún recurso IAM ni política → `evidencia_insuficiente`.
+  - Con dos políticas declaradas manda la más débil: es la que la cuenta aplica de hecho.
+- **Notas:** el umbral de 14 es el del **CIS AWS Foundations Benchmark**, no una cifra elegida.
+  La rúbrica es **deliberadamente asimétrica**: una política débil declarada (0 o 25) puntúa por
+  debajo de no declarar ninguna (50). En IaC la ausencia no prueba la ausencia —la cuenta puede
+  tener su política puesta fuera de Terraform—, mientras que una longitud de 6 escrita en el `.tf`
+  es la observación de un control débil. Es el silencio documental (docs/09 §60) aplicado a una
+  señal técnica.
+- **Recomendación:** declarar las identidades en IaC y endurecer la autenticación — política de al
+  menos 14 caracteres y una política que exija MFA.
 
 ### CRI-PR-02 — Backups configurados y protegidos
 - **Subcategorías:** PR.DS-11 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí

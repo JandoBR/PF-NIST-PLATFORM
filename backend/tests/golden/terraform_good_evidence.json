@@ -81,6 +81,56 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
+      "file": "plataforma.tf",
+      "line_end": 26,
+      "line_start": 18
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_iam_account_password_policy.cuenta",
+    "subject_type": "aws_iam_account_password_policy",
+    "type_id": "tf.identity.config",
+    "type_version": 1,
+    "value": {
+      "estado": "declarado",
+      "longitud_minima": 14,
+      "mfa_requerido": null,
+      "requiere_numeros": true,
+      "requiere_simbolos": true,
+      "reutilizacion_bloqueada": 24,
+      "rotacion_dias": 90,
+      "tipo": "politica_de_contrasenas"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 51,
+      "line_start": 28
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_iam_policy.exigir_mfa",
+    "subject_type": "aws_iam_policy",
+    "type_id": "tf.identity.config",
+    "type_version": 1,
+    "value": {
+      "estado": "declarado",
+      "longitud_minima": null,
+      "mfa_requerido": true,
+      "requiere_numeros": null,
+      "requiere_simbolos": null,
+      "reutilizacion_bloqueada": null,
+      "rotacion_dias": null,
+      "tipo": "mfa"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
       "file": "main.tf",
       "line_end": 74,
       "line_start": 69
@@ -221,6 +271,66 @@
       "entorno": null,
       "nombre": "principal",
       "tipo": "aws_db_instance"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 26,
+      "line_start": 18
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_iam_account_password_policy.cuenta",
+    "subject_type": "aws_iam_account_password_policy",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "cuenta",
+      "tipo": "aws_iam_account_password_policy"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 51,
+      "line_start": 28
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_iam_policy.exigir_mfa",
+    "subject_type": "aws_iam_policy",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "exigir_mfa",
+      "tipo": "aws_iam_policy"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": "tipo de recurso no soportado: se registra su presencia, no sus atributos",
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 16,
+      "line_start": 3
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_iam_role.aplicacion",
+    "subject_type": "aws_iam_role",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "aplicacion",
+      "tipo": "aws_iam_role"
     }
   },
   {

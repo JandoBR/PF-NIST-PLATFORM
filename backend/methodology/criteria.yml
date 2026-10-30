@@ -48,7 +48,9 @@
 # v20: Oleada C (1/5) - CRI-ID-06 declara ID.RA-09 con los dos tipos de procedencia que el
 #      adaptador de Terraform ahora lee (`tf.module.source`, `tf.provider.version`). Primera
 #      subcategoria de la cobertura que no depende de que U1 extraiga nada (docs/09 §90).
-version: 20
+# v21: Oleada C (2/5) - CRI-PR-08 (identidades y autenticacion) declara PR.AA-01 y PR.AA-03 con
+#      `tf.identity.config` y la presencia de recursos IAM (docs/09 §91).
+version: 21
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -246,6 +248,20 @@ criterios:
       tipo: umbral_por_recurso
       estados: { all_enabled: 100, any_disabled: 25, any_unknown: insuficiente }
       tipos_afirmacion: [policy_exists]
+
+  - id: CRI-PR-08
+    version: 1
+    titulo: "Gestion de identidades y autenticacion"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.AA]
+    subcategorias: [PR.AA-01, PR.AA-03]
+    peso: 5
+    ai_adjustable: false
+    evidencias: [tf.identity.config@1, tf.resource.present@1]
+    recomendacion: "Declarar las identidades en IaC y endurecer la autenticacion: politica de contrasenas de al menos 14 caracteres (CIS AWS) y una politica que exija `aws:MultiFactorAuthPresent`."
+    regla:
+      tipo: identidades_y_autenticacion
 
   - id: CRI-PR-02
     version: 1

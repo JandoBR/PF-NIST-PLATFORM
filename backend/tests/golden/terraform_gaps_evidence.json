@@ -61,6 +61,31 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
+      "file": "plataforma.tf",
+      "line_end": 9,
+      "line_start": 7
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_iam_account_password_policy.cuenta",
+    "subject_type": "aws_iam_account_password_policy",
+    "type_id": "tf.identity.config",
+    "type_version": 1,
+    "value": {
+      "estado": "declarado",
+      "longitud_minima": 6,
+      "mfa_requerido": null,
+      "requiere_numeros": null,
+      "requiere_simbolos": null,
+      "reutilizacion_bloqueada": null,
+      "rotacion_dias": null,
+      "tipo": "politica_de_contrasenas"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
       "file": "versiones.tf",
       "line_end": 7,
       "line_start": 3
@@ -140,6 +165,46 @@
       "entorno": null,
       "nombre": "legacy",
       "tipo": "aws_db_instance"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 9,
+      "line_start": 7
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_iam_account_password_policy.cuenta",
+    "subject_type": "aws_iam_account_password_policy",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "cuenta",
+      "tipo": "aws_iam_account_password_policy"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": "tipo de recurso no soportado: se registra su presencia, no sus atributos",
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 5,
+      "line_start": 3
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_iam_user.operador",
+    "subject_type": "aws_iam_user",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "operador",
+      "tipo": "aws_iam_user"
     }
   },
   {

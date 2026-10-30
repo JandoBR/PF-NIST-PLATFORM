@@ -198,6 +198,19 @@
       "final_score": null
     },
     {
+      "base_score": 100.0,
+      "criterion_id": "CRI-PR-08",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.identity.config|aws_iam_account_password_policy.cuenta",
+        "tf.identity.config|aws_iam_policy.exigir_mfa",
+        "tf.resource.present|aws_iam_policy.exigir_mfa",
+        "tf.resource.present|aws_iam_role.aplicacion"
+      ],
+      "explanation": "Identidades declaradas en IaC, politica de contrasenas de 14 caracteres y una politica que exige MFA. 2 recurso(s) IAM declarado(s) (aws_iam_policy, aws_iam_role).",
+      "final_score": 100.0
+    },
+    {
       "base_score": null,
       "criterion_id": "CRI-RC-01",
       "estado": "evidencia_insuficiente",
@@ -288,15 +301,15 @@
       "score": 100.0
     },
     {
-      "cobertura": 0.8571,
+      "cobertura": 0.875,
       "conteo_estados": {
-        "evaluado": 6,
+        "evaluado": 7,
         "evidencia_insuficiente": 1
       },
       "nivel": "funcion",
       "provisional": false,
       "ref": "PR",
-      "score": 94.79
+      "score": 95.69
     },
     {
       "cobertura": 0.0,
@@ -320,15 +333,15 @@
     }
   ],
   "global": {
-    "cobertura": 0.2759,
+    "cobertura": 0.3,
     "conteo_estados": {
-      "evaluado": 8,
+      "evaluado": 9,
       "evidencia_insuficiente": 21
     },
     "nivel": "global",
     "provisional": true,
     "ref": "global",
-    "score": 98.26
+    "score": 98.56
   },
   "tier": {
     "estimable": false,

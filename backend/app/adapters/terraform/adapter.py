@@ -31,6 +31,8 @@ _HANDLED_TYPES = {
     "aws_s3_bucket_versioning",
     "aws_security_group",
     "aws_cloudtrail",
+    "aws_iam_account_password_policy",
+    "aws_iam_policy",
 }
 
 
@@ -40,6 +42,8 @@ CONFIG_RESOURCE_TYPES = frozenset(
         "aws_s3_bucket_server_side_encryption_configuration",
         "aws_s3_bucket_public_access_block",
         "aws_s3_bucket_versioning",
+        # Configura la cuenta entera, no es un activo que un inventario deba listar.
+        "aws_iam_account_password_policy",
     }
 )
 
@@ -83,6 +87,13 @@ _WATCHED_ATTRS: dict[str, set[str]] = {
     "aws_s3_bucket_versioning": {"status"},
     "aws_security_group": {"cidr_blocks", "ipv6_cidr_blocks", "from_port", "to_port"},
     "aws_cloudtrail": {"enable_logging", "is_multi_region_trail"},
+    "aws_iam_account_password_policy": {
+        "minimum_password_length",
+        "require_symbols",
+        "require_numbers",
+        "max_password_age",
+        "password_reuse_prevention",
+    },
 }
 
 _EXPRESSION_REASON = (
@@ -369,6 +380,20 @@ def module_origin(source: Any) -> str:
     return "desconocido"
 
 
+def _entero(value: Any) -> int | None:
+    """Un entero literal, o `None` si falta o es una expresion. `True` no es 1 (docs/02 §4)."""
+
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return int(value)
+
+
+def _booleano(value: Any) -> bool | None:
+    """Un booleano literal, o `None` si falta o es una expresion."""
+
+    return value if isinstance(value, bool) else None
+
+
 def module_pinned(source: Any, version: Any) -> bool:
     """Si la procedencia del modulo esta fijada a algo reproducible.
 
@@ -397,7 +422,9 @@ def module_pinned(source: Any, version: Any) -> bool:
 #: v10: los rangos de linea ignoran `/* */` y heredocs y aceptan `{` en la linea siguiente.
 #: v11: segunda ruta de parseo: los bloques `module` y `terraform { required_providers }`
 #: emiten `tf.module.source` y `tf.provider.version` (procedencia del codigo de terceros).
-ADAPTER_VERSION = "11"
+#: v12: `aws_iam_account_password_policy` y `aws_iam_policy` emiten `tf.identity.config`
+#: (politica de contrasenas y exigencia de MFA leida del documento de la politica).
+ADAPTER_VERSION = "12"
 
 
 class TerraformAdapter:
@@ -639,6 +666,16 @@ class TerraformAdapter:
                 *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
             ]
 
+        if resource_type == "aws_iam_account_password_policy":
+            return [
+                self._password_policy(file_path, subject_ref, attrs),
+                *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
+            ]
+
+        if resource_type == "aws_iam_policy":
+            mfa = self._mfa_requirement(file_path, subject_ref, attrs)
+            return [mfa] if mfa is not None else []
+
         if resource_type in (
             "aws_s3_bucket_server_side_encryption_configuration",
             "aws_s3_bucket_public_access_block",
@@ -845,6 +882,71 @@ class TerraformAdapter:
             value=value,
             file_path=file_path,
             limitations=limitations,
+        )
+
+    def _password_policy(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
+        """`aws_iam_account_password_policy`: como se autentica la cuenta (PR.AA-03)."""
+
+        longitud = _entero(attrs.get("minimum_password_length"))
+        return self._make_evidence(
+            type_id="tf.identity.config",
+            subject_type="aws_iam_account_password_policy",
+            subject_ref=subject_ref,
+            value={
+                "tipo": "politica_de_contrasenas",
+                "longitud_minima": longitud,
+                "requiere_simbolos": _booleano(attrs.get("require_symbols")),
+                "requiere_numeros": _booleano(attrs.get("require_numbers")),
+                "rotacion_dias": _entero(attrs.get("max_password_age")),
+                "reutilizacion_bloqueada": _entero(attrs.get("password_reuse_prevention")),
+                "mfa_requerido": None,
+                "estado": "declarado" if longitud is not None else "unknown",
+            },
+            file_path=file_path,
+            limitations=(
+                None
+                if longitud is not None
+                else "minimum_password_length ausente o no literal: la politica no se puede valorar"
+            ),
+        )
+
+    def _mfa_requirement(
+        self, file_path: Path, subject_ref: str, attrs: dict
+    ) -> EvidenceInstance | None:
+        """Si una politica IAM exige MFA, leyendo su documento JSON (PR.AA-03).
+
+        En AWS no hay un atributo "exigir MFA": se expresa como la condicion
+        `aws:MultiFactorAuthPresent` dentro del documento de una politica. Un documento construido
+        con `jsonencode(...)` o con un `data` source no es literal, asi que se emite `unknown` en
+        vez de suponer que no exige nada: lo contrario convertiria una limitacion del parser en un
+        incumplimiento.
+        """
+
+        documento = attrs.get("policy")
+        if documento is None:
+            return None
+        if not isinstance(documento, str) or _is_expression(documento):
+            estado, exige = "unknown", None
+            limitacion = "documento de politica no literal: no se puede leer si exige MFA"
+        else:
+            exige = "aws:MultiFactorAuthPresent" in documento
+            estado, limitacion = "declarado", None
+        return self._make_evidence(
+            type_id="tf.identity.config",
+            subject_type="aws_iam_policy",
+            subject_ref=subject_ref,
+            value={
+                "tipo": "mfa",
+                "longitud_minima": None,
+                "requiere_simbolos": None,
+                "requiere_numeros": None,
+                "rotacion_dias": None,
+                "reutilizacion_bloqueada": None,
+                "mfa_requerido": exige,
+                "estado": estado,
+            },
+            file_path=file_path,
+            limitations=limitacion,
         )
 
     def _s3_public_access(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:

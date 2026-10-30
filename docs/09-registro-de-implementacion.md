@@ -2956,3 +2956,53 @@ sale de leer el `.tf`, así que los tests la fijan de verdad.
 uno a uno: en los de evidencia solo hay adiciones, y cada puntaje que se movió en los de pipeline se
 explica con el criterio nuevo.
 
+## 91. Oleada C (2/5): identidades y autenticación, con dos señales que ya estaban en el `.tf`
+
+`PR.AA` estaba en **1 de 6**: la única subcategoría cubierta era `PR.AA-05` (mínimo privilegio), por
+los CIDR de los security groups. "Se gestionan las identidades" y "los usuarios se autentican" no
+tenían criterio, y no por falta de documentación: los adaptadores no reconocían un solo recurso IAM.
+
+**Dos señales, una por subcategoría.**
+
+- **`PR.AA-01`** se evidencia con `tf.resource.present` filtrado a `aws_iam_*`, el tipo que ya
+  existía. Un rol creado a mano en la consola no está gestionado; uno declarado en Terraform tiene
+  dueño, revisión e historial. No hacía falta un tipo nuevo para esto.
+- **`PR.AA-03`** sí lo necesitaba: `tf.identity.config`, con los atributos de
+  `aws_iam_account_password_policy` y la exigencia de MFA.
+
+**El MFA no es un atributo.** En AWS no existe un `require_mfa = true`: la exigencia se expresa como
+la condición `aws:MultiFactorAuthPresent` dentro del documento JSON de una política IAM. El
+adaptador lee ese documento cuando es literal (un heredoc) y busca la condición. Cuando el documento
+viene de `jsonencode(...)` o de un `data` source no es literal, y entonces emite
+`mfa_requerido: null` con `estado: "unknown"`, **nunca `false`**: lo contrario convertiría una
+limitación del parser en un incumplimiento, que es justo lo que docs/02 §4 prohíbe.
+
+**La asimetría de la rúbrica, que es lo más discutible y por eso va escrito.** Una política de
+contraseñas *declarada y débil* puntúa **por debajo** de no declarar ninguna: 6 caracteres da 0,
+10 da 25, y no tener política da 50. Parece al revés. No lo es: en IaC la ausencia no prueba la
+ausencia —la cuenta puede tener su política puesta fuera de Terraform—, mientras que una longitud
+mínima de 6 escrita en el `.tf` es la observación directa de un control débil. Es el principio del
+silencio documental (§60) aplicado por segunda vez a una señal técnica, después de §90. Hay un test
+que lo fija explícitamente, porque sin él el próximo que lo lea lo "arregla".
+
+El umbral de 14 es el del **CIS AWS Foundations Benchmark**, no una cifra elegida a ojo. Con dos
+políticas declaradas manda la más débil: es la que la cuenta aplica de hecho.
+
+**`aws_iam_account_password_policy` entró en `CONFIG_RESOURCE_TYPES`.** Configura la cuenta entera,
+no es un activo que un inventario deba listar — el mismo criterio que ya excluía los recursos de
+configuración de S3. Sin eso habría bajado `CRI-ID-01` por un recurso que ningún inventario lista.
+
+**Lo que sí movió a `CRI-ID-01`**, y es la clase de acoplamiento que solo se ve mirando: añadir
+`aws_iam_role` y `aws_iam_policy` a los fixtures mete dos tipos nuevos en el denominador del
+inventario. El documento de `good` listaba cuatro tipos y habría bajado de 100 a 50 **sin que
+ningún test del pipeline lo detectara**, porque `CRI-ID-01` necesita IA y el pipeline golden no la
+usa. Se añadieron los dos tipos a su inventario. `mid` y `gaps` no cambian de tramo (2/5 y 0/4 caen
+donde caían).
+
+**Los tres paquetes:** `good` 100, `mid` 25 (10 caracteres, sin MFA), `gaps` 0 (6 caracteres
+declarados). En `gaps` eso **baja** el puntaje de la función Proteger de 3,75 a 3,0, que es lo que
+debe pasar cuando se observa un control débil nuevo, y el global de 14,38 a 14,0.
+
+**Verificación:** 734 tests (17 nuevos), `ruff` limpio, goldens releídos. `PR.AA` pasa de 1/6 a 3/6 y
+la cobertura a **77/106 (72,6 %)**, con PROTECT en 10/22.
+

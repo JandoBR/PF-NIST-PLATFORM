@@ -20,7 +20,11 @@ export const DEMO_BUNDLES: DemoBundle[] = [
     label: 'Entorno con brechas',
     description:
       'SSH y RDP abiertos a Internet, una base de datos pública sin cifrar ni respaldos y login de root habilitado. Hallazgos de severidad alta y media.',
-    terraform: ['/demo/gaps/terraform/main.tf', '/demo/gaps/terraform/versiones.tf'],
+    terraform: [
+      '/demo/gaps/terraform/main.tf',
+      '/demo/gaps/terraform/plataforma.tf',
+      '/demo/gaps/terraform/versiones.tf',
+    ],
     ansible: ['/demo/gaps/ansible/hardening.yml'],
     documents: [
       '/demo/gaps/documents/politica-seguridad.md',
@@ -36,6 +40,7 @@ export const DEMO_BUNDLES: DemoBundle[] = [
       'Lo grave ya está corregido, pero queda trabajo a medias: una base sin cifrar, un bucket sin bloqueo público, SSH aún con contraseña y respaldos por debajo de la política. Puntajes intermedios y evidencia insuficiente.',
     terraform: [
       '/demo/mid/terraform/main.tf',
+      '/demo/mid/terraform/plataforma.tf',
       '/demo/mid/terraform/security.tf',
       '/demo/mid/terraform/versiones.tf',
     ],
@@ -54,7 +59,11 @@ export const DEMO_BUNDLES: DemoBundle[] = [
     label: 'Entorno conforme',
     description:
       'Cifrado, respaldos, SSH endurecido, registro multirregión y políticas completas. Queda una brecha menor: el bloqueo público de un bucket está incompleto.',
-    terraform: ['/demo/good/terraform/main.tf', '/demo/good/terraform/versiones.tf'],
+    terraform: [
+      '/demo/good/terraform/main.tf',
+      '/demo/good/terraform/plataforma.tf',
+      '/demo/good/terraform/versiones.tf',
+    ],
     ansible: ['/demo/good/ansible/hardening.yml'],
     documents: [
       '/demo/good/documents/politica-seguridad.md',
