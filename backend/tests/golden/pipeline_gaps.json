@@ -113,6 +113,17 @@
       "final_score": null
     },
     {
+      "base_score": 25.0,
+      "criterion_id": "CRI-ID-06",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.module.source|module.legacy_red",
+        "tf.module.source|module.reportes"
+      ],
+      "explanation": "La procedencia del codigo de terceros no esta fijada por ningun lado: 2 modulo(s) y 0 proveedor(es) sin restriccion. 2 modulo(s) de terceros, 0 proveedor(es) declarado(s).",
+      "final_score": 25.0
+    },
+    {
       "base_score": 0.0,
       "criterion_id": "CRI-PR-01",
       "estado": "no_implementado",
@@ -258,14 +269,15 @@
       "score": null
     },
     {
-      "cobertura": 0.0,
+      "cobertura": 0.1667,
       "conteo_estados": {
+        "evaluado": 1,
         "evidencia_insuficiente": 5
       },
       "nivel": "funcion",
-      "provisional": false,
+      "provisional": true,
       "ref": "ID",
-      "score": null
+      "score": 25.0
     },
     {
       "cobertura": 0.7143,
@@ -301,16 +313,16 @@
     }
   ],
   "global": {
-    "cobertura": 0.1786,
+    "cobertura": 0.2069,
     "conteo_estados": {
-      "evaluado": 1,
+      "evaluado": 2,
       "evidencia_insuficiente": 23,
       "no_implementado": 4
     },
     "nivel": "global",
     "provisional": true,
     "ref": "global",
-    "score": 3.75
+    "score": 14.38
   },
   "tier": {
     "estimable": false,

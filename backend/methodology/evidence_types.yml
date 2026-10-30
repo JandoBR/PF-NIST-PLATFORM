@@ -4,7 +4,9 @@
 # v4: doc.claim@2 guarda la cita textual (docs/09 §60).
 # v5: log.pattern@2 conserva los origenes del patron (`fuentes`), que hasta ahora se
 #     calculaban y se descartaban al construir la evidencia (docs/09 §75).
-version: 5
+# v6: tf.module.source y tf.provider.version: procedencia del codigo de terceros, leida de los
+#     bloques `module` y `terraform { required_providers }` que el adaptador no miraba (docs/09 §90).
+version: 6
 tipos:
   - id: tf.resource.present
     version: 1
@@ -138,6 +140,47 @@ tipos:
     requiere_locator: true
     estado: published
     publicado: "2026-09-30"
+
+  - id: tf.module.source
+    version: 1
+    descripcion: >
+      Procedencia de un bloque `module`: de donde viene el codigo y si esa procedencia esta fijada
+      a algo reproducible. `origen: local` es codigo del mismo repositorio, que no se adquiere y por
+      tanto no se fija; el resto es de terceros. `fijada` es true con `version` (registry) o con un
+      `?ref=<tag|sha>` en el `source` (git).
+    valor_schema:
+      type: object
+      required: [nombre, origen, fijada, estado]
+      properties:
+        nombre: { type: string }
+        source: { type: [string, "null"] }
+        version: { type: [string, "null"] }
+        origen: { enum: [registry, git, externo, local, desconocido] }
+        fijada: { type: boolean }
+        estado: { enum: [fijado, sin_fijar, propio, "unknown"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-10-29"
+
+  - id: tf.provider.version
+    version: 1
+    descripcion: >
+      Restriccion de version declarada para un proveedor en `terraform { required_providers }`.
+      Un proveedor declarado sin `version` se emite con `restriccion: null`: declararlo sin fijarlo
+      no es lo mismo que no declararlo.
+    valor_schema:
+      type: object
+      required: [proveedor, fijada, estado]
+      properties:
+        proveedor: { type: string }
+        restriccion: { type: [string, "null"] }
+        fijada: { type: boolean }
+        estado: { enum: [fijado, sin_fijar] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-10-29"
 
   - id: doc.claim
     version: 1

@@ -25,6 +25,7 @@ INSUFICIENTE = Estado.EVIDENCIA_INSUFICIENTE.value
 #: Puntaje (o "evidencia_insuficiente") de cada criterio tecnico, por paquete.
 ESPERADO = {
     "gaps": {
+        "CRI-ID-06": 25,  # dos modulos de git sin `?ref=` y sin required_providers
         "CRI-PR-01": 25,  # una base cifrada y otra no
         "CRI-PR-02": 25,  # una base sin backups y otra con 3 dias
         "CRI-PR-03": 0,  # SSH y RDP abiertos a Internet
@@ -34,6 +35,7 @@ ESPERADO = {
         "CRI-DE-01": INSUFICIENTE,
     },
     "mid": {
+        "CRI-ID-06": 50,  # el modulo del registry esta fijado, el proveedor no
         "CRI-PR-01": 25,  # la base de reportes sigue sin cifrar
         "CRI-PR-02": 75,  # 14 dias; sin leer la politica (IA) el tope es 75
         "CRI-PR-03": 100,
@@ -43,6 +45,7 @@ ESPERADO = {
         "CRI-DE-01": 75,
     },
     "good": {
+        "CRI-ID-06": 100,  # proveedor y modulo del registry fijados
         "CRI-PR-01": 100,
         "CRI-PR-02": 75,  # 100 cuando la IA lee la politica de 7 dias
         "CRI-PR-03": 100,
@@ -90,7 +93,8 @@ def test_bundles_show_every_severity_between_them(methodology):
         return {f.severidad for f in derive_findings(methodology, results)}
 
     assert severidades("gaps") == {"alta", "media"}
-    assert severidades("mid") == {"media"}
+    # `baja` aparece en mid desde CRI-ID-06 (50): el modulo esta fijado y el proveedor no.
+    assert severidades("mid") == {"baja", "media"}
     assert severidades("good") == {"baja"}
 
 

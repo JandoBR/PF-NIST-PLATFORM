@@ -2893,3 +2893,66 @@ aplicó sobre el esquema de GitHub sin cambios.
 **Verificación:** suite completa **685 tests** + 2 skipped; `ruff check` y `ruff format --check`
 limpios; frontend `typecheck`, `lint` y `build` limpios; `alembic upgrade head` sobre SQLite limpio
 con la restricción `(org_id, scope, correlation_key)`.
+
+## 90. Oleada C (1/5): el adaptador aprende a leer de dónde viene el código (`ID.RA-09`)
+
+**AMP-07 llevaba dos oleadas anotado como deuda** (docs/12 §5), y la Oleada B lo había reescrito: ya
+no era un ítem de cobertura, porque `GV.SC-07` quedó cubierta por vía documental, sino de **calidad
+de la señal** — cambiar una afirmación extraída por IA por una observación determinística del IaC.
+Esta oleada lo cierra, y de paso cubre `ID.RA-09`, que seguía descubierta.
+
+**Había una ruta de parseo que no existía.** `TerraformAdapter` usa un parser HCL real
+(`python-hcl2`), así que `hcl2.loads` ya devolvía las claves `module`, `provider` y `terraform` en el
+diccionario; simplemente nadie las leía. `_flatten_resources` hacía `raw.get("resource", [])` y ahí
+se acababa. El adaptador llevaba desde el principio **mirando solo una sexta parte de lo que ya
+tenía parseado**.
+
+Lo que sí había que construir eran los **locators**. `resource_line_ranges` estaba atada a la palabra
+`resource` por una regex literal, y un bloque sin rango de líneas no es evidencia auditable: es una
+afirmación sin dónde comprobarla. Se generalizó a `block_line_ranges(texto, patron)`, con
+`_block_start(keyword, etiquetas)` construyendo el patrón según cuántas etiquetas lleva el bloque
+(`resource` dos, `module` una, `terraform` ninguna). Un bloque sin etiquetas se indexa por orden de
+aparición para que dos en el mismo archivo no se pisen, y el patrón de `terraform` exige que la línea
+no sea otra cosa: sin eso, `terraform_remote_state` y `terraform = "x"` coincidían.
+
+**Dos tipos nuevos** (`evidence_types.yml` v6): `tf.module.source` y `tf.provider.version`. El primero
+clasifica el `origen` del `source` (`registry`/`git`/`externo`/`local`/`desconocido`) y si la
+procedencia está `fijada`. Un `source` no literal se emite con `estado: "unknown"`, que es el
+convenio que ya hace aparecer un hallazgo de limitación sin añadir código
+(`recommendations/limitations.py`).
+
+**`CRI-ID-06` y dos decisiones que la rúbrica hace explícitas.**
+
+- **Un módulo local no se penaliza.** `source = "../modules/red"` es código del mismo repositorio: no
+  se adquiere de nadie y no hay versión que fijar. Contarlo como "sin fijar" sería castigar tener el
+  código propio ordenado en módulos, que es lo contrario de lo que se quiere incentivar. Lleva
+  `estado: "propio"`, no `"fijado"`: `fijada: false` con `estado: "fijado"` se contradecía en la cara.
+- **El piso es 25, no 0.** Un `source` sin `version` no es una negación, es silencio sobre la
+  procedencia — el mismo razonamiento del silencio documental (§60). Para dar 0 haría falta una
+  declaración explícita de que no se controla, y en HCL eso no existe. Es la primera vez que ese
+  principio, que nació para los documentos, se aplica a una señal técnica.
+
+Un `source` que el parser no puede leer cuenta como **de terceros**, no como propio: suponer lo
+segundo sería suponer a favor.
+
+**Los tres paquetes caen en tramos distintos**, que es lo que hace útil la demo: `good` 100 (proveedor
+y módulo del registry fijados), `mid` 50 (el módulo fijado, el proveedor sin restricción), `gaps` 25
+(dos módulos de git sin `?ref=` y ningún `required_providers`). La procedencia vive en un
+`versiones.tf` propio por paquete, que es la convención de Terraform y además dejó intactos los
+números de línea de los goldens: el diff es solo adiciones.
+
+**Lo que esto mueve, y por qué está bien.** Un criterio nuevo es un sumando nuevo en el promedio
+ponderado. En el pipeline golden —que es Terraform + Ansible, sin IA— la **función Identificar pasa de
+`null` a tener puntaje**, porque hasta ahora ninguno de sus criterios se evaluaba sin afirmaciones
+documentales. El global de `gaps` sube de 3,75 a 14,38. No es una regresión ni un ablandamiento de la
+escala: el sistema mide una cosa más y esa cosa, en `gaps`, saca 25. `ID` queda además marcada
+`provisional` (1 criterio evaluado de 6), que es exactamente para lo que existe esa marca.
+
+**Y es la primera subcategoría de la cobertura que no depende de la IA.** Las Oleadas A y B subieron
+cobertura añadiendo campos de afirmación: honestos, pero sin medir contra el modelo real. `ID.RA-09`
+sale de leer el `.tf`, así que los tests la fijan de verdad.
+
+**Verificación:** 717 tests (28 nuevos), `ruff check`/`format` limpios. Goldens regenerados y leídos
+uno a uno: en los de evidencia solo hay adiciones, y cada puntaje que se movió en los de pipeline se
+explica con el criterio nuevo.
+

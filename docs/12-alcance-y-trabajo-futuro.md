@@ -82,7 +82,6 @@ estas medidas no tienen superficie real aquí.
 | AMP-01 | Recuperación semántica (embeddings) sobre el catálogo NIST | El motor es determinístico y basado en reglas + evidencia estructurada; añade proveedor, índice, costo y no-determinismo. | docs/07 §2/§7 |
 | AMP-06 | Niveles por función A/B/C/D (Consolidado/Gestionado/…) | El diseño lo marca opcional y no-NIST. | docs/01 §8.4 |
 | AMP-08 | `CRI-GV-05` en el cruce de privacidad (`PRIVACY_CRITERIA`) | `GV.OC-03` nombra explícitamente los requisitos de privacidad, pero eso es **Govern-P** del PF 1.0, y el alcance declarado del cruce (docs/00 §6, docs/03 §7) son Identify-P, Protect-P y los eventos. Añadirlo ensancha un límite de alcance que el informe también enuncia, así que es una decisión de alcance y no un detalle de UI. | docs/09 §73 |
-| AMP-07 | Procedencia de módulos y proveedores de Terraform (`tf.module.source`) como señal técnica de cadena de suministro (GV.SC-07, ID.RA-09) | **Ya no es un ítem de cobertura:** la Oleada B cubrió `GV.SC-07` por vía documental (`riesgos_monitoreados`, docs/09 §77), así que lo que aportaría es **calidad de la señal** — cambiar una afirmación extraída por IA por una observación determinística del IaC— más `ID.RA-09`, que sigue descubierta. El adaptador solo lee bloques `resource`: exige una ruta de parseo nueva, un tipo de evidencia y fixtures en los tres paquetes. | docs/04 §3 |
 
 ### Subcategorías que el mapeo no podía declarar: cerrado
 
@@ -91,6 +90,12 @@ La Oleada 0 (docs/09 §70) dejó aquí tres subcategorías que las reglas no evi
 están hechas**: `DE.AE-03` en docs/09 §75 (`log.pattern@2` conserva los orígenes del patrón) y las
 otras dos en §76 (campos nuevos de `process_defined`), junto con `ID.IM-04`, que la Oleada A había
 dejado fuera por el mismo motivo.
+
+**AMP-07 también está cerrado** (docs/09 §90): el adaptador de Terraform leía solo bloques
+`resource` aunque el parser ya le entregaba `module`, `provider` y `terraform`. La Oleada C añadió
+esa segunda ruta de parseo, generalizó los rangos de línea a cualquier tipo de bloque y cubrió
+`ID.RA-09` con `tf.module.source` y `tf.provider.version`. `GV.SC-07`, que la Oleada B cubrió por vía
+documental, pasa a tener además respaldo determinístico.
 
 Esta sección se mantiene vacía a propósito: si una oleada futura vuelve a descartar una
 subcategoría, su motivo y su coste van aquí, no en la cabeza de nadie.

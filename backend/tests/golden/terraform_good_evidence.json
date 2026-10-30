@@ -101,6 +101,73 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
+      "file": "versiones.tf",
+      "line_end": 27,
+      "line_start": 23
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "module.etiquetas",
+    "subject_type": "module",
+    "type_id": "tf.module.source",
+    "type_version": 1,
+    "value": {
+      "estado": "propio",
+      "fijada": false,
+      "nombre": "etiquetas",
+      "origen": "local",
+      "source": "./modulos/etiquetas",
+      "version": null
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "versiones.tf",
+      "line_end": 20,
+      "line_start": 14
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "module.red",
+    "subject_type": "module",
+    "type_id": "tf.module.source",
+    "type_version": 1,
+    "value": {
+      "estado": "fijado",
+      "fijada": true,
+      "nombre": "red",
+      "origen": "registry",
+      "source": "terraform-aws-modules/vpc/aws",
+      "version": "5.8.1"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "versiones.tf",
+      "line_end": 12,
+      "line_start": 3
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "provider.aws",
+    "subject_type": "provider",
+    "type_id": "tf.provider.version",
+    "type_version": 1,
+    "value": {
+      "estado": "fijado",
+      "fijada": true,
+      "proveedor": "aws",
+      "restriccion": "~> 5.40"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
       "file": "main.tf",
       "line_end": 33,
       "line_start": 27

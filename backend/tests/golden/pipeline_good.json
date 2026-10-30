@@ -116,6 +116,18 @@
     },
     {
       "base_score": 100.0,
+      "criterion_id": "CRI-ID-06",
+      "estado": "evaluado",
+      "evidence": [
+        "tf.module.source|module.etiquetas",
+        "tf.module.source|module.red",
+        "tf.provider.version|provider.aws"
+      ],
+      "explanation": "Toda la procedencia esta fijada: 1 modulo(s) de terceros y 1 propio(s), 1 proveedor(es) declarado(s). Cada modulo de terceros declara su version (o un `ref` en el `source`) y cada proveedor su restriccion.",
+      "final_score": 100.0
+    },
+    {
+      "base_score": 100.0,
       "criterion_id": "CRI-PR-01",
       "estado": "evaluado",
       "evidence": [
@@ -265,14 +277,15 @@
       "score": null
     },
     {
-      "cobertura": 0.0,
+      "cobertura": 0.1667,
       "conteo_estados": {
+        "evaluado": 1,
         "evidencia_insuficiente": 5
       },
       "nivel": "funcion",
-      "provisional": false,
+      "provisional": true,
       "ref": "ID",
-      "score": null
+      "score": 100.0
     },
     {
       "cobertura": 0.8571,
@@ -307,15 +320,15 @@
     }
   ],
   "global": {
-    "cobertura": 0.25,
+    "cobertura": 0.2759,
     "conteo_estados": {
-      "evaluado": 7,
+      "evaluado": 8,
       "evidencia_insuficiente": 21
     },
     "nivel": "global",
     "provisional": true,
     "ref": "global",
-    "score": 97.4
+    "score": 98.26
   },
   "tier": {
     "estimable": false,

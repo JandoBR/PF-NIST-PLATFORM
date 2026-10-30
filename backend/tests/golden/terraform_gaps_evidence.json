@@ -61,6 +61,52 @@
     "created_by": "adapter:terraform",
     "limitations": null,
     "locator": {
+      "file": "versiones.tf",
+      "line_end": 7,
+      "line_start": 3
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "module.legacy_red",
+    "subject_type": "module",
+    "type_id": "tf.module.source",
+    "type_version": 1,
+    "value": {
+      "estado": "sin_fijar",
+      "fijada": false,
+      "nombre": "legacy_red",
+      "origen": "git",
+      "source": "github.com/acme-interno/terraform-red",
+      "version": null
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "versiones.tf",
+      "line_end": 11,
+      "line_start": 9
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "module.reportes",
+    "subject_type": "module",
+    "type_id": "tf.module.source",
+    "type_version": 1,
+    "value": {
+      "estado": "sin_fijar",
+      "fijada": false,
+      "nombre": "reportes",
+      "origen": "git",
+      "source": "git::https://git.acme-interno.local/infra/reportes.git",
+      "version": null
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
       "file": "main.tf",
       "line_end": 21,
       "line_start": 15
