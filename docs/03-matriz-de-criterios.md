@@ -95,7 +95,7 @@ Resumen de cobertura del catálogo:
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** institucionalizar una revisión periódica de la estrategia basada en resultados y registrar los ajustes.
 
-### CRI-GV-05 — Contexto organizacional
+### CRI-GV-05 — Contexto organizacional declarado
 - **Subcategorías:** GV.OC-01 … GV.OC-05 (las cinco) · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no
 - **Evidencias:** `doc.claim(tipo=org_context)`
 - **Regla:** un campo del contenido por subcategoría —`mision` (`GV.OC-01`), `partes_interesadas` (`GV.OC-02`), `requisitos_legales` (`GV.OC-03`), `servicios_criticos` (`GV.OC-04`), `dependencias` (`GV.OC-05`)—, así que cada una se declara solo si su dato viene.
@@ -294,7 +294,7 @@ Resumen de cobertura del catálogo:
   - Sin recursos evaluables → insuficiente.
 - **Recomendación:** habilitar CloudTrail multirregión y logging de sistema con retención definida.
 
-### CRI-PR-07 — Concienciación y formación
+### CRI-PR-07 — Concienciación y formación en seguridad
 - **Subcategorías:** PR.AT-01, PR.AT-02 · **Tipo:** Proceso · **Peso:** 3 · **IA:** sí · **MVP:** no
 - **Evidencias:** `doc.claim(tipo=training_program)`
 - **Regla:** `programa` es la puerta (`PR.AT-01`); `roles_especializados` es lo que sostiene `PR.AT-02` (formación específica para roles con acceso privilegiado o funciones de seguridad).
