@@ -3055,3 +3055,43 @@ locators posteriores de ese archivo. Se comprobó que en los goldens de evidenci
 amenazas ambientales, es física y queda fuera del alcance declarado— y la cobertura a **79/106
 (74,5 %)**, con PROTECT en 12/22.
 
+## 93. Oleada C (4/5): el dato en viaje, y un ancla que baja a propósito
+
+`PR.DS-02` ("se protege el dato en tránsito") era la última subcategoría de `PR.DS` alcanzable: la
+que queda, `PR.DS-10` (dato **en uso**), pide enclaves o memoria cifrada y no está en el alcance de
+los adaptadores.
+
+**Sin criterio nuevo.** En reposo y en tránsito son las dos mitades del mismo control, y
+`CRI-PR-01` ya compone evidencia de RDS y de S3. Se retituló a "Cifrado de datos en reposo y en
+tránsito" y pasó a `version: 2`. Un criterio cuyo título dice menos de lo que evalúa produce
+recomendaciones incompletas — la lección de §78.
+
+**Las dos mitades no son simétricas, y la rúbrica lo refleja.** Un fallo en reposo es una base de
+datos entera legible por quien consiga el volumen; un canal en claro es grave, pero acotado a lo que
+pasa por él. Así que el tránsito **no** es una rama aparte: es una **compuerta sobre el tramo alto**.
+Con todo cifrado en reposo, 100 exige además observar el canal, 75 si el IaC no dice nada de él, y 50
+si se observa un listener HTTP. Pero un `storage_encrypted = false` sigue mandando por D7: un
+listener HTTPS no lo sube. Hay un test que lo fija.
+
+**Y el ancla del 100 bajó.** `good` seguiría en 100 solo porque se le añadió el listener HTTPS y el
+`rds.force_ssl`; sin eso habría caído a 75. Eso es lo que debe pasar: declarar una subcategoría más
+tiene que **costar más evidencia**, o la cobertura sube y el puntaje se abarata a la vez, que es la
+combinación que no se puede defender (§77). Cuatro tests de otros archivos cayeron pidiendo el 100
+antiguo y se actualizaron a 75 **sin tocar la regla**: eran la consecuencia correcta, no una
+regresión.
+
+**Dos señales, y una decisión sobre el ruido.** El listener se lee del `protocol` y la `ssl_policy`;
+la base, del parámetro `rds.force_ssl` de un `aws_db_parameter_group`. Ese segundo emisor **solo
+emite si el grupo declara ese parámetro**: un grupo que ajusta `log_statement` no dice nada sobre el
+tránsito, y emitir `unknown` por cada grupo de parámetros del proyecto habría llenado los hallazgos
+de ruido — el mismo criterio que llevó a `no_declarado` en §92.
+
+**`aws_lb_listener` y `aws_db_parameter_group` entran en `CONFIG_RESOURCE_TYPES`:** configuran a otro
+recurso (un balanceador, una base), no son activos que un inventario deba listar. `aws_lb` sí lo es,
+y está en el inventario de `good` — es la cuarta vez en esta oleada que un tipo de recurso nuevo pasa
+por el denominador de `CRI-ID-01`, y conviene decirlo: **cada señal técnica nueva tiene ese peaje**.
+
+**Verificación:** 756 tests (9 nuevos), `ruff` limpio. En el golden de `good` el único cambio del
+pipeline es la explicación —el 100 se sostiene con la evidencia nueva— y en el de evidencia solo hay
+adiciones. `PR.DS` pasa de 2/4 a 3/4 y la cobertura a **80/106 (75,5 %)**, con PROTECT en 13/22.
+

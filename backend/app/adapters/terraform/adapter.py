@@ -34,6 +34,8 @@ _HANDLED_TYPES = {
     "aws_iam_account_password_policy",
     "aws_iam_policy",
     "aws_autoscaling_group",
+    "aws_lb_listener",
+    "aws_db_parameter_group",
 }
 
 
@@ -45,6 +47,9 @@ CONFIG_RESOURCE_TYPES = frozenset(
         "aws_s3_bucket_versioning",
         # Configura la cuenta entera, no es un activo que un inventario deba listar.
         "aws_iam_account_password_policy",
+        # Configuran a otro recurso (un balanceador, una base), no son activos propios.
+        "aws_lb_listener",
+        "aws_db_parameter_group",
     }
 )
 
@@ -89,6 +94,7 @@ _WATCHED_ATTRS: dict[str, set[str]] = {
     "aws_security_group": {"cidr_blocks", "ipv6_cidr_blocks", "from_port", "to_port"},
     "aws_cloudtrail": {"enable_logging", "is_multi_region_trail"},
     "aws_autoscaling_group": {"min_size", "max_size", "desired_capacity"},
+    "aws_lb_listener": {"protocol", "ssl_policy"},
     "aws_iam_account_password_policy": {
         "minimum_password_length",
         "require_symbols",
@@ -396,6 +402,14 @@ def _booleano(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
+def _como_lista(value: Any) -> list:
+    """Un bloque repetible de HCL: hcl2 lo da como lista, pero como dict si aparece una sola vez."""
+
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
 def module_pinned(source: Any, version: Any) -> bool:
     """Si la procedencia del modulo esta fijada a algo reproducible.
 
@@ -428,7 +442,9 @@ def module_pinned(source: Any, version: Any) -> bool:
 #: (politica de contrasenas y exigencia de MFA leida del documento de la politica).
 #: v13: `tf.resilience.config` desde `multi_az`/`replicate_source_db` de RDS y desde
 #: `aws_autoscaling_group` (alta disponibilidad y capacidad elastica).
-ADAPTER_VERSION = "13"
+#: v14: `tf.transit_encryption.config` desde el `protocol`/`ssl_policy` de un `aws_lb_listener` y
+#: desde `rds.force_ssl` en un `aws_db_parameter_group`.
+ADAPTER_VERSION = "14"
 
 
 class TerraformAdapter:
@@ -671,6 +687,16 @@ class TerraformAdapter:
                 *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
             ]
 
+        if resource_type == "aws_lb_listener":
+            return [
+                self._listener_transit(file_path, subject_ref, attrs),
+                *self._unresolved_for(file_path, resource_type, subject_ref, attrs),
+            ]
+
+        if resource_type == "aws_db_parameter_group":
+            forzado = self._parameter_group_transit(file_path, subject_ref, attrs)
+            return [forzado] if forzado is not None else []
+
         if resource_type == "aws_autoscaling_group":
             return [
                 self._autoscaling_capacity(file_path, subject_ref, attrs),
@@ -894,6 +920,73 @@ class TerraformAdapter:
             file_path=file_path,
             limitations=limitations,
         )
+
+    def _listener_transit(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
+        """Cifrado en transito de un listener: su protocolo y su politica TLS (PR.DS-02)."""
+
+        protocolo = attrs.get("protocol")
+        politica = attrs.get("ssl_policy")
+        if not isinstance(protocolo, str) or _is_expression(protocolo):
+            estado: str | None = "unknown"
+        elif protocolo.upper() in ("HTTPS", "TLS"):
+            estado = "enabled"
+        else:
+            estado = "disabled"
+        return self._make_evidence(
+            type_id="tf.transit_encryption.config",
+            subject_type="aws_lb_listener",
+            subject_ref=subject_ref,
+            value={
+                "mecanismo": "listener",
+                "protocolo": protocolo if isinstance(protocolo, str) else None,
+                "politica": politica
+                if isinstance(politica, str) and not _is_expression(politica)
+                else None,
+                "estado": estado,
+            },
+            file_path=file_path,
+            limitations=(
+                None if estado != "unknown" else "protocol no literal: no se puede leer el canal"
+            ),
+        )
+
+    def _parameter_group_transit(
+        self, file_path: Path, subject_ref: str, attrs: dict
+    ) -> EvidenceInstance | None:
+        """`rds.force_ssl = 1` en un grupo de parametros: la base rechaza conexiones en claro.
+
+        Solo se emite si el grupo declara ese parametro. Un grupo que ajusta otras cosas no dice
+        nada sobre el transito, y emitir `unknown` por cada uno seria ruido.
+        """
+
+        for parametro in _como_lista(attrs.get("parameter")):
+            if not isinstance(parametro, dict):
+                continue
+            if str(parametro.get("name", "")).strip() != "rds.force_ssl":
+                continue
+            valor = parametro.get("value")
+            if _is_expression(valor):
+                estado = "unknown"
+            else:
+                estado = "enabled" if str(valor).strip() in ("1", "true") else "disabled"
+            return self._make_evidence(
+                type_id="tf.transit_encryption.config",
+                subject_type="aws_db_parameter_group",
+                subject_ref=subject_ref,
+                value={
+                    "mecanismo": "rds_force_ssl",
+                    "protocolo": None,
+                    "politica": None,
+                    "estado": estado,
+                },
+                file_path=file_path,
+                limitations=(
+                    None
+                    if estado != "unknown"
+                    else "valor de rds.force_ssl no literal: no se puede valorar"
+                ),
+            )
+        return None
 
     def _rds_resilience(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
         """Alta disponibilidad de una base: `multi_az` o ser replica de otra (PR.IR-03).

@@ -10,7 +10,9 @@
 #     documento de una politica IAM (docs/09 §91).
 # v8: tf.resilience.config: alta disponibilidad (multi_az / replica) y capacidad elastica
 #     (aws_autoscaling_group), para PR.IR-03 y PR.IR-04 (docs/09 §92).
-version: 8
+# v9: tf.transit_encryption.config: como viaja el dato (listener TLS, rds.force_ssl), PR.DS-02
+#     (docs/09 §93).
+version: 9
 tipos:
   - id: tf.resource.present
     version: 1
@@ -144,6 +146,26 @@ tipos:
     requiere_locator: true
     estado: published
     publicado: "2026-09-30"
+
+  - id: tf.transit_encryption.config
+    version: 1
+    descripcion: >
+      Como viaja el dato. `mecanismo: listener` lee el `protocol` y la `ssl_policy` de un
+      `aws_lb_listener` (HTTPS/TLS -> enabled, cualquier otro -> disabled); `mecanismo:
+      rds_force_ssl` lee el parametro `rds.force_ssl` de un `aws_db_parameter_group`, y solo se
+      emite si el grupo declara ese parametro: uno que ajusta otras cosas no dice nada del transito.
+    valor_schema:
+      type: object
+      required: [mecanismo, estado]
+      properties:
+        mecanismo: { enum: [listener, rds_force_ssl] }
+        protocolo: { type: [string, "null"] }
+        politica: { type: [string, "null"] }
+        estado: { enum: [enabled, disabled, "unknown"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-10-29"
 
   - id: tf.resilience.config
     version: 1

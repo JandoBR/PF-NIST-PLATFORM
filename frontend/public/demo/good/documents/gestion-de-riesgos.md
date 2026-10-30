@@ -26,9 +26,9 @@ registro de riesgos con su responsable y plan de tratamiento. El responsable del
 El inventario de activos incluye: aws_db_instance (base de datos de clientes), aws_s3_bucket
 (repositorio de documentos), aws_security_group (reglas de red de la aplicacion), aws_cloudtrail
 (registro de auditoria), aws_iam_role (identidad de la aplicacion en produccion), aws_iam_policy
-(politicas de acceso, incluida la que exige MFA) y aws_autoscaling_group (capacidad de la capa de
-aplicacion). La base de datos de clientes tiene criticidad alta; el repositorio de documentos,
-criticidad media.
+(politicas de acceso, incluida la que exige MFA), aws_autoscaling_group (capacidad de la capa de
+aplicacion) y aws_lb (balanceador de la aplicacion, que solo escucha en HTTPS). La base de datos de
+clientes tiene criticidad alta; el repositorio de documentos, criticidad media.
 
 ## Inventario de datos
 

@@ -39,7 +39,7 @@ Resumen de cobertura del catálogo:
 
 > **Estado de implementación:** **31 de 31** criterios implementados (CR-01…CR-05 y las Oleadas A, B
 > y C, docs/11 §C). Cobertura del marco medida por el propio sistema en `GET /methodology`
-> (`cobertura_implementacion`): **79 de 106 subcategorías (74,5 %) y las 22 categorías del CSF 2.0**,
+> (`cobertura_implementacion`): **80 de 106 subcategorías (75,5 %) y las 22 categorías del CSF 2.0**,
 > es decir `categorias_sin_criterio` vacía, con la **función Gobernar completa (31/31)**.
 > **Las reglas de esta matriz describen el código** (`backend/app/evaluation/rules/`): si una regla cambia, se
 > actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-24 (docs/09 §77); en esa
@@ -194,11 +194,10 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** fijar la procedencia del código de terceros — `version` en cada módulo del
   registry, `?ref=<tag|sha>` en los de git, y una restricción de versión por proveedor.
 
-### CRI-PR-01 — Cifrado de datos en reposo
-- **Subcategorías:** PR.DS-01 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Privacidad:** Protect-P
-- **Evidencias:** `tf.encryption.config` (RDS, S3), `doc.claim(tipo=policy_exists)`
+### CRI-PR-01 — Cifrado de datos en reposo y en tránsito
+- **Subcategorías:** PR.DS-01, PR.DS-02 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Privacidad:** Protect-P
+- **Evidencias:** `tf.encryption.config` (RDS, S3), `tf.transit_encryption.config`, `doc.claim(tipo=policy_exists)`
 - **Regla (por recurso soportado):**
-  - Todos los recursos aplicables con evidencia `enabled` → 100.
   - Alguno `disabled` y alguno `enabled` → 25: implementación parcial (prevalece sobre la política).
   - Ningún recurso resuelto cifra (todos `disabled`) → 0: ausencia explícita.
   - Un recurso aplicable **sin evidencia de cifrado** o con estado `unknown` (p. ej. un bucket sin
@@ -206,7 +205,17 @@ Resumen de cobertura del catálogo:
     se puede afirmar el 100. Un `disabled` explícito sí prevalece (0/25) y se informa.
   - Sin recursos del tipo → `no_aplicable` con motivo.
   - Política documental sin recursos: no eleva el puntaje técnico; alimenta contexto y el hallazgo.
-- **Recomendación:** habilitar cifrado gestionado por KMS en RDS y S3; verificar mecanismo y llave.
+- **Tramo alto, con todo cifrado en reposo** (`PR.DS-02` decide, docs/09 §93):
+  - 100: además una observación de canal cifrado (listener HTTPS/TLS o `rds.force_ssl = 1`).
+  - 75: nada en el IaC dice cómo viaja el dato.
+  - 50: un canal en claro observado (un listener HTTP).
+- **Notas:** el tránsito es una **compuerta sobre el tramo alto, no una rama aparte**. Las dos
+  mitades no son simétricas: un fallo en reposo es una base de datos entera legible, así que sigue
+  dominando por D7 — un listener HTTPS no sube un `storage_encrypted = false`. El ancla del 100
+  **bajó** al declarar `PR.DS-02`: declarar más subcategorías tiene que costar más evidencia, o la
+  cobertura sube y el puntaje se abarata a la vez (docs/09 §77).
+- **Recomendación:** habilitar cifrado gestionado por KMS en RDS y S3, y cifrar el canal — un
+  listener HTTPS con política TLS moderna y `rds.force_ssl = 1` en el grupo de parámetros.
 
 ### CRI-PR-08 — Gestión de identidades y autenticación
 - **Subcategorías:** PR.AA-01, PR.AA-03 · **Tipo:** Técnico · **Peso:** 5 · **IA:** no · **MVP:** no · **Privacidad:** Protect-P

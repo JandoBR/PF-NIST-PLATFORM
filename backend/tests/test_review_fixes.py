@@ -140,11 +140,12 @@ def test_id01_complete_inventory_scores_100():
                 "aws_iam_role",
                 "aws_iam_policy",
                 "aws_autoscaling_group",
+                "aws_lb",
             ]
         },
     )
     result = id01_asset_inventory.evaluate([*evidence, inventario])
-    assert result.final_score == 100 and "(7/7)" in result.explanation
+    assert result.final_score == 100 and "(8/8)" in result.explanation
 
 
 # -- Ansible: modo octal sin comillas -----------------------------------------------------------

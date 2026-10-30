@@ -132,9 +132,11 @@
       "estado": "evaluado",
       "evidence": [
         "tf.encryption.config|aws_db_instance.principal",
-        "tf.encryption.config|aws_s3_bucket.documentos"
+        "tf.encryption.config|aws_s3_bucket.documentos",
+        "tf.transit_encryption.config|aws_db_parameter_group.principal",
+        "tf.transit_encryption.config|aws_lb_listener.https"
       ],
-      "explanation": "Cifrado habilitado en todos los recursos: aws_db_instance.principal, aws_s3_bucket.documentos.",
+      "explanation": "Cifrado en reposo en todos los recursos (aws_db_instance.principal, aws_s3_bucket.documentos) y en transito en aws_lb_listener.https, aws_db_parameter_group.principal.",
       "final_score": 100.0
     },
     {

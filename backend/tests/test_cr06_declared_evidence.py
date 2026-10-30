@@ -394,7 +394,8 @@ def test_pr01_policy_never_raises_score_but_is_cited_next_to_a_gap(tmp_path):
     assert claim.id in resultado.evidence_ids
 
     ok = _parse(tmp_path, 'resource "aws_db_instance" "d" { storage_encrypted = true }')
-    assert pr01_encryption.evaluate([*ok, claim]).final_score == 100
+    # 75: cifrado en reposo sin nada que diga como viaja el dato (PR.DS-02, docs/09 §93).
+    assert pr01_encryption.evaluate([*ok, claim]).final_score == 75
 
 
 def test_de01_cites_observation_window_without_changing_score():
