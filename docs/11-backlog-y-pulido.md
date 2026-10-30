@@ -125,15 +125,21 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **28 de 28** criterios de docs/03 (`criteria.yml` v19). Cobertura por función:
-GV 6/6 · ID 5/5 · PR 7/7 · DE 3/3 · RS 4/4 · RC 3/3.
-- **Cobertura del marco (AMP-04):** **74 de 106 subcategorías (69,8 %), 22 de 22 categorías y 10
+El catálogo implementa **31 de 31** criterios de docs/03 (`criteria.yml` v24). Cobertura por función:
+GV 6/6 · ID 6/6 · PR 9/9 · DE 3/3 · RS 4/4 · RC 3/3.
+- **Cobertura del marco (AMP-04):** **81 de 106 subcategorías (76,4 %), 22 de 22 categorías y 10
   completas**, calculada por el sistema (`GET /methodology`) y visible en el dashboard
-  (docs/09 §70-§78). `categorias_sin_criterio` quedó vacía con la Oleada A y la Oleada B dejó la
-  **función Gobernar completa (31/31)**, además de cerrar la deuda de SUB-01…SUB-03 de docs/12 §5.
-  Lo que falta ahora está en `ID`, `PR` y `DE`: las categorías más lejanas son `PR.AA` (1/6),
-  `PR.PS` (2/6), `PR.IR` (1/4), `ID.RA` (5/10) e `ID.AM` (4/7), y en su mayoría pedirían señales
-  técnicas que los adaptadores todavía no leen, no más campos de afirmación.
+  (docs/09 §70-§94). `categorias_sin_criterio` quedó vacía con la Oleada A, la Oleada B dejó la
+  **función Gobernar completa (31/31)** y la Oleada C sacó a **Proteger de 8/22 a 14/22** con señal
+  técnica nueva en los adaptadores (docs/09 §90-§94).
+  Cobertura por función en subcategorías: GV 31/31 · RS 11/13 · ID 14/21 · PR 14/22 · RC 5/8 ·
+  DE 6/11.
+  Lo que falta se reparte así (`categorias_incompletas`): `ID.RA` (4), `ID.AM` (3), `PR.AA` (3),
+  `PR.PS` (3), `DE.CM` (3), `DE.AE` (2), `RC.RP` (2), y una sola en `PR.DS`, `PR.IR`, `RS.AN`,
+  `RS.CO` y `RC.CO`. **Una parte ya no es alcanzable por diseño** —acceso físico, amenazas
+  ambientales, actividad del personal, hardware— y está anotada con su motivo en docs/12 §5. El
+  resto se divide entre señales de red que los adaptadores aún no leen (`ID.AM-03`) y procesos que
+  solo un documento puede evidenciar.
 - **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
 
@@ -191,6 +197,15 @@ GV 6/6 · ID 5/5 · PR 7/7 · DE 3/3 · RS 4/4 · RC 3/3.
   respuesta. (La paginación por cursor y los filtros en listados siguen en docs/12 §1.)
 
 > Descartados para el prototipo (API-01 `sources`+`run` separados, API-02 `GET /scores`): ver **docs/12 §1**.
+
+- [ ] API-05 · **Una evaluación no debe quedar `pendiente` si no se puede encolar su job** (P2).
+  Encontrado al verificar la Oleada C en el navegador, con Redis apagado: `POST /assessments` crea
+  la fila, falla al encolar con `ConnectionRefusedError` y devuelve 500, dejando la evaluación en
+  `pendiente` para siempre y sin job. Es la **misma forma** del bug que `_parse_context`
+  (`routes_assessments.py`) ya arregló para un `context` con JSON inválido —crear primero y validar
+  después—, pero por la rama de infraestructura: ahí la validación se adelantó, aquí haría falta
+  encolar antes de confirmar, o marcar la evaluación como `error` cuando el encolado falla. No es de
+  la Oleada C y no la afecta: solo se ve sin Redis.
 
 ## F. Seguridad / endurecimiento
 

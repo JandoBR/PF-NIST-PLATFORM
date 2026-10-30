@@ -6,9 +6,11 @@ solo los del archivo recien subido (`core/operations.py`). Un stream continuo
 real con ventanas deslizantes e ingesta parcial es evolucion futura (docs/08 §11); el contrato
 de evidencia (`log.window`) ya distingue completo/incompleto para cuando eso exista.
 
-`incident_triaged` (consumido por el disparador D2) y `containment_done` (solo contexto: ningun
-criterio ni disparador lo usa todavia, ver docs/09 §53) se agregan igual, para que queden como
-evidencia `log.pattern` en vez de descartarse al parsear (docs/11 FN-08).
+`incident_triaged` lo consume el disparador D2, y `containment_done` lo consume `CRI-RS-04`
+(contencion/erradicacion) desde `criteria.yml` v13 (docs/09 §72): ya no es un patron de solo
+contexto, como decia docs/09 §53 y como este comentario afirmo hasta la Oleada C. Los dos se
+agregan igual que el resto, para que queden como evidencia `log.pattern` en vez de descartarse al
+parsear (docs/11 FN-08).
 
 `recovery_communicated` se agrega como siente patron (existencia simple) aunque docs/06 §3 no lo
 lista entre los "patrones iniciales": CRI-RC-03 y el disparador D5 (docs/08 §5) lo necesitan.

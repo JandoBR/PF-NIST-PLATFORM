@@ -256,34 +256,6 @@ criterios:
       transito: { en_claro: 50, sin_observacion: 75, cifrado: 100 }
       tipos_afirmacion: [policy_exists]
 
-  - id: CRI-PR-08
-    version: 1
-    titulo: "Gestion de identidades y autenticacion"
-    tipo: tecnico
-    funcion: PR
-    categorias: [PR.AA]
-    subcategorias: [PR.AA-01, PR.AA-03]
-    peso: 5
-    ai_adjustable: false
-    evidencias: [tf.identity.config@1, tf.resource.present@1]
-    recomendacion: "Declarar las identidades en IaC y endurecer la autenticacion: politica de contrasenas de al menos 14 caracteres (CIS AWS) y una politica que exija `aws:MultiFactorAuthPresent`."
-    regla:
-      tipo: identidades_y_autenticacion
-
-  - id: CRI-PR-09
-    version: 1
-    titulo: "Resiliencia y capacidad de la plataforma"
-    tipo: tecnico
-    funcion: PR
-    categorias: [PR.IR]
-    subcategorias: [PR.IR-03, PR.IR-04]
-    peso: 3
-    ai_adjustable: false
-    evidencias: [tf.resilience.config@1]
-    recomendacion: "Declarar alta disponibilidad (`multi_az` o una replica de lectura) y capacidad elastica (un grupo de autoescalado con `max_size` mayor que `min_size`)."
-    regla:
-      tipo: resiliencia_y_capacidad
-
   - id: CRI-PR-02
     version: 1
     titulo: "Backups configurados y protegidos"
@@ -374,6 +346,34 @@ criterios:
     regla:
       tipo: formacion
       tipos_afirmacion: [training_program]
+
+  - id: CRI-PR-08
+    version: 1
+    titulo: "Gestion de identidades y autenticacion"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.AA]
+    subcategorias: [PR.AA-01, PR.AA-03]
+    peso: 5
+    ai_adjustable: false
+    evidencias: [tf.identity.config@1, tf.resource.present@1]
+    recomendacion: "Declarar las identidades en IaC y endurecer la autenticacion: politica de contrasenas de al menos 14 caracteres (CIS AWS) y una politica que exija `aws:MultiFactorAuthPresent`."
+    regla:
+      tipo: identidades_y_autenticacion
+
+  - id: CRI-PR-09
+    version: 1
+    titulo: "Resiliencia y capacidad de la plataforma"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.IR]
+    subcategorias: [PR.IR-03, PR.IR-04]
+    peso: 3
+    ai_adjustable: false
+    evidencias: [tf.resilience.config@1]
+    recomendacion: "Declarar alta disponibilidad (`multi_az` o una replica de lectura) y capacidad elastica (un grupo de autoescalado con `max_size` mayor que `min_size`)."
+    regla:
+      tipo: resiliencia_y_capacidad
 
   - id: CRI-DE-01
     version: 1
