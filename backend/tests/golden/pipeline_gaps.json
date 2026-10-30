@@ -191,6 +191,17 @@
       "final_score": null
     },
     {
+      "base_score": 0.0,
+      "criterion_id": "CRI-PR-08",
+      "estado": "no_implementado",
+      "evidence": [
+        "tf.identity.config|aws_iam_account_password_policy.cuenta",
+        "tf.resource.present|aws_iam_user.operador"
+      ],
+      "explanation": "La politica de contrasenas declara una longitud minima de 6 caracteres: por debajo de cualquier umbral defendible. 1 recurso(s) IAM declarado(s) (aws_iam_user).",
+      "final_score": 0.0
+    },
+    {
       "base_score": null,
       "criterion_id": "CRI-RC-01",
       "estado": "evidencia_insuficiente",
@@ -280,16 +291,16 @@
       "score": 25.0
     },
     {
-      "cobertura": 0.7143,
+      "cobertura": 0.75,
       "conteo_estados": {
         "evaluado": 1,
         "evidencia_insuficiente": 2,
-        "no_implementado": 4
+        "no_implementado": 5
       },
       "nivel": "funcion",
       "provisional": false,
       "ref": "PR",
-      "score": 3.75
+      "score": 3.0
     },
     {
       "cobertura": 0.0,
@@ -313,16 +324,16 @@
     }
   ],
   "global": {
-    "cobertura": 0.2069,
+    "cobertura": 0.2333,
     "conteo_estados": {
       "evaluado": 2,
       "evidencia_insuficiente": 23,
-      "no_implementado": 4
+      "no_implementado": 5
     },
     "nivel": "global",
     "provisional": true,
     "ref": "global",
-    "score": 14.38
+    "score": 14.0
   },
   "tier": {
     "estimable": false,

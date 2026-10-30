@@ -32,6 +32,7 @@ ESPERADO = {
         "CRI-PR-04": 25,  # PermitRootLogin yes
         "CRI-PR-05": 0,  # base publica y bucket con un flag en false
         "CRI-PR-06": INSUFICIENTE,
+        "CRI-PR-08": 0,  # politica de contrasenas de 6 caracteres declarada en el IaC
         "CRI-DE-01": INSUFICIENTE,
     },
     "mid": {
@@ -42,6 +43,7 @@ ESPERADO = {
         "CRI-PR-04": 25,  # root deshabilitado, contrasena todavia permitida
         "CRI-PR-05": INSUFICIENTE,  # el bucket de exportes no tiene bloque
         "CRI-PR-06": 75,  # CloudTrail de una sola region
+        "CRI-PR-08": 25,  # 10 caracteres: por debajo de los 14 del CIS AWS
         "CRI-DE-01": 75,
     },
     "good": {
@@ -52,6 +54,7 @@ ESPERADO = {
         "CRI-PR-04": 100,
         "CRI-PR-05": 50,  # bloqueo parcial en el bucket de logs
         "CRI-PR-06": 100,
+        "CRI-PR-08": 100,  # 14 caracteres y una politica que exige MFA
         "CRI-DE-01": 100,
     },
 }

@@ -6,7 +6,9 @@
 #     calculaban y se descartaban al construir la evidencia (docs/09 §75).
 # v6: tf.module.source y tf.provider.version: procedencia del codigo de terceros, leida de los
 #     bloques `module` y `terraform { required_providers }` que el adaptador no miraba (docs/09 §90).
-version: 6
+# v7: tf.identity.config: politica de contrasenas de la cuenta y exigencia de MFA leida del
+#     documento de una politica IAM (docs/09 §91).
+version: 7
 tipos:
   - id: tf.resource.present
     version: 1
@@ -140,6 +142,31 @@ tipos:
     requiere_locator: true
     estado: published
     publicado: "2026-09-30"
+
+  - id: tf.identity.config
+    version: 1
+    descripcion: >
+      Como se autentica la cuenta. `tipo: politica_de_contrasenas` trae los atributos de
+      `aws_iam_account_password_policy`; `tipo: mfa` dice si el documento de una politica IAM exige
+      la condicion `aws:MultiFactorAuthPresent`. En AWS no hay un atributo "exigir MFA", asi que es
+      la unica lectura deterministica posible. Un documento no literal (`jsonencode`, un `data`
+      source) da `estado: unknown`, nunca `mfa_requerido: false`.
+    valor_schema:
+      type: object
+      required: [tipo, estado]
+      properties:
+        tipo: { enum: [politica_de_contrasenas, mfa] }
+        longitud_minima: { type: [integer, "null"] }
+        requiere_simbolos: { type: [boolean, "null"] }
+        requiere_numeros: { type: [boolean, "null"] }
+        rotacion_dias: { type: [integer, "null"] }
+        reutilizacion_bloqueada: { type: [integer, "null"] }
+        mfa_requerido: { type: [boolean, "null"] }
+        estado: { enum: [declarado, "unknown"] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-10-29"
 
   - id: tf.module.source
     version: 1

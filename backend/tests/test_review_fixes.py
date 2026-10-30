@@ -130,10 +130,20 @@ def test_id01_complete_inventory_scores_100():
     evidence = TerraformAdapter("test", "s").parse_path(FIXTURES / "good")
     inventario = _claim(
         "data_inventory",
-        {"activos": ["aws_db_instance", "aws_s3_bucket", "aws_security_group", "aws_cloudtrail"]},
+        {
+            "activos": [
+                "aws_db_instance",
+                "aws_s3_bucket",
+                "aws_security_group",
+                "aws_cloudtrail",
+                # La Oleada C añadio identidades al fixture: un inventario completo las lista.
+                "aws_iam_role",
+                "aws_iam_policy",
+            ]
+        },
     )
     result = id01_asset_inventory.evaluate([*evidence, inventario])
-    assert result.final_score == 100 and "(4/4)" in result.explanation
+    assert result.final_score == 100 and "(6/6)" in result.explanation
 
 
 # -- Ansible: modo octal sin comillas -----------------------------------------------------------
