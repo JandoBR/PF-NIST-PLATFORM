@@ -54,7 +54,9 @@
 #      `multi_az`/`replicate_source_db` y los grupos de autoescalado (docs/09 §92).
 # v23: Oleada C (4/5) - CRI-PR-01 pasa a cubrir tambien PR.DS-02 (cifrado en transito) y su ancla
 #      del 100 baja: con todo cifrado en reposo pero sin observacion del canal, 75 (docs/09 §93).
-version: 23
+# v24: Oleada C (5/5) - CRI-PR-04 pasa a cubrir tambien PR.PS-02 (mantenimiento de software) con
+#      `an.package.state`, y su 100 exige una tarea que actualice versiones (docs/09 §94).
+version: 24
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -314,19 +316,20 @@ criterios:
       puertos_administrativos: [22, 3389]
 
   - id: CRI-PR-04
-    version: 1
-    titulo: "Configuracion segura del servidor (SSH)"
+    version: 2
+    titulo: "Configuracion y mantenimiento seguro del servidor"
     tipo: tecnico
     funcion: PR
     categorias: [PR.PS]
-    subcategorias: [PR.PS-01]
+    subcategorias: [PR.PS-01, PR.PS-02]
     peso: 3
     ai_adjustable: false
-    evidencias: [an.task.config@1, an.file.permissions@1]
-    recomendacion: "Deshabilitar login de root y autenticacion por contrasena; usar claves."
+    evidencias: [an.task.config@1, an.file.permissions@1, an.package.state@1]
+    recomendacion: "Deshabilitar login de root y autenticacion por contrasena, usar claves, y mantener el software al dia con una tarea que actualice versiones (`upgrade` o `state: latest`)."
     regla:
       tipo: sshd_directivas
       directivas: [PermitRootLogin, PasswordAuthentication]
+      mantenimiento: { sin_actualizacion: 75 }
 
   - id: CRI-PR-05
     version: 1

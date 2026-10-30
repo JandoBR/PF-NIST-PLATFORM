@@ -1,7 +1,8 @@
 """Adaptador de Ansible: YAML -> evidencias `an.*` (docs/02 §3.2).
 
 Alcance declarado: modulos `lineinfile`, `copy`, `template` (solo rutas), `file`, `service`,
-`ufw`/`iptables` (parametros basicos). Cualquier otro modulo (incluye `command`/`shell`) produce
+`ufw`/`iptables` (parametros basicos) y los gestores de paquetes `apt`/`yum`/`dnf`/`package`
+(mantenimiento de software). Cualquier otro modulo (incluye `command`/`shell`) produce
 `an.task.uninterpreted` con el motivo. Nunca se ejecuta ningun playbook ni comando (docs/02 §3.2).
 """
 
@@ -54,7 +55,19 @@ def _json_safe(value: Any) -> Any:
     return str(value)
 
 
-_SUPPORTED_MODULES = {"lineinfile", "copy", "template", "file", "service", "ufw", "iptables"}
+#: Gestores de paquetes: distintos modulos para la misma intencion, mantener el software.
+_PACKAGE_MODULES = {"apt", "yum", "dnf", "package"}
+
+_SUPPORTED_MODULES = {
+    "lineinfile",
+    "copy",
+    "template",
+    "file",
+    "service",
+    "ufw",
+    "iptables",
+    *_PACKAGE_MODULES,
+}
 
 #: Claves de control de una tarea, nunca el modulo en si (docs/02 §3.2: alcance declarado).
 _CONTROL_KEYS = {
@@ -107,7 +120,9 @@ def _any_module_key(task: dict) -> str | None:
 #: v5: acepta `!vault`/`!unsafe` y otros tags `!...`; normaliza fechas YAML a texto; `hosts`
 #: siempre es un array de strings y el BOM UTF-8 no rompe el playbook.
 #: v6: traduce modos simbolicos absolutos (`u=rw,g=r`) a octal; los relativos quedan `unknown`.
-ADAPTER_VERSION = "6"
+#: v7: los gestores de paquetes (`apt`/`yum`/`dnf`/`package`) emiten `an.package.state` en vez de
+#: caer en `an.task.uninterpreted` (mantenimiento de software, PR.PS-02).
+ADAPTER_VERSION = "7"
 
 
 _SYMBOLIC_MODE = re.compile(r"^(?:[ugoa]=[rwxXst]*)(?:,(?:[ugoa]=[rwxXst]*))*$")
@@ -269,6 +284,8 @@ class AnsibleAdapter:
             return self._file_permissions(file_path, tarea, parametros)
         if modulo == "service":
             return [self._service_state(file_path, tarea, parametros)]
+        if modulo in _PACKAGE_MODULES:
+            return [self._package_state(file_path, tarea, modulo, parametros)]
         return [self._task_config(file_path, tarea, modulo, parametros)]
 
     def _task_config(
@@ -330,6 +347,50 @@ class AnsibleAdapter:
             subject_type="service",
             subject_ref=servicio,
             value={"servicio": servicio, "estado": estado},
+            file_path=file_path,
+        )
+
+    def _package_state(
+        self, file_path: Path, tarea: str, modulo: str, parametros: dict[str, Any]
+    ) -> EvidenceInstance:
+        """Mantenimiento de software: que hace la tarea con los paquetes (PR.PS-02).
+
+        Tres intenciones distintas, y la diferencia importa:
+
+        - `actualiza`: la tarea sube versiones (`upgrade`, o `state: latest`). Es lo unico que
+          sostiene "el software se mantiene".
+        - `instala` / `elimina`: gestiona que paquetes hay, pero no dice nada sobre mantenerlos al
+          dia. Un `state: present` deja la version que ya hubiera.
+        - `desconocido`: no se pudo leer la intencion.
+        """
+
+        paquetes = parametros.get("name") or parametros.get("pkg")
+        if isinstance(paquetes, str):
+            paquetes = [paquetes]
+        elif not isinstance(paquetes, list):
+            paquetes = []
+
+        upgrade = parametros.get("upgrade")
+        state = parametros.get("state")
+        if upgrade not in (None, False, "no") or state == "latest":
+            intencion = "actualiza"
+        elif state in ("absent", "removed"):
+            intencion = "elimina"
+        elif state in ("present", "installed") or paquetes:
+            intencion = "instala"
+        else:
+            intencion = "desconocido"
+
+        return self._make_evidence(
+            type_id="an.package.state",
+            subject_type="package",
+            subject_ref=", ".join(str(p) for p in paquetes) or tarea,
+            value={
+                "modulo": modulo,
+                "paquetes": [str(p) for p in paquetes],
+                "intencion": intencion,
+                "actualiza_cache": parametros.get("update_cache") in (True, "yes"),
+            },
             file_path=file_path,
         )
 

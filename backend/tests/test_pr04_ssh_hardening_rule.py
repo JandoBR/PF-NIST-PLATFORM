@@ -33,10 +33,16 @@ def test_no_sshd_tasks_is_insufficient():
     assert result.estado == Estado.EVIDENCIA_INSUFICIENTE
 
 
-def test_both_directives_hardened_scores_100():
+def test_both_directives_hardened_without_patching_scores_75():
+    """Desde la Oleada C el 100 exige ademas mantener el software al dia (PR.PS-02, docs/09 §94).
+
+    Un sshd_config endurecido sobre un sistema sin parchear no es un servidor mantenido.
+    """
+
     claims = [_lineinfile("PermitRootLogin no"), _lineinfile("PasswordAuthentication no")]
     result = pr04_ssh_hardening.evaluate(claims)
-    assert result.final_score == 100
+    assert result.final_score == 75
+    assert "PR.PS-02" in result.explanation
 
 
 def test_only_one_directive_hardened_scores_75():

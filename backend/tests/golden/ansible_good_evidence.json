@@ -23,6 +23,27 @@
     "created_by": "adapter:ansible",
     "limitations": null,
     "locator": {
+      "file": "hardening.yml",
+      "line_end": 36,
+      "line_start": 33
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "Mantener el sistema al dia",
+    "subject_type": "package",
+    "type_id": "an.package.state",
+    "type_version": 1,
+    "value": {
+      "actualiza_cache": true,
+      "intencion": "actualiza",
+      "modulo": "apt",
+      "paquetes": []
+    }
+  },
+  {
+    "created_by": "adapter:ansible",
+    "limitations": null,
+    "locator": {
       "file": "hardening.yml"
     },
     "modality": "declarada",

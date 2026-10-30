@@ -91,6 +91,7 @@ reconoce el bloque, o se ignora registrando la limitación.
 
 | ID | value (resumen) | Uso principal |
 |---|---|---|
+| `an.package.state` | `{ modulo, paquetes, intencion, actualiza_cache }` | Intención de una tarea de gestor de paquetes (`apt`/`yum`/`dnf`/`package`). `actualiza` es la única que sostiene "el software se mantiene" (`upgrade`, o `state: latest`); un `state: present` deja la versión que ya hubiera. |
 | `an.playbook.present` | `{ archivo, plays, hosts }` | Detectar automatización existente. |
 | `an.task.config` | `{ modulo, parametros, tarea, archivo }` | Tareas declarativas interpretadas. |
 | `an.file.permissions` | `{ ruta, modo, owner? }` | Permisos sobre archivos sensibles. |

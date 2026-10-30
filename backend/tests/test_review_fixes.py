@@ -154,9 +154,11 @@ def test_id01_complete_inventory_scores_100():
 @pytest.mark.parametrize(
     ("modo", "esperado", "score"),
     [
-        ("0644", "0644", 100),  # antes: "420" -> leido como octal -> "escritura para grupo" -> 25
-        ("0600", "0600", 100),  # antes: "384" -> octal invalido -> se ignoraba
-        ('"0644"', "0644", 100),
+        # 75 y no 100: sin tarea de actualizacion de paquetes el tramo alto queda en 75 desde la
+        # Oleada C (docs/09 §94). Lo que este caso fija es el modo octal, no el tramo.
+        ("0644", "0644", 75),  # antes: "420" -> leido como octal -> "escritura para grupo" -> 25
+        ("0600", "0600", 75),  # antes: "384" -> octal invalido -> se ignoraba
+        ('"0644"', "0644", 75),
         ("0666", "0666", 25),  # este si es inseguro
     ],
 )
