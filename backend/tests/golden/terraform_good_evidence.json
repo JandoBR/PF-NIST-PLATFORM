@@ -342,6 +342,26 @@
     "limitations": null,
     "locator": {
       "file": "plataforma.tf",
+      "line_end": 84,
+      "line_start": 76
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_db_parameter_group.principal",
+    "subject_type": "aws_db_parameter_group",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "principal",
+      "tipo": "aws_db_parameter_group"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "plataforma.tf",
       "line_end": 26,
       "line_start": 18
     },
@@ -395,6 +415,46 @@
       "entorno": null,
       "nombre": "aplicacion",
       "tipo": "aws_iam_role"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": "tipo de recurso no soportado: se registra su presencia, no sus atributos",
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 67,
+      "line_start": 63
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_lb.aplicacion",
+    "subject_type": "aws_lb",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "aplicacion",
+      "tipo": "aws_lb"
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 74,
+      "line_start": 69
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_lb_listener.https",
+    "subject_type": "aws_lb_listener",
+    "type_id": "tf.resource.present",
+    "type_version": 1,
+    "value": {
+      "entorno": null,
+      "nombre": "https",
+      "tipo": "aws_lb_listener"
     }
   },
   {
@@ -534,6 +594,48 @@
         "puerto_hasta": 0
       }
     ]
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 84,
+      "line_start": 76
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_db_parameter_group.principal",
+    "subject_type": "aws_db_parameter_group",
+    "type_id": "tf.transit_encryption.config",
+    "type_version": 1,
+    "value": {
+      "estado": "enabled",
+      "mecanismo": "rds_force_ssl",
+      "politica": null,
+      "protocolo": null
+    }
+  },
+  {
+    "created_by": "adapter:terraform",
+    "limitations": null,
+    "locator": {
+      "file": "plataforma.tf",
+      "line_end": 74,
+      "line_start": 69
+    },
+    "modality": "declarada",
+    "scope": "entorno:produccion",
+    "subject_ref": "aws_lb_listener.https",
+    "subject_type": "aws_lb_listener",
+    "type_id": "tf.transit_encryption.config",
+    "type_version": 1,
+    "value": {
+      "estado": "enabled",
+      "mecanismo": "listener",
+      "politica": "ELBSecurityPolicy-TLS13-1-2-2021-06",
+      "protocolo": "HTTPS"
+    }
   },
   {
     "created_by": "adapter:terraform",

@@ -57,3 +57,28 @@ resource "aws_autoscaling_group" "aplicacion" {
   max_size         = 6
   desired_capacity = 2
 }
+
+# El dato en viaje: el balanceador solo escucha en HTTPS con una politica TLS moderna, y la base
+# rechaza conexiones sin SSL.
+resource "aws_lb" "aplicacion" {
+  name               = "aplicacion-produccion"
+  load_balancer_type = "application"
+  internal           = false
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.aplicacion.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+}
+
+resource "aws_db_parameter_group" "principal" {
+  name   = "principal-postgres"
+  family = "postgres16"
+
+  parameter {
+    name  = "rds.force_ssl"
+    value = "1"
+  }
+}

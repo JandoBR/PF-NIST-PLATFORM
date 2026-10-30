@@ -199,7 +199,9 @@ def test_reevaluate_rereads_the_same_path_and_picks_up_fixes(db_session, methodo
     after_results = {r.criterion_id: r for r in svc.load_criterion_results(db_session, after.id)}
 
     assert after.id != before.id
-    assert after_results["CRI-PR-01"].final_score == 100  # la correccion se refleja
+    # 75 y no 100: el fixture `gaps` no declara listener TLS ni `rds.force_ssl`, y desde la
+    # Oleada C el tramo alto de PR-01 exige observar tambien el transito (docs/09 §93).
+    assert after_results["CRI-PR-01"].final_score == 75  # la correccion se refleja
 
 
 def test_reevaluate_unknown_assessment_raises(db_session, methodology):
@@ -222,7 +224,7 @@ def test_compare_reports_per_criterion_and_global_change(db_session, methodology
 
     pr01_diff = next(d for d in report.diffs if d.criterion_id == "CRI-PR-01")
     assert pr01_diff.score_antes == 0
-    assert pr01_diff.score_despues == 100
+    assert pr01_diff.score_despues == 75  # sin evidencia de transito no se llega a 100
     assert pr01_diff.cambio is True
     assert pr01_diff in report.cambios
     assert report.global_despues > report.global_antes

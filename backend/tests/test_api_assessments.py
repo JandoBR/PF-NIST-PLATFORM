@@ -324,7 +324,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "backups" {
     after = api_client.get(f"/assessments/{reeval_accepted['assessment_id']}/criteria").json()
     criteria = {c["criterion_id"]: c for c in after}
 
-    assert criteria["CRI-PR-01"]["final_score"] == 100  # la correccion se refleja
+    # 75: el fixture no declara transito, y el 100 de PR-01 lo exige (docs/09 §93).
+    assert criteria["CRI-PR-01"]["final_score"] == 75  # la correccion se refleja
 
 
 def test_reevaluate_unknown_assessment_is_404(api_client):

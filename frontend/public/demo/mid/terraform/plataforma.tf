@@ -29,3 +29,11 @@ resource "aws_autoscaling_group" "aplicacion" {
   max_size         = 4
   desired_capacity = 2
 }
+
+# El balanceador sigue escuchando en claro: el dato en reposo ya se arreglo a medias, el de viaje
+# no se ha tocado.
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.aplicacion.arn
+  port              = 80
+  protocol          = "HTTP"
+}

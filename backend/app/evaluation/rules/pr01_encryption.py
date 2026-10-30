@@ -1,8 +1,17 @@
-"""CRI-PR-01 — Cifrado de datos en reposo (docs/03 §3, docs/01 §9).
+"""CRI-PR-01 — Cifrado de datos en reposo y en transito (PR.DS-01, PR.DS-02; docs/03 §3).
 
 La observacion tecnica prevalece (D7): cualquier recurso `disabled` hace caer el puntaje aunque
 otros esten `enabled`. Los recursos `unknown` no bloquean el calculo de los resueltos, pero quedan
 registrados como limitacion.
+
+**El transito es una compuerta sobre el 100, no una rama aparte.** El dato en reposo y el dato en
+viaje son las dos mitades del mismo control (`PR.DS-01` y `PR.DS-02`), pero no son simetricas: un
+fallo en reposo es una base de datos entera legible, asi que sigue dominando el puntaje por D7. El
+transito decide el tramo alto: con todo cifrado en reposo, el 100 exige ademas una observacion de
+que el canal va cifrado, y un canal en claro observado lo baja a 50.
+
+Declarar una subcategoria mas tiene que costar mas evidencia; si no, la cobertura sube y el puntaje
+se abarata a la vez, que es la combinacion que no se puede defender (docs/09 §77).
 """
 
 from __future__ import annotations
@@ -12,10 +21,10 @@ from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-PR-01"
-CRITERION_VERSION = 1
+CRITERION_VERSION = 2
 
 
-@noting_unresolved({"storage_encrypted", "sse_algorithm", "bucket"})
+@noting_unresolved({"storage_encrypted", "sse_algorithm", "bucket", "protocol", "ssl_policy"})
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     """Puntaje tecnico; la politica documental (`doc.claim(policy_exists)`) nunca lo eleva
     (docs/03 §3): solo se cita como contexto cuando hay cifrado deshabilitado."""
@@ -104,17 +113,7 @@ def _evaluate_technical(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     if enabled:
-        return CriterionResult(
-            criterion_id=CRITERION_ID,
-            criterion_version=CRITERION_VERSION,
-            estado=Estado.EVALUADO,
-            base_score=100,
-            final_score=100,
-            explanation="Cifrado habilitado en todos los recursos: "
-            + ", ".join(e.subject_ref for e in enabled)
-            + ".",
-            evidence_ids=[e.id for e in enabled],
-        )
+        return _con_transito(evidence, enabled)
 
     return CriterionResult(
         criterion_id=CRITERION_ID,
@@ -122,4 +121,57 @@ def _evaluate_technical(evidence: list[EvidenceInstance]) -> CriterionResult:
         estado=Estado.EVIDENCIA_INSUFICIENTE,
         explanation="Todos los recursos tienen estado de cifrado desconocido (unknown).",
         evidence_ids=[e.id for e in unknown],
+    )
+
+
+def _con_transito(
+    evidence: list[EvidenceInstance], en_reposo: list[EvidenceInstance]
+) -> CriterionResult:
+    """Todo cifrado en reposo: el tramo alto lo decide lo que se observe del canal (PR.DS-02)."""
+
+    transito = by_type(evidence, "tf.transit_encryption.config")
+    en_claro = [e for e in transito if e.value.get("estado") == "disabled"]
+    cifrado = [e for e in transito if e.value.get("estado") == "enabled"]
+    reposo = ", ".join(e.subject_ref for e in en_reposo)
+
+    if en_claro:
+        return CriterionResult(
+            criterion_id=CRITERION_ID,
+            criterion_version=CRITERION_VERSION,
+            estado=Estado.EVALUADO,
+            base_score=50,
+            final_score=50,
+            explanation=(
+                f"Cifrado en reposo en todos los recursos ({reposo}), pero el dato viaja en claro:"
+                f" {', '.join(e.subject_ref for e in en_claro)}."
+            ),
+            evidence_ids=[e.id for e in (*en_reposo, *en_claro)],
+        )
+
+    if cifrado:
+        return CriterionResult(
+            criterion_id=CRITERION_ID,
+            criterion_version=CRITERION_VERSION,
+            estado=Estado.EVALUADO,
+            base_score=100,
+            final_score=100,
+            explanation=(
+                f"Cifrado en reposo en todos los recursos ({reposo}) y en transito en"
+                f" {', '.join(e.subject_ref for e in cifrado)}."
+            ),
+            evidence_ids=[e.id for e in (*en_reposo, *cifrado)],
+        )
+
+    return CriterionResult(
+        criterion_id=CRITERION_ID,
+        criterion_version=CRITERION_VERSION,
+        estado=Estado.EVALUADO,
+        base_score=75,
+        final_score=75,
+        explanation=(
+            f"Cifrado en reposo en todos los recursos ({reposo}), pero nada en el IaC dice como"
+            " viaja el dato (PR.DS-02): sin un listener TLS ni `rds.force_ssl` no se puede afirmar"
+            " el 100."
+        ),
+        evidence_ids=[e.id for e in en_reposo],
     )

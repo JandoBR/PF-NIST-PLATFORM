@@ -52,7 +52,9 @@
 #      `tf.identity.config` y la presencia de recursos IAM (docs/09 §91).
 # v22: Oleada C (3/5) - CRI-PR-09 (resiliencia y capacidad) declara PR.IR-03 y PR.IR-04 desde
 #      `multi_az`/`replicate_source_db` y los grupos de autoescalado (docs/09 §92).
-version: 22
+# v23: Oleada C (4/5) - CRI-PR-01 pasa a cubrir tambien PR.DS-02 (cifrado en transito) y su ancla
+#      del 100 baja: con todo cifrado en reposo pero sin observacion del canal, 75 (docs/09 §93).
+version: 23
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -236,19 +238,20 @@ criterios:
       tipo: procedencia_del_codigo
 
   - id: CRI-PR-01
-    version: 1
-    titulo: "Cifrado de datos en reposo"
+    version: 2
+    titulo: "Cifrado de datos en reposo y en transito"
     tipo: tecnico
     funcion: PR
     categorias: [PR.DS]
-    subcategorias: [PR.DS-01]
+    subcategorias: [PR.DS-01, PR.DS-02]
     peso: 5
     ai_adjustable: true
-    evidencias: [tf.encryption.config@1, doc.claim@2]
-    recomendacion: "Habilitar cifrado gestionado por KMS en RDS y S3; verificar mecanismo y llave."
+    evidencias: [tf.encryption.config@1, tf.transit_encryption.config@1, doc.claim@2]
+    recomendacion: "Habilitar cifrado gestionado por KMS en RDS y S3, y cifrar el canal: un listener HTTPS con politica TLS moderna y `rds.force_ssl = 1` en el grupo de parametros."
     regla:
       tipo: umbral_por_recurso
       estados: { all_enabled: 100, any_disabled: 25, any_unknown: insuficiente }
+      transito: { en_claro: 50, sin_observacion: 75, cifrado: 100 }
       tipos_afirmacion: [policy_exists]
 
   - id: CRI-PR-08
