@@ -22,16 +22,22 @@ ALLOWED_SUFFIXES: dict[str, set[str]] = {
 def safe_filename(name: str | None, *, tipo: str = "default") -> str:
     """Devuelve un nombre de archivo seguro (solo basename) o levanta `ValueError`.
 
-    Rechaza nombres vacios, `.`/`..`, separadores de ruta y bytes nulos, y exige una extension de la
-    lista blanca del tipo. `Path(original).name` ya elimina directorios, pero se comprueba ademas
-    explicitamente por si el separador es de Windows (`\\`), que en Linux no es especial.
+    Rechaza nombres vacios, `.`/`..`, separadores de Windows y bytes nulos, y exige una extension de
+    la lista blanca del tipo. Una ruta con `/` se reduce a su basename (`../../etc/evil.tf` ->
+    `evil.tf`); una con `\\` se rechaza.
+
+    El `\\` se comprueba sobre el nombre **original**, antes de `Path(...).name`: `Path` trata `\\`
+    como separador en Windows y como un caracter normal en Linux, asi que hacerlo despues dejaba el
+    saneo dependiendo del sistema operativo (en Windows `..\\..\\evil.tf` pasaba como `evil.tf`).
     """
 
     original = (name or "").strip()
     if not original or "\x00" in original:
         raise ValueError("Nombre de archivo invalido.")
+    if "\\" in original:
+        raise ValueError("Nombre de archivo invalido.")
     base = Path(original).name
-    if base in ("", ".", "..") or "/" in base or "\\" in base:
+    if base in ("", ".", ".."):
         raise ValueError("Nombre de archivo invalido.")
     if len(base.encode("utf-8")) > 255:
         # `NAME_MAX` en Linux; sin esto, `write_bytes` revienta con OSError (500) en vez de 422.
