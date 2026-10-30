@@ -72,6 +72,8 @@ notas: >
 | `tf.logging.config` | `{ habilitado: bool\|unknown, multi_region?, destino? }` | CloudTrail / logging declarado. |
 | `tf.security_group.rules` | reglas normalizadas (ver §2) | Exposición de red de grupos de seguridad. |
 | `tf.versioning.config` | `{ habilitado: bool\|unknown }` | Versionado de almacenamiento. |
+| `tf.module.source` | `{ nombre, source?, version?, origen, fijada, estado }` | Procedencia de un bloque `module`. `origen`: `registry`/`git`/`externo`/`local`/`desconocido`; `local` es código del propio repositorio, que no se adquiere y por tanto no se fija. `fijada` es cierto con `version` (registry) o con `?ref=<tag\|sha>` en el `source` (git). |
+| `tf.provider.version` | `{ proveedor, restriccion?, fijada, estado }` | Restricción de versión de un proveedor en `terraform { required_providers }`. Declarado sin `version` → `restriccion: null`: no es lo mismo que no declararlo. |
 | `tf.expression.unresolved` | `{ recurso, atributo, expresion, motivo }` | Limitación explícita del parser. |
 
 Alcance del adaptador: recursos **`aws_db_instance`, `aws_s3_bucket` (+ `aws_s3_bucket_*`),

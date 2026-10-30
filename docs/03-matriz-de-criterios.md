@@ -30,16 +30,16 @@ Resumen de cobertura del catálogo:
 | Función | Criterios | MVP total | MVP parcial |
 |---|---|---|---|
 | Govern | 6 | 3 | 0 |
-| Identify | 5 | 3 | 0 |
+| Identify | 6 | 3 | 0 |
 | Protect | 7 | 6 | 0 |
 | Detect | 3 | 1 | 1 |
 | Respond | 4 | 1 | 0 |
 | Recover | 3 | 2 | 1 |
-| **Total** | **28** | **16** | **2** |
+| **Total** | **29** | **16** | **2** |
 
-> **Estado de implementación:** **28 de 28** criterios implementados (CR-01…CR-05 y las Oleadas A y B,
-> docs/11 §C). Cobertura del marco medida por el propio sistema en `GET /methodology`
-> (`cobertura_implementacion`): **74 de 106 subcategorías (69,8 %) y las 22 categorías del CSF 2.0**,
+> **Estado de implementación:** **29 de 29** criterios implementados (CR-01…CR-05 y las Oleadas A, B
+> y C, docs/11 §C). Cobertura del marco medida por el propio sistema en `GET /methodology`
+> (`cobertura_implementacion`): **75 de 106 subcategorías (70,8 %) y las 22 categorías del CSF 2.0**,
 > es decir `categorias_sin_criterio` vacía, con la **función Gobernar completa (31/31)**.
 > **Las reglas de esta matriz describen el código** (`backend/app/evaluation/rules/`): si una regla cambia, se
 > actualiza aquí en el mismo commit. Revisado contra el código el 2026-10-24 (docs/09 §77); en esa
@@ -176,6 +176,23 @@ Resumen de cobertura del catálogo:
 ---
 
 ## 3. PROTECT (PR)
+
+### CRI-ID-06 — Procedencia e integridad del software adquirido
+- **Subcategorías:** ID.RA-09 · **Tipo:** Técnico · **Peso:** 2 · **IA:** no · **MVP:** no · **Privacidad:** —
+- **Evidencias:** `tf.module.source`, `tf.provider.version`
+- **Regla:**
+  - 100: todos los proveedores con restricción de versión **y** todos los módulos de terceros fijados.
+  - 75: proveedores fijados, algún módulo de terceros sin fijar.
+  - 50: módulos de terceros fijados, pero ningún proveedor con restricción (o sin `required_providers`).
+  - 25: ni proveedores con restricción ni módulos de terceros fijados.
+  - Sin bloques `module` ni `required_providers` → no aplicable.
+- **Notas:** un módulo `local` (`./modulos/x`) no se cuenta como "sin fijar": es código del mismo
+  repositorio, no una adquisición, y no hay versión que fijar. El piso es **25 y no 0** porque un
+  `source` sin versión es silencio sobre la procedencia, no una negación explícita (mismo criterio
+  que docs/09 §60); en HCL no existe forma de declarar "no controlo esto". Un `source` que el parser
+  no puede leer cuenta como de terceros: no se puede suponer propio.
+- **Recomendación:** fijar la procedencia del código de terceros — `version` en cada módulo del
+  registry, `?ref=<tag|sha>` en los de git, y una restricción de versión por proveedor.
 
 ### CRI-PR-01 — Cifrado de datos en reposo
 - **Subcategorías:** PR.DS-01 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí · **Privacidad:** Protect-P

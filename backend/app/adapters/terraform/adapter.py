@@ -3,6 +3,9 @@
 Alcance declarado: `aws_db_instance`, `aws_s3_bucket` (+ sus recursos de configuracion separados
 `aws_s3_bucket_server_side_encryption_configuration`, `aws_s3_bucket_public_access_block`,
 `aws_s3_bucket_versioning`), `aws_security_group`, `aws_cloudtrail`.
+
+Ademas de los `resource`, lee los bloques `module` y `terraform { required_providers }` para la
+procedencia del codigo de terceros (`tf.module.source`, `tf.provider.version`).
 Solo parsea; nunca ejecuta Terraform ni resuelve el estado real de la nube (docs/02 §7).
 """
 
@@ -11,7 +14,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import hcl2
 from hcl2.utils import SerializationOptions
@@ -133,7 +136,21 @@ def _cidrs(value: Any) -> list[str]:
     return [CIDR_DESCONOCIDO if _is_expression(item) else item for item in value]
 
 
-_RESOURCE_START = re.compile(r'^\s*resource\s+"([^"]+)"\s+"([^"]+)"')
+def _block_start(keyword: str, etiquetas: int) -> re.Pattern[str]:
+    """Patron que reconoce la linea que abre un bloque `keyword "et1" "et2" {`.
+
+    El `\\b` impide que `terraform` coincida con `terraform_remote_state`, y las etiquetas se
+    capturan para usarlas como clave del rango.
+    """
+
+    labels = "".join([r'\s+"([^"]+)"'] * etiquetas)
+    return re.compile(rf"^\s*{keyword}\b{labels}\s*")
+
+
+_RESOURCE_START = _block_start("resource", 2)
+_MODULE_START = _block_start("module", 1)
+#: `terraform` no lleva etiquetas, asi que se exige que la linea no sea otra cosa (`terraform = x`).
+_TERRAFORM_START = re.compile(r"^\s*terraform\s*\{?\s*$")
 
 
 def _clean_hcl(text: str) -> str:
@@ -264,17 +281,22 @@ def _has_open_brace(line: str) -> bool:
     return False
 
 
-def resource_line_ranges(text: str) -> dict[tuple[str, str], tuple[int, int]]:
-    """(tipo, nombre) -> (linea inicial, linea final), 1-based, de cada bloque `resource`.
+def block_line_ranges(
+    text: str, inicio_bloque: re.Pattern[str]
+) -> dict[tuple[str, ...], tuple[int, int]]:
+    """(etiquetas) -> (linea inicial, linea final), 1-based, de cada bloque del tipo dado.
 
     `python-hcl2` no entrega posiciones, asi que se calculan sobre el texto: el bloque empieza en la
-    linea `resource "tipo" "nombre" {` y termina donde se cierra su llave (docs/11 OP-15)."""
+    linea `resource "tipo" "nombre" {` y termina donde se cierra su llave (docs/11 OP-15).
+
+    Un bloque sin etiquetas (`terraform {`) se indexa por su orden de aparicion, para que dos en el
+    mismo archivo no se pisen."""
 
     lineas = _clean_hcl(text).splitlines()
-    rangos: dict[tuple[str, str], tuple[int, int]] = {}
+    rangos: dict[tuple[str, ...], tuple[int, int]] = {}
     i = 0
     while i < len(lineas):
-        inicio = _RESOURCE_START.match(lineas[i])
+        inicio = inicio_bloque.match(lineas[i])
         if inicio is None:
             i += 1
             continue
@@ -294,13 +316,69 @@ def resource_line_ranges(text: str) -> dict[tuple[str, str], tuple[int, int]]:
                 break
         else:
             fin = len(lineas) - 1  # bloque sin cerrar: hasta el final del archivo
-        rangos[(inicio.group(1), inicio.group(2))] = (i + 1, fin + 1)
+        rangos[inicio.groups() or (str(len(rangos)),)] = (i + 1, fin + 1)
         i = fin + 1
     return rangos
 
 
+def resource_line_ranges(text: str) -> dict[tuple[str, ...], tuple[int, int]]:
+    """Rangos de los bloques `resource`, por (tipo, nombre)."""
+
+    return block_line_ranges(text, _RESOURCE_START)
+
+
 def _strip_meta(block: dict) -> dict:
     return {k: v for k, v in block.items() if k != "__is_block__"}
+
+
+class _ArchivoParseado(NamedTuple):
+    """Un `.tf` ya leido: su texto original hace falta para los rangos de linea de cada bloque."""
+
+    path: Path
+    raw: dict
+    text: str
+    recursos: list[tuple[str, str, dict]]
+
+
+#: Prefijos que identifican un `source` de modulo servido por git (docs/02 §3.1).
+_FUENTES_GIT = ("git::", "git@", "github.com/", "bitbucket.org/", "gitlab.com/")
+#: Prefijos de un archivo descargado por HTTP o de un bucket: externo, pero no git ni registry.
+_FUENTES_EXTERNAS = ("http://", "https://", "s3::", "gcs::")
+#: `namespace/nombre/proveedor`, con un `//submodulo` opcional: la forma del Terraform Registry.
+_FUENTE_REGISTRY = re.compile(r"^[\w.-]+(/[\w.-]+){2}(//[\w./-]+)?$")
+
+
+def module_origin(source: Any) -> str:
+    """De donde viene el codigo de un `module`: `local` es propio, el resto es de terceros.
+
+    La distincion importa porque un modulo local no se puede "fijar" a una version —es codigo del
+    mismo repositorio— y penalizarlo por no tenerla seria castigar lo que no es una adquisicion.
+    """
+
+    if not isinstance(source, str) or not source.strip() or _is_expression(source):
+        return "desconocido"
+    valor = source.strip()
+    if valor.startswith(("./", "../", "/")):
+        return "local"
+    if valor.startswith(_FUENTES_GIT) or valor.endswith(".git") or ".git//" in valor:
+        return "git"
+    if valor.startswith(_FUENTES_EXTERNAS):
+        return "externo"
+    if _FUENTE_REGISTRY.match(valor):
+        return "registry"
+    return "desconocido"
+
+
+def module_pinned(source: Any, version: Any) -> bool:
+    """Si la procedencia del modulo esta fijada a algo reproducible.
+
+    `version` es como se fija un modulo del registry; un `source` de git se fija con un
+    `?ref=<tag|sha>` en la propia URL, donde el argumento `version` no aplica.
+    """
+
+    if isinstance(version, str) and version.strip() and not _is_expression(version):
+        return True
+    return isinstance(source, str) and "?ref=" in source
 
 
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
@@ -317,7 +395,9 @@ def _strip_meta(block: dict) -> dict:
 #: v8: `dynamic "ingress"/"egress"` se emite como regla con CIDR desconocido (no se ignora).
 #: v9: se acepta un `.tf` con BOM UTF-8 (`utf-8-sig`).
 #: v10: los rangos de linea ignoran `/* */` y heredocs y aceptan `{` en la linea siguiente.
-ADAPTER_VERSION = "10"
+#: v11: segunda ruta de parseo: los bloques `module` y `terraform { required_providers }`
+#: emiten `tf.module.source` y `tf.provider.version` (procedencia del codigo de terceros).
+ADAPTER_VERSION = "11"
 
 
 class TerraformAdapter:
@@ -343,16 +423,24 @@ class TerraformAdapter:
         puede apuntar a un recurso declarado en otro archivo, asi que primero se leen todos."""
 
         options = SerializationOptions(strip_string_quotes=True)
-        archivos = []
+        archivos: list[_ArchivoParseado] = []
         for file_path in self.list_files(path):
             text = file_path.read_text(encoding="utf-8-sig")
             raw = hcl2.loads(text, serialization_options=options)
-            archivos.append((file_path, self._flatten_resources(raw), resource_line_ranges(text)))
-        todos = [recurso for _, recursos, _ in archivos for recurso in recursos]
+            archivos.append(_ArchivoParseado(file_path, raw, text, self._flatten_resources(raw)))
+        todos = [recurso for archivo in archivos for recurso in archivo.recursos]
 
         evidence: list[EvidenceInstance] = []
-        for file_path, recursos, rangos in archivos:
-            evidence.extend(self._parse_file(file_path, recursos, rangos, todos))
+        for archivo in archivos:
+            evidence.extend(
+                self._parse_file(
+                    archivo.path,
+                    archivo.recursos,
+                    resource_line_ranges(archivo.text),
+                    todos,
+                )
+            )
+            evidence.extend(self._parse_provenance(archivo.path, archivo.raw, archivo.text))
         return evidence
 
     # -- parsing -----------------------------------------------------------------
@@ -361,7 +449,7 @@ class TerraformAdapter:
         self,
         file_path: Path,
         resources: list[tuple[str, str, dict]],
-        rangos: dict[tuple[str, str], tuple[int, int]],
+        rangos: dict[tuple[str, ...], tuple[int, int]],
         all_resources: list[tuple[str, str, dict]],
     ) -> list[EvidenceInstance]:
         evidence: list[EvidenceInstance] = []
@@ -388,6 +476,120 @@ class TerraformAdapter:
                 for local_name, attrs in by_name.items():
                     flattened.append((resource_type, local_name, _strip_meta(attrs)))
         return flattened
+
+    # -- procedencia: `module` y `required_providers` ------------------------------
+
+    def _parse_provenance(self, file_path: Path, raw: dict, text: str) -> list[EvidenceInstance]:
+        """Segunda ruta de parseo: de donde viene el codigo que el modulo usa (docs/02 §3.1).
+
+        No reutiliza el bucle de `_parse_file`: ese espera la forma `(tipo, nombre, attrs)` y emite
+        `tf.resource.present` para todo lo que ve, y ni un `module` ni un `terraform {}` son un
+        recurso desplegado. `self._lines` se fija por bloque igual que alli, y se limpia al salir.
+        """
+
+        evidence: list[EvidenceInstance] = []
+
+        rangos_modulo = block_line_ranges(text, _MODULE_START)
+        for nombre, attrs in self._flatten_modules(raw):
+            self._lines = rangos_modulo.get((nombre,))
+            evidence.append(self._module_source_evidence(file_path, nombre, attrs))
+
+        # Todas las restricciones viven en el bloque `terraform`, asi que comparten su locator.
+        self._lines = block_line_ranges(text, _TERRAFORM_START).get(("0",))
+        for proveedor, restriccion in self._required_providers(raw):
+            evidence.append(self._provider_version_evidence(file_path, proveedor, restriccion))
+
+        self._lines = None
+        return evidence
+
+    @staticmethod
+    def _flatten_modules(raw: dict) -> list[tuple[str, dict]]:
+        """`module` en hcl2 es una lista de bloques `{nombre: {...attrs}}`."""
+
+        return [
+            (nombre, _strip_meta(attrs))
+            for block in raw.get("module", [])
+            for nombre, attrs in block.items()
+        ]
+
+    @staticmethod
+    def _required_providers(raw: dict) -> list[tuple[str, str | None]]:
+        """(proveedor, restriccion de version) de cada `terraform { required_providers }`.
+
+        Un proveedor declarado sin `version` entra con `None`: declararlo sin fijarlo no es lo mismo
+        que no declararlo, y la regla distingue los dos casos.
+        """
+
+        encontrados: list[tuple[str, str | None]] = []
+        for bloque in raw.get("terraform", []):
+            if not isinstance(bloque, dict):
+                continue
+            grupos = bloque.get("required_providers") or []
+            if isinstance(grupos, dict):  # hcl2 envuelve el bloque en una lista, pero no siempre
+                grupos = [grupos]
+            for grupo in grupos:
+                if not isinstance(grupo, dict):
+                    continue
+                for proveedor, spec in _strip_meta(grupo).items():
+                    version = spec.get("version") if isinstance(spec, dict) else None
+                    if not isinstance(version, str) or _is_expression(version):
+                        version = None
+                    encontrados.append((proveedor, (version or "").strip() or None))
+        return encontrados
+
+    def _module_source_evidence(
+        self, file_path: Path, nombre: str, attrs: dict
+    ) -> EvidenceInstance:
+        source = attrs.get("source")
+        version = attrs.get("version")
+        origen = module_origin(source)
+        fijada = module_pinned(source, version)
+        if origen == "desconocido":
+            estado = "unknown"  # el `source` no es literal: no hay procedencia que afirmar
+        elif origen == "local":
+            estado = "propio"  # codigo del mismo repositorio: no se adquiere, no se fija
+        else:
+            estado = "fijado" if fijada else "sin_fijar"
+        return self._make_evidence(
+            type_id="tf.module.source",
+            subject_type="module",
+            subject_ref=f"module.{nombre}",
+            value={
+                "nombre": nombre,
+                "source": source
+                if isinstance(source, str) and not _is_expression(source)
+                else None,
+                "version": version
+                if isinstance(version, str) and not _is_expression(version)
+                else None,
+                "origen": origen,
+                "fijada": fijada,
+                "estado": estado,
+            },
+            file_path=file_path,
+            limitations=(
+                None
+                if origen != "desconocido"
+                else "source no literal: procedencia no determinable"
+            ),
+        )
+
+    def _provider_version_evidence(
+        self, file_path: Path, proveedor: str, restriccion: str | None
+    ) -> EvidenceInstance:
+        return self._make_evidence(
+            type_id="tf.provider.version",
+            subject_type="provider",
+            subject_ref=f"provider.{proveedor}",
+            value={
+                "proveedor": proveedor,
+                "restriccion": restriccion,
+                "fijada": restriccion is not None,
+                "estado": "fijado" if restriccion is not None else "sin_fijar",
+            },
+            file_path=file_path,
+            limitations=None if restriccion is not None else "declarado sin restriccion de version",
+        )
 
     # -- evidencia por recurso -----------------------------------------------------
 

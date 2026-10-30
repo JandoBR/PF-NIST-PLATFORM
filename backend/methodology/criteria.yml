@@ -45,7 +45,10 @@
 #      plazos; RS-01 exige escalamiento posterior; PR-01 exige evidencia de cifrado por recurso;
 #      PR-04 no da 100 con un modo relativo; PR-05 no da 100 con bloqueo sin resolver
 #      (docs/09 §79-88).
-version: 19
+# v20: Oleada C (1/5) - CRI-ID-06 declara ID.RA-09 con los dos tipos de procedencia que el
+#      adaptador de Terraform ahora lee (`tf.module.source`, `tf.provider.version`). Primera
+#      subcategoria de la cobertura que no depende de que U1 extraiga nada (docs/09 §90).
+version: 20
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -213,6 +216,20 @@ criterios:
       tipo: mejora_continua
       patrones_positivos: [restore_exercise_run]
       tipos_afirmacion: [process_defined]
+
+  - id: CRI-ID-06
+    version: 1
+    titulo: "Procedencia e integridad del software adquirido"
+    tipo: tecnico
+    funcion: ID
+    categorias: [ID.RA]
+    subcategorias: [ID.RA-09]
+    peso: 2
+    ai_adjustable: false
+    evidencias: [tf.module.source@1, tf.provider.version@1]
+    recomendacion: "Fijar la procedencia del codigo de terceros: `version` en cada modulo del registry, `?ref=<tag|sha>` en los de git, y una restriccion de version por proveedor en `required_providers`."
+    regla:
+      tipo: procedencia_del_codigo
 
   - id: CRI-PR-01
     version: 1

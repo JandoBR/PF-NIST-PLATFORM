@@ -64,6 +64,7 @@ def test_loads_expected_criteria():
         "CRI-ID-03",
         "CRI-ID-04",
         "CRI-ID-05",
+        "CRI-ID-06",
         "CRI-PR-01",
         "CRI-PR-02",
         "CRI-PR-03",
