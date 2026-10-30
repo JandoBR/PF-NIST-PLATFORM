@@ -73,6 +73,7 @@ def test_loads_expected_criteria():
         "CRI-PR-06",
         "CRI-PR-07",
         "CRI-PR-08",
+        "CRI-PR-09",
         "CRI-DE-01",
         "CRI-DE-02",
         "CRI-DE-03",

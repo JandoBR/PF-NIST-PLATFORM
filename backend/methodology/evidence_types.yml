@@ -8,7 +8,9 @@
 #     bloques `module` y `terraform { required_providers }` que el adaptador no miraba (docs/09 §90).
 # v7: tf.identity.config: politica de contrasenas de la cuenta y exigencia de MFA leida del
 #     documento de una politica IAM (docs/09 §91).
-version: 7
+# v8: tf.resilience.config: alta disponibilidad (multi_az / replica) y capacidad elastica
+#     (aws_autoscaling_group), para PR.IR-03 y PR.IR-04 (docs/09 §92).
+version: 8
 tipos:
   - id: tf.resource.present
     version: 1
@@ -142,6 +144,30 @@ tipos:
     requiere_locator: true
     estado: published
     publicado: "2026-09-30"
+
+  - id: tf.resilience.config
+    version: 1
+    descripcion: >
+      Mecanismo de resiliencia declarado para un recurso. `multi_az` y `replica` son alta
+      disponibilidad (PR.IR-03); `autoescalado` es capacidad elastica (PR.IR-04), y su `habilitado`
+      es cierto solo si `max_size > min_size`: un minimo igual al maximo es capacidad fija. Un
+      `multi_az` ausente da `habilitado: null` y `estado: no_declarado`, no `false`: el defecto de
+      AWS no se supone. `no_declarado` y no `unknown` a proposito: en este catalogo `unknown` esta
+      reservado a un valor que el parser no pudo leer, y hace aparecer un hallazgo de limitacion.
+      Un atributo que simplemente no esta escrito no es un valor ilegible.
+    valor_schema:
+      type: object
+      required: [mecanismo, estado]
+      properties:
+        mecanismo: { enum: [multi_az, replica, autoescalado] }
+        habilitado: { type: [boolean, "null"] }
+        capacidad_minima: { type: [integer, "null"] }
+        capacidad_maxima: { type: [integer, "null"] }
+        estado: { enum: [declarado, no_declarado] }
+    modalidad_permitida: [declarada]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-10-29"
 
   - id: tf.identity.config
     version: 1

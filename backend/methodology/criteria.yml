@@ -50,7 +50,9 @@
 #      subcategoria de la cobertura que no depende de que U1 extraiga nada (docs/09 §90).
 # v21: Oleada C (2/5) - CRI-PR-08 (identidades y autenticacion) declara PR.AA-01 y PR.AA-03 con
 #      `tf.identity.config` y la presencia de recursos IAM (docs/09 §91).
-version: 21
+# v22: Oleada C (3/5) - CRI-PR-09 (resiliencia y capacidad) declara PR.IR-03 y PR.IR-04 desde
+#      `multi_az`/`replicate_source_db` y los grupos de autoescalado (docs/09 §92).
+version: 22
 criterios:
   - id: CRI-GV-01
     version: 1
@@ -262,6 +264,20 @@ criterios:
     recomendacion: "Declarar las identidades en IaC y endurecer la autenticacion: politica de contrasenas de al menos 14 caracteres (CIS AWS) y una politica que exija `aws:MultiFactorAuthPresent`."
     regla:
       tipo: identidades_y_autenticacion
+
+  - id: CRI-PR-09
+    version: 1
+    titulo: "Resiliencia y capacidad de la plataforma"
+    tipo: tecnico
+    funcion: PR
+    categorias: [PR.IR]
+    subcategorias: [PR.IR-03, PR.IR-04]
+    peso: 3
+    ai_adjustable: false
+    evidencias: [tf.resilience.config@1]
+    recomendacion: "Declarar alta disponibilidad (`multi_az` o una replica de lectura) y capacidad elastica (un grupo de autoescalado con `max_size` mayor que `min_size`)."
+    regla:
+      tipo: resiliencia_y_capacidad
 
   - id: CRI-PR-02
     version: 1

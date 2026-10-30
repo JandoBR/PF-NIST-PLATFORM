@@ -6,6 +6,7 @@ resource "aws_db_instance" "legacy" {
   storage_encrypted       = false
   backup_retention_period = 0
   publicly_accessible     = true
+  multi_az                = false
 }
 
 resource "aws_db_instance" "reportes" {

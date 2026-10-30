@@ -20,3 +20,12 @@ resource "aws_iam_account_password_policy" "cuenta" {
   require_numbers           = true
   password_reuse_prevention = 3
 }
+
+# El grupo si puede crecer, pero ninguna base declara multi_az ni es replica: se aguanta la carga,
+# no se sobrevive a una zona caida.
+resource "aws_autoscaling_group" "aplicacion" {
+  name             = "aplicacion-clientes"
+  min_size         = 2
+  max_size         = 4
+  desired_capacity = 2
+}

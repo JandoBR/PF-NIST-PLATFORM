@@ -3006,3 +3006,52 @@ debe pasar cuando se observa un control débil nuevo, y el global de 14,38 a 14,
 **Verificación:** 734 tests (17 nuevos), `ruff` limpio, goldens releídos. `PR.AA` pasa de 1/6 a 3/6 y
 la cobertura a **77/106 (72,6 %)**, con PROTECT en 10/22.
 
+## 92. Oleada C (3/5): sobrevivir a una zona caída y aguantar la carga no son lo mismo
+
+`PR.IR` estaba en **1 de 4**, con solo `PR.IR-01` cubierta por los security groups. Las dos que
+faltaban y sí se pueden observar en el IaC suenan parecidas y no lo son, y por eso el CSF las separa:
+
+- **`PR.IR-03`** ("mecanismos para alcanzar los requisitos de resiliencia") es **sobrevivir a la
+  pérdida de una zona**: `multi_az` o una réplica de lectura.
+- **`PR.IR-04`** ("capacidad de recursos adecuada") es **aguantar la carga**: un grupo de
+  autoescalado.
+
+Mezclarlas en un solo ancla habría dado 100 a una plataforma con autoescalado y una sola zona, que
+es exactamente la que se cae entera un martes.
+
+**`min_size == max_size` no es capacidad elástica.** Es capacidad fija con otro nombre, y no sostiene
+"se mantiene capacidad adecuada para asegurar la disponibilidad". El `habilitado` del autoescalado es
+cierto solo si el grupo puede crecer.
+
+**`no_declarado` no es `unknown`, y la diferencia costó una decisión.** La primera versión emitía
+`estado: "unknown"` para un `multi_az` ausente, por analogía con `tf.public_access.config`. Tres
+tests de `test_limitation_findings.py` cayeron en el acto, y tenían razón: `unknown` es el convenio
+que `recommendations/limitations.py` usa para decir *"el parser no pudo leer este valor"*, y hace
+aparecer un hallazgo. Un atributo que simplemente no está escrito no es un valor ilegible — y
+`multi_az` se omite en casi todo `.tf` real, así que habría generado un hallazgo de limitación por
+cada base de datos de cualquier proyecto.
+
+Toda esta oleada ha ido separando "no lo veo" de "lo veo y está mal"; aquí hacía falta un tercer
+estado: **"no lo escribiste"**. `unknown` queda reservado a lo que el parser no puede resolver —para
+eso ya está `tf.expression.unresolved` y el decorador `noting_unresolved`, que cita la expresión sin
+tocar el puntaje.
+
+**La rúbrica tiene cinco anclas porque hay cinco situaciones distintas**, y la del 25 es la que
+obliga a pensar: capacidad elástica **con** `multi_az = false` explícito. Crecer con la carga no
+compensa haber apagado la alta disponibilidad a mano, pero tampoco es lo mismo que no tener nada, y
+por eso no es 0.
+
+**Los tres paquetes:** `good` 100 (`multi_az` y un grupo de 2 a 6), `mid` 50 (el grupo crece, ninguna
+base declara `multi_az`), `gaps` 0 (`multi_az = false` y sin autoescalado).
+
+**Dos efectos colaterales que hubo que atender, los dos del mismo tipo:** `aws_autoscaling_group` es
+un tipo de recurso nuevo, así que entra en el **denominador del inventario** de `CRI-ID-01` — el
+documento de `good` lo lista ahora, igual que pasó con IAM en §91. Y el `multi_az` de `good` y `gaps`
+se declara dentro de un bloque que ya existía en `main.tf`, así que **desplaza una línea** todos los
+locators posteriores de ese archivo. Se comprobó que en los goldens de evidencia las únicas bajas son
+`line_start`/`line_end`: ni un valor cambió.
+
+**Verificación:** 747 tests (13 nuevos), `ruff` limpio. `PR.IR` pasa de 1/4 a 3/4 —`PR.IR-02`,
+amenazas ambientales, es física y queda fuera del alcance declarado— y la cobertura a **79/106
+(74,5 %)**, con PROTECT en 12/22.
+

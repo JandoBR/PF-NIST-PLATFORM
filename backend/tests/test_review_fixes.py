@@ -139,11 +139,12 @@ def test_id01_complete_inventory_scores_100():
                 # La Oleada C añadio identidades al fixture: un inventario completo las lista.
                 "aws_iam_role",
                 "aws_iam_policy",
+                "aws_autoscaling_group",
             ]
         },
     )
     result = id01_asset_inventory.evaluate([*evidence, inventario])
-    assert result.final_score == 100 and "(6/6)" in result.explanation
+    assert result.final_score == 100 and "(7/7)" in result.explanation
 
 
 # -- Ansible: modo octal sin comillas -----------------------------------------------------------
