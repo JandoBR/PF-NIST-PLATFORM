@@ -217,43 +217,6 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** habilitar cifrado gestionado por KMS en RDS y S3, y cifrar el canal — un
   listener HTTPS con política TLS moderna y `rds.force_ssl = 1` en el grupo de parámetros.
 
-### CRI-PR-08 — Gestión de identidades y autenticación
-- **Subcategorías:** PR.AA-01, PR.AA-03 · **Tipo:** Técnico · **Peso:** 5 · **IA:** no · **MVP:** no · **Privacidad:** Protect-P
-- **Evidencias:** `tf.identity.config`, `tf.resource.present` (recursos `aws_iam_*`)
-- **Regla:**
-  - 100: identidades declaradas en IaC, política de contraseñas ≥ 14 caracteres **y** una política que exige `aws:MultiFactorAuthPresent`.
-  - 75: política ≥ 14 pero ninguna que exija MFA (la contraseña sigue siendo el único factor).
-  - 50: identidades declaradas y **sin** política de contraseñas en el IaC (o con longitud no literal).
-  - 25: política declarada con 8–13 caracteres, por debajo del umbral del CIS AWS Foundations Benchmark.
-  - 0: política declarada con menos de 8 caracteres.
-  - Sin ningún recurso IAM ni política → `evidencia_insuficiente`.
-  - Con dos políticas declaradas manda la más débil: es la que la cuenta aplica de hecho.
-- **Notas:** el umbral de 14 es el del **CIS AWS Foundations Benchmark**, no una cifra elegida.
-  La rúbrica es **deliberadamente asimétrica**: una política débil declarada (0 o 25) puntúa por
-  debajo de no declarar ninguna (50). En IaC la ausencia no prueba la ausencia —la cuenta puede
-  tener su política puesta fuera de Terraform—, mientras que una longitud de 6 escrita en el `.tf`
-  es la observación de un control débil. Es el silencio documental (docs/09 §60) aplicado a una
-  señal técnica.
-- **Recomendación:** declarar las identidades en IaC y endurecer la autenticación — política de al
-  menos 14 caracteres y una política que exija MFA.
-
-### CRI-PR-09 — Resiliencia y capacidad de la plataforma
-- **Subcategorías:** PR.IR-03, PR.IR-04 · **Tipo:** Técnico · **Peso:** 3 · **IA:** no · **MVP:** no · **Privacidad:** —
-- **Evidencias:** `tf.resilience.config`
-- **Regla:**
-  - 100: alta disponibilidad (`multi_az` o réplica) **y** un grupo de autoescalado que puede crecer.
-  - 75: alta disponibilidad sin capacidad elástica.
-  - 50: capacidad elástica y ninguna base que declare `multi_az` ni sea réplica.
-  - 25: capacidad elástica con `multi_az = false` explícito.
-  - 0: `multi_az = false` explícito y sin capacidad elástica.
-  - Sin bases ni grupos de autoescalado → no aplicable; todo declarado sin valor literal → `evidencia_insuficiente`.
-- **Notas:** son dos cosas que suenan parecidas y no lo son — `PR.IR-03` es sobrevivir a la caída de
-  una zona, `PR.IR-04` es aguantar la carga. Un `min_size` igual al `max_size` **no** cuenta como
-  capacidad elástica: es capacidad fija con otro nombre. Un `multi_az` ausente no cuenta como
-  `false` aunque ese sea el defecto de AWS.
-- **Recomendación:** declarar alta disponibilidad (`multi_az` o réplica de lectura) y un grupo de
-  autoescalado con `max_size` mayor que `min_size`.
-
 ### CRI-PR-02 — Backups configurados y protegidos
 - **Subcategorías:** PR.DS-11 · **Tipo:** Técnico · **Peso:** 5 · **IA:** sí · **MVP:** sí
 - **Evidencias:** `tf.backup.config` (retención), `doc.claim(tipo=backup_policy)`
@@ -343,6 +306,43 @@ Resumen de cobertura del catálogo:
 - **Recomendación:** formalizar el programa de concienciación con frecuencia definida y formación específica para los roles privilegiados.
 
 ---
+
+### CRI-PR-08 — Gestión de identidades y autenticación
+- **Subcategorías:** PR.AA-01, PR.AA-03 · **Tipo:** Técnico · **Peso:** 5 · **IA:** no · **MVP:** no · **Privacidad:** Protect-P
+- **Evidencias:** `tf.identity.config`, `tf.resource.present` (recursos `aws_iam_*`)
+- **Regla:**
+  - 100: identidades declaradas en IaC, política de contraseñas ≥ 14 caracteres **y** una política que exige `aws:MultiFactorAuthPresent`.
+  - 75: política ≥ 14 pero ninguna que exija MFA (la contraseña sigue siendo el único factor).
+  - 50: identidades declaradas y **sin** política de contraseñas en el IaC (o con longitud no literal).
+  - 25: política declarada con 8–13 caracteres, por debajo del umbral del CIS AWS Foundations Benchmark.
+  - 0: política declarada con menos de 8 caracteres.
+  - Sin ningún recurso IAM ni política → `evidencia_insuficiente`.
+  - Con dos políticas declaradas manda la más débil: es la que la cuenta aplica de hecho.
+- **Notas:** el umbral de 14 es el del **CIS AWS Foundations Benchmark**, no una cifra elegida.
+  La rúbrica es **deliberadamente asimétrica**: una política débil declarada (0 o 25) puntúa por
+  debajo de no declarar ninguna (50). En IaC la ausencia no prueba la ausencia —la cuenta puede
+  tener su política puesta fuera de Terraform—, mientras que una longitud de 6 escrita en el `.tf`
+  es la observación de un control débil. Es el silencio documental (docs/09 §60) aplicado a una
+  señal técnica.
+- **Recomendación:** declarar las identidades en IaC y endurecer la autenticación — política de al
+  menos 14 caracteres y una política que exija MFA.
+
+### CRI-PR-09 — Resiliencia y capacidad de la plataforma
+- **Subcategorías:** PR.IR-03, PR.IR-04 · **Tipo:** Técnico · **Peso:** 3 · **IA:** no · **MVP:** no · **Privacidad:** —
+- **Evidencias:** `tf.resilience.config`
+- **Regla:**
+  - 100: alta disponibilidad (`multi_az` o réplica) **y** un grupo de autoescalado que puede crecer.
+  - 75: alta disponibilidad sin capacidad elástica.
+  - 50: capacidad elástica y ninguna base que declare `multi_az` ni sea réplica.
+  - 25: capacidad elástica con `multi_az = false` explícito.
+  - 0: `multi_az = false` explícito y sin capacidad elástica.
+  - Sin bases ni grupos de autoescalado → no aplicable; todo declarado sin valor literal → `evidencia_insuficiente`.
+- **Notas:** son dos cosas que suenan parecidas y no lo son — `PR.IR-03` es sobrevivir a la caída de
+  una zona, `PR.IR-04` es aguantar la carga. Un `min_size` igual al `max_size` **no** cuenta como
+  capacidad elástica: es capacidad fija con otro nombre. Un `multi_az` ausente no cuenta como
+  `false` aunque ese sea el defecto de AWS.
+- **Recomendación:** declarar alta disponibilidad (`multi_az` o réplica de lectura) y un grupo de
+  autoescalado con `max_size` mayor que `min_size`.
 
 ## 4. DETECT (DE)
 

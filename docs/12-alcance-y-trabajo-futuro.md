@@ -81,6 +81,8 @@ estas medidas no tienen superficie real aquí.
 |---|---|---|---|
 | AMP-01 | Recuperación semántica (embeddings) sobre el catálogo NIST | El motor es determinístico y basado en reglas + evidencia estructurada; añade proveedor, índice, costo y no-determinismo. | docs/07 §2/§7 |
 | AMP-06 | Niveles por función A/B/C/D (Consolidado/Gestionado/…) | El diseño lo marca opcional y no-NIST. | docs/01 §8.4 |
+| AMP-09 | Validar `valor_schema` de verdad | `evidence_types.yml` declara un `valor_schema` por tipo y `methodology/schemas.py` lo tipa como `dict`, pero **nunca se ejecuta**: no hay jsonschema y nada valida `EvidenceInstance.value` contra él. `modalidad_permitida` y `requiere_locator` tampoco se hacen cumplir. Con los **seis tipos nuevos** de la Oleada C el contrato de evidencia es hoy documentación, no garantía: un adaptador que emitiera una clave mal escrita no fallaría al arrancar, fallaría en una regla con un `KeyError` o, peor, con un `.get()` que devuelve `None` y baja un puntaje en silencio. Coste: una dependencia de jsonschema, validar en `loader.py` al cargar y en los adaptadores al emitir (o solo en los tests, que ya sería la mitad del valor). | docs/02, docs/09 §90-§94 |
+| AMP-10 | Topología de red como señal (`aws_vpc`/`subnet`/`route_table`) para `ID.AM-03` | Alcanzable y del mismo tipo que lo que hizo la Oleada C, pero es otra familia de recursos y otra forma de evidencia (una representación de flujos, no un atributo por recurso). Se dejó fuera para no estirar la oleada. | docs/09 §90 |
 | AMP-08 | `CRI-GV-05` en el cruce de privacidad (`PRIVACY_CRITERIA`) | `GV.OC-03` nombra explícitamente los requisitos de privacidad, pero eso es **Govern-P** del PF 1.0, y el alcance declarado del cruce (docs/00 §6, docs/03 §7) son Identify-P, Protect-P y los eventos. Añadirlo ensancha un límite de alcance que el informe también enuncia, así que es una decisión de alcance y no un detalle de UI. | docs/09 §73 |
 
 ### Subcategorías que el mapeo no podía declarar: cerrado
@@ -97,8 +99,24 @@ esa segunda ruta de parseo, generalizó los rangos de línea a cualquier tipo de
 `ID.RA-09` con `tf.module.source` y `tf.provider.version`. `GV.SC-07`, que la Oleada B cubrió por vía
 documental, pasa a tener además respaldo determinístico.
 
-Esta sección se mantiene vacía a propósito: si una oleada futura vuelve a descartar una
-subcategoría, su motivo y su coste van aquí, no en la cabeza de nadie.
+### Subcategorías que la Oleada C decidió no declarar
+
+La Oleada C (docs/09 §90-§94) subió PROTECT de 8/22 a 14/22 con señal técnica. Estas se quedaron
+fuera **a propósito**, y conviene que su motivo esté escrito: declararlas forzando una señal que el
+IaC no da sería exactamente lo que esta sección existe para evitar.
+
+| Subcategoría | Por qué no |
+|---|---|
+| `PR.AA-02` (verificación y vinculación de identidad según el contexto) | Es un proceso de *identity proofing*. Nada en Terraform lo observa, y no hay campo de afirmación que lo evidencie sin volverse opinable. |
+| `PR.AA-04` (aserciones de identidad protegidas, transmitidas y verificadas) | `aws_iam_saml_provider`/`aws_iam_openid_connect_provider` serían la señal, pero no hay federación en el alcance del prototipo: el fixture sería un adorno y el criterio mediría el fixture. |
+| `PR.AA-06` (acceso físico) · `PR.IR-02` (amenazas ambientales) · `DE.CM-02` (entorno físico) · `DE.CM-03` (actividad del personal) · `PR.PS-03` (hardware) | **No alcanzables por diseño.** Son físicas o de personal, y este prototipo evalúa IaC, documentos y logs. Es un límite del alcance declarado (docs/00 §6), no una tarea pendiente. |
+| `PR.PS-05` (impedir la instalación y ejecución de software no autorizado) | Pediría *allowlisting* (AppArmor, SELinux enforcing, firma de paquetes). Un `service: apparmor enabled` sería una señal muy fina para sostener la subcategoría entera. |
+| `PR.PS-06` (prácticas de desarrollo seguro) | Pediría señal de CI/CD, que no es ninguna de las tres fuentes del prototipo. |
+| `ID.RA-02` · `ID.RA-07` · `ID.RA-08` · `ID.RA-10` · `ID.AM-04` · `ID.AM-08` | Procesos de gobierno (inteligencia de amenazas, gestión de cambios, divulgación de vulnerabilidades, riesgo de proveedores, inventario de servicios de terceros, ciclo de vida de activos). Son documentales, no técnicos: una oleada futura podría cubrirlos con campos de afirmación, con el coste conocido de no estar medidos contra el modelo real. |
+| `ID.AM-03` (representación de la comunicación de red y del flujo de datos) | Sí es alcanzable técnicamente: ver **AMP-10**. |
+
+Esta sección se mantiene al día a propósito: si una oleada vuelve a descartar una subcategoría, su
+motivo y su coste van aquí, no en la cabeza de nadie.
 
 *(AMP-04, cobertura de implementación, se promovió al prototipo y está hecha: `methodology/csf_subcategories.yml`
 con las 106 subcategorías, `app/methodology/coverage.py` y `GET /methodology` — ver docs/09 §68.)*

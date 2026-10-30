@@ -190,9 +190,9 @@ docs/09 §59.
 
 La **cobertura de implementación** se calcula en `app/methodology/coverage.py` sobre
 `methodology/csf_subcategories.yml` (las 106 subcategorías) y se expone en `GET /methodology`;
-hoy son **74/106 (69,8 %)**, las **22 categorías** tienen criterio (`categorias_sin_criterio`
+hoy son **81/106 (76,4 %)**, las **22 categorías** tienen criterio (`categorias_sin_criterio`
 vacía desde la Oleada A) y **10 están completas**, entre ellas las seis de la función Gobernar,
-que queda en 31/31 (docs/09 §68, §73, §77). Es metadato del producto: constante para una versión de
+que queda en 31/31 (docs/09 §68, §73, §77, §94). Es metadato del producto: constante para una versión de
 metodología y sin efecto sobre ningún puntaje. La **cobertura de evidencia** es la de abajo, por
 evaluación, y es la única que marca un puntaje como provisional. No se mezclan ni se suman.
 
