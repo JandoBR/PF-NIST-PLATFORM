@@ -15,7 +15,9 @@ venv/
 *.egg-info/
 
 # Node / frontend
-node_modules/
+# Sin barra final: con `node_modules/` la regla solo cubre directorios, y un symlink con
+# ese nombre se cuela al indice (paso justo eso, ver docs/09).
+node_modules
 dist/
 dist-ssr/
 build/
