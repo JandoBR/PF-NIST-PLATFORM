@@ -99,11 +99,19 @@ esa segunda ruta de parseo, generalizó los rangos de línea a cualquier tipo de
 `ID.RA-09` con `tf.module.source` y `tf.provider.version`. `GV.SC-07`, que la Oleada B cubrió por vía
 documental, pasa a tener además respaldo determinístico.
 
-### Subcategorías que la Oleada C decidió no declarar
+### Las 25 subcategorías descubiertas, y por qué
 
-La Oleada C (docs/09 §90-§94) subió PROTECT de 8/22 a 14/22 con señal técnica. Estas se quedaron
-fuera **a propósito**, y conviene que su motivo esté escrito: declararlas forzando una señal que el
-IaC no da sería exactamente lo que esta sección existe para evitar.
+El sistema cubre **81 de las 106** del CSF 2.0. Esta sección da el motivo de las **25 restantes**,
+una por una, para que la afirmación del proyecto no sea un porcentaje sino algo más fuerte:
+**cada subcategoría del marco tiene un criterio que la evalúa o un motivo escrito de por qué no lo
+tiene.** `tests/test_csf_scope_documented.py` lo comprueba, así que la lista no puede quedarse atrás
+de `criteria.yml`.
+
+No son todas lo mismo, y meterlas en una sola lista de "fuera de alcance" sería tan flojo como no
+decir nada. Van en tres grupos: las que el alcance declarado no puede evidenciar, las que **no se
+deben** declarar aunque parezca que se puede, y las que sí son alcanzables y solo esperan su oleada.
+
+#### (a) Fuera del alcance declarado: ninguna de las tres fuentes las evidencia
 
 | Subcategoría | Por qué no |
 |---|---|
@@ -113,10 +121,32 @@ IaC no da sería exactamente lo que esta sección existe para evitar.
 | `PR.PS-05` (impedir la instalación y ejecución de software no autorizado) | Pediría *allowlisting* (AppArmor, SELinux enforcing, firma de paquetes). Un `service: apparmor enabled` sería una señal muy fina para sostener la subcategoría entera. |
 | `PR.PS-06` (prácticas de desarrollo seguro) | Pediría señal de CI/CD, que no es ninguna de las tres fuentes del prototipo. |
 | `ID.RA-02` · `ID.RA-07` · `ID.RA-08` · `ID.RA-10` · `ID.AM-04` · `ID.AM-08` | Procesos de gobierno (inteligencia de amenazas, gestión de cambios, divulgación de vulnerabilidades, riesgo de proveedores, inventario de servicios de terceros, ciclo de vida de activos). Son documentales, no técnicos: una oleada futura podría cubrirlos con campos de afirmación, con el coste conocido de no estar medidos contra el modelo real. |
-| `ID.AM-03` (representación de la comunicación de red y del flujo de datos) | Sí es alcanzable técnicamente: ver **AMP-10**. |
+| `PR.DS-10` (datos **en uso**) | Pide *confidential computing*: enclaves o cifrado de memoria. No se expresa en el subconjunto de IaC que el adaptador lee, y tampoco es una afirmación documental — es una propiedad del tiempo de ejecución. Con ella, `PR.DS` queda en 3/4 y no puede completarse. |
+| `DE.AE-07` (inteligencia de amenazas integrada al análisis) | Un *feed* de amenazas no es ninguna de las tres fuentes del prototipo. Misma familia que `ID.RA-02`, arriba. |
+| `DE.CM-06` (monitoreo de actividades y servicios de proveedores externos) | El esquema de eventos tiene `fuente` (el sistema que emite el evento), pero **ningún concepto de tercero como actor**, y los seis escenarios no modelan proveedores. Declararla exigiría cambiar el modelo de eventos antes que añadir un criterio. |
+| `RC.CO-04` (actualizaciones **públicas** sobre la recuperación) | Comunicación externa durante un incidente. No la registra el IaC, ni los logs de operación, ni los documentos del alcance. |
 
-Esta sección se mantiene al día a propósito: si una oleada vuelve a descartar una subcategoría, su
-motivo y su coste van aquí, no en la cabeza de nadie.
+#### (b) Alcanzables en apariencia, descartadas por circularidad
+
+Este grupo es el que más merece estar escrito, porque la tentación de declararlas es real y el
+atajo sería invisible en los números.
+
+| Subcategoría | Por qué no |
+|---|---|
+| `DE.AE-04` (impacto y alcance estimados de los eventos adversos) · `RS.AN-08` (estimar y validar la magnitud del incidente) | La entidad `Incident` **ya tiene `severidad`** (`app/models/tables.py`), así que las dos parecen a un paso. No lo están: esa severidad **la asigna un disparador determinístico del propio sistema** (`app/ops/triggers.py`), no un analista estimando impacto. Declararlas sobre ese campo sería evaluar como práctica de la organización lo que la herramienta acaba de calcular sola: cobertura que sube sin una sola evidencia nueva. Para cubrirlas de verdad haría falta una afirmación documental sobre **cómo** la organización estima la magnitud, o un campo de magnitud puesto por quien vive el incidente. Es el mismo principio del silencio documental (docs/09 §60): para afirmar algo hay que observarlo, y la salida propia no es una observación. |
+
+#### (c) Alcanzables: no son un límite, son coste anotado
+
+| Subcategoría | Qué costaría |
+|---|---|
+| `ID.AM-03` (representación de la comunicación de red y del flujo de datos) | Alcanzable por vía técnica: ver **AMP-10**. |
+| `RC.RP-06` (declarar el fin de la recuperación según criterios) | **La más cercana de las nueve.** El incidente ya se cierra con `motivo_cierre` obligatorio (docs/09 §52), pero eso es una acción del usuario sobre la API, no evidencia observada de la práctica. Haría falta un tipo de evento (`recovery_completed`) en `_EXISTENCE_PATTERNS` (`app/surveillance/patterns.py`) y que `CRI-RC-03` lo consuma: exactamente la forma de lo que hizo la Oleada A con `containment_done` (docs/09 §72). Completaría `RC.RP` salvo por `RC.RP-04`. |
+| `RS.CO-03` (compartir información del incidente con las partes interesadas designadas) | `CRI-RS-03` cubre `RS.CO-02`, que es el **plan** de notificación, con `doc.claim`. Lo que falta es el **acto** de notificar durante la respuesta: un evento `stakeholders_notified`, hermano del `recovery_communicated` que ya existe para `RC.CO-03`. |
+| `RC.RP-04` (considerar las funciones críticas y el riesgo al ejecutar la recuperación) | Un campo documental más en el proceso de recuperación, con el **coste conocido** de esa vía: sube la cobertura sin estar medido contra el modelo real, que es la deuda que la Oleada B dejó abierta y que sigue sin saldarse. |
+
+Esta sección se mantiene al día a propósito, y ahora con un test detrás: si una oleada cubre una de
+estas, hay que sacarla de aquí; si descarta otra, su motivo y su coste van aquí, no en la cabeza de
+nadie.
 
 *(AMP-04, cobertura de implementación, se promovió al prototipo y está hecha: `methodology/csf_subcategories.yml`
 con las 106 subcategorías, `app/methodology/coverage.py` y `GET /methodology` — ver docs/09 §68.)*
