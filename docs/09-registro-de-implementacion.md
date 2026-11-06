@@ -3186,3 +3186,53 @@ documentado; y los tres paquetes progresan de verdad —global 18,3 / 59,5 / 97,
 53,5 / 91,4—, con los tres criterios nuevos repartidos por toda la escala en vez de amontonados.
 
 **Estado final: 778 tests**, 2 skipped, `ruff` y frontend limpios.
+
+## 96. Las 106 subcategorías, cubiertas o justificadas
+
+`docs/12 §5` decía de sí mismo que el motivo de lo no declarado "va aquí, no en la cabeza de nadie".
+**No se cumplía.** De las 25 subcategorías descubiertas, solo 16 tenían motivo escrito; las otras
+nueve no aparecían en ninguna parte. Nada lo detectaba, porque la cobertura solo sabe contar las que
+**sí** están cubiertas: lo que falta es, por definición, lo que no se cuenta.
+
+Ahora están las 25, repartidas en tres grupos que no son lo mismo: **13 fuera del alcance
+declarado**, **2 descartadas por circularidad** y **10 alcanzables** con su coste anotado. De las
+nueve que faltaban:
+
+- **Cuatro van al primer grupo** (`PR.DS-10`, `DE.AE-07`, `DE.CM-06`, `RC.CO-04`): ninguna de las
+  tres fuentes —IaC, documentos, logs— las evidencia. `PR.DS-10` pide *confidential computing*;
+  `DE.CM-06` exigiría que el modelo de eventos tuviera el concepto de tercero como actor, que no
+  tiene.
+- **Dos estrenan el segundo** (`DE.AE-04`, `RS.AN-08`), y es el grupo que más merecía estar
+  escrito. La entidad `Incident` **ya tiene `severidad`**, así que las dos parecen a un paso de
+  declararse. No lo están: esa severidad la asigna un disparador determinístico del propio sistema,
+  no un analista estimando impacto. Declararlas sería evaluar como práctica de la organización lo
+  que la herramienta acaba de calcular sola — cobertura que sube sin una sola evidencia nueva. Es el
+  principio del silencio documental (§60) llevado a su conclusión incómoda: **para afirmar algo hay
+  que observarlo, y la salida propia no es una observación.**
+- **Tres van al tercero** (`RC.RP-06`, `RS.CO-03`, `RC.RP-04`), que ya tenía `ID.AM-03` y las seis
+  documentales de gobierno. `RC.RP-06` es la más cercana de todas: el incidente ya se cierra con `motivo_cierre`
+  obligatorio (§52), pero eso es una acción sobre la API, no evidencia observada; haría falta un
+  evento `recovery_completed`, exactamente la forma de lo que la Oleada A hizo con
+  `containment_done` (§72).
+
+**Y un test detrás, porque la afirmación tiene que costar algo.**
+`tests/test_csf_scope_documented.py` comprueba las dos direcciones: que ninguna descubierta se quede
+sin motivo, y que ningún motivo sobreviva a su causa —si una oleada futura cubre una, hay que
+sacarla de la lista, porque un motivo que afirma "fuera de alcance" sobre algo que ya se evalúa es
+peor que no tenerlo—. También que el total del encabezado sea el de verdad. Validado contra tres
+mutaciones (quitar un motivo, desajustar el total, cubrir una subcategoría dejando su motivo) antes
+de darlo por bueno; las caza las tres.
+
+Afinar el test costó una iteración: leía la fila entera de la tabla y confundía las subcategorías
+**citadas dentro de una explicación** (`RS.CO-02` para decir que `CRI-RS-03` cubre el plan de
+notificación, `RC.CO-03` para situar `recovery_communicated`) con subcategorías presentadas como
+descubiertas. Ahora lee solo la primera columna.
+
+**Lo que esto cambia para el informe.** La afirmación del proyecto deja de ser un porcentaje y pasa
+a ser una propiedad verificable: **cada una de las 106 subcategorías del CSF 2.0 tiene un criterio
+que la evalúa o un motivo escrito de por qué no lo tiene**, y un test impide que eso se degrade. El
+81/106 sigue siendo el número, pero ya no es el argumento.
+
+**Verificación:** 781 tests, 2 skipped, `ruff` limpio. No se tocó el motor, el catálogo, los
+fixtures ni los goldens: `GET /methodology` sigue en 81/106 con 31 criterios y `criterios=24`.
+

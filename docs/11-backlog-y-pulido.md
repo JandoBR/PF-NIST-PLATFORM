@@ -136,10 +136,14 @@ GV 6/6 · ID 6/6 · PR 9/9 · DE 3/3 · RS 4/4 · RC 3/3.
   DE 6/11.
   Lo que falta se reparte así (`categorias_incompletas`): `ID.RA` (4), `ID.AM` (3), `PR.AA` (3),
   `PR.PS` (3), `DE.CM` (3), `DE.AE` (2), `RC.RP` (2), y una sola en `PR.DS`, `PR.IR`, `RS.AN`,
-  `RS.CO` y `RC.CO`. **Una parte ya no es alcanzable por diseño** —acceso físico, amenazas
-  ambientales, actividad del personal, hardware— y está anotada con su motivo en docs/12 §5. El
-  resto se divide entre señales de red que los adaptadores aún no leen (`ID.AM-03`) y procesos que
-  solo un documento puede evidenciar.
+  `RS.CO` y `RC.CO`. **Las 25 tienen su motivo escrito en docs/12 §5** (docs/09 §96), repartidas en
+  tres grupos: **13 fuera del alcance declarado** (5 físicas o de personal, 4 que pedirían *identity
+  proofing*, federación, *allowlisting* o señal de CI, y `PR.DS-10`, `DE.AE-07`, `DE.CM-06` y
+  `RC.CO-04`), **2 descartadas por circularidad** (`DE.AE-04` y `RS.AN-08`: el sistema no puede
+  puntuarse con la severidad que él mismo asigna) y **10 alcanzables** con su coste anotado —de
+  ellas `ID.AM-03`, `RC.RP-06` y `RS.CO-03` por vía técnica, y siete con campos documentales, con la
+  deuda conocida de no estar medidos contra el modelo real.
+  `tests/test_csf_scope_documented.py` impide que esa lista se quede atrás del catálogo.
 - **UI (hecho):** la matriz muestra siempre las **6 funciones**; una sin criterios aparece como
   "Sin criterios" (borde punteado) en vez de desaparecer (docs/09 §30).
 
