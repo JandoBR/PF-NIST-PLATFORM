@@ -148,13 +148,13 @@ export const listOrgIncidents = (orgId: string) =>
 export const ingestEvents = (
   orgId: string,
   file: File,
-  opts: { useAi?: boolean; confirmLiveAi?: boolean } = {}
+  opts: { useAi?: boolean } = {}
 ) => {
   const form = new FormData();
   form.append('file', file);
   const params = new URLSearchParams();
   if (opts.useAi) params.set('use_ai', 'true');
-  if (opts.confirmLiveAi) params.set('confirm_live_ai', 'true');
+  params.set('confirm_live_ai', 'true');
   const qs = params.toString() ? `?${params.toString()}` : '';
   return request<EventsAccepted>(`/orgs/${orgId}/events${qs}`, {
     method: 'POST',
@@ -191,7 +191,6 @@ export interface CreateAssessmentInput {
   scope?: string;
   aiAdjust?: boolean;
   useAiForDocuments?: boolean;
-  confirmLiveAi?: boolean;
   terraformFiles?: File[];
   ansibleFiles?: File[];
   documentFiles?: File[];
@@ -203,7 +202,7 @@ export const createAssessment = (input: CreateAssessmentInput) => {
   form.append('scope', input.scope ?? 'entorno:produccion');
   form.append('ai_adjust', String(input.aiAdjust ?? false));
   form.append('use_ai_for_documents', String(input.useAiForDocuments ?? false));
-  form.append('confirm_live_ai', String(input.confirmLiveAi ?? false));
+  form.append('confirm_live_ai', 'true');
   for (const f of input.terraformFiles ?? []) form.append('terraform_files', f);
   for (const f of input.ansibleFiles ?? []) form.append('ansible_files', f);
   for (const f of input.documentFiles ?? []) form.append('document_files', f);
@@ -231,21 +230,21 @@ export const updatePlanEstado = (assessmentId: string, planId: string, estado: P
     body: JSON.stringify({ estado }),
   });
 
-export const createPlans = (id: string, opts: { useAi?: boolean; confirmLiveAi?: boolean } = {}) => {
+export const createPlans = (id: string, opts: { useAi?: boolean } = {}) => {
   const params = new URLSearchParams();
   if (opts.useAi) params.set('use_ai', 'true');
-  if (opts.confirmLiveAi) params.set('confirm_live_ai', 'true');
+  params.set('confirm_live_ai', 'true');
   const qs = params.toString() ? `?${params.toString()}` : '';
   return request<Plan[]>(`/assessments/${id}/plans${qs}`, { method: 'POST' });
 };
 
 export const reevaluateAssessment = (
   id: string,
-  opts: { aiAdjust?: boolean; context?: object; confirmLiveAi?: boolean } = {}
+  opts: { aiAdjust?: boolean; context?: object } = {}
 ) => {
   const params = new URLSearchParams();
   if (opts.aiAdjust) params.set('ai_adjust', 'true');
-  if (opts.confirmLiveAi) params.set('confirm_live_ai', 'true');
+  params.set('confirm_live_ai', 'true');
   if (opts.context) params.set('context', JSON.stringify(opts.context));
   const qs = params.toString() ? `?${params.toString()}` : '';
   return request<AssessmentAccepted>(`/assessments/${id}/reevaluate${qs}`, { method: 'POST' });
@@ -266,8 +265,8 @@ export const listJobs = (filters: { estado?: JobEstado; tipo?: string; limit?: n
   return request<JobOut[]>(`/jobs${qs ? `?${qs}` : ''}`);
 };
 
-export const retryJob = (jobId: string, confirmLiveAi = false) =>
-  request<JobOut>(`/jobs/${jobId}/retry${confirmLiveAi ? '?confirm_live_ai=true' : ''}`, {
+export const retryJob = (jobId: string) =>
+  request<JobOut>(`/jobs/${jobId}/retry?confirm_live_ai=true`, {
     method: 'POST',
   });
 

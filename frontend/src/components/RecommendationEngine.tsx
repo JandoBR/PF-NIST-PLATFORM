@@ -11,7 +11,7 @@ import {
   ChevronRight,
   Info,
 } from 'lucide-react';
-import { ApiError, createPlans, updatePlanEstado } from '@/lib/api';
+import { createPlans, updatePlanEstado } from '@/lib/api';
 import type { Finding, Plan, PlanEstado } from '@/lib/types';
 import { PLAN_ESTADOS, PLAN_ESTADO_META, SEVERITY_META } from '@/lib/ui';
 
@@ -44,22 +44,15 @@ export function RecommendationEngine({
   const [generating, setGenerating] = useState<'plantilla' | 'ia' | null>(null);
   const [savingPlan, setSavingPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [needsConfirm, setNeedsConfirm] = useState(false);
 
-  async function handleGenerate(useAi: boolean, confirmLiveAi = false) {
+  async function handleGenerate(useAi: boolean) {
     setGenerating(useAi ? 'ia' : 'plantilla');
     setError(null);
     try {
-      const updated = await createPlans(assessmentId, { useAi, confirmLiveAi });
+      const updated = await createPlans(assessmentId, { useAi });
       onPlansUpdated(updated);
-      setNeedsConfirm(false);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        setNeedsConfirm(true);
-        setError(err.detail);
-      } else {
-        setError(err instanceof Error ? err.message : 'Error desconocido.');
-      }
+      setError(err instanceof Error ? err.message : 'Error desconocido.');
     } finally {
       setGenerating(null);
     }
@@ -139,18 +132,9 @@ export function RecommendationEngine({
           <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3.5 text-xs text-amber-200">
             <div className="mb-1 flex items-center gap-2 font-medium">
               <AlertTriangle className="h-3.5 w-3.5" />
-              {needsConfirm ? 'Confirmación requerida' : 'No se pudo completar la acción'}
+              No se pudo completar la acción
             </div>
             <p className="whitespace-pre-line leading-relaxed">{error}</p>
-            {needsConfirm && (
-              <button
-                onClick={() => handleGenerate(true, true)}
-                disabled={generating !== null}
-                className="btn-primary mt-2 text-xs"
-              >
-                Confirmar llamadas reales a IA y reintentar
-              </button>
-            )}
           </div>
         )}
       </div>

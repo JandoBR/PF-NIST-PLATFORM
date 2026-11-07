@@ -9,6 +9,7 @@ import {
   Info,
   Lock,
   Library,
+  AlertTriangle,
 } from 'lucide-react';
 import { downloadExecutiveReport, getMethodology } from '@/lib/api';
 import type {
@@ -52,11 +53,16 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
   // metodologia, asi que se pide una sola vez y no depende de la evaluacion que se este viendo.
   // Si falla, la seccion no se pinta: es metadato y nunca debe tumbar la matriz.
   const [coverage, setCoverage] = useState<ImplementationCoverage | null>(null);
+  const [currentCatalog, setCurrentCatalog] = useState<{ version: string; total: number } | null>(null);
 
   useEffect(() => {
     let vigente = true;
     getMethodology()
-      .then((m) => vigente && setCoverage(m.cobertura_implementacion))
+      .then((m) => {
+        if (!vigente) return;
+        setCoverage(m.cobertura_implementacion);
+        setCurrentCatalog({ version: m.methodology_version, total: m.criterios.length });
+      })
       .catch(() => undefined);
     return () => {
       vigente = false;
@@ -226,6 +232,17 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
 
       {/* Cobertura del catalogo (AMP-04, docs/01 §7): mide la herramienta, no esta evaluacion */}
       {coverage && <CatalogCoverage coverage={coverage} />}
+
+      {currentCatalog && assessment.methodology_version !== currentCatalog.version && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3.5 text-xs text-amber-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <p className="leading-relaxed">
+            Esta evaluación se calculó con una versión anterior del catálogo ({criteria.length} criterios;
+            el actual tiene {currentCatalog.total}). Los criterios añadidos después no aparecen aquí.
+            Crea una evaluación nueva para usar el catálogo vigente.
+          </p>
+        </div>
+      )}
 
       {/* Criterios evaluados, con una vista alterna de privacidad (docs/03 §7) */}
       <div className="card overflow-hidden">

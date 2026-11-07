@@ -45,16 +45,9 @@ export function JobHistory({ onClose, onOpenAssessment, openableIds }: Props) {
   }, [load]);
 
   async function handleRetry(job: JobOut) {
-    if (
-      job.usa_ia &&
-      !window.confirm(
-        'Reintentar volverá a llamar a la IA real y puede generar costo. ¿Quieres continuar?'
-      )
-    )
-      return;
     setRetrying(job.id);
     try {
-      await retryJob(job.id, job.usa_ia);
+      await retryJob(job.id);
       setError(null);
       await load();
     } catch (err) {

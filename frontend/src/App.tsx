@@ -14,7 +14,7 @@ import { Login } from '@/components/Login';
 import { ContextSelector } from '@/components/ContextSelector';
 import { MaturityDashboard } from '@/components/MaturityDashboard';
 import { RecommendationEngine } from '@/components/RecommendationEngine';
-import { ThreatSimulation } from '@/components/ThreatSimulation';
+import { EventsIncidents } from '@/components/EventsIncidents';
 import { CompareAssessments } from '@/components/CompareAssessments';
 import { JobHistory } from '@/components/JobHistory';
 import {
@@ -351,7 +351,7 @@ function App() {
         {tab === 'threats' ? (
           // Eventos e incidentes dependen de la organizacion (sesion), no de una evaluacion: se
           // pueden ingerir logs y ver incidentes sin haber evaluado nada (docs/08).
-          <ThreatSimulation
+          <EventsIncidents
             orgId={user.org_id}
             orgNombre={user.org_nombre}
             onIngested={() => void refreshHistory()}
@@ -399,7 +399,7 @@ function App() {
 
       <footer className="mx-auto max-w-[1400px] px-4 pb-8 pt-4 sm:px-6">
         <p className="text-center text-xs text-slate-700">
-          Prototipo académico · Evaluación determinista + IA opcional · Referencia NIST CSF 2.0 · No apto para uso en producción
+          Evaluación determinista asistida por IA · Referencia NIST CSF 2.0
         </p>
       </footer>
     </div>

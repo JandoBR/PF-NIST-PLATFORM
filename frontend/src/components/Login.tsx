@@ -88,9 +88,6 @@ export function Login({ onLogin }: LoginProps) {
           </p>
         </form>
 
-        <p className="mt-6 text-center text-xs text-slate-700">
-          Prototipo académico · No apto para uso en producción
-        </p>
       </div>
     </div>
   );

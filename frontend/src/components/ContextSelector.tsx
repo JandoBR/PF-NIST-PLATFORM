@@ -8,10 +8,9 @@ import {
   Sparkles,
   ArrowRight,
   AlertTriangle,
-  Brain,
 } from 'lucide-react';
 import { DEMO_BUNDLES, fetchAsFile } from '@/data/demo';
-import { ApiError, JobTimeoutError, createAssessment, getAssessment, isAbortError, pollJob } from '@/lib/api';
+import { JobTimeoutError, createAssessment, getAssessment, isAbortError, pollJob } from '@/lib/api';
 import type { AssessmentAccepted, AssessmentDetail, JobEstado } from '@/lib/types';
 
 interface ContextSelectorProps {
@@ -28,8 +27,6 @@ type Mode = 'demo' | 'custom';
 export function ContextSelector({ open, onClose, onCreated, onAccepted }: ContextSelectorProps) {
   const [mode, setMode] = useState<Mode>('demo');
   const [bundleId, setBundleId] = useState(DEMO_BUNDLES[0].id);
-  const [aiAdjust, setAiAdjust] = useState(false);
-  const [useAiForDocuments, setUseAiForDocuments] = useState(false);
   const [terraformFiles, setTerraformFiles] = useState<File[]>([]);
   const [ansibleFiles, setAnsibleFiles] = useState<File[]>([]);
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
@@ -37,8 +34,6 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
   const [submitting, setSubmitting] = useState(false);
   const [jobEstado, setJobEstado] = useState<JobEstado | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [needsConfirm, setNeedsConfirm] = useState(false);
-  const [confirmLiveAi, setConfirmLiveAi] = useState(false);
 
   //: Permite abortar el sondeo del job si el usuario cierra el modal: el job sigue corriendo en
   //: el backend, pero la UI deja de esperar y el dashboard lo recupera por el historial.
@@ -48,10 +43,6 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
   if (!open) return null;
 
   const hasCustomFiles = terraformFiles.length + ansibleFiles.length + documentFiles.length > 0;
-  // Hay documentos en esta evaluación (los de ejemplo o los subidos) y sin U1 no se leen.
-  const hasDocuments = (mode === 'demo'
-    ? (DEMO_BUNDLES.find((b) => b.id === bundleId)?.documents?.length ?? 0)
-    : documentFiles.length) > 0;
   const canSubmit = mode === 'demo' || hasCustomFiles;
 
   async function handleSubmit() {
@@ -71,18 +62,16 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
           Promise.all((bundle.documents ?? []).map(fetchAsFile)),
         ]);
         input = {
-          aiAdjust,
-          useAiForDocuments: useAiForDocuments && docs.length > 0,
-          confirmLiveAi,
+          aiAdjust: true,
+          useAiForDocuments: docs.length > 0,
           terraformFiles: tf,
           ansibleFiles: ans,
           documentFiles: docs,
         };
       } else {
         input = {
-          aiAdjust,
-          useAiForDocuments: useAiForDocuments && documentFiles.length > 0,
-          confirmLiveAi,
+          aiAdjust: true,
+          useAiForDocuments: documentFiles.length > 0,
           terraformFiles,
           ansibleFiles,
           documentFiles,
@@ -112,9 +101,6 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
       }
       if (err instanceof JobTimeoutError) {
         setError(err.message);
-      } else if (err instanceof ApiError && err.status === 409) {
-        setNeedsConfirm(true);
-        setError(err.detail);
       } else {
         setError(err instanceof Error ? err.message : 'Error desconocido.');
       }
@@ -128,11 +114,6 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
   function resetAndClose() {
     abortRef.current?.abort();
     setError(null);
-    setNeedsConfirm(false);
-    setConfirmLiveAi(false);
-    // La capa de IA es por corrida (docs/11 UI-03): no debe sobrevivir al cierre del modal.
-    setAiAdjust(false);
-    setUseAiForDocuments(false);
     onClose();
   }
 
@@ -143,9 +124,7 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
         ? 'Evaluando…'
         : submitting
           ? 'Enviando…'
-          : needsConfirm
-            ? 'Reintentar'
-            : 'Analizar';
+          : 'Analizar';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -235,53 +214,14 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
               </div>
             )}
 
-            {/* Opciones de IA */}
-            <div className="mt-5 space-y-2 rounded-lg border border-white/[0.06] bg-ink-900/40 p-3.5">
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
-                <Brain className="h-3.5 w-3.5 text-cyan-400" />
-                Capa de IA (opcional)
-              </div>
-              <Checkbox
-                checked={aiAdjust}
-                onChange={setAiAdjust}
-                label="Ajustar puntajes con contexto adicional (U2)"
-              />
-              <Checkbox
-                checked={useAiForDocuments}
-                onChange={setUseAiForDocuments}
-                label="Usar IA para extraer afirmaciones de los documentos (U1)"
-              />
-              {hasDocuments && !useAiForDocuments && (
-                <p className="pl-6 text-xs text-amber-300/90">
-                  Sin esta opción los documentos no se leen: Gobernar e Identificar quedan sin evidencia,
-                  y Responder y Recuperar solo con lo que muestren los eventos.
-                </p>
-              )}
-              <p className="pl-6 text-xs text-slate-600">
-                Solo aplica a esta evaluación: se restablece al cerrar o enviar el modal. Sin una
-                DEEPSEEK_API_KEY configurada en el backend, esto no tiene costo ni efecto: el
-                resultado queda igual al puntaje base.
-              </p>
-            </div>
 
             {error && (
               <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3.5 text-xs text-amber-200">
                 <div className="mb-1 flex items-center gap-2 font-medium">
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  {needsConfirm ? 'Confirmación requerida' : 'No se pudo crear la evaluación'}
+                  No se pudo crear la evaluación
                 </div>
                 <p className="whitespace-pre-line leading-relaxed">{error}</p>
-                {needsConfirm && (
-                  <label className="mt-2 flex items-center gap-2 text-amber-100">
-                    <input
-                      type="checkbox"
-                      checked={confirmLiveAi}
-                      onChange={(e) => setConfirmLiveAi(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-amber-500/40 bg-transparent"
-                    />
-                    Confirmo que quiero hacer llamadas reales (y pagadas) a la API de IA.
-                  </label>
-                )}
               </div>
             )}
           </div>
@@ -294,7 +234,7 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
               </p>
               <button
                 onClick={handleSubmit}
-                disabled={!canSubmit || submitting || (needsConfirm && !confirmLiveAi)}
+                disabled={!canSubmit || submitting}
                 className="btn-primary flex-shrink-0"
               >
                 {submitting ? (
@@ -346,27 +286,6 @@ function FilePicker({
   );
 }
 
-function Checkbox({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: string;
-}) {
-  return (
-    <label className="flex items-center gap-2 text-xs text-slate-300">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-3.5 w-3.5 rounded border-white/20 bg-transparent"
-      />
-      {label}
-    </label>
-  );
-}
 
 function TabBtn({
   active,

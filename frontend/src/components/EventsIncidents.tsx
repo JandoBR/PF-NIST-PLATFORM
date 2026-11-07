@@ -41,7 +41,7 @@ interface Props {
 
 type Tab = 'activos' | 'historial';
 
-export function ThreatSimulation({ orgId, orgNombre, onIngested }: Props) {
+export function EventsIncidents({ orgId, orgNombre, onIngested }: Props) {
   const [incidents, setIncidents] = useState<IncidentOut[]>([]);
   const [loading, setLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
