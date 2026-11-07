@@ -12,6 +12,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from app.ai.client import AIClient, NullAIClient
+from app.ai.parallel import map_ordered
 from app.ai.plan_generation import generate_plan_content
 from app.evaluation.schemas import CriterionResult
 from app.methodology.loader import Methodology
@@ -71,4 +72,4 @@ def generate_plans(
 
     active_client = client or NullAIClient()
     findings = derive_findings(methodology, results)
-    return [_build_plan(methodology, active_client, finding) for finding in findings]
+    return map_ordered(lambda finding: _build_plan(methodology, active_client, finding), findings)

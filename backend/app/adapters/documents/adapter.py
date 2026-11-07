@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
 from app.adapters.documents.extraction_text import chunk_document
 from app.ai.client import AIClient
 from app.ai.extraction import extract_claims
+from app.ai.parallel import map_ordered, slot
 from app.methodology.loader import Methodology
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
 
@@ -31,13 +33,16 @@ class _CountingClient:
         self._inner = inner
         self.respondidas = 0
         self.sin_respuesta = 0
+        self._lock = threading.Lock()
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
-        respuesta = self._inner.complete_json(system_prompt, user_prompt)
-        if respuesta is None:
-            self.sin_respuesta += 1
-        else:
-            self.respondidas += 1
+        with slot():
+            respuesta = self._inner.complete_json(system_prompt, user_prompt)
+        with self._lock:
+            if respuesta is None:
+                self.sin_respuesta += 1
+            else:
+                self.respondidas += 1
         return respuesta
 
 
@@ -58,6 +63,7 @@ class DocumentAdapter:
         self.scope = scope
         self._max_chunks_per_document = max_chunks_per_document
         self.chunks_omitidos = 0
+        self._omitidos_lock = threading.Lock()
 
     _SUPPORTED_SUFFIXES = (".pdf", ".md", ".markdown", ".txt")
 
@@ -72,8 +78,9 @@ class DocumentAdapter:
 
     def parse_path(self, path: Path, tipos_solicitados: list[str]) -> list[EvidenceInstance]:
         evidence: list[EvidenceInstance] = []
-        for file_path in self.list_files(path):
-            evidence.extend(self._parse_file(file_path, tipos_solicitados))
+        files = self.list_files(path)
+        for parsed in map_ordered(lambda f: self._parse_file(f, tipos_solicitados), files):
+            evidence.extend(parsed)
         return evidence
 
     def _source_info(
@@ -108,24 +115,27 @@ class DocumentAdapter:
         chunks = chunk_document(file_path)
         total = len(chunks)
         if total > self._max_chunks_per_document:
-            self.chunks_omitidos += total - self._max_chunks_per_document
+            with self._omitidos_lock:
+                self.chunks_omitidos += total - self._max_chunks_per_document
             chunks = chunks[: self._max_chunks_per_document]
 
         contador = _CountingClient(self._client)
         claims: list[EvidenceInstance] = []
-        for chunk in chunks:
-            claims.extend(
-                extract_claims(
-                    contador,
-                    chunk_text=chunk.text,
-                    chunk_locator=chunk.locator,
-                    tipos_solicitados=tipos_solicitados,
-                    doc_id=file_path.stem,
-                    source_id=self.source_id,
-                    scope=self.scope,
-                    confianza_minima=self._confianza_minima,
-                )
-            )
+        por_chunk = map_ordered(
+            lambda chunk: extract_claims(
+                contador,
+                chunk_text=chunk.text,
+                chunk_locator=chunk.locator,
+                tipos_solicitados=tipos_solicitados,
+                doc_id=file_path.stem,
+                source_id=self.source_id,
+                scope=self.scope,
+                confianza_minima=self._confianza_minima,
+            ),
+            chunks,
+        )
+        for extraidos in por_chunk:
+            claims.extend(extraidos)
 
         # Un documento al que la IA no contesto en ninguna seccion NO se marca como analizado: eso
         # diria "se leyo y no habia nada" cuando en realidad no se leyo (degradar sin inventar).

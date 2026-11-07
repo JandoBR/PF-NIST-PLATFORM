@@ -12,6 +12,7 @@ from typing import Any
 
 from app.ai.adjustment import adjust, is_adjustable
 from app.ai.client import AIClient
+from app.ai.parallel import map_ordered
 from app.evaluation.contradictions import Contradiction, detect, excluded_by_criterion
 from app.evaluation.rules import (
     de01_monitoring,
@@ -212,13 +213,11 @@ def apply_ai_adjustments(
 
     permitidos = _criterios_a_ajustar(methodology, results)
 
-    adjusted = []
-    for result in results:
+    def _adjust_one(result: CriterionResult) -> CriterionResult:
         criterion = methodology.criterios.get(result.criterion_id)
         if criterion is None or result.criterion_id not in permitidos:
-            adjusted.append(result)
-            continue
-        adjusted.append(
-            adjust(client, criterion, result, evidence_by_id, context, alpha, divergencia_maxima)
-        )
+            return result
+        return adjust(client, criterion, result, evidence_by_id, context, alpha, divergencia_maxima)
+
+    adjusted = map_ordered(_adjust_one, results)
     return adjusted
