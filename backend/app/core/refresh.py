@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+from app.core import reproducibility
 from app.core.assessment_service import (
     AssessmentNotFoundError,
     collect_surveillance_evidence,
@@ -223,7 +224,9 @@ def _apply_selective_refresh(
         if _criterion_uses_surveillance(criterion)
     }
     # Lo no afectado se reusa tal cual (incluido lo derivado de IA): hereda con que se calculo.
-    assessment.reproducibility = previous.reproducibility
+    assessment.reproducibility = reproducibility.with_methodology(
+        previous.reproducibility, methodology
+    )
 
     # 1. Fuentes (trazabilidad) y evidencia base (todo menos vigilancia), con remapeo de ids.
     for source in previous.sources:

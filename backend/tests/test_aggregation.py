@@ -25,6 +25,14 @@ def _result(criterion_id, estado, score=None):
     )
 
 
+def test_unknown_historical_criteria_are_ignored(methodology):
+    results = [_result("CRI-REMOVED-99", Estado.EVALUADO, 100)]
+
+    assert aggregation.aggregate_by_subcategoria(methodology, results) == []
+    assert aggregation.aggregate_by_categoria(methodology, results) == []
+    assert aggregation.aggregate_by_funcion(methodology, results) == []
+
+
 def test_categoria_aggregate_is_weighted_by_criterion_peso(methodology):
     # PR.DS agrupa CRI-PR-01 (peso 5) y CRI-PR-02 (peso 5); CRI-PR-05 tambien pesa 3 sobre PR.DS.
     results = [

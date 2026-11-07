@@ -3,11 +3,12 @@ archivo JSONL no requiere nada mas que el archivo mismo."""
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
+
+from app.core.json import strict_loads
 
 
 class SurveillanceError(Exception):
@@ -35,8 +36,8 @@ def load_events_jsonl(path: Path) -> list[RawEvent]:
             if not line:
                 continue
             try:
-                raw = json.loads(line)
-            except json.JSONDecodeError as exc:
+                raw = strict_loads(line)
+            except ValueError as exc:
                 raise SurveillanceError(f"{path}:{line_number}: JSON invalido: {exc}") from exc
             try:
                 event = RawEvent.model_validate(raw)

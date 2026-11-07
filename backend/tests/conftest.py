@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -139,7 +140,10 @@ def _client(db_session, fake_redis, *, authenticated: bool, auth_user: User | No
         assert auth_user is not None
         app.dependency_overrides[get_current_user] = lambda: auth_user
     try:
-        with TestClient(app) as client:
+        with (
+            patch("app.api.app.build_engine", return_value=db_session.get_bind()),
+            TestClient(app) as client,
+        ):
             yield client
     finally:
         app.dependency_overrides.clear()

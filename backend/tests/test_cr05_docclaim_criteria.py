@@ -95,7 +95,7 @@ def _rds_encryption(estado: str = "enabled") -> EvidenceInstance:
     )
 
 
-def _claim(tipo: str, contenido: dict) -> EvidenceInstance:
+def _claim(tipo: str, contenido: dict, confianza: float = 0.9) -> EvidenceInstance:
     return EvidenceInstance(
         type_id="doc.claim",
         type_version=1,
@@ -106,7 +106,7 @@ def _claim(tipo: str, contenido: dict) -> EvidenceInstance:
             "tipo_afirmacion": tipo,
             "contenido": contenido,
             "encontrado": True,
-            "confianza": 0.9,
+            "confianza": confianza,
         },
         source_id="test:cr05",
         locator=Locator(file="politica.md"),
@@ -150,6 +150,20 @@ def test_pr02_retencion_bajo_politica_scores_50():
 
 def test_pr02_sin_politica_tope_75():
     assert pr02_backup.evaluate([_backup(7)]).final_score == 75
+
+
+def test_pr02_una_politica_callada_no_tapa_la_retencion_de_otra():
+    """La afirmacion mas confiable calla la retencion; otra menos confiable si la declara. Antes
+    75 (sin politica) tapaba la comparacion real 7 < 30, que es 50."""
+
+    callada = _claim("backup_policy", {"respaldo": True}, confianza=0.95)
+    con_retencion = _claim(
+        "backup_policy", {"respaldo": True, "retencion": "30 dias"}, confianza=0.7
+    )
+
+    result = pr02_backup.evaluate([_backup(7), callada, con_retencion])
+
+    assert result.final_score == 50 and con_retencion.id in result.evidence_ids
 
 
 # -- CRI-RS-01 ----------------------------------------------------------------------
@@ -254,6 +268,22 @@ def test_rc02_politica_y_restauracion_verificada_scores_100():
 def test_rc02_politica_sin_ventana_tope_75():
     evidence = [_claim("backup_policy", {"respaldo": True, "verificacion_integridad": True})]
     assert rc02_backup_verification.evaluate(evidence).final_score == 75
+
+
+def test_rc02_una_politica_callada_no_tapa_la_verificacion_de_otra():
+    """La afirmacion mas confiable omite `verificacion_integridad`; otra menos confiable la exige.
+    Antes 75 (restauracion verificada sin politica documentada), ahora la politica cuenta: 100."""
+
+    callada = _claim("backup_policy", {"respaldo": True}, confianza=0.95)
+    con_verificacion = _claim(
+        "backup_policy", {"respaldo": True, "verificacion_integridad": True}, confianza=0.7
+    )
+
+    result = rc02_backup_verification.evaluate(
+        [_window(), _pattern("restore_verified"), callada, con_verificacion]
+    )
+
+    assert result.final_score == 100 and con_verificacion.id in result.evidence_ids
 
 
 def test_rc02_fallo_prevalece_sobre_politica_scores_0():

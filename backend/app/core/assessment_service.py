@@ -280,6 +280,7 @@ def run_pending_assessment(
         )
         results = engine.evaluate_all(methodology, evidence)
         assessment.reproducibility = reproducibility.build(
+            methodology=methodology,
             terraform=terraform_path is not None,
             ansible=ansible_path is not None,
             documents=documents_path is not None,

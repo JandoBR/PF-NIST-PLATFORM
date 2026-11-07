@@ -54,7 +54,9 @@ def aggregate_by_subcategoria(
 
     by_subcategoria: dict[str, list[tuple[CriterionResult, float]]] = defaultdict(list)
     for result in results:
-        criterio = methodology.criterios[result.criterion_id]
+        criterio = methodology.criterios.get(result.criterion_id)
+        if criterio is None:
+            continue
         for subcategoria in criterio.subcategorias:
             by_subcategoria[subcategoria].append((result, criterio.peso))
 
@@ -76,7 +78,9 @@ def aggregate_by_categoria(
 
     by_categoria: dict[str, list[tuple[CriterionResult, float]]] = defaultdict(list)
     for result in results:
-        criterio = methodology.criterios[result.criterion_id]
+        criterio = methodology.criterios.get(result.criterion_id)
+        if criterio is None:
+            continue
         for categoria in criterio.categorias:
             by_categoria[categoria].append((result, criterio.peso))
 
@@ -96,7 +100,9 @@ def aggregate_by_funcion(
 ) -> list[Aggregate]:
     by_funcion: dict[str, list[tuple[CriterionResult, float]]] = defaultdict(list)
     for result in results:
-        criterio = methodology.criterios[result.criterion_id]
+        criterio = methodology.criterios.get(result.criterion_id)
+        if criterio is None:
+            continue
         by_funcion[criterio.funcion].append((result, criterio.peso))
 
     return [

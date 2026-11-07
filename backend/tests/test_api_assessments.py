@@ -38,7 +38,14 @@ def test_invalid_context_is_422_and_creates_nothing(api_client, db_session):
 
     from app.models.tables import Assessment
 
-    for context in ("{no es json", "[1, 2]"):
+    for context in (
+        "{no es json",
+        "[1, 2]",
+        '{"value": NaN}',
+        '{"value": Infinity}',
+        '{"value": -Infinity}',
+        '{"value": 1e999}',
+    ):
         response = _upload_terraform(api_client, "good", context=context)
         assert response.status_code == 422
     assert db_session.query(Assessment).count() == 0

@@ -12,6 +12,7 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -24,7 +25,7 @@ _PBKDF2_ITERATIONS = 200_000
 
 
 def secret_key() -> str:
-    return os.environ.get("SECRET_KEY", DEFAULT_SECRET_KEY)
+    return os.environ.get("SECRET_KEY") or DEFAULT_SECRET_KEY
 
 
 def token_ttl_hours() -> int:
@@ -80,13 +81,15 @@ def decode_token(token: str) -> dict | None:
         return None
     try:
         payload = json.loads(_unb64url(body))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         return None
     if not isinstance(payload, dict):
         return None
 
     exp = payload.get("exp")
     if not isinstance(exp, (int, float)) or isinstance(exp, bool):
+        return None
+    if isinstance(exp, float) and not math.isfinite(exp):
         return None
     if exp < datetime.now(UTC).timestamp():
         return None

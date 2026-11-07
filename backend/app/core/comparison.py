@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.assessment_service import AssessmentNotFoundError, load_criterion_results
 from app.evaluation import aggregation
 from app.evaluation.schemas import CriterionResult
+from app.methodology import snapshot
 from app.methodology.loader import Methodology
 from app.models.tables import (
     Assessment,
@@ -96,13 +97,17 @@ def compare(
         if assessment is None:
             raise AssessmentNotFoundError(assessment_id)
 
+    methodology_a = snapshot.for_assessment(antes, methodology)
+    methodology_b = snapshot.for_assessment(despues, methodology)
     results_a = {r.criterion_id: r for r in load_criterion_results(session, assessment_id_a)}
     results_b = {r.criterion_id: r for r in load_criterion_results(session, assessment_id_b)}
 
     diffs = []
     for criterion_id in sorted(set(results_a) | set(results_b)):
         ra, rb = results_a.get(criterion_id), results_b.get(criterion_id)
-        criterio = methodology.criterios.get(criterion_id)
+        criterio = methodology_b.criterios.get(criterion_id) or methodology_a.criterios.get(
+            criterion_id
+        )
         diffs.append(
             CriterionDiff(
                 criterion_id=criterion_id,
@@ -116,10 +121,10 @@ def compare(
             )
         )
 
-    brechas_a = _brechas(methodology, list(results_a.values()))
-    brechas_b = _brechas(methodology, list(results_b.values()))
-    global_antes = _global_score(methodology, list(results_a.values()))
-    global_despues = _global_score(methodology, list(results_b.values()))
+    brechas_a = _brechas(methodology_a, list(results_a.values()))
+    brechas_b = _brechas(methodology_b, list(results_b.values()))
+    global_antes = _global_score(methodology_a, list(results_a.values()))
+    global_despues = _global_score(methodology_b, list(results_b.values()))
 
     return ComparisonReport(
         assessment_id_a=assessment_id_a,

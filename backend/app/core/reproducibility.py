@@ -18,6 +18,8 @@ from app.adapters.documents.adapter import ADAPTER_VERSION as DOCUMENTS_ADAPTER_
 from app.adapters.terraform.adapter import ADAPTER_VERSION as TERRAFORM_ADAPTER_VERSION
 from app.ai import adjustment, extraction, plan_generation
 from app.ai.client import AIClient, NullAIClient
+from app.methodology import snapshot
+from app.methodology.loader import Methodology
 
 
 def _package_version(name: str) -> str | None:
@@ -46,6 +48,7 @@ def _ai_active(client: AIClient | None) -> bool:
 
 def build(
     *,
+    methodology: Methodology,
     terraform: bool,
     ansible: bool,
     documents: bool,
@@ -75,7 +78,13 @@ def build(
             pasos["ajuste"] = adjustment.PROMPT_VERSION
         if pasos:
             ai = {"modelo": model_name(ai_client), **pasos}
-    return {"adapters": adapters, "ai": ai}
+    return {"adapters": adapters, "ai": ai, "methodology": snapshot.build(methodology)}
+
+
+def with_methodology(info: dict[str, Any] | None, methodology: Methodology) -> dict[str, Any]:
+    result = dict(info or {"adapters": {}, "ai": None})
+    result["methodology"] = snapshot.build(methodology)
+    return result
 
 
 def with_plans_ai(info: dict[str, Any] | None, ai_client: AIClient | None) -> dict[str, Any] | None:

@@ -116,6 +116,83 @@ def test_migrated_incidents_correlation_key_is_unique_per_organization(tmp_path,
     assert unicas == [["correlation_key", "org_id", "scope"]]
 
 
+def test_degradado_migration_backfills_existing_criterion_results(tmp_path, monkeypatch):
+    """La columna NOT NULL nueva de aa43bbfb8944 no puede fallar con filas ya guardadas."""
+
+    db_path = tmp_path / "degradado.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    _upgrade("1131f3a55f64")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO organizations (id, nombre) VALUES ('o1', 'Org')"))
+        conn.execute(
+            text(
+                "INSERT INTO assessments (id, org_id, estado, methodology_version, scope,"
+                " creado_en) VALUES ('a1', 'o1', 'completada', 'v1', 'entorno:produccion',"
+                " '2026-01-01')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO criterion_results (id, assessment_id, criterion_id,"
+                " criterion_version, estado, explanation, evidence_ids)"
+                " VALUES ('cr1', 'a1', 'CR-01', 1, 'cumple', 'ok', '[]')"
+            )
+        )
+
+    _upgrade("e3911d3a9d74")
+
+    with engine.begin() as conn:
+        degradado = conn.execute(
+            text("SELECT degradado FROM criterion_results WHERE id = 'cr1'")
+        ).scalar_one()
+    assert degradado in (0, False)
+
+    columnas = {c["name"]: c for c in inspect(engine).get_columns("criterion_results")}
+    assert columnas["degradado"]["nullable"] is False
+
+
+def test_ops_migration_backfills_existing_plans(tmp_path, monkeypatch):
+    """hipotesis/comprobaciones_seguras (NOT NULL) se agregan con [] a los planes existentes."""
+
+    db_path = tmp_path / "planes.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    _upgrade("e3911d3a9d74")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO organizations (id, nombre) VALUES ('o1', 'Org')"))
+        conn.execute(
+            text(
+                "INSERT INTO assessments (id, org_id, estado, methodology_version, scope,"
+                " creado_en) VALUES ('a1', 'o1', 'completada', 'v1', 'entorno:produccion',"
+                " '2026-01-01')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO plans (id, assessment_id, criterion_id, origen, titulo, prioridad,"
+                " objetivo, pasos, verificacion, dependencias, generado_por, estado, creado_en)"
+                " VALUES ('p1', 'a1', 'CR-01', 'criterio', 'Plan viejo', 'alta', 'objetivo',"
+                " '[]', 'verificar', '[]', 'manual', 'pendiente', '2026-01-01')"
+            )
+        )
+
+    _upgrade_head()
+
+    with engine.begin() as conn:
+        hipotesis, comprobaciones = conn.execute(
+            text("SELECT hipotesis, comprobaciones_seguras FROM plans WHERE id = 'p1'")
+        ).one()
+    assert hipotesis == "[]"
+    assert comprobaciones == "[]"
+
+    columnas = {c["name"]: c for c in inspect(engine).get_columns("plans")}
+    assert columnas["hipotesis"]["nullable"] is False
+    assert columnas["comprobaciones_seguras"]["nullable"] is False
+
+
 def test_existing_incidents_survive_the_scope_migration(tmp_path, monkeypatch):
     """La migracion agrega scope a la clave sin tocar las filas existentes."""
 

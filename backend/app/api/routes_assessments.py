@@ -12,7 +12,6 @@ formulario se ignora, y un assessment de otra organizacion responde 404.
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -34,10 +33,12 @@ from app.api.schemas import (
 from app.core import assessment_service as svc
 from app.core import comparison
 from app.core.dispatch import dispatch_job
+from app.core.json import strict_loads
 from app.core.repository import row_to_plan
 from app.core.uploads import safe_filename
 from app.evaluation import aggregation, tier
 from app.evaluation.schemas import CriterionResult
+from app.methodology import snapshot
 from app.methodology.loader import Methodology
 from app.models.tables import Assessment, User
 from app.recommendations.findings import Finding, derive_findings
@@ -80,6 +81,7 @@ def _pdf_response(content: bytes, filename: str) -> Response:
 def _assessment_detail(
     session: Session, methodology: Methodology, assessment: Assessment
 ) -> AssessmentDetail:
+    methodology = snapshot.for_assessment(assessment, methodology)
     results = svc.load_criterion_results(session, assessment.id)
     categorias = aggregation.aggregate_by_categoria(methodology, results)
     funciones = aggregation.aggregate_by_funcion(methodology, results)
@@ -110,7 +112,7 @@ def _parse_context(context: str) -> dict:
     con 500 despues de crear la evaluacion, que quedaba `pendiente` para siempre y sin job."""
 
     try:
-        parsed = json.loads(context)
+        parsed = strict_loads(context)
     except (ValueError, RecursionError) as exc:
         # `JSONDecodeError` es un ValueError; un entero de >4300 digitos lanza ValueError y un
         # objeto muy anidado, RecursionError. Ninguno debe escapar como 500 (docs/04 §6).
@@ -248,7 +250,8 @@ def get_findings(
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
 ) -> list[Finding]:
-    _require_assessment(session, assessment_id, user)
+    assessment = _require_assessment(session, assessment_id, user)
+    methodology = snapshot.for_assessment(assessment, methodology)
     results = svc.load_criterion_results(session, assessment_id)
     evidence = svc.load_evidence(session, assessment_id)
     return derive_findings(methodology, results, evidence)
@@ -273,7 +276,8 @@ def create_plans(
     session: Session = Depends(get_session),
     methodology: Methodology = Depends(get_methodology),
 ) -> list[Plan]:
-    _require_assessment(session, assessment_id, user)
+    assessment = _require_assessment(session, assessment_id, user)
+    methodology = snapshot.for_assessment(assessment, methodology)
     guard_error = check_live_ai_guard(use_ai, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai)
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
@@ -398,6 +402,7 @@ def get_executive_report(
 
     assessment = _require_assessment(session, assessment_id, user)
     _require_completed(assessment)
+    methodology = snapshot.for_assessment(assessment, methodology)
     detail = _assessment_detail(session, methodology, assessment)
     results = svc.load_criterion_results(session, assessment_id)
     evidence = svc.load_evidence(session, assessment_id)

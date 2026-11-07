@@ -68,11 +68,23 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['org_id'], ['organizations.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    #: Los planes existentes (creados antes del motor de ops) no tienen hipotesis ni
+    #: comprobaciones: el default `[]` del modelo se usa como server_default para poder
+    #: agregarlas NOT NULL sin violar la restriccion en filas ya guardadas.
     with op.batch_alter_table('plans', schema=None) as batch_op:
         batch_op.add_column(sa.Column('incident_id', sa.String(), nullable=True))
         batch_op.add_column(sa.Column('diagnostico_observable', sa.Text(), nullable=True))
-        batch_op.add_column(sa.Column('hipotesis', sa.JSON(), nullable=False))
-        batch_op.add_column(sa.Column('comprobaciones_seguras', sa.JSON(), nullable=False))
+        batch_op.add_column(
+            sa.Column('hipotesis', sa.JSON(), nullable=False, server_default=sa.text("'[]'"))
+        )
+        batch_op.add_column(
+            sa.Column(
+                'comprobaciones_seguras',
+                sa.JSON(),
+                nullable=False,
+                server_default=sa.text("'[]'"),
+            )
+        )
         batch_op.add_column(sa.Column('advertencia', sa.Text(), nullable=True))
         batch_op.alter_column('assessment_id',
                existing_type=sa.VARCHAR(),

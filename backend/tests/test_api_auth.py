@@ -93,3 +93,23 @@ def test_token_with_a_malformed_payload_is_rejected():
     ):
         body = auth._b64url(json.dumps(payload).encode())
         assert auth.decode_token(f"{body}.{auth._sign(body)}") is None
+
+
+def test_blank_secret_key_uses_the_demo_fallback(monkeypatch):
+    from app.core import auth
+
+    monkeypatch.setenv("SECRET_KEY", "")
+    assert auth.secret_key() == auth.DEFAULT_SECRET_KEY
+
+
+def test_non_finite_or_deeply_nested_token_payloads_are_rejected():
+    import json
+
+    from app.core import auth
+
+    for exp in (float("nan"), float("inf"), float("-inf")):
+        body = auth._b64url(json.dumps({"sub": "u1", "exp": exp}).encode())
+        assert auth.decode_token(f"{body}.{auth._sign(body)}") is None
+
+    body = auth._b64url(("[" * 100000 + "]" * 100000).encode())
+    assert auth.decode_token(f"{body}.{auth._sign(body)}") is None

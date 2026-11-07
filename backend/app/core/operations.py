@@ -142,10 +142,12 @@ def ingest_events(
             row.event_id
             for row in session.query(Event.event_id).filter_by(org_id=org.id, scope=scope).all()
         }
+        insertados: set[str] = set()
         for evento in eventos:
             if evento.event_id in ya_ingeridos:
                 continue  # mismo archivo reingerido (o id repetido): no duplicar filas append-only
             ya_ingeridos.add(evento.event_id)
+            insertados.add(evento.event_id)
             eventos_nuevos += 1
             session.add(
                 Event(
@@ -199,12 +201,11 @@ def ingest_events(
             )
         session.flush()
 
-        # Un disparador solo se procesa si este archivo aporta alguno de sus eventos: los que ya
-        # estaban y no cambian no vuelven a tocar su incidente ni su plan.
-        de_este_archivo = {e.event_id for e in eventos}
+        # Un disparador solo se procesa si esta ingesta inserto alguno de sus eventos: reingerir
+        # un archivo ya guardado no vuelve a tocar su incidente ni su plan.
         triggers = evaluate_triggers(matches, methodology.settings.vigilancia, scope)
         for trigger in triggers:
-            if not de_este_archivo & set(trigger.event_ids):
+            if not insertados & set(trigger.event_ids):
                 continue
             incident, es_nuevo = upsert_incident(session, org.id, scope, trigger)
             (nuevos if es_nuevo else actualizados).append(incident)

@@ -7,7 +7,7 @@ disparador D4 (docs/08 §5). Sin ventana no se penaliza: se evalua solo lo docum
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, by_type, doc_claims, result
+from app.evaluation.rules._common import best_found_with, by_type, doc_claims, result
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -27,7 +27,7 @@ def _verificacion_documentada(claim: EvidenceInstance) -> bool:
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    verificacion = best_found(doc_claims(evidence, "backup_policy"))
+    verificacion = best_found_with(doc_claims(evidence, "backup_policy"), "verificacion_integridad")
     doc_verifica = verificacion is not None and _verificacion_documentada(verificacion)
 
     ventana = by_type(evidence, "log.window")

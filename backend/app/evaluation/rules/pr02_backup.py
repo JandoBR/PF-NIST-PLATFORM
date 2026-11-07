@@ -10,7 +10,7 @@ import re
 
 from app.ai.quotes import normalize
 from app.evaluation.rules._common import (
-    best_found,
+    best_found_with,
     by_type,
     doc_claims,
     noting_unresolved,
@@ -98,7 +98,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     peor_retencion = min(e.value["retencion_dias"] for e in resolved)
-    politica = best_found(doc_claims(evidence, "backup_policy"))
+    politica = best_found_with(doc_claims(evidence, "backup_policy"), "retencion")
     politica_dias = retencion_politica_dias(politica) if politica else None
     ids_tf = [e.id for e in resolved]
 

@@ -39,3 +39,15 @@ def test_missing_required_field_raises(tmp_path):
     path.write_text(payload)
     with pytest.raises(SurveillanceError, match="missing_field.jsonl:1"):
         load_events_jsonl(path)
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity", "1e999"])
+def test_non_finite_event_details_are_rejected(tmp_path, value):
+    path = tmp_path / "non_finite.jsonl"
+    path.write_text(
+        '{"event_id": "x", "event_time": "2026-01-01T00:00:00Z", "tipo": "x",'
+        f' "recurso": "r", "scope": "s", "detalle": {{"value": {value}}}}}\n'
+    )
+
+    with pytest.raises(SurveillanceError, match="non_finite.jsonl:1"):
+        load_events_jsonl(path)
