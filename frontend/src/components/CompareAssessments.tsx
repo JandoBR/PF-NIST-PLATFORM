@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { compareAssessments, downloadComparisonReport, listAssessments } from '@/lib/api';
 import { DownloadPdfButton } from '@/components/DownloadPdfButton';
+import { formatDbDate, parseDbDate } from '@/lib/datetime';
 import type {
   AssessmentDetail,
   ComparisonDiff,
@@ -32,12 +33,12 @@ interface Props {
 }
 
 function label(a: AssessmentDetail): string {
-  const when = new Date(a.creado_en).toLocaleString();
+  const when = formatDbDate(a.creado_en);
   const score = a.score_global != null ? Math.round(a.score_global) : '—';
   return `${when} · score ${score}`;
 }
 
-const time = (a: AssessmentDetail) => new Date(a.creado_en).getTime();
+const time = (a: AssessmentDetail) => parseDbDate(a.creado_en).getTime();
 
 const round = (value: number | null | undefined) => (value != null ? `${Math.round(value)}` : '—');
 
@@ -176,6 +177,7 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
       return;
     }
     let active = true;
+    setComparison(null);
     setLoading(true);
     setError(null);
     setExpanded(null);
@@ -196,23 +198,32 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
   const after = assessments?.find((a) => a.id === idB) ?? null;
   const reversed = before != null && after != null && time(before) > time(after);
 
+  // Además de limpiar en el efecto, se exige que el resultado corresponda al par visible: así ni
+  // un render intermedio ni una respuesta vieja pueden mostrar/descargar otra comparación.
+  const currentComparison =
+    comparison &&
+    comparison.assessment_id_a === idA &&
+    comparison.assessment_id_b === idB
+      ? comparison
+      : null;
+
   const counts = useMemo(() => {
     const result = {} as Record<ComparisonDirection, number>;
     for (const key of DIRECTION_ORDER) result[key] = 0;
-    for (const d of comparison?.diffs ?? []) result[d.direccion] += 1;
+    for (const d of currentComparison?.diffs ?? []) result[d.direccion] += 1;
     return result;
-  }, [comparison]);
+  }, [currentComparison]);
 
   // Puntaje y cobertura por función tal como los calcula el backend (ponderados por peso): los
   // mismos números que muestra el Resumen de Madurez.
   const byFunction = useMemo(() => {
-    if (!comparison || !before || !after) return [];
+    if (!currentComparison || !before || !after) return [];
     const aggregate = (a: AssessmentDetail, key: string) =>
       a.agregados_funcion.find((f) => f.ref === key) ?? null;
     return FUNCTION_ORDER.map((key) => {
       const antes = aggregate(before, key);
       const despues = aggregate(after, key);
-      const diffs = comparison.diffs.filter((d) => d.criterion_id.split('-')[1] === key);
+      const diffs = currentComparison.diffs.filter((d) => d.criterion_id.split('-')[1] === key);
       if (diffs.length === 0) return null;
       return {
         key,
@@ -224,16 +235,16 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
         total: diffs.length,
       };
     }).filter((x): x is NonNullable<typeof x> => x !== null);
-  }, [comparison, before, after]);
+  }, [currentComparison, before, after]);
 
   const rows = useMemo(() => {
-    if (!comparison) return [];
+    if (!currentComparison) return [];
     const order = (d: ComparisonDiff) => DIRECTION_ORDER.indexOf(d.direccion);
-    return comparison.diffs
+    return currentComparison.diffs
       .filter((d) => showUnchanged || d.cambio)
       .slice()
       .sort((a, b) => order(a) - order(b) || a.criterion_id.localeCompare(b.criterion_id));
-  }, [comparison, showUnchanged]);
+  }, [currentComparison, showUnchanged]);
 
   if (assessments === null) {
     return (
@@ -257,15 +268,15 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
   }
 
   const deltaGlobal =
-    comparison?.global_antes != null && comparison?.global_despues != null
-      ? comparison.global_despues - comparison.global_antes
+    currentComparison?.global_antes != null && currentComparison?.global_despues != null
+      ? currentComparison.global_despues - currentComparison.global_antes
       : null;
   const deltaCobertura =
     before?.cobertura_global != null && after?.cobertura_global != null
       ? (after.cobertura_global - before.cobertura_global) * 100
       : null;
-  const changedCount = comparison?.diffs.filter((d) => d.cambio).length ?? 0;
-  const unchangedCount = (comparison?.diffs.length ?? 0) - changedCount;
+  const changedCount = currentComparison?.diffs.filter((d) => d.cambio).length ?? 0;
+  const unchangedCount = (currentComparison?.diffs.length ?? 0) - changedCount;
 
   return (
     <div className="space-y-6">
@@ -322,12 +333,12 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
             «Antes» es más reciente que «Después»: la comparación se lee al revés en el tiempo.
           </Notice>
         )}
-        {comparison && (!comparison.misma_metodologia || !comparison.mismo_scope) && (
+        {currentComparison && (!currentComparison.misma_metodologia || !currentComparison.mismo_scope) && (
           <Notice>
             Estas evaluaciones usan{' '}
             {[
-              !comparison.misma_metodologia && 'versiones distintas de las reglas',
-              !comparison.mismo_scope && 'alcances distintos',
+              !currentComparison.misma_metodologia && 'versiones distintas de las reglas',
+              !currentComparison.mismo_scope && 'alcances distintos',
             ]
               .filter(Boolean)
               .join(' y ')}
@@ -341,13 +352,13 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
         )}
       </div>
 
-      {comparison && before && after && (
+      {currentComparison && before && after && (
         <>
           <div className="flex justify-end">
             <DownloadPdfButton
               label="Comparación PDF"
               onDownload={() =>
-                downloadComparisonReport(comparison.assessment_id_a, comparison.assessment_id_b)
+                downloadComparisonReport(currentComparison.assessment_id_a, currentComparison.assessment_id_b)
               }
             />
           </div>
@@ -356,7 +367,7 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
           <div className="grid gap-4 sm:grid-cols-3">
             <SummaryCard
               label="Score global"
-              value={`${round(comparison.global_antes)} → ${round(comparison.global_despues)}`}
+              value={`${round(currentComparison.global_antes)} → ${round(currentComparison.global_despues)}`}
               delta={deltaGlobal}
             />
             <SummaryCard
@@ -365,7 +376,7 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
               delta={deltaCobertura}
               unit=" pts"
               note={
-                comparison.misma_metodologia
+                currentComparison.misma_metodologia
                   ? undefined
                   : 'El catálogo cambió de tamaño: esta cobertura tiene otro denominador en cada evaluación y la diferencia no es comparable.'
               }
@@ -399,13 +410,13 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
             </div>
             <p className="mt-3 text-xs leading-relaxed text-slate-400">
               <span className="font-semibold text-slate-300">Hallazgos:</span>{' '}
-              {comparison.hallazgos_resueltos.length === 0 && comparison.hallazgos_nuevos.length === 0
+              {currentComparison.hallazgos_resueltos.length === 0 && currentComparison.hallazgos_nuevos.length === 0
                 ? 'los mismos criterios tienen brecha en las dos evaluaciones.'
                 : [
-                    comparison.hallazgos_resueltos.length > 0 &&
-                      `${comparison.hallazgos_resueltos.length} ya no aparece(n) (${comparison.hallazgos_resueltos.join(', ')})`,
-                    comparison.hallazgos_nuevos.length > 0 &&
-                      `${comparison.hallazgos_nuevos.length} nuevo(s) (${comparison.hallazgos_nuevos.join(', ')})`,
+                    currentComparison.hallazgos_resueltos.length > 0 &&
+                      `${currentComparison.hallazgos_resueltos.length} ya no aparece(n) (${currentComparison.hallazgos_resueltos.join(', ')})`,
+                    currentComparison.hallazgos_nuevos.length > 0 &&
+                      `${currentComparison.hallazgos_nuevos.length} nuevo(s) (${currentComparison.hallazgos_nuevos.join(', ')})`,
                   ]
                     .filter(Boolean)
                     .join(' · ') + '.'}

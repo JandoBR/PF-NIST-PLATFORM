@@ -27,6 +27,7 @@ import {
   pollJob,
   updateIncident,
 } from '@/lib/api';
+import { formatDbDate } from '@/lib/datetime';
 import type { IncidentOut, JobEstado, Plan } from '@/lib/types';
 import { describeIngest, incidentEstadoMeta, incidentSeverityMeta, isIncidentClosed } from '@/lib/ui';
 
@@ -227,7 +228,7 @@ export function ThreatSimulation({ orgId, orgNombre, onIngested }: Props) {
                   className="group flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.02]"
                 >
                   <span className="font-mono text-xs text-slate-600">
-                    {new Date(incident.last_event_time).toLocaleString()}
+                    {formatDbDate(incident.last_event_time)}
                   </span>
                   <span className={`h-2 w-2 flex-shrink-0 rounded-full ${sev.dot}`} />
                   <div className="min-w-0 flex-1">
@@ -344,7 +345,7 @@ function IncidentDrawer({
                 <span className={`chip ${estado.bg} ${estado.text} ${estado.border} border`}>{estado.label}</span>
                 <span className={`chip ${meta.bg} ${meta.text} ${meta.border} border`}>{meta.label}</span>
                 <span className="flex items-center gap-1 text-xs text-slate-500">
-                  <Clock className="h-3 w-3" /> {new Date(incident.last_event_time).toLocaleString()}
+                  <Clock className="h-3 w-3" /> {formatDbDate(incident.last_event_time)}
                 </span>
               </div>
             </div>
@@ -372,7 +373,7 @@ function IncidentDrawer({
                       {String(entry.disparador ?? entry.transicion ?? '')}
                     </span>
                     <span className="text-xs text-slate-500">
-                      {entry.momento ? new Date(String(entry.momento)).toLocaleString() : ''}
+                      {entry.momento ? formatDbDate(String(entry.momento)) : ''}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-slate-300">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, ArrowLeft, ExternalLink, Loader2, RefreshCw, RotateCcw } from 'lucide-react';
 import { listJobs, retryJob } from '@/lib/api';
+import { formatDbDate } from '@/lib/datetime';
 import type { JobEstado, JobOut } from '@/lib/types';
 import { JOB_ESTADO_META, JOB_TIPO_LABEL, describeIngest } from '@/lib/ui';
 
@@ -15,8 +16,7 @@ const POLL_MS = 3000;
 const ACTIVE: JobEstado[] = ['pendiente', 'en_progreso'];
 
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('es');
+  return formatDbDate(iso);
 }
 
 /** Historial de actividad en segundo plano (evaluaciones e ingestas de eventos): qué corrió, en qué

@@ -48,7 +48,8 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  } catch {
+  } catch (err) {
+    if (isAbortError(err)) throw err;
     throw new ApiError(0, `No se pudo contactar la API en ${API_BASE}. ¿Esta corriendo?`);
   }
 
@@ -278,7 +279,7 @@ const TERMINAL_JOB_STATES: JobOut['estado'][] = ['completado', 'fallido'];
 export class JobTimeoutError extends Error {}
 
 export function isAbortError(err: unknown): boolean {
-  return err instanceof DOMException && err.name === 'AbortError';
+  return err instanceof Error && err.name === 'AbortError';
 }
 
 /** `true` si el error es un `AbortError` (p. ej. lanzado por `AbortSignal.abort()`). */

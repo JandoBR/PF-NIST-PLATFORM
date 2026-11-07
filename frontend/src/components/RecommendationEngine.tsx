@@ -15,11 +15,13 @@ import { ApiError, createPlans, updatePlanEstado } from '@/lib/api';
 import type { Finding, Plan, PlanEstado } from '@/lib/types';
 import { PLAN_ESTADOS, PLAN_ESTADO_META, SEVERITY_META } from '@/lib/ui';
 
+type PlansUpdater = (update: Plan[] | ((prev: Plan[]) => Plan[])) => void;
+
 interface Props {
   assessmentId: string;
   findings: Finding[];
   plans: Plan[];
-  onPlansUpdated: (plans: Plan[]) => void;
+  onPlansUpdated: PlansUpdater;
 }
 
 const SEVERITY_ORDER: Finding['severidad'][] = ['alta', 'media', 'baja'];
@@ -68,7 +70,7 @@ export function RecommendationEngine({
     setError(null);
     try {
       const updated = await updatePlanEstado(assessmentId, plan.id, estado);
-      onPlansUpdated(plans.map((p) => (p.id === updated.id ? updated : p)));
+      onPlansUpdated((current) => current.map((p) => (p.id === updated.id ? updated : p)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo actualizar el seguimiento.');
     } finally {

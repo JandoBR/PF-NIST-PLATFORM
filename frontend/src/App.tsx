@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard,
   Brain,
@@ -28,6 +28,7 @@ import {
   logout as apiLogout,
 } from '@/lib/api';
 import type { AuthUser } from '@/lib/api';
+import { formatDbDate } from '@/lib/datetime';
 import type { AssessmentAccepted, AssessmentDetail, CriterionResult, Finding, Plan } from '@/lib/types';
 
 type Tab = 'dashboard' | 'recommendations' | 'threats' | 'compare' | 'jobs';
@@ -47,9 +48,12 @@ const IN_PROGRESS = ['pendiente', 'en_progreso'];
 const ACTIVE_POLL_MS = 3000;
 
 function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('es', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return formatDbDate(iso, 'es', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function App() {
@@ -65,6 +69,25 @@ function App() {
   const [history, setHistory] = useState<AssessmentDetail[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('dashboard');
+
+  // Identifica la petición de detalle más reciente y la evaluación que el usuario quiere activa,
+  // para que una respuesta lenta de A no pise una selección posterior de B (ni el sondeo).
+  const detailRequest = useRef(0);
+  const activeId = useRef<string | null>(null);
+
+  const clearActiveData = useCallback(() => {
+    detailRequest.current += 1;
+    activeId.current = null;
+    setAssessment(null);
+    setCriteria([]);
+    setFindings([]);
+    setPlans([]);
+    setHistory([]);
+    setDetailError(null);
+    setSelectorOpen(false);
+    setTab('dashboard');
+    localStorage.removeItem(ACTIVE_KEY);
+  }, []);
 
   // Restaura la sesión al montar (token en localStorage) y vuelve al login ante cualquier 401.
   useEffect(() => {
@@ -83,30 +106,38 @@ function App() {
         if (mounted) setAuthChecked(true);
       }
     })();
-    const onUnauthorized = () => setUser(null);
+    const onUnauthorized = () => {
+      setUser(null);
+      clearActiveData();
+    };
     window.addEventListener('pf:unauthorized', onUnauthorized);
     return () => {
       mounted = false;
       window.removeEventListener('pf:unauthorized', onUnauthorized);
     };
-  }, []);
+  }, [clearActiveData]);
 
   const loadAssessmentDetails = useCallback(async (detail: AssessmentDetail) => {
+    const requestId = ++detailRequest.current;
+    activeId.current = detail.id;
     setAssessment(detail);
     localStorage.setItem(ACTIVE_KEY, detail.id);
     setCriteria([]);
     setFindings([]);
     setPlans([]);
+    setDetailError(null);
     try {
       const [c, f, p] = await Promise.all([
         getCriteria(detail.id),
         getFindings(detail.id),
         getPlans(detail.id),
       ]);
+      if (requestId !== detailRequest.current) return;
       setCriteria(c);
       setFindings(f);
       setPlans(p);
     } catch (err) {
+      if (requestId !== detailRequest.current) return;
       setDetailError(err instanceof Error ? err.message : 'No se pudieron cargar los detalles.');
     }
   }, []);
@@ -134,7 +165,12 @@ function App() {
         const saved = list.find((a) => a.id === savedId);
         const fallback = list.find((a) => a.estado === 'completada') ?? list[0];
         const chosen = saved ?? fallback;
-        if (chosen) await loadAssessmentDetails(chosen);
+        if (chosen) {
+          await loadAssessmentDetails(chosen);
+        } else {
+          // Sin evaluación restaurable no debe quedar activa la de una sesión anterior.
+          clearActiveData();
+        }
       } catch (err) {
         if (mounted) {
           setDetailError(err instanceof Error ? err.message : 'No se pudo cargar el historial.');
@@ -144,7 +180,7 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [user, loadAssessmentDetails]);
+  }, [user, loadAssessmentDetails, clearActiveData]);
 
   async function handleCreated(detail: AssessmentDetail) {
     setDetailError(null);
@@ -158,13 +194,17 @@ function App() {
   // recarga puntajes, hallazgos y planes al acabar, sin ir al historial a elegirla.
   async function handleAccepted(accepted: AssessmentAccepted) {
     setDetailError(null);
+    const previousActiveId = activeId.current;
+    activeId.current = accepted.assessment_id;
     await refreshHistory();
     try {
       const detail = await getAssessment(accepted.assessment_id);
+      if (activeId.current !== accepted.assessment_id) return;
       setTab('dashboard');
       await loadAssessmentDetails(detail);
     } catch {
       // sin el detalle no se puede activar; queda en el historial y se elige desde ahí
+      if (activeId.current === accepted.assessment_id) activeId.current = previousActiveId;
     }
   }
 
@@ -179,7 +219,7 @@ function App() {
     const timer = window.setInterval(async () => {
       try {
         const fresh = await getAssessment(id);
-        if (cancelled || fresh.estado === estado) return;
+        if (cancelled || activeId.current !== id || fresh.estado === estado) return;
         if (IN_PROGRESS.includes(fresh.estado)) {
           setAssessment(fresh); // pasó de pendiente a en_progreso
           return;
@@ -202,22 +242,18 @@ function App() {
     if (!chosen) return;
     setDetailError(null);
     setTab('dashboard');
+    activeId.current = id;
     // El historial puede estar desactualizado (una evaluación en curso aparece sin puntajes):
     // se pide el detalle actual y, si falla, se usa el que ya hay.
     const fresh = await getAssessment(id).catch(() => chosen);
+    if (activeId.current !== id) return;
     await loadAssessmentDetails(fresh);
   }
 
   function handleLogout() {
     apiLogout();
     setUser(null);
-    setAssessment(null);
-    setCriteria([]);
-    setFindings([]);
-    setPlans([]);
-    setHistory([]);
-    setDetailError(null);
-    localStorage.removeItem(ACTIVE_KEY);
+    clearActiveData();
   }
 
   if (!authChecked) {
@@ -343,6 +379,7 @@ function App() {
           <MaturityDashboard assessment={assessment} criteria={criteria} />
         ) : tab === 'recommendations' ? (
           <RecommendationEngine
+            key={assessment.id}
             assessmentId={assessment.id}
             findings={findings}
             plans={plans}
