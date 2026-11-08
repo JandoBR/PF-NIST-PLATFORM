@@ -74,6 +74,24 @@ Lo que queda pendiente está en [docs/11 §I](docs/11-backlog-y-pulido.md); lo d
 - **Solo el backend, sin Docker:** `cd backend && uv run python -m app.main run --terraform
   tests/fixtures/terraform/gaps --org "Empresa Demo"` para la CLI, o `uv run uvicorn app.api.app:app --reload`
   para la API.
+- **Sin `uv`, con `pip`:** el `pyproject.toml` no declara `[build-system]` a propósito, porque el backend
+  no se distribuye como paquete. `uv` lo trata entonces como proyecto *virtual* e instala las dependencias
+  sin empaquetarlo; `pip install -e .` falla ahí, así que con pip las dependencias se instalan aparte
+  (hace falta Python 3.12+ y pip 25.1+ para `--group`):
+
+  ```bash
+  cd backend
+  python --version                            # tiene que decir 3.12 o superior
+  python -m venv .venv
+  PY=.venv/Scripts/python.exe                 # Linux/macOS: PY=.venv/bin/python
+  $PY -m pip install --upgrade pip
+  $PY -c "import pathlib, tomllib; p = pathlib.Path; p('reqs.txt').write_text('\n'.join(tomllib.loads(p('pyproject.toml').read_text())['project']['dependencies']))"
+  $PY -m pip install -r reqs.txt && rm reqs.txt
+  $PY -m pip install --group dev
+  ```
+
+  Después, los mismos comandos cambiando `uv run X` por `$PY -m X`: `$PY -m pytest`, `$PY -m ruff check
+  app tests`, `$PY -m app.main run --terraform tests/fixtures/terraform/gaps --org "Empresa Demo"`.
 - **Solo el frontend:** `cd frontend && cp .env.example .env && npm install && npm run dev`, con la API
   corriendo aparte.
 - **Datos de ejemplo:** el diálogo "Nueva Evaluación" trae tres paquetes (entorno con brechas, en mejora y
@@ -84,7 +102,8 @@ Lo que queda pendiente está en [docs/11 §I](docs/11-backlog-y-pulido.md); lo d
 ## Desarrollo
 
 Antes de confirmar cambios en el backend: `uv run pytest`, `ruff check app tests` y
-`ruff format --check app tests` (en NixOS, `ruff` lo provee `nix develop`). En el frontend:
+`ruff format --check app tests` (en NixOS, `ruff` lo provee `nix develop`; sin `uv`, el equivalente con
+pip está en [Cómo probarlo](#cómo-probarlo)). En el frontend:
 `npm run typecheck`, `npm run lint` y `npm run build`. Si cambia una regla de criterio, se actualiza
 doc 03 en el mismo commit.
 
