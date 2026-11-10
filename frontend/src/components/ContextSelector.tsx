@@ -10,7 +10,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { DEMO_BUNDLES, fetchAsFile } from '@/data/demo';
-import { JobTimeoutError, createAssessment, getAssessment, isAbortError, pollJob } from '@/lib/api';
+import { JobTimeoutError, createAssessment, getAssessment, getMethodology, isAbortError, pollJob } from '@/lib/api';
 import type { AssessmentAccepted, AssessmentDetail, JobEstado } from '@/lib/types';
 
 interface ContextSelectorProps {
@@ -34,11 +34,34 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
   const [submitting, setSubmitting] = useState(false);
   const [jobEstado, setJobEstado] = useState<JobEstado | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [methodology, setMethodology] = useState<{
+    criterios: number;
+    cubiertas: number;
+    totales: number;
+  } | null>(null);
 
   //: Permite abortar el sondeo del job si el usuario cierra el modal: el job sigue corriendo en
   //: el backend, pero la UI deja de esperar y el dashboard lo recupera por el historial.
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (!open) return;
+    let vigente = true;
+    getMethodology()
+      .then((m) => {
+        if (!vigente) return;
+        setMethodology({
+          criterios: m.criterios.length,
+          cubiertas: m.cobertura_implementacion.subcategorias_cubiertas,
+          totales: m.cobertura_implementacion.subcategorias_totales,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      vigente = false;
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -62,16 +85,12 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
           Promise.all((bundle.documents ?? []).map(fetchAsFile)),
         ]);
         input = {
-          aiAdjust: true,
-          useAiForDocuments: docs.length > 0,
           terraformFiles: tf,
           ansibleFiles: ans,
           documentFiles: docs,
         };
       } else {
         input = {
-          aiAdjust: true,
-          useAiForDocuments: documentFiles.length > 0,
           terraformFiles,
           ansibleFiles,
           documentFiles,
@@ -230,7 +249,9 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
           <div className="border-t border-white/[0.06] px-6 py-4">
             <div className="flex items-center justify-between gap-4">
               <p className="text-xs text-slate-500">
-                El motor de reglas evalúa 32 subcategorías CSF 2.0 de forma determinista.
+                {methodology
+                  ? `El motor de reglas evalúa ${methodology.criterios} criterios CSF 2.0 (${methodology.cubiertas} de ${methodology.totales} subcategorías) de forma determinista.`
+                  : 'El motor de reglas evalúa 31 criterios CSF 2.0 de forma determinista.'}
               </p>
               <button
                 onClick={handleSubmit}

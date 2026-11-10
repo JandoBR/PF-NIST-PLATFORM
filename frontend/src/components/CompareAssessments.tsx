@@ -174,6 +174,7 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
   useEffect(() => {
     if (!idA || !idB || idA === idB) {
       setComparison(null);
+      setLoading(false);
       return;
     }
     let active = true;

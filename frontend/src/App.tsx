@@ -46,6 +46,7 @@ const ACTIVE_KEY = 'pf.activeAssessmentId';
 //: Estados no terminales de una evaluación y cada cuánto se consulta la activa mientras dura.
 const IN_PROGRESS = ['pendiente', 'en_progreso'];
 const ACTIVE_POLL_MS = 3000;
+const ACTIVE_POLL_TIMEOUT_MS = 10 * 60_000;
 
 function formatWhen(iso: string): string {
   return formatDbDate(iso, 'es', {
@@ -65,6 +66,7 @@ function App() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [pollNotice, setPollNotice] = useState<string | null>(null);
 
   const [history, setHistory] = useState<AssessmentDetail[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -74,16 +76,19 @@ function App() {
   // para que una respuesta lenta de A no pise una selección posterior de B (ni el sondeo).
   const detailRequest = useRef(0);
   const activeId = useRef<string | null>(null);
+  const pollStart = useRef<{ id: string; at: number } | null>(null);
 
   const clearActiveData = useCallback(() => {
     detailRequest.current += 1;
     activeId.current = null;
+    pollStart.current = null;
     setAssessment(null);
     setCriteria([]);
     setFindings([]);
     setPlans([]);
     setHistory([]);
     setDetailError(null);
+    setPollNotice(null);
     setSelectorOpen(false);
     setTab('dashboard');
     localStorage.removeItem(ACTIVE_KEY);
@@ -126,6 +131,8 @@ function App() {
     setFindings([]);
     setPlans([]);
     setDetailError(null);
+    setPollNotice(null);
+    pollStart.current = null;
     try {
       const [c, f, p] = await Promise.all([
         getCriteria(detail.id),
@@ -215,8 +222,23 @@ function App() {
   useEffect(() => {
     if (!assessment || !IN_PROGRESS.includes(assessment.estado)) return;
     const { id, estado } = assessment;
+    const previousStart = pollStart.current;
+    let startedAt: number;
+    if (previousStart && previousStart.id === id) {
+      startedAt = previousStart.at;
+    } else {
+      startedAt = Date.now();
+      pollStart.current = { id, at: startedAt };
+    }
     let cancelled = false;
     const timer = window.setInterval(async () => {
+      if (Date.now() - startedAt > ACTIVE_POLL_TIMEOUT_MS) {
+        window.clearInterval(timer);
+        setPollNotice(
+          'La evaluación sigue en cola o procesándose tras 10 minutos y se dejó de consultar. Revisa la pestaña Actividad para ver el estado del job.'
+        );
+        return;
+      }
       try {
         const fresh = await getAssessment(id);
         if (cancelled || activeId.current !== id || fresh.estado === estado) return;
@@ -341,6 +363,13 @@ function App() {
       </div>
 
       <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8">
+        {pollNotice && (
+          <div className="card mb-4 flex items-center gap-2 border-amber-500/30 bg-amber-500/[0.07] p-3.5 text-sm text-amber-200">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            {pollNotice}
+          </div>
+        )}
+
         {detailError && (
           <div className="card mb-4 flex items-center gap-2 border-rose-500/30 bg-rose-500/[0.07] p-3.5 text-sm text-rose-200">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />

@@ -73,38 +73,6 @@ export interface Plan {
   advertencia: string | null;
 }
 
-export type Modality = 'declarada' | 'documental' | 'operativa' | 'contexto';
-
-export interface Locator {
-  file: string | null;
-  line_start: number | null;
-  line_end: number | null;
-  page: number | null;
-  section: string | null;
-  event_id: string | null;
-}
-
-export interface EvidenceInstance {
-  id: string;
-  type_id: string;
-  type_version: number;
-  subject_type: string;
-  subject_ref: string;
-  scope: string;
-  value: unknown;
-  source_id: string;
-  locator: Locator;
-  observed_at: string;
-  modality: Modality;
-  limitations: string | null;
-  created_by: string;
-}
-
-export interface OrganizationOut {
-  id: string;
-  nombre: string;
-}
-
 export interface AssessmentSummary {
   id: string;
   org_id: string;
@@ -157,13 +125,6 @@ export interface IngestJobResult {
   patrones_nuevos: number;
   incidentes_nuevos: number;
   incidentes_actualizados: number;
-}
-
-export interface IngestEventsResponse {
-  org_id: string;
-  eventos_ingeridos: number;
-  nuevos_incidentes: IncidentOut[];
-  incidentes_actualizados: IncidentOut[];
 }
 
 export interface ComparisonDiff {

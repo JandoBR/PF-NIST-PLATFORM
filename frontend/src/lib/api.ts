@@ -4,7 +4,6 @@ import type {
   ComparisonOut,
   CriterionResult,
   EventsAccepted,
-  EvidenceInstance,
   Finding,
   IncidentOut,
   JobEstado,
@@ -111,8 +110,6 @@ function json(body: unknown): RequestInit {
 
 // --- Metodologia -----------------------------------------------------------------------
 
-export const getHealth = () => request<{ status: string }>('/health');
-
 export const getMethodology = () => request<MethodologyCatalog>('/methodology');
 
 // --- Sesión ------------------------------------------------------------------------------
@@ -145,18 +142,10 @@ export function logout(): void {
 export const listOrgIncidents = (orgId: string) =>
   request<IncidentOut[]>(`/orgs/${orgId}/incidents`);
 
-export const ingestEvents = (
-  orgId: string,
-  file: File,
-  opts: { useAi?: boolean } = {}
-) => {
+export const ingestEvents = (orgId: string, file: File) => {
   const form = new FormData();
   form.append('file', file);
-  const params = new URLSearchParams();
-  if (opts.useAi) params.set('use_ai', 'true');
-  params.set('confirm_live_ai', 'true');
-  const qs = params.toString() ? `?${params.toString()}` : '';
-  return request<EventsAccepted>(`/orgs/${orgId}/events${qs}`, {
+  return request<EventsAccepted>(`/orgs/${orgId}/events?confirm_live_ai=true`, {
     method: 'POST',
     body: form,
   });
@@ -170,9 +159,6 @@ export const clearOrgEvents = (orgId: string) =>
     `/orgs/${orgId}/events`,
     { method: 'DELETE' }
   );
-
-export const getIncident = (incidentId: string) =>
-  request<IncidentOut>(`/incidents/${incidentId}`);
 
 /** Cambia el estado del incidente. Cerrar exige `motivo` (OP-11). */
 export const updateIncident = (incidentId: string, estado: string, motivo?: string) =>
@@ -189,8 +175,6 @@ export const getIncidentPlans = (incidentId: string) =>
 
 export interface CreateAssessmentInput {
   scope?: string;
-  aiAdjust?: boolean;
-  useAiForDocuments?: boolean;
   terraformFiles?: File[];
   ansibleFiles?: File[];
   documentFiles?: File[];
@@ -200,8 +184,8 @@ export const createAssessment = (input: CreateAssessmentInput) => {
   // La organizacion sale de la sesion (doc 10): no se manda org_name.
   const form = new FormData();
   form.append('scope', input.scope ?? 'entorno:produccion');
-  form.append('ai_adjust', String(input.aiAdjust ?? false));
-  form.append('use_ai_for_documents', String(input.useAiForDocuments ?? false));
+  form.append('ai_adjust', 'true');
+  form.append('use_ai_for_documents', String((input.documentFiles?.length ?? 0) > 0));
   form.append('confirm_live_ai', 'true');
   for (const f of input.terraformFiles ?? []) form.append('terraform_files', f);
   for (const f of input.ansibleFiles ?? []) form.append('ansible_files', f);
@@ -216,9 +200,6 @@ export const getAssessment = (id: string) => request<AssessmentDetail>(`/assessm
 export const getCriteria = (id: string) =>
   request<CriterionResult[]>(`/assessments/${id}/criteria`);
 
-export const getEvidence = (id: string) =>
-  request<EvidenceInstance[]>(`/assessments/${id}/evidence`);
-
 export const getFindings = (id: string) => request<Finding[]>(`/assessments/${id}/findings`);
 
 export const getPlans = (id: string) => request<Plan[]>(`/assessments/${id}/plans`);
@@ -230,25 +211,8 @@ export const updatePlanEstado = (assessmentId: string, planId: string, estado: P
     body: JSON.stringify({ estado }),
   });
 
-export const createPlans = (id: string, opts: { useAi?: boolean } = {}) => {
-  const params = new URLSearchParams();
-  if (opts.useAi) params.set('use_ai', 'true');
-  params.set('confirm_live_ai', 'true');
-  const qs = params.toString() ? `?${params.toString()}` : '';
-  return request<Plan[]>(`/assessments/${id}/plans${qs}`, { method: 'POST' });
-};
-
-export const reevaluateAssessment = (
-  id: string,
-  opts: { aiAdjust?: boolean; context?: object } = {}
-) => {
-  const params = new URLSearchParams();
-  if (opts.aiAdjust) params.set('ai_adjust', 'true');
-  params.set('confirm_live_ai', 'true');
-  if (opts.context) params.set('context', JSON.stringify(opts.context));
-  const qs = params.toString() ? `?${params.toString()}` : '';
-  return request<AssessmentAccepted>(`/assessments/${id}/reevaluate${qs}`, { method: 'POST' });
-};
+export const createPlans = (id: string) =>
+  request<Plan[]>(`/assessments/${id}/plans?use_ai=true&confirm_live_ai=true`, { method: 'POST' });
 
 export const compareAssessments = (idA: string, idB: string) =>
   request<ComparisonOut>(`/assessments/${idA}/compare/${idB}`);

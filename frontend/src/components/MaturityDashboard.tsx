@@ -124,6 +124,16 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
         />
       </div>
 
+      {assessment.estado === 'fallida' && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/[0.07] p-3.5 text-xs text-rose-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <p className="leading-relaxed">
+            {assessment.error?.trim() ||
+              'La evaluación falló sin detalle del error. Revisa la pestaña Actividad para ver el estado del job.'}
+          </p>
+        </div>
+      )}
+
       {/* Tarjetas de resumen */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard

@@ -41,20 +41,20 @@ export function RecommendationEngine({
   );
   const limitations = useMemo(() => allFindings.filter((f) => f.tipo === 'limitacion'), [allFindings]);
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [generating, setGenerating] = useState<'plantilla' | 'ia' | null>(null);
+  const [generating, setGenerating] = useState(false);
   const [savingPlan, setSavingPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleGenerate(useAi: boolean) {
-    setGenerating(useAi ? 'ia' : 'plantilla');
+  async function handleGenerate() {
+    setGenerating(true);
     setError(null);
     try {
-      const updated = await createPlans(assessmentId, { useAi });
+      const updated = await createPlans(assessmentId);
       onPlansUpdated(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido.');
     } finally {
-      setGenerating(null);
+      setGenerating(false);
     }
   }
 
@@ -110,12 +110,12 @@ export function RecommendationEngine({
         {findings.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/[0.06] pt-4">
             <button
-              onClick={() => handleGenerate(true)}
-              disabled={generating !== null}
+              onClick={() => handleGenerate()}
+              disabled={generating}
               className="btn-ghost border border-cyan-500/20 text-xs text-cyan-300 hover:text-cyan-200"
               title="Recalcula el plan con la capa de IA (requiere DEEPSEEK_API_KEY configurada)."
             >
-              {generating === 'ia' ? (
+              {generating ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Sparkles className="h-3.5 w-3.5" />
@@ -244,7 +244,7 @@ function FindingsList({
                   ) : (
                     <p className="text-xs text-slate-500">
                       Este hallazgo no tiene plan: la evaluación es anterior a la generación automática.
-                      Reevalúa para generarlo.
+                      Genera los planes con el botón de arriba.
                     </p>
                   )}
                 </div>

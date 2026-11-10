@@ -247,6 +247,7 @@ export function EventsIncidents({ orgId, orgNombre, onIngested }: Props) {
 
       {selected && (
         <IncidentDrawer
+          key={selected.id}
           incident={selected}
           onClose={() => setSelected(null)}
           onClosed={async () => {
@@ -446,7 +447,7 @@ function IncidentDrawer({
                     {plan.pasos.length > 0 && (
                       <div className="mt-3 space-y-2">
                         {plan.pasos.map((paso, i) => {
-                          const key = `${plan.criterion_id}-${i}`;
+                          const key = `${plan.id}-${i}`;
                           const done = checked.has(key);
                           return (
                             <button
