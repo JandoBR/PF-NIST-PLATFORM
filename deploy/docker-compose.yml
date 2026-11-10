@@ -22,11 +22,11 @@
 # juntas son las que realmente cierran el gap: el contenedor vuelve a arrancar solo, y el job
 # huerfano que dejo se marca fallido en vez de quedar colgado.
 #
-# Config de la app: `DEEPSEEK_*`, `CORS_ORIGINS` y `JOB_STALE_TIMEOUT_SECONDS` salen de
-# `deploy/.env` via `env_file`, que NO lo pisa el shell. Antes iban como `${VAR}` en
-# `environment:` y una variable exportada en el shell (p. ej. la key que usa opencode) ganaba
-# sobre el .env -- ver docs/09 §17. `DATABASE_URL`/`REDIS_URL` siguen en `environment` porque
-# apuntan a los nombres de servicio de la red de compose, no a un .env de host.
+# Config de la app: `DEEPSEEK_*`, `AI_MAX_CONCURRENCY`, `CORS_ORIGINS` y
+# `JOB_STALE_TIMEOUT_SECONDS` salen de `deploy/.env` via `env_file`, que NO lo pisa el shell. Antes
+# iban como `${VAR}` en `environment:` y una variable exportada en el shell (p. ej. la key que usa
+# opencode) ganaba sobre el .env -- ver docs/09 §17. `DATABASE_URL`/`REDIS_URL` siguen en
+# `environment` porque apuntan a los nombres de servicio de la red de compose, no a un .env de host.
 
 services:
   db:

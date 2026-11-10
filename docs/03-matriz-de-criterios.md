@@ -190,7 +190,10 @@ Resumen de cobertura del catálogo:
   repositorio, no una adquisición, y no hay versión que fijar. El piso es **25 y no 0** porque un
   `source` sin versión es silencio sobre la procedencia, no una negación explícita (mismo criterio
   que docs/09 §60); en HCL no existe forma de declarar "no controlo esto". Un `source` que el parser
-  no puede leer cuenta como de terceros: no se puede suponer propio.
+  no puede leer cuenta como de terceros: no se puede suponer propio. Un `?ref=` solo fija si apunta
+  a un tag de versión (`v1.2.3`) o a un SHA de commit: `?ref=main` o un `ref` vacío siguen una rama
+  y cuentan como sin fijar (docs/09 §97). Un proveedor con la forma antigua `aws = "~> 4.0"` sí
+  tiene restricción.
 - **Recomendación:** fijar la procedencia del código de terceros — `version` en cada módulo del
   registry, `?ref=<tag|sha>` en los de git, y una restricción de versión por proveedor.
 
@@ -206,9 +209,12 @@ Resumen de cobertura del catálogo:
   - Sin recursos del tipo → `no_aplicable` con motivo.
   - Política documental sin recursos: no eleva el puntaje técnico; alimenta contexto y el hallazgo.
 - **Tramo alto, con todo cifrado en reposo** (`PR.DS-02` decide, docs/09 §93):
-  - 100: además una observación de canal cifrado (listener HTTPS/TLS o `rds.force_ssl = 1`).
+  - 100: además una observación de canal cifrado (listener HTTPS/TLS, listener HTTP cuya acción
+    por defecto redirige a HTTPS, o `rds.force_ssl` activado: `1`, `true` o el booleano de HCL).
   - 75: nada en el IaC dice cómo viaja el dato.
-  - 50: un canal en claro observado (un listener HTTP).
+  - 50: un canal en claro observado (un listener HTTP que sirve tráfico sin redirigir a HTTPS).
+  - Un listener TCP (paso directo de un NLB) queda `unknown`: el TLS puede terminar detrás, así que
+    ni sube al 100 ni baja al 50 (docs/09 §97).
 - **Notas:** el tránsito es una **compuerta sobre el tramo alto, no una rama aparte**. Las dos
   mitades no son simétricas: un fallo en reposo es una base de datos entera legible, así que sigue
   dominando por D7 — un listener HTTPS no sube un `storage_encrypted = false`. El ancla del 100
@@ -255,6 +261,8 @@ Resumen de cobertura del catálogo:
     interpretable: `evidencia_insuficiente`, nunca 100.
   - 0: los dos en `yes` explícito.
   - El valor se lee de `line` (lo que queda escrito), nunca de `regexp`.
+  - `PermitRootLogin prohibit-password` (y `without-password`, `forced-commands-only`) cuenta como
+    endurecido, igual que `no`: es lo que recomienda CIS (docs/09 §97).
   - `an.file.permissions` sobre `sshd_config` con escritura para grupo/otros → tope 25.
   - Sin tareas de SSH interpretadas → insuficiente.
 - **Compuerta de `PR.PS-02` (mantenimiento), solo sobre el 100:**
@@ -318,6 +326,9 @@ Resumen de cobertura del catálogo:
   - 0: política declarada con menos de 8 caracteres.
   - Sin ningún recurso IAM ni política → `evidencia_insuficiente`.
   - Con dos políticas declaradas manda la más débil: es la que la cuenta aplica de hecho.
+  - "Exige MFA" se lee del documento de la política, no de que mencione la clave: un `Allow`
+    condicionado a `aws:MultiFactorAuthPresent` en `true` (`Bool`/`BoolIfExists`), o un `Deny` cuando
+    vale `false`. Un `Allow` con `false` no exige MFA; un JSON ilegible queda `unknown` (docs/09 §97).
 - **Notas:** el umbral de 14 es el del **CIS AWS Foundations Benchmark**, no una cifra elegida.
   La rúbrica es **deliberadamente asimétrica**: una política débil declarada (0 o 25) puntúa por
   debajo de no declarar ninguna (50). En IaC la ausencia no prueba la ausencia —la cuenta puede
@@ -336,6 +347,8 @@ Resumen de cobertura del catálogo:
   - 50: capacidad elástica y ninguna base que declare `multi_az` ni sea réplica.
   - 25: capacidad elástica con `multi_az = false` explícito.
   - 0: `multi_az = false` explícito y sin capacidad elástica.
+  - 0: un grupo de autoescalado con `min_size` igual a `max_size` y ninguna base con alta
+    disponibilidad: la capacidad está declarada de forma literal, y es fija (docs/09 §97).
   - Sin bases ni grupos de autoescalado → no aplicable; todo declarado sin valor literal → `evidencia_insuficiente`.
 - **Notas:** son dos cosas que suenan parecidas y no lo son — `PR.IR-03` es sobrevivir a la caída de
   una zona, `PR.IR-04` es aguantar la carga. Un `min_size` igual al `max_size` **no** cuenta como

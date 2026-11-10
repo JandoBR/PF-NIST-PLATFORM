@@ -280,12 +280,18 @@ Una evaluación registra:
 
 - `methodology_version` (versión de criterios, de tipos de evidencia, de settings —pesos,
   umbrales, α, D— y del núcleo CSF).
+- El **snapshot de la metodología** con la que se calculó: criterios completos y settings, en
+  `assessments.reproducibility["methodology"]`.
 - Versiones de tipos de evidencia usadas.
 - Versión de adaptadores/parsers.
 - Modelo y versión de prompt de IA (para ajustes y extracción).
 
 Implementado en `assessments.reproducibility` (adaptador y parser por fuente; modelo y prompt de
-IA solo si participó), docs/09 §37. `methodology_version` se fija al ejecutar el pipeline (no al
-encolar), para que la evaluación registre la versión que realmente usó (docs/09 §85). Con eso, dos
-evaluaciones son comparables y un cambio de puntaje se puede atribuir a: nueva evidencia, nuevo
-criterio, nuevo parser o nuevo modelo.
+IA solo si participó; snapshot de la metodología), docs/09 §37. `methodology_version` se fija al
+ejecutar el pipeline (no al encolar), para que la evaluación registre la versión que realmente usó
+(docs/09 §85). Las lecturas históricas —detalle, hallazgos, informes y comparaciones— restauran el
+snapshot (`app/methodology/snapshot.py`) en vez de aplicar el YAML vigente; una evaluación anterior
+al snapshot cae al catálogo actual y omite los criterios que ya no existen. La UI avisa cuando
+`methodology_version` no coincide con la del catálogo vigente. Con eso, dos evaluaciones son
+comparables y un cambio de puntaje se puede atribuir a: nueva evidencia, nuevo criterio, nuevo
+parser o nuevo modelo.

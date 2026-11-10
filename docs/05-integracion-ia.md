@@ -185,8 +185,25 @@ fuentes de verdad (evidencia vs. clic) y rompería el determinismo y la reproduc
 | Modo de salida | `response_format={"type": "json_object"}` |
 | Temperatura | 0.0–0.3 según caso |
 | `max_tokens` | Generoso y configurable para evitar truncar el JSON |
-| Timeout | 60 s; reintento máximo 2 con backoff |
-| Reintentos | Solo ante error transitorio o JSON inválido; nunca infinitos |
+| Timeout | 60 s |
+| Reintentos | Hasta 2 con backoff (1 s, 2 s), solo ante timeout, error de conexión, 429 o 5xx |
+| Errores permanentes | 401/403 (clave inválida), 400 u otro 4xx: degradan de inmediato, sin reintento |
+| Concurrencia | `AI_MAX_CONCURRENCY` (6 por defecto; 1 = secuencial) |
+
+**Activación.** La UI no expone checkboxes ni confirmación: envía siempre `use_ai`/`ai_adjust=true`
+y `confirm_live_ai=true`. Si el backend tiene `DEEPSEEK_API_KEY`, la IA corre; sin ella
+`build_default_client` devuelve `NullAIClient` y la evaluación sigue con los puntajes base, sin
+llamadas ni costo. Las llamadas directas a la API (`POST /assessments`, `.../plans`, `.../reevaluate`
+y el reintento de jobs) sí exigen `confirm_live_ai` cuando hay clave, como guard de costo.
+
+**Concurrencia.** `app/ai/parallel.py` ejecuta las llamadas en paralelo con un semáforo por proceso
+y conserva el orden de entrada de los resultados (determinista): U1 por documento y por chunk, U2 por
+criterio y U3 por hallazgo. `AI_MAX_CONCURRENCY` fija el límite (6 por defecto; `1` = secuencial; un
+valor inválido cae a 6; menor que 1 se trata como 1). Si DeepSeek responde 429, bájalo.
+
+**Reintentos.** Solo se reintenta lo transitorio: timeout, error de conexión, 429 y 5xx. Un error
+permanente (p. ej. 401 por clave inválida) degrada en el primer intento y no consume reintentos; una
+respuesta vacía o un JSON que no parsea también termina en degradado.
 
 Notas de la documentación de DeepSeek:
 
@@ -197,8 +214,10 @@ Notas de la documentación de DeepSeek:
 Manejo de fallos:
 
 ```text
-respuesta vacía / JSON inválido / esquema inválido
+timeout / conexión / 429 / 5xx
   → reintento 1 → reintento 2 → degradado (ajuste 0 / extracción descartada)
+401/403/400 (permanente) → degradado inmediato, sin reintento
+respuesta vacía / JSON inválido / esquema inválido → degradado
   → registrar en ai_adjustments / log de extracción con motivo
 ```
 
@@ -261,7 +280,7 @@ Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extrac
 | Exfiltración de datos sensibles | **Pendiente para uso real** (docs/12 SEC-07): el prototipo no redacta secretos; el documento se envía tal cual a la IA. |
 | Alucinación de evidencia | U1 exige cita; U2 exige IDs existentes y que `criterion_id`/`puntaje_base_recibido` coincidan con lo enviado; validación de esquema; sin cita/ID → descarte. |
 | Respuestas vacías, truncadas o no finitas | Manejo explícito, reintentos limitados, degradación controlada. Puntajes y confianza se validan en rango (`0–100`, `0–1`); `NaN`/`Infinity` degradan a `S = B`, no rompen la evaluación. |
-| Costos | Límite de chunks por documento, límite de tokens, caché de extracción por hash del prompt **+ modelo + base URL**. Una entrada de caché corrupta se trata como miss, no tumba la evaluación. |
+| Costos | Límite de chunks por documento, límite de tokens, llamadas concurrentes acotadas por `AI_MAX_CONCURRENCY` y caché de extracción por hash del prompt **+ modelo + base URL**. Una entrada de caché corrupta se trata como miss, no tumba la evaluación. |
 | Envenenamiento del contexto | El contexto del formulario se valida y no puede contradecir hechos técnicos. |
 
 Principio operativo: **si la IA desaparece, el sistema sigue funcionando** con `S = B` y extracción

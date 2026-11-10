@@ -54,8 +54,9 @@ Prototipo completo para su alcance declarado:
 - **Evaluación:** núcleo determinista con los 31 criterios del catálogo (`criteria.yml` v24, doc 03),
   adaptadores de Terraform, Ansible y documentos, agregación por función, cobertura de evidencia y Tier
   estimado (doc 01).
-- **IA (opcional):** extracción documental con cita (U1), ajuste contextual acotado (U2) y redacción de
-  planes (U3), con un golden set que mide la extracción contra el modelo real (doc 05, docs/09 §43).
+- **IA (U1/U2/U3):** extracción documental con cita, ajuste contextual acotado y redacción de planes;
+  la UI no pregunta, la IA corre si el backend tiene `DEEPSEEK_API_KEY` (sin key: puntajes base,
+  sin llamadas ni costo). Un golden set mide la extracción contra el modelo real (doc 05, docs/09 §43).
 - **Motor operativo:** eventos, patrones, disparadores D1–D5, incidentes con transiciones validadas y planes
   de respuesta (docs 06/08).
 - **Plataforma:** API REST con login y aislamiento por organización (doc 10), workers sobre Redis con
@@ -95,9 +96,9 @@ Lo que queda pendiente está en [docs/11 §I](docs/11-backlog-y-pulido.md); lo d
 - **Solo el frontend:** `cd frontend && cp .env.example .env && npm install && npm run dev`, con la API
   corriendo aparte.
 - **Datos de ejemplo:** el diálogo "Nueva Evaluación" trae tres paquetes (entorno con brechas, en mejora y
-  conforme). Sus documentos solo se leen con la opción de IA activada (requiere `DEEPSEEK_API_KEY`); sin
-  ella, Gobernar e Identificar quedan sin evidencia. Los logs de ejemplo de Eventos e Incidentes empiezan de
-  cero cada vez.
+  conforme). Sus documentos se leen con IA automáticamente cuando el backend tiene `DEEPSEEK_API_KEY`;
+  sin ella, Gobernar e Identificar quedan sin evidencia. Los logs de ejemplo de Eventos e Incidentes
+  empiezan de cero cada vez.
 
 ## Desarrollo
 

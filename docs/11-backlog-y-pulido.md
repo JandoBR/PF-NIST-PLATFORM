@@ -43,10 +43,14 @@ contrario.
 - Volver a `false` al cerrar/enviar el modal (o al completarse la corrida).
 - Texto explícito: "solo aplica a esta evaluación; se resetea".
 - (Opcional) tooltip con el costo estimado / que sin `DEEPSEEK_API_KEY` no tiene efecto.
+- **Cambiado (superado):** ya no hay checkboxes ni confirmación en la UI. El frontend envía siempre
+  `confirm_live_ai=true` y `use_ai`/`ai_adjust=true`; la IA corre solo si el backend tiene
+  `DEEPSEEK_API_KEY` (sin key: `NullAIClient`, puntajes base y cero costo). La API directa sigue
+  exigiendo `confirm_live_ai` cuando hay clave, como guard de costo.
 
 ### [x] UI-04 · Hallazgo → plan inline (P1)
 En Recomendaciones, tocar un hallazgo debería **desplegar su plan de acción** en el lugar (como hace
-Simulación de Amenazas con sus incidentes), en vez de tener un botón que salta a otra sección.
+Eventos e Incidentes con sus incidentes), en vez de tener un botón que salta a otra sección.
 - Acordeón por hallazgo: pasos, verificación, prioridad, `generado_por`.
 - Si no hay plan generado para el hallazgo, ofrecer "generar plan" desde ahí.
 - **Hecho:** con esto se eliminó la pestaña "Plan de Acción" (era redundante); la lista de hallazgos

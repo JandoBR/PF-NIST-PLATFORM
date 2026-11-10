@@ -3236,3 +3236,50 @@ que la evalúa o un motivo escrito de por qué no lo tiene**, y un test impide q
 **Verificación:** 781 tests, 2 skipped, `ruff` limpio. No se tocó el motor, el catálogo, los
 fixtures ni los goldens: `GET /methodology` sigue en 81/106 con 31 criterios y `criterios=24`.
 
+## 97. Segunda revisión: lecturas que puntuaban lo que no estaba
+
+Una revisión de la Oleada C con sondas a mano —formas de HCL que los fixtures no usan— encontró
+siete lecturas equivocadas. Dos daban **100 sobre una premisa falsa**, que es el peor error posible
+en un evaluador; otras dos bajaban a 50 infraestructura bien configurada.
+
+**Puntaje perfecto sin motivo:**
+- **MFA (`CRI-PR-08`).** "Exige MFA" era buscar la cadena `aws:MultiFactorAuthPresent` en el
+  documento, así que una condición con `"false"` contaba como exigirlo. Ahora se parsea el JSON: un
+  `Allow` condicionado a `true` (`Bool`/`BoolIfExists`) o un `Deny` cuando vale `false`. Un JSON
+  ilegible queda `unknown`. De paso se quitan los marcadores `<<EOF` que `hcl2` deja en el valor,
+  sin lo cual toda política escrita como heredoc habría quedado `unknown`.
+- **Módulos fijados (`CRI-ID-06`).** Cualquier `?ref=` fijaba, incluidos `?ref=main` y `?ref=`
+  vacío. Ahora solo un tag de versión o un SHA de commit.
+
+**Penalización a lo que estaba bien:**
+- **`rds.force_ssl` (`CRI-PR-01`).** El booleano de HCL `true` se convertía en `"True"`, que no es
+  `"true"`, y quedaba `disabled`: tope 50. Ahora `True`, `1`, `"1"` y `"true"` sin distinguir
+  mayúsculas activan.
+- **Listener HTTP que redirige a HTTPS (`CRI-PR-01`).** Se leía solo `protocol`, así que la
+  configuración estándar (puerto 80 que redirige al 443) contaba como dato en claro. Ahora la
+  redirección a HTTPS cuenta como canal cifrado, y un listener TCP (paso directo de un NLB) queda
+  `unknown`: el TLS puede terminar detrás.
+- **`PermitRootLogin prohibit-password` (`CRI-PR-04`)** contaba como sin endurecer, aunque es lo
+  que recomienda CIS. Ahora cuenta como `no`, con `without-password` y `forced-commands-only`.
+- **`required_providers` en la forma antigua** (`aws = "~> 4.0"`) se leía como sin restricción.
+
+**Un estado mal nombrado:** un grupo de autoescalado con `min_size == max_size` y sin alta
+disponibilidad caía en *"ninguno los declara de forma literal"*, cuando los valores sí eran
+literales. Ahora es `evaluado` con **0**, la misma ancla que `multi_az = false` sin capacidad
+elástica: la capacidad fija no es un positivo, es su ausencia declarada.
+
+**Fuera de las reglas**, en la misma tanda:
+- El cliente de IA reintentaba cualquier error, también un 401 por clave inválida: tres intentos
+  con espera por cada llamada condenada. Ahora reintenta solo timeouts, errores de conexión, 429 y
+  5xx; el resto degrada al primer intento.
+- Frontend: el panel de incidente arrastraba los pasos marcados y el motivo de cierre del incidente
+  anterior; el spinner de comparar podía quedarse girando; una evaluación fallida no mostraba su
+  error; el sondeo de la evaluación activa no tenía fin (ahora corta a los 10 minutos). Se quitó el
+  código muerto que dejó la IA siempre activa.
+- Docs: la IA siempre activa, `AI_MAX_CONCURRENCY`, la nueva política de reintentos y el snapshot de
+  metodología (docs/01 §10, docs/04, docs/05).
+
+`ADAPTER_VERSION` de Terraform sube a 16. **Ningún golden cambió**: los fixtures no usaban ninguna
+de estas formas, que es exactamente por qué la suite no podía verlas (el mismo patrón que §95).
+
+**Verificación:** 830 tests, 2 skipped, `ruff` limpio; typecheck, lint y build del frontend limpios.

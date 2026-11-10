@@ -128,7 +128,7 @@ porque toca el modelo de evidencias.
 |---|---|
 | `organizations` | `id`, `nombre`, `contexto jsonb` |
 | `users` | `id`, `org_id`, `username`, `password_salt`, `password_hash`, `role`, `creado_en` (doc 10) |
-| `assessments` | `id`, `org_id`, `estado` (`pendiente`\|`en_progreso`\|`completada`\|`fallida`), `methodology_version`, `scope`, `previous_assessment_id?` (auto-referencia a la evaluación anterior del mismo org+scope, para heredar seguimiento — docs/05 §4.4), `reproducibility? jsonb` (adaptadores/parsers/IA, docs/01 §10), `error?`, `creado_en` |
+| `assessments` | `id`, `org_id`, `estado` (`pendiente`\|`en_progreso`\|`completada`\|`fallida`), `methodology_version`, `scope`, `previous_assessment_id?` (auto-referencia a la evaluación anterior del mismo org+scope, para heredar seguimiento — docs/05 §4.4), `reproducibility? jsonb` (adaptadores/parsers/IA y snapshot de la metodología, docs/01 §10), `error?`, `creado_en` |
 | `sources` | `id`, `assessment_id`, `tipo` (`terraform`\|`ansible`\|`documents`), `ruta`, `sha256` (un `Source` por adaptador, no por archivo — docs/09 §11) |
 | `evidence_definitions` | `id`, `version`, `descripcion`, `schema jsonb`, `estado`, `publicado_en` (catálogo, no por evaluación) |
 | `evidence` | `id`, `assessment_id`, `type_id`, `type_version`, `subject_type`, `subject_ref`, `scope`, `value jsonb`, `source_id`, `locator jsonb`, `observed_at`, `modality`, `limitations`, `created_by` |
@@ -261,7 +261,7 @@ backend/
 │   ├── methodology/         # loader + validación de los YAML
 │   ├── adapters/            # terraform/, ansible/, documents/
 │   ├── evaluation/          # engine, aggregation, tier, contradictions, rules/
-│   ├── ai/                  # client, cache, extraction, adjustment, plan_generation, golden_eval, prompts/
+│   ├── ai/                  # client, cache, parallel, extraction, adjustment, plan_generation, golden_eval, prompts/
 │   ├── recommendations/     # findings (brecha/contradicción/limitación), plans
 │   ├── surveillance/        # eventos y patrones (pipeline de logs, ver §3.1)
 │   ├── ops/                 # motor operativo: disparadores, incidentes, planes de incidente (doc 08)
@@ -286,22 +286,23 @@ En la raíz del proyecto: `deploy/docker-compose.yml` y `deploy/.env.example` (v
 `methodology/criteria.yml` (extracto):
 
 ```yaml
-version: 19
+version: 24
 criterios:
   - id: CRI-PR-01
-    version: 1
-    titulo: "Cifrado de datos en reposo"
+    version: 2
+    titulo: "Cifrado de datos en reposo y en transito"
     tipo: tecnico
     funcion: PR
     categorias: [PR.DS]
-    subcategorias: [PR.DS-01]
+    subcategorias: [PR.DS-01, PR.DS-02]
     peso: 5
     ai_adjustable: true
-    evidencias: [tf.encryption.config@1, doc.claim@2]
-    recomendacion: "Habilitar cifrado gestionado por KMS en RDS y S3; verificar mecanismo y llave."
+    evidencias: [tf.encryption.config@1, tf.transit_encryption.config@1, doc.claim@2]
+    recomendacion: "Habilitar cifrado gestionado por KMS en RDS y S3, y cifrar el canal: un listener HTTPS con politica TLS moderna y `rds.force_ssl = 1` en el grupo de parametros."
     regla:
       tipo: umbral_por_recurso
       estados: { all_enabled: 100, any_disabled: 25, any_unknown: insuficiente }
+      transito: { en_claro: 50, sin_observacion: 75, cifrado: 100 }
       tipos_afirmacion: [policy_exists]
 ```
 
@@ -338,7 +339,12 @@ Reglas:
   `csf_subcategories.yml` y que la subcategoría liste su categoría padre (docs/09 §68).
 - `methodology_version` concatena las versiones de `criteria.yml`, `evidence_types.yml`,
   `settings.yml` y `csf_subcategories.yml`; subir cualquiera de ellas cambia la versión.
-- Las evaluaciones guardan la versión; nunca se recalculan con la versión actual.
+- Las evaluaciones guardan la versión y el **snapshot completo de la metodología** (criterios y
+  settings) en `reproducibility["methodology"]` (`app/methodology/snapshot.py`). Las lecturas
+  históricas —detalle, hallazgos, informes y comparaciones— restauran el snapshot en vez del YAML
+  vigente, así que una evaluación no se reinterpreta con criterios nuevos. Una evaluación anterior
+  al snapshot cae al catálogo actual y omite los criterios que ya no existen; la UI avisa cuando
+  `methodology_version` difiere de la vigente.
 
 ## 9. Manejo de Archivos y Datos No Confiables
 

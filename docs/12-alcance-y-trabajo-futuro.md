@@ -158,5 +158,5 @@ del acceso a los resultados y da oficialidad al informe — ver `docs/11 §G`, d
 
 | ID | Motivo |
 |---|---|
-| FN-04 | El botón "Reevaluar" se eliminó (UI-10); no hay dónde exponer el toggle de IA. El endpoint sigue aceptando `ai_adjust`. |
+| FN-04 | El botón "Reevaluar" se eliminó (UI-10); ya no hay toggle de IA que exponer: la UI envía siempre `use_ai`/`ai_adjust=true` y la IA corre si hay `DEEPSEEK_API_KEY`. El endpoint sigue aceptando `ai_adjust`. |
 | CAL-01 | Modelado de calendario aproximado (meses de 28–31 días): aproximación aceptada; no se necesita calendario real. |
