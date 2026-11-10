@@ -103,6 +103,18 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             citadas,
         )
 
+    fijos = [e for e in grupos if e.value.get("habilitado") is False]
+    if fijos:
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            0,
+            f"El grupo de autoescalado declarado ({_refs(fijos)}) tiene `min_size` igual a"
+            " `max_size`: capacidad fija con otro nombre, no puede crecer (PR.IR-04). Y ninguna"
+            " base declara `multi_az` ni es replica (PR.IR-03).",
+            citadas,
+        )
+
     return result(
         CRITERION_ID,
         Estado.EVIDENCIA_INSUFICIENTE,

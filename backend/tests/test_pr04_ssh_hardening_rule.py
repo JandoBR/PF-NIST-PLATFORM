@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from app.evaluation.rules import pr04_ssh_hardening
 from app.evaluation.schemas import Estado
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
@@ -49,6 +51,16 @@ def test_only_one_directive_hardened_scores_75():
     claims = [_lineinfile("PermitRootLogin no")]
     result = pr04_ssh_hardening.evaluate(claims)
     assert result.final_score == 75
+
+
+@pytest.mark.parametrize("valor", ["prohibit-password", "without-password", "forced-commands-only"])
+def test_root_login_without_password_counts_as_hardened(valor):
+    """Solo `yes` deja entrar a root con contrasena; los demas valores no son un `yes`."""
+
+    claims = [_lineinfile(f"PermitRootLogin {valor}")]
+    result = pr04_ssh_hardening.evaluate(claims)
+    assert result.final_score == 75
+    assert "insegura" not in result.explanation
 
 
 def test_neither_directive_mentioned_scores_50():

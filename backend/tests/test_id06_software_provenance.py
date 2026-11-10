@@ -106,6 +106,19 @@ def test_module_origin_classifies_the_source(source, esperado):
         ("terraform-aws-modules/vpc/aws", None, False),
         # Un modulo de git no se fija con `version` sino con un ref en la propia URL.
         ("git::https://git.acme.local/red.git?ref=v2.1.0", None, True),
+        ("git::https://git.acme.local/red.git?ref=1.2.3", None, True),
+        ("git::https://git.acme.local/red.git?ref=v1.2.3-rc.1", None, True),
+        # Un SHA de commit fija la procedencia aunque no sea una etiqueta.
+        ("git::https://git.acme.local/red.git?ref=3f2a1b4", None, True),
+        (
+            "git::https://git.acme.local/red.git?ref=3f2a1b4c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a",
+            None,
+            True,
+        ),
+        # Una rama, o un `ref` vacio, sigue lo que haya manana: no fija nada.
+        ("git::https://git.acme.local/red.git?ref=main", None, False),
+        ("git::https://git.acme.local/red.git?ref=develop", None, False),
+        ("git::https://git.acme.local/red.git?ref=", None, False),
         ("git::https://git.acme.local/red.git", None, False),
         # Una version que es una expresion no fija nada: no se sabe a que resuelve.
         ("terraform-aws-modules/vpc/aws", "${var.v}", False),
@@ -148,6 +161,20 @@ def test_adapter_reads_modules_and_required_providers(tmp_path):
     assert por_ref["provider.random"].limitations == "declarado sin restriccion de version"
     # Un `module` no es un recurso desplegado: no debe aparecer como `tf.resource.present`.
     assert [e for e in evidencia if e.type_id == "tf.resource.present"] == []
+
+
+def test_a_legacy_provider_string_is_a_version_constraint(tmp_path):
+    """`aws = "~> 4.0"` es la forma heredada de `required_providers`, no un proveedor sin fijar."""
+
+    evidencia = _terraform(
+        tmp_path,
+        'terraform {\n  required_providers {\n    aws = "~> 4.0"\n  }\n}\n',
+    )
+    proveedor = next(e for e in evidencia if e.type_id == "tf.provider.version")
+
+    assert proveedor.value["restriccion"] == "~> 4.0"
+    assert proveedor.value["fijada"] is True
+    assert proveedor.limitations is None
 
 
 def test_module_and_terraform_blocks_carry_real_line_ranges(tmp_path):

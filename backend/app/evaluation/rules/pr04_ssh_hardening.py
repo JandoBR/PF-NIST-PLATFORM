@@ -25,9 +25,16 @@ from app.schemas.evidence import EvidenceInstance
 CRITERION_ID = "CRI-PR-04"
 CRITERION_VERSION = 2
 
+#: Valores que cuentan como endurecimiento. Los de `PermitRootLogin`: `no`, `prohibit-password`
+#: (nombre actual de `without-password`) y `forced-commands-only`, que solo permite ordenes con
+#: `command=` y clave publica. Ninguno deja entrar a root con contrasena.
+_VALORES_ENDUECIDOS = frozenset(
+    {"no", "prohibit-password", "without-password", "forced-commands-only"}
+)
+
 
 def _directive_value(tasks: list[EvidenceInstance], directive: str) -> bool | None:
-    """True=endurecido (no), False=explicito (yes), None=no se encontro la directiva.
+    """True=endurecido (`no` o `prohibit-password`), False=explicito (yes), None=no esta.
 
     Solo se lee `line`, que es lo que queda escrito en el archivo. `regexp` dice que linea se
     reemplaza y puede contener ambos valores (`(yes|no)`): leerlo daba por endurecido un `yes`."""
@@ -42,7 +49,7 @@ def _directive_value(tasks: list[EvidenceInstance], directive: str) -> bool | No
         if coincide is None:
             continue
         escrito = coincide.group(1).lower()
-        if escrito == "no":
+        if escrito in _VALORES_ENDUECIDOS:
             valor = True
         elif escrito == "yes":
             valor = False

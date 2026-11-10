@@ -134,6 +134,29 @@ def test_high_availability_explicitly_off_and_no_capacity_scores_0():
     assert resultado.final_score == 0
 
 
+def test_a_declared_group_that_cannot_grow_is_evaluated_not_insufficient():
+    """El grupo esta escrito: `min_size == max_size` es un hallazgo, no un silencio."""
+
+    resultado = regla.evaluate([_señal("autoescalado", False, "asg")])
+
+    assert resultado.estado == Estado.EVALUADO
+    assert resultado.final_score == 0
+    assert "min_size" in resultado.explanation
+    assert "PR.IR-04" in resultado.explanation
+
+
+def test_a_fixed_group_read_from_the_iac_is_evaluated(tmp_path):
+    evidencia = _terraform(
+        tmp_path,
+        'resource "aws_autoscaling_group" "fijo" {\n  min_size = 3\n  max_size = 3\n}\n',
+    )
+
+    resultado = regla.evaluate(evidencia)
+
+    assert resultado.estado == Estado.EVALUADO
+    assert resultado.final_score == 0
+
+
 def test_nothing_declared_is_insufficient_not_zero():
     """Que el `.tf` calle no prueba que falte: el defecto de AWS no se supone."""
 

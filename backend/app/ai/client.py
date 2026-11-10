@@ -10,6 +10,7 @@ import logging
 import os
 import time
 from collections.abc import Callable
+from functools import lru_cache
 from typing import Protocol
 
 from app.ai.calllog import log_call
@@ -32,6 +33,29 @@ class AIClient(Protocol):
     """
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None: ...
+
+
+@lru_cache(maxsize=1)
+def _errores_transitorios() -> tuple[type[Exception], ...]:
+    """Excepciones del SDK que si merecen un reintento (docs/05 §5)."""
+
+    from openai import APIConnectionError, APITimeoutError, RateLimitError
+
+    return (APITimeoutError, APIConnectionError, RateLimitError)
+
+
+def _reintentable(exc: Exception) -> bool:
+    """Timeout, conexion, 429 y 5xx: lo unico que puede cambiar en el siguiente intento.
+
+    Un 400/401/402/403/404/422 no se arregla repitiendo la misma peticion: cada reintento solo
+    gasta cuota y retrasa la degradacion que de todos modos va a ocurrir.
+    """
+
+    from openai import APIStatusError
+
+    if isinstance(exc, _errores_transitorios()):
+        return True
+    return isinstance(exc, APIStatusError) and (exc.status_code == 429 or exc.status_code >= 500)
 
 
 class DeepSeekClient:
@@ -77,8 +101,10 @@ class DeepSeekClient:
                     temperature=0.0,
                     max_tokens=2000,
                 )
-            except Exception as exc:  # error transitorio: reintentar, nunca propagar (docs/05 §5)
+            except Exception as exc:  # error de red o de la API: reintentar solo lo transitorio
                 motivo = f"error:{type(exc).__name__}"
+                if not _reintentable(exc):
+                    break
                 continue
 
             # docs/09: la API devuelve `usage` en cada respuesta; sin loguearlo, el consumo real

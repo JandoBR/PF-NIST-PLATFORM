@@ -7,6 +7,7 @@ el proximo que lo lea lo "arreglara".
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -104,6 +105,96 @@ def test_a_policy_without_the_condition_does_not_require_mfa(tmp_path):
     config = [e for e in evidencia if e.type_id == "tf.identity.config"]
 
     assert [e.value["mfa_requerido"] for e in config] == [False]
+
+
+def _mfa_documento(tmp_path, documento: dict | str) -> EvidenceInstance:
+    texto = documento if isinstance(documento, str) else json.dumps(documento)
+    evidencia = _terraform(
+        tmp_path,
+        'resource "aws_iam_policy" "mfa" {\n  policy = <<EOF\n' + texto + "\nEOF\n}\n",
+    )
+    return next(e for e in evidencia if e.type_id == "tf.identity.config")
+
+
+def test_an_allow_conditioned_on_mfa_true_requires_it(tmp_path):
+    config = _mfa_documento(
+        tmp_path,
+        {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "s3:*",
+                    "Condition": {"Bool": {"aws:MultiFactorAuthPresent": "true"}},
+                }
+            ]
+        },
+    )
+
+    assert config.value["mfa_requerido"] is True
+
+
+def test_a_false_condition_on_an_allow_does_not_require_mfa(tmp_path):
+    """La clave presente con `false` no exige MFA: el chequeo de subcadena decia que si."""
+
+    config = _mfa_documento(
+        tmp_path,
+        {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "s3:*",
+                    "Condition": {"Bool": {"aws:MultiFactorAuthPresent": "false"}},
+                }
+            ]
+        },
+    )
+
+    assert config.value["mfa_requerido"] is False
+    assert config.value["estado"] == "declarado"
+
+
+def test_the_key_in_a_non_boolean_operator_does_not_require_mfa(tmp_path):
+    config = _mfa_documento(
+        tmp_path,
+        {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "s3:*",
+                    "Condition": {"StringEquals": {"aws:MultiFactorAuthPresent": "true"}},
+                }
+            ]
+        },
+    )
+
+    assert config.value["mfa_requerido"] is False
+
+
+def test_the_condition_key_is_case_insensitive(tmp_path):
+    config = _mfa_documento(
+        tmp_path,
+        {
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "s3:*",
+                    "Condition": {"BoolIfExists": {"aws:multifactorauthpresent": "true"}},
+                }
+            ]
+        },
+    )
+
+    assert config.value["mfa_requerido"] is True
+
+
+def test_an_invalid_policy_document_is_unknown_not_a_denial(tmp_path):
+    """Un documento que no es JSON no se puede valorar: `unknown`, no `false`."""
+
+    config = _mfa_documento(tmp_path, "{ esto no es json")
+
+    assert config.value["mfa_requerido"] is None
+    assert config.value["estado"] == "unknown"
+    assert config.limitations is not None
 
 
 def test_a_generated_policy_document_is_unknown_not_a_denial(tmp_path):

@@ -76,6 +76,86 @@ def test_a_parameter_group_about_other_things_says_nothing_about_transit(tmp_pat
     assert [e for e in evidencia if e.type_id == "tf.transit_encryption.config"] == []
 
 
+def test_force_ssl_as_a_native_boolean_is_enabled_too(tmp_path):
+    """`value = true` no es el texto "true": el parser lo entrega como `bool`."""
+
+    _, evidencia = _evaluar(
+        tmp_path,
+        'resource "aws_db_parameter_group" "g" {\n'
+        "  parameter {\n"
+        '    name  = "rds.force_ssl"\n'
+        "    value = true\n"
+        "  }\n"
+        "}\n",
+    )
+    señal = next(e for e in evidencia if e.type_id == "tf.transit_encryption.config")
+
+    assert señal.value["estado"] == "enabled"
+
+
+def test_force_ssl_in_capitals_is_enabled_too(tmp_path):
+    _, evidencia = _evaluar(
+        tmp_path,
+        'resource "aws_db_parameter_group" "g" {\n'
+        "  parameter {\n"
+        '    name  = "rds.force_ssl"\n'
+        '    value = "TRUE"\n'
+        "  }\n"
+        "}\n",
+    )
+    señal = next(e for e in evidencia if e.type_id == "tf.transit_encryption.config")
+
+    assert señal.value["estado"] == "enabled"
+
+
+def test_an_http_listener_that_redirects_to_https_is_not_a_clear_channel(tmp_path):
+    """El listener escucha en claro pero no sirve el dato: lo manda a HTTPS."""
+
+    _, evidencia = _evaluar(
+        tmp_path,
+        'resource "aws_lb_listener" "l" {\n'
+        '  protocol = "HTTP"\n'
+        "  default_action {\n"
+        '    type = "redirect"\n'
+        "    redirect {\n"
+        '      protocol = "HTTPS"\n'
+        "    }\n"
+        "  }\n"
+        "}\n",
+    )
+    señal = next(e for e in evidencia if e.type_id == "tf.transit_encryption.config")
+
+    assert señal.value["estado"] == "enabled"
+
+
+def test_an_http_redirect_to_http_is_still_a_clear_channel(tmp_path):
+    _, evidencia = _evaluar(
+        tmp_path,
+        'resource "aws_lb_listener" "l" {\n'
+        '  protocol = "HTTP"\n'
+        "  default_action {\n"
+        '    type = "redirect"\n'
+        "    redirect {\n"
+        '      protocol = "HTTP"\n'
+        "    }\n"
+        "  }\n"
+        "}\n",
+    )
+    señal = next(e for e in evidencia if e.type_id == "tf.transit_encryption.config")
+
+    assert señal.value["estado"] == "disabled"
+
+
+def test_a_tcp_listener_is_unknown_not_a_clear_channel(tmp_path):
+    """En un NLB con `TCP` el cifrado depende del destino, y el `.tf` no lo dice."""
+
+    _, evidencia = _evaluar(tmp_path, 'resource "aws_lb_listener" "l" {\n  protocol = "TCP"\n}\n')
+    señal = next(e for e in evidencia if e.type_id == "tf.transit_encryption.config")
+
+    assert señal.value["estado"] == "unknown"
+    assert señal.limitations is not None
+
+
 # -- la compuerta del 100 ---------------------------------------------------------
 
 

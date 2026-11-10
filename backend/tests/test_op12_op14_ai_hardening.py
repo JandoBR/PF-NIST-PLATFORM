@@ -60,18 +60,58 @@ def _client(outcomes):
     return deepseek, completions, sleeps
 
 
+def _error_transitorio() -> Exception:
+    """Un fallo de conexion del SDK: lo unico que un reintento puede resolver."""
+
+    import httpx2
+    from openai import APIConnectionError
+
+    return APIConnectionError(request=httpx2.Request("POST", "https://api.deepseek.com"))
+
+
+def _error_http(status: int) -> Exception:
+    import httpx2
+    from openai import APIStatusError
+
+    request = httpx2.Request("POST", "https://api.deepseek.com")
+    response = httpx2.Response(status, request=request)
+    return APIStatusError(f"HTTP {status}", response=response, body=None)
+
+
 def test_retries_wait_with_exponential_backoff_then_succeed():
-    deepseek, completions, sleeps = _client([RuntimeError("x"), RuntimeError("y"), _response("{}")])
+    deepseek, completions, sleeps = _client(
+        [_error_transitorio(), _error_transitorio(), _response("{}")]
+    )
     assert deepseek.complete_json("s", "u") == {}
     assert completions.calls == 3
     assert sleeps == [1.0, 2.0]
 
 
 def test_degrades_after_retries_without_extra_waiting():
-    deepseek, completions, sleeps = _client([RuntimeError("x")] * 3)
+    deepseek, completions, sleeps = _client([_error_transitorio()] * 3)
     assert deepseek.complete_json("s", "u") is None
     assert completions.calls == client_module.MAX_RETRIES + 1
     assert sleeps == [1.0, 2.0]
+
+
+def test_a_permanent_error_is_not_retried(caplog):
+    """Un 401 no se arregla repitiendo la peticion: se degrada en el primer intento."""
+
+    deepseek, completions, sleeps = _client([_error_http(401)])
+    with caplog.at_level(logging.INFO, logger="app.ai.calls"):
+        assert deepseek.complete_json("s", "u") is None
+
+    assert completions.calls == 1
+    assert sleeps == []
+    registro = next(r for r in caplog.records if r.name == "app.ai.calls").getMessage()
+    assert '"resultado": "degradado"' in registro and "error:APIStatusError" in registro
+
+
+def test_a_5xx_is_retried():
+    deepseek, completions, sleeps = _client([_error_http(503), _response("{}")])
+    assert deepseek.complete_json("s", "u") == {}
+    assert completions.calls == 2
+    assert sleeps == [1.0]
 
 
 def test_first_attempt_success_never_sleeps():

@@ -11,6 +11,7 @@ Solo parsea; nunca ejecuta Terraform ni resuelve el estado real de la nube (docs
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -368,6 +369,10 @@ _FUENTES_EXTERNAS = ("http://", "https://", "s3::", "gcs::")
 #: un namespace porque lleva un punto, asi que `terraform-aws-modules/vpc/aws` sigue siendo publico.
 _FUENTE_REGISTRY = re.compile(r"^([\w.-]+\.[\w-]+/)?[\w.-]+(/[\w.-]+){2}(//[\w./-]+)?$")
 
+#: `?ref=` que fija de verdad: un SHA de commit (>= 7 hex) o una etiqueta de version, no una rama.
+_REF_COMMIT = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
+_REF_TAG = re.compile(r"^v?\d+(?:\.\d+)+(?:[-+][0-9A-Za-z.]+)*$")
+
 
 def module_origin(source: Any) -> str:
     """De donde viene el codigo de un `module`: `local` es propio, el resto es de terceros.
@@ -412,6 +417,34 @@ def _como_lista(value: Any) -> list:
     return value if isinstance(value, list) else [value]
 
 
+def _redirige_a_https(attrs: dict) -> bool:
+    """Si la accion por defecto de un listener es una redireccion a `HTTPS`."""
+
+    for accion in _como_lista(attrs.get("default_action")):
+        if not isinstance(accion, dict) or accion.get("type") != "redirect":
+            continue
+        for redireccion in _como_lista(accion.get("redirect")):
+            if not isinstance(redireccion, dict):
+                continue
+            if str(redireccion.get("protocol", "")).upper() == "HTTPS":
+                return True
+    return False
+
+
+def _activado(valor: Any) -> bool:
+    """Un valor de parametro que significa "activado": `true`, `1` o su forma en texto.
+
+    El parser entrega los numeros como `int`/`float` y los booleanos como `bool`, pero RDS
+    documenta el valor como cadena: `"1"`, `"true"` y `True` son el mismo ajuste.
+    """
+
+    if isinstance(valor, bool):
+        return valor
+    if isinstance(valor, str):
+        return valor.strip().lower() in ("1", "true")
+    return valor == 1
+
+
 def module_pinned(source: Any, version: Any) -> bool:
     """Si la procedencia del modulo esta fijada a algo reproducible.
 
@@ -427,7 +460,73 @@ def module_pinned(source: Any, version: Any) -> bool:
         return False
     if isinstance(version, str) and version.strip() and not _is_expression(version):
         return True
-    return "?ref=" in source
+    return _ref_fijado(source)
+
+
+def _ref_fijado(source: str) -> bool:
+    """Si el `?ref=` de la URL apunta a un commit o a una etiqueta de version.
+
+    `?ref=main`, `?ref=develop` o un `?ref=` vacio no fijan nada: siguen lo que haya en la rama.
+    """
+
+    coincide = re.search(r"[?&]ref=([^&#]+)", source)
+    if coincide is None:
+        return False
+    ref = coincide.group(1).strip()
+    return bool(_REF_COMMIT.match(ref) or _REF_TAG.match(ref))
+
+
+def _es_booleano_texto(valor: Any, esperado: bool) -> bool:
+    """Un valor de condicion IAM: `true`/`"true"` (o `false`/`"false"`), sin mayusculas."""
+
+    if isinstance(valor, bool):
+        return valor is esperado
+    return isinstance(valor, str) and valor.strip().lower() == str(esperado).lower()
+
+
+#: Un heredoc de HCL tal como lo entrega `hcl2`: los marcadores forman parte del valor.
+_HEREDOC = re.compile(r"^<<-?([A-Za-z_][A-Za-z0-9_]*)\n(.*)\n\1$", re.DOTALL)
+
+
+def _texto_documento(documento: str) -> str:
+    """El contenido de un heredoc `<<EOF ... EOF`, sin los marcadores."""
+
+    coincide = _HEREDOC.match(documento.strip())
+    return coincide.group(2) if coincide else documento
+
+
+def _exige_mfa(politica: Any) -> bool:
+    """Si alguna afirmacion de una politica IAM exige MFA (PR.AA-03).
+
+    La exigencia se escribe de dos formas: un `Allow` condicionado a
+    `aws:MultiFactorAuthPresent == true`, o el patron estandar de AWS, un `Deny` con
+    `BoolIfExists` sobre `... == false` que bloquea lo que llega sin MFA. Una condicion `false`
+    en un `Allow` no exige nada; la mera aparicion de la clave tampoco.
+    """
+
+    if not isinstance(politica, dict):
+        return False
+    for afirmacion in _como_lista(politica.get("Statement")):
+        if not isinstance(afirmacion, dict):
+            continue
+        efecto = str(afirmacion.get("Effect", "")).strip().lower()
+        condicion = afirmacion.get("Condition")
+        if not isinstance(condicion, dict):
+            continue
+        for operador, pares in condicion.items():
+            if str(operador).strip().lower() not in ("bool", "boolifexists"):
+                continue
+            if not isinstance(pares, dict):
+                continue
+            for clave, valor in pares.items():
+                if str(clave).strip().lower() != "aws:multifactorauthpresent":
+                    continue
+                marcas = _como_lista(valor)
+                if efecto == "allow" and any(_es_booleano_texto(m, True) for m in marcas):
+                    return True
+                if efecto == "deny" and any(_es_booleano_texto(m, False) for m in marcas):
+                    return True
+    return False
 
 
 #: Se sube a mano cuando cambia lo que el adaptador emite (docs/11 OP-14).
@@ -454,7 +553,11 @@ def module_pinned(source: Any, version: Any) -> bool:
 #: desde `rds.force_ssl` en un `aws_db_parameter_group`.
 #: v15: un modulo de registry privado (`app.terraform.io/ns/nombre/proveedor`) se reconoce como
 #: `registry` en vez de `desconocido`, y un `source` no literal nunca queda `fijada: true`.
-ADAPTER_VERSION = "15"
+#: v16: `?ref=` solo fija con un SHA o una etiqueta (no una rama); `required_providers` acepta la
+#: forma heredada `aws = "~> 4.0"`; un listener HTTP que redirige a HTTPS cuenta como cifrado y uno
+#: TCP queda `unknown`; el valor de `rds.force_ssl` se normaliza; la exigencia de MFA se lee del
+#: JSON de la politica, no de una coincidencia de texto.
+ADAPTER_VERSION = "16"
 
 
 class TerraformAdapter:
@@ -588,7 +691,13 @@ class TerraformAdapter:
                 if not isinstance(grupo, dict):
                     continue
                 for proveedor, spec in _strip_meta(grupo).items():
-                    version = spec.get("version") if isinstance(spec, dict) else None
+                    if isinstance(spec, dict):
+                        version = spec.get("version")
+                    elif isinstance(spec, str):
+                        # Forma heredada: `aws = "~> 4.0"` sin bloque `{ source, version }`.
+                        version = spec
+                    else:
+                        version = None
                     if not isinstance(version, str) or _is_expression(version):
                         version = None
                     encontrados.append((proveedor, (version or "").strip() or None))
@@ -932,16 +1041,26 @@ class TerraformAdapter:
         )
 
     def _listener_transit(self, file_path: Path, subject_ref: str, attrs: dict) -> EvidenceInstance:
-        """Cifrado en transito de un listener: su protocolo y su politica TLS (PR.DS-02)."""
+        """Cifrado en transito de un listener: su protocolo y su politica TLS (PR.DS-02).
+
+        Un listener `HTTP` que redirige a `HTTPS` no transporta el dato en claro: el canal util
+        queda cifrado, igual que en un listener `HTTPS` directo. Un listener `TCP` de un NLB no
+        termina TLS: el cifrado depende de lo que haya detras y el `.tf` no lo dice.
+        """
 
         protocolo = attrs.get("protocol")
         politica = attrs.get("ssl_policy")
         if not isinstance(protocolo, str) or _is_expression(protocolo):
-            estado: str | None = "unknown"
+            estado, limitacion = "unknown", "protocol no literal: no se puede leer el canal"
         elif protocolo.upper() in ("HTTPS", "TLS"):
-            estado = "enabled"
+            estado, limitacion = "enabled", None
+        elif protocolo.upper() == "HTTP" and _redirige_a_https(attrs):
+            estado, limitacion = "enabled", None
+        elif protocolo.upper() == "TCP":
+            estado = "unknown"
+            limitacion = "listener TCP: el cifrado lo decide el destino (passthrough), no el `.tf`"
         else:
-            estado = "disabled"
+            estado, limitacion = "disabled", None
         return self._make_evidence(
             type_id="tf.transit_encryption.config",
             subject_type="aws_lb_listener",
@@ -955,9 +1074,7 @@ class TerraformAdapter:
                 "estado": estado,
             },
             file_path=file_path,
-            limitations=(
-                None if estado != "unknown" else "protocol no literal: no se puede leer el canal"
-            ),
+            limitations=limitacion,
         )
 
     def _parameter_group_transit(
@@ -978,7 +1095,7 @@ class TerraformAdapter:
             if _is_expression(valor):
                 estado = "unknown"
             else:
-                estado = "enabled" if str(valor).strip() in ("1", "true") else "disabled"
+                estado = "enabled" if _activado(valor) else "disabled"
             return self._make_evidence(
                 type_id="tf.transit_encryption.config",
                 subject_type="aws_db_parameter_group",
@@ -1116,8 +1233,16 @@ class TerraformAdapter:
             estado, exige = "unknown", None
             limitacion = "documento de politica no literal: no se puede leer si exige MFA"
         else:
-            exige = "aws:MultiFactorAuthPresent" in documento
-            estado, limitacion = "declarado", None
+            try:
+                politica = json.loads(_texto_documento(documento))
+            except json.JSONDecodeError:
+                estado, exige = "unknown", None
+                limitacion = (
+                    "documento de politica no es JSON valido: no se puede leer si exige MFA"
+                )
+            else:
+                exige = _exige_mfa(politica)
+                estado, limitacion = "declarado", None
         return self._make_evidence(
             type_id="tf.identity.config",
             subject_type="aws_iam_policy",
