@@ -15,10 +15,8 @@ import redis
 from sqlalchemy.orm import Session
 
 from app.core import jobs as job_service
-from app.core.queue import MESSAGE_SCHEMA_VERSION, QUEUE_CORE, QUEUE_LOGS, enqueue
+from app.core.queue import MESSAGE_SCHEMA_VERSION, QUEUE_BY_TIPO, enqueue
 from app.models.tables import Assessment, CriterionResultRow, EvidenceRow, Job, PlanRow, Source
-
-QUEUE_BY_TIPO = {"assessment_run": QUEUE_CORE, "event_ingest": QUEUE_LOGS}
 
 #: Claves del payload que apuntan a archivos subidos que el worker vuelve a leer.
 _INPUT_PATH_KEYS = ("terraform_path", "ansible_path", "documents_path", "jsonl_path")

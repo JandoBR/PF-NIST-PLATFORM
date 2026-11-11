@@ -191,6 +191,21 @@ Las colas se implementan sobre Redis (listas `RPUSH`/`BLPOP`, sin consumer group
 persiste la evidencia y evalúa todos los criterios. El **refresco selectivo** tras una ingesta es el
 único que recalcula solo los criterios de vigilancia (docs/06 §6).
 
+**Jobs colgados y heartbeat.** Cada worker publica en Redis un latido por cola
+(`pf:jobs:hb:<cola>:<worker>`, con TTL renovado por un hilo propio) y otro por el job que tiene en
+curso (`pf:jobs:hb:job:<id>`); así el latido sigue vivo mientras el pipeline está bloqueado en una
+llamada larga de IA. El barrido (`reap_stale_jobs`, en los workers y en `GET /jobs`) solo declara
+perdido un job `pendiente` cuando pasó `JOB_PENDING_TIMEOUT_SECONDS` **y** no hay ningún worker vivo
+en su cola: estar en la cola detrás de otro job no es un fallo. Un `en_progreso` se marca `fallido`
+cuando pasó `JOB_STALE_TIMEOUT_SECONDS` y el latido de ese job desapareció (el worker que lo tomó
+murió). Si el chequeo de heartbeat no se puede hacer (Redis inalcanzable), el `pendiente` no se
+falla y el `en_progreso` conserva el timeout viejo. Si el worker saca de la cola un mensaje cuyo job
+ya fue dado por perdido así, lo ejecuta igual (vuelve a `pendiente` → `en_progreso`), salvo que
+exista un reintento para la misma entrada (esperando, corriendo o terminado), para no duplicar el
+trabajo (docs/09 §104). Los
+tiempos y el heartbeat se configuran con `JOB_STALE_TIMEOUT_SECONDS`,
+`JOB_PENDING_TIMEOUT_SECONDS`, `JOB_HEARTBEAT_TTL_SECONDS` y `JOB_HEARTBEAT_INTERVAL_SECONDS`.
+
 ## 6. API REST (borrador)
 
 | Método | Ruta | Descripción |
@@ -200,9 +215,9 @@ persiste la evidencia y evalúa todos los criterios. El **refresco selectivo** t
 | `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). Un `context` que no sea un objeto JSON da 422 antes de crear nada. `event_ingest_ids` (array JSON, opcional) limita las ingestas de eventos consumidas: omitido = todas las del org+scope, `[]` = ninguna; una ingesta ajena a la organización da 400 (docs/09 §102). |
 | `GET` | `/assessments` | Lista de evaluaciones de la organización (cada una con su resumen/Tier). |
 | `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
-| `GET` | `/jobs` | Historial de jobs de la organización, del más reciente al más antiguo. Filtros `estado`, `tipo` y `limit` (1–200, por defecto 50). Marca `fallido` los jobs activos que se quedaron colgados antes de listar (docs/09 §45). |
+| `GET` | `/jobs` | Historial de jobs de la organización, del más reciente al más antiguo. Filtros `estado`, `tipo` y `limit` (1–200, por defecto 50). Marca `fallido` los jobs activos que se quedaron colgados (sin heartbeat vivo) antes de listar (docs/09 §45). |
 | `POST` | `/jobs/{job_id}/retry` | Reencola un job `fallido` con las mismas entradas (202, devuelve el job nuevo). 409 si no está fallido, no tiene entradas guardadas, faltan los archivos o la evaluación ya se reintentó; si usaba IA real, exige `confirm_live_ai` otra vez (docs/09 §46). |
-| `GET` | `/jobs/{job_id}` | Estado y progreso de cualquier trabajo (`assessment_run`/`event_ingest`). |
+| `GET` | `/jobs/{job_id}` | Estado y progreso de cualquier trabajo (`assessment_run`/`event_ingest`). Si quedó colgado sin worker vivo (heartbeat), se marca `fallido` antes de responder. |
 | `GET` | `/assessments/{id}/criteria` | Resultados por criterio con explicación y evidencias. |
 | `GET` | `/assessments/{id}/evidence` | Evidencias con procedencia y limitaciones (filtrable). |
 | `GET` | `/assessments/{id}/findings` | Hallazgos. Tipos `brecha`, `contradiccion` (docs/09 §38) y `limitacion` (docs/09 §56). Los hallazgos no se persisten: se derivan al consultar, con la evidencia. |

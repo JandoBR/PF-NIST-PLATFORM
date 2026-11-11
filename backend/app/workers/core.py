@@ -20,7 +20,13 @@ from app.core import assessment_service as svc
 from app.core import jobs as job_service
 from app.core import refresh
 from app.core.db import build_engine, build_session_factory, ensure_schema
-from app.core.queue import QUEUE_CORE, build_redis_client, dequeue_blocking, message_version_error
+from app.core.queue import (
+    QUEUE_CORE,
+    WorkerHeartbeat,
+    build_redis_client,
+    dequeue_blocking,
+    message_version_error,
+)
 from app.methodology.loader import Methodology, load_methodology
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -66,9 +72,9 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
         job_service.fail_linked_assessment(session, job)
         return
 
-    if job.estado != "pendiente":
-        # Ya no espera a nadie: se dio por perdido mientras hacia cola (y quiza ya se reintento
-        # con otro job) o es un mensaje repetido. Correrlo ejecutaria el trabajo dos veces.
+    if not job_service.adopt_lost_in_queue(session, job):
+        # Ya no espera a nadie: se cerro por otra via (y quiza ya se reintento con otro job) o es
+        # un mensaje repetido. Correrlo ejecutaria el trabajo dos veces.
         logger.warning("Job %s esta %r, no pendiente; se descarta el mensaje.", job.id, job.estado)
         return
 
@@ -112,14 +118,21 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
         job_service.mark_failed(session, job, str(exc))
 
 
-def reap_stale_jobs(session: Session, timeout_seconds: int = JOB_STALE_TIMEOUT_SECONDS) -> None:
+def reap_stale_jobs(
+    session: Session, timeout_seconds: int = JOB_STALE_TIMEOUT_SECONDS, redis_client=None
+) -> None:
     """Ademas de marcar el `Job` fallido (`job_service.reap_stale_jobs`), si tenia un
     `Assessment` ligado que se quedo en `pendiente` o `en_progreso`, lo marca `fallida` tambien --
     sin esto, el job se veria fallido pero `GET /assessments/{id}` seguiria mostrando un estado no
-    terminal para siempre (el worker que murio nunca llego a la rama `except` que lo marca)."""
+    terminal para siempre (el worker que murio nunca llego a la rama `except` que lo marca).
+    `redis_client` habilita el chequeo de heartbeat (docs/04 §5)."""
 
     for job in job_service.reap_stale_jobs(
-        session, "assessment_run", timeout_seconds, JOB_PENDING_TIMEOUT_SECONDS
+        session,
+        "assessment_run",
+        timeout_seconds,
+        JOB_PENDING_TIMEOUT_SECONDS,
+        redis_client=redis_client,
     ):
         job_service.fail_linked_assessment(session, job)
 
@@ -130,6 +143,8 @@ def main() -> None:
     session_factory = build_session_factory(engine)
     methodology = load_methodology(REPO_ROOT / "methodology")
     redis_client = build_redis_client()
+    heartbeat = WorkerHeartbeat(redis_client, QUEUE_CORE)
+    heartbeat.start()
 
     logger.info("worker-core escuchando %s", QUEUE_CORE)
     while True:
@@ -137,8 +152,12 @@ def main() -> None:
         session = session_factory()
         try:
             if message is not None:
-                process_message(session, methodology, message)
-            reap_stale_jobs(session)
+                heartbeat.track(message.get("job_id"))
+                try:
+                    process_message(session, methodology, message)
+                finally:
+                    heartbeat.track(None)
+            reap_stale_jobs(session, redis_client=redis_client)
         finally:
             session.close()
 

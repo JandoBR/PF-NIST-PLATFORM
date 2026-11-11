@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from app.api import routes_jobs
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
+from app.core.queue import QUEUE_CORE, heartbeat_key
 from tests.conftest import TEST_ORG_NAME
 
 
@@ -41,6 +42,29 @@ def test_get_job_leaves_recent_pending_alone(db_session, methodology, api_client
         db_session, methodology, org_name=TEST_ORG_NAME, scope="entorno:produccion"
     )
     job = job_service.create_job(db_session, "assessment_run", assessment_id=assessment.id)
+
+    response = api_client.get(f"/jobs/{job.id}")
+
+    assert response.status_code == 200
+    assert response.json()["estado"] == "pendiente"
+    db_session.refresh(assessment)
+    assert assessment.estado == "pendiente"
+
+
+def test_get_job_leaves_a_pending_job_queued_behind_a_long_job_alone(
+    db_session, methodology, api_client, fake_redis, monkeypatch
+):
+    """El job viejo solo espera: su cola tiene un worker latiendo (docs/04 §5)."""
+
+    monkeypatch.setattr(routes_jobs, "_PENDING_TIMEOUT", 0)
+
+    assessment = svc.create_pending_assessment(
+        db_session, methodology, org_name=TEST_ORG_NAME, scope="entorno:produccion"
+    )
+    job = job_service.create_job(db_session, "assessment_run", assessment_id=assessment.id)
+    job.creado_en = datetime.now(UTC) - timedelta(seconds=300)
+    db_session.commit()
+    fake_redis.set(heartbeat_key(QUEUE_CORE, "worker-test"), "ahora")
 
     response = api_client.get(f"/jobs/{job.id}")
 

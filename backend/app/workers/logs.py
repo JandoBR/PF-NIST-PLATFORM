@@ -19,7 +19,13 @@ from app.ai.client import build_default_client, describe_client
 from app.core import jobs as job_service
 from app.core import operations, refresh
 from app.core.db import build_engine, build_session_factory, ensure_schema
-from app.core.queue import QUEUE_LOGS, build_redis_client, dequeue_blocking, message_version_error
+from app.core.queue import (
+    QUEUE_LOGS,
+    WorkerHeartbeat,
+    build_redis_client,
+    dequeue_blocking,
+    message_version_error,
+)
 from app.methodology.loader import Methodology, load_methodology
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -32,6 +38,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s
 logger = logging.getLogger("worker.logs")
 
 JOB_STALE_TIMEOUT_SECONDS = int(os.environ.get("JOB_STALE_TIMEOUT_SECONDS", "600"))
+#: Mismo default que `app/workers/core.py`: sin worker sano el job pendiente se falla antes.
+JOB_PENDING_TIMEOUT_SECONDS = int(os.environ.get("JOB_PENDING_TIMEOUT_SECONDS", "120"))
 
 
 def _maybe_refresh_maturity(
@@ -79,9 +87,9 @@ def process_message(
         job_service.mark_failed(session, job, version_error)
         return
 
-    if job.estado != "pendiente":
-        # Ya no espera a nadie: se dio por perdido mientras hacia cola (y quiza ya se reintento
-        # con otro job) o es un mensaje repetido. Correrlo ejecutaria el trabajo dos veces.
+    if not job_service.adopt_lost_in_queue(session, job):
+        # Ya no espera a nadie: se cerro por otra via (y quiza ya se reintento con otro job) o es
+        # un mensaje repetido. Correrlo ejecutaria el trabajo dos veces.
         logger.warning("Job %s esta %r, no pendiente; se descarta el mensaje.", job.id, job.estado)
         return
 
@@ -114,6 +122,8 @@ def main() -> None:
     session_factory = build_session_factory(engine)
     methodology = load_methodology(REPO_ROOT / "methodology")
     redis_client = build_redis_client()
+    heartbeat = WorkerHeartbeat(redis_client, QUEUE_LOGS)
+    heartbeat.start()
 
     logger.info("worker-logs escuchando %s", QUEUE_LOGS)
     while True:
@@ -121,8 +131,18 @@ def main() -> None:
         session = session_factory()
         try:
             if message is not None:
-                process_message(session, methodology, message, redis_client)
-            job_service.reap_stale_jobs(session, "event_ingest", JOB_STALE_TIMEOUT_SECONDS)
+                heartbeat.track(message.get("job_id"))
+                try:
+                    process_message(session, methodology, message, redis_client)
+                finally:
+                    heartbeat.track(None)
+            job_service.reap_stale_jobs(
+                session,
+                "event_ingest",
+                JOB_STALE_TIMEOUT_SECONDS,
+                JOB_PENDING_TIMEOUT_SECONDS,
+                redis_client=redis_client,
+            )
         finally:
             session.close()
 

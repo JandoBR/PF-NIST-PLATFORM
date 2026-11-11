@@ -3580,3 +3580,48 @@ test que fijaba la versión es `test_op12_op14_ai_hardening`, actualizado a `ext
 prompt v5, `data_inventory.activos` nombra recursos tecnológicos y el prompt de usuario declara los
 campos de cada tipo pedido). `pytest` de `test_ai_extraction`, `test_op12_op14_ai_hardening`,
 `test_ai_golden` y `test_document_extraction_text` en verde, y `ruff` al final del cambio.
+
+## 104. Un job que esperaba en la cola se marcaba `fallido` a los 120 s y el worker descartaba el mensaje
+
+**Síntoma.** Apareció regenerando los escenarios del poster: tres ingestas de eventos seguidas sobre
+la misma organización, y la segunda terminaba `fallido` con "El job no fue tomado por ningún worker a
+tiempo" aunque `worker-logs` estaba corriendo. La ingesta no ocurría: los eventos del archivo nunca
+se guardaban.
+
+**Causa.** Dos piezas que por separado tenían sentido. `_is_stale` (`app/core/jobs.py`) fallaba todo
+job `pendiente` con más de `JOB_PENDING_TIMEOUT_SECONDS` (120 s) desde `creado_en`, sin mirar si
+había un worker vivo; el barrido corre en cada vuelta del loop y en cada `GET /jobs`. Y el worker,
+al sacar el mensaje de Redis, descartaba cualquier job que no estuviera `pendiente`
+(`app/workers/core.py`/`logs.py`, "Correrlo ejecutaría el trabajo dos veces"). Con una reevaluación
+con IA de varios minutos delante, el job de la ingesta esperaba en la cola más de 120 s, el reaper
+lo fallaba y el mensaje, todavía en Redis, se tiraba. Estar en la cola no es evidencia de que nadie
+lo vaya a procesar.
+
+**Cambio.** Los workers publican un heartbeat en Redis: `pf:jobs:hb:<cola>:<worker-id>` (TTL
+`JOB_HEARTBEAT_TTL_SECONDS`, default 60 s) y, mientras procesan, `pf:jobs:hb:job:<job-id>`, ambos
+refrescados por un hilo propio cada `JOB_HEARTBEAT_INTERVAL_SECONDS` (default 20 s) — el loop
+principal queda bloqueado en la llamada de IA, así que el refresco no puede depender de él.
+`app/core/queue.py` expone `WorkerHeartbeat` (`beat`/`track`/`start`/`stop`) y las consultas
+`worker_alive`/`job_worker_alive` (devuelven `None` si no se pudo saber, p. ej. Redis caído). El
+reaper ahora falla un `pendiente` solo si pasó el timeout **y** no hay worker vivo en su cola, y un
+`en_progreso` solo si pasó `JOB_STALE_TIMEOUT_SECONDS` **y** desapareció el latido de ese job: un
+pipeline de IA largo ya no se mata por viejo. `JOB_PENDING_TIMEOUT_SECONDS` se mantiene como
+umbral, no como sentencia.
+
+Defensa en profundidad: `jobs.adopt_lost_in_queue` reconoce el caso exacto (`fallido`, motivo
+`LOST_IN_QUEUE_ERROR`, `tomado_en` nulo) y devuelve el job a `pendiente` (y la `Assessment` ligada a
+`pendiente`) para ejecutarlo, en vez de descartar el mensaje. Si existe un intento posterior para
+la misma entrada que no esté fallido —esperando, corriendo o ya completado; un reintento crea un job
+nuevo con `dispatch.retry_job`— lo descarta igual, para no duplicar el trabajo. Los workers `core` y
+`logs` arrancan su heartbeat y pasan su cliente Redis al barrido.
+
+**Configuración.** Nuevas `JOB_HEARTBEAT_TTL_SECONDS` y `JOB_HEARTBEAT_INTERVAL_SECONDS` (comentadas
+en `backend/.env.example` y `deploy/.env.example`); los dos timeouts existentes no cambian de
+nombre. El mensaje de error no cambió, así que el frontend no necesitó cambios.
+
+**Verificación:** `tests/test_heartbeat.py` (claves, liberación del job, hilo que refresca con el
+loop bloqueado), `tests/test_jobs.py` (pendiente viejo con worker vivo no se reapea; sin heartbeat
+sí; `en_progreso` con latido de job no se reapea; adopción y descarte por reintento),
+`tests/test_workers_core.py` y `tests/test_workers_logs.py` (el worker ejecuta un job dado por
+perdido en la cola y descarta el viejo si ya fue reintentado) y `tests/test_api_jobs.py` (`GET
+/jobs/{id}` no falla un job que solo espera). `ruff check` y `ruff format --check` limpios.

@@ -3,11 +3,12 @@
 
 Exige sesion (doc 10): un job de otra organizacion responde 404.
 
-`GET /jobs/{id}` reaprea perezosamente: si el job se quedo `pendiente` (nadie lo tomo) o
-`en_progreso` (el worker murio) mas alla del timeout, se marca `fallido` antes de responder. Asi el
-cliente que sondea siempre termina viendo un estado terminal aunque no haya ningun worker haciendo
-el barrido (docs/09 §20). `GET /jobs` hace lo mismo con los jobs activos de la organizacion antes de
-listarlos: el historial nunca muestra como "pendiente" un job que ya esta perdido (docs/09 §45)."""
+`GET /jobs/{id}` reaprea perezosamente: si el job se quedo `pendiente` sin ningun worker vivo en
+su cola (heartbeat, docs/04 §5) o `en_progreso` y el worker que lo tomo dejo de latir, mas alla del
+timeout, se marca `fallido` antes de responder. Asi el cliente que sondea siempre termina viendo un
+estado terminal aunque no haya ningun worker haciendo el barrido (docs/09 §20). `GET /jobs` hace lo
+mismo con los jobs activos de la organizacion antes de listarlos: el historial nunca muestra como
+"pendiente" un job que ya esta perdido (docs/09 §45)."""
 
 from __future__ import annotations
 
@@ -44,12 +45,13 @@ def _require_job_owned(session: Session, job: Job, user: User) -> None:
     raise HTTPException(status_code=404, detail=f"No existe el job {job.id!r}.")
 
 
-def _reap_if_stale(session: Session, job: Job) -> None:
+def _reap_if_stale(session: Session, job: Job, redis_client: redis.Redis) -> None:
     if job_service.fail_if_stale(
         session,
         job,
         stale_timeout_seconds=_STALE_TIMEOUT,
         pending_timeout_seconds=_PENDING_TIMEOUT,
+        redis_client=redis_client,
     ):
         # El reaper de los workers tambien marca la `Assessment` ligada; aqui se hace lo mismo
         # para que `GET /assessments/{id}` no se quede en `pendiente`/`en_progreso` para siempre
@@ -64,6 +66,7 @@ def list_jobs(
     limit: int = Query(50, ge=1, le=200),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    redis_client: redis.Redis = Depends(get_redis),
 ) -> list[JobOut]:
     """Historial de jobs de la organizacion del usuario, del mas reciente al mas antiguo."""
 
@@ -72,7 +75,7 @@ def list_jobs(
         .filter(Job.estado.in_(["pendiente", "en_progreso"]))
         .all()
     ):
-        _reap_if_stale(session, job)
+        _reap_if_stale(session, job, redis_client)
     jobs = job_service.list_jobs(session, user.org_id, estado=estado, tipo=tipo, limit=limit)
     assessment_ids = {job.assessment_id for job in jobs if job.assessment_id}
     estados = (
@@ -92,13 +95,14 @@ def get_job(
     job_id: str,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
+    redis_client: redis.Redis = Depends(get_redis),
 ) -> JobOut:
     job = job_service.get_job(session, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"No existe el job {job_id!r}.")
     _require_job_owned(session, job, user)
 
-    _reap_if_stale(session, job)
+    _reap_if_stale(session, job, redis_client)
     assessment = session.get(Assessment, job.assessment_id) if job.assessment_id else None
     return JobOut.from_job(job, assessment_estado=assessment.estado if assessment else None)
 

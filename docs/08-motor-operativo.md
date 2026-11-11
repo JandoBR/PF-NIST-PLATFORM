@@ -178,6 +178,11 @@ no hay evaluación previa, ya hay una evaluación en vuelo para ese `org`+`scope
 o el ingreso no alcanzó el umbral. La reevaluación corre sin IA (determinista) y hereda el
 seguimiento de planes.
 
+Esa reevaluación se encola detrás de lo que el worker ya esté haciendo (p. ej. otra ingesta con IA
+que tarda minutos) y puede seguir `pendiente` más que `JOB_PENDING_TIMEOUT_SECONDS` sin ser un
+fallo: el reaper solo la da por perdida si no hay ningún worker vivo en su cola, y si llega a
+fallarla el worker la ejecuta igual al sacarla de Redis (docs/04 §5, docs/09 §104).
+
 **Eventos e incidentes son independientes de la evaluación.** Pertenecen a la organización+scope, no
 a una evaluación: se ingieren y se ven aunque no se haya evaluado nunca. El refresco es una
 consecuencia *opcional* (solo si hay evaluación previa), no un requisito para operar el flujo

@@ -58,6 +58,34 @@ def test_process_message_ingests_events_and_opens_an_incident(db_session, method
     assert incidents[0].severidad == "media"
 
 
+def test_process_message_ingests_a_job_reaped_as_lost_in_queue(db_session, methodology):
+    """Bug real: el segundo `event_ingest` esperaba detras de una reevaluacion larga con IA y el
+    reaper lo fallaba antes de que `worker-logs` lo tomara. El mensaje sigue en Redis; el worker lo
+    ejecuta igual en vez de descartarlo (docs/09 §104)."""
+
+    org = svc.get_or_create_organization(db_session, "Empresa Worker Eventos Rescate")
+    db_session.commit()
+    job = job_service.create_job(db_session, "event_ingest", org_id=org.id)
+    job_service.mark_failed(db_session, job, job_service.LOST_IN_QUEUE_ERROR)
+
+    worker_logs.process_message(
+        db_session,
+        methodology,
+        {
+            "job_id": job.id,
+            "org_id": org.id,
+            "org_nombre": org.nombre,
+            "jsonl_path": str(SCENARIOS / "e1b_fallos_sin_alerta.jsonl"),
+            "ai_requested": False,
+        },
+        FakeRedis(),
+    )
+
+    db_session.refresh(job)
+    assert job.estado == "completado"
+    assert job.resultado["eventos_nuevos"] == 6
+
+
 def test_ingest_refreshes_maturity_when_enough_new_patterns(db_session, methodology):
     """Una ingesta con suficientes patrones nuevos encola una reevaluacion del org+scope.
 

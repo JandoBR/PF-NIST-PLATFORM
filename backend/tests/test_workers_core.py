@@ -76,6 +76,73 @@ def test_process_message_marks_job_and_assessment_failed_on_bad_path(db_session,
     assert job.error
 
 
+def test_process_message_runs_a_job_reaped_as_lost_in_queue(db_session, methodology):
+    """El reaper lo fallo justo antes de que el worker sacara el mensaje: se ejecuta igual (y la
+    evaluacion ligada vuelve de `fallida` a completarse), en vez de perder el trabajo."""
+
+    assessment = svc.create_pending_assessment(
+        db_session, methodology, org_name="Empresa Worker Rescate", scope="entorno:produccion"
+    )
+    job = job_service.create_job(db_session, "assessment_run", assessment_id=assessment.id)
+    job_service.mark_failed(db_session, job, job_service.LOST_IN_QUEUE_ERROR)
+    job_service.fail_linked_assessment(db_session, job)
+
+    worker_core.process_message(
+        db_session,
+        methodology,
+        {
+            "job_id": job.id,
+            "assessment_id": assessment.id,
+            "terraform_path": str(FIXTURES / "good"),
+            "ansible_path": None,
+            "documents_path": None,
+            "ai_requested": False,
+            "apply_ai_adjustment": False,
+            "context": {},
+        },
+    )
+
+    db_session.refresh(assessment)
+    db_session.refresh(job)
+    assert job.estado == "completado"
+    assert assessment.estado == "completada"
+
+
+def test_process_message_discards_a_lost_job_that_was_already_retried(db_session, methodology):
+    """Un reintento crea un job nuevo (`dispatch.retry_job`): el mensaje viejo no debe correr la
+    evaluacion una segunda vez."""
+
+    assessment = svc.create_pending_assessment(
+        db_session, methodology, org_name="Empresa Worker Reintento", scope="entorno:produccion"
+    )
+    job = job_service.create_job(db_session, "assessment_run", assessment_id=assessment.id)
+    job_service.mark_failed(db_session, job, job_service.LOST_IN_QUEUE_ERROR)
+    job_service.fail_linked_assessment(db_session, job)
+    # Asi deja el estado `dispatch.retry_job`: la evaluacion vuelve a `pendiente` y el job nuevo
+    # espera en la cola.
+    assessment.estado = "pendiente"
+    assessment.error = None
+    db_session.commit()
+    job_service.create_job(db_session, "assessment_run", assessment_id=assessment.id)
+
+    worker_core.process_message(
+        db_session,
+        methodology,
+        {
+            "job_id": job.id,
+            "assessment_id": assessment.id,
+            "terraform_path": str(FIXTURES / "good"),
+            "ai_requested": False,
+        },
+    )
+
+    db_session.refresh(assessment)
+    db_session.refresh(job)
+    assert job.estado == "fallido"
+    assert assessment.estado == "pendiente"
+    assert svc.load_criterion_results(db_session, assessment.id) == []
+
+
 def test_process_message_discards_unknown_job_id(db_session, methodology):
     assessment = svc.create_pending_assessment(
         db_session, methodology, org_name="Empresa Worker Sin Job", scope="entorno:produccion"

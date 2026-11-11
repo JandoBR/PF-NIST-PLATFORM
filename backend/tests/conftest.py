@@ -1,5 +1,6 @@
 import json
 import os
+from fnmatch import fnmatch
 from pathlib import Path
 from unittest.mock import patch
 
@@ -65,15 +66,17 @@ def auth_user(db_session) -> User:
 
 
 class FakeRedis:
-    """Doble minimo de `redis.Redis` para tests de la API: listas en memoria, solo `rpush` y
-    `blpop` (lo unico que usa `app/core/queue.py`). Los workers tienen sus propios tests que
-    llaman `process_message` directamente (ver test_workers_core.py/test_workers_logs.py), asi
-    que esto nunca necesita bloquear de verdad ni la suite por defecto necesita un Redis real
-    corriendo -- ver tests/test_queue.py para la contraparte que si usa uno, saltandose si no
-    hay ninguno alcanzable."""
+    """Doble minimo de `redis.Redis` para tests de la API: listas en memoria (`rpush`/`blpop`) y
+    claves con valor (`set`/`exists`/`delete`/`keys`, para el heartbeat de `app/core/queue.py`; el
+    `ex` se ignora, asi que la expiracion por TTL se simula dejando de refrescar la clave). Los
+    workers tienen sus propios tests que llaman `process_message` directamente (ver
+    test_workers_core.py/test_workers_logs.py), asi que esto nunca necesita bloquear de verdad ni
+    la suite por defecto necesita un Redis real corriendo -- ver tests/test_queue.py para la
+    contraparte que si usa uno, saltandose si no hay ninguno alcanzable."""
 
     def __init__(self) -> None:
         self._lists: dict[str, list[str]] = {}
+        self._values: dict[str, str] = {}
 
     def rpush(self, key: str, value: str) -> None:
         self._lists.setdefault(key, []).append(value)
@@ -84,6 +87,18 @@ class FakeRedis:
             if lst:
                 return key, lst.pop(0)
         return None
+
+    def set(self, key: str, value: str, ex: int | None = None) -> None:
+        self._values[key] = value
+
+    def exists(self, *keys: str) -> int:
+        return sum(1 for key in keys if key in self._values)
+
+    def delete(self, *keys: str) -> int:
+        return sum(1 for key in keys if self._values.pop(key, None) is not None)
+
+    def keys(self, pattern: str) -> list[str]:
+        return [key for key in self._values if fnmatch(key, pattern)]
 
     def drain(self, key: str) -> list[dict]:
         """Solo para tests: devuelve y vacia los mensajes pendientes de una cola, decodificados.
