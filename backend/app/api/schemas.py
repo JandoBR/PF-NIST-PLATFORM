@@ -136,3 +136,19 @@ class EventsAccepted(BaseModel):
 
     org_id: str
     job_id: str
+
+
+class EventSourceOut(BaseModel):
+    """Origen de eventos (`Event.source_id`) que una evaluacion puede consumir (docs/09 §98).
+
+    `label` es el nombre visible (el `fuente` declarado por los eventos o el archivo de origen) y
+    `ultima_ingesta` es la ultima vez que se guardo un evento de ese origen, no la hora del evento.
+    """
+
+    source_id: str
+    label: str
+    scope: str
+    eventos: int
+    desde: datetime
+    hasta: datetime
+    ultima_ingesta: datetime | None = None

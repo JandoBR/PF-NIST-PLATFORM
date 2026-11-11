@@ -85,7 +85,9 @@ def test_patterns_and_window_evidence_carry_the_origin(db_session, methodology, 
 
     filas = db_session.query(LogPatternRow).all()
     assert filas and all(p.fuentes == ["log:sshd"] for p in filas)
-    evidence = svc.collect_surveillance_evidence(db_session, org_id, SCOPE)
+    evidence = svc.collect_surveillance_evidence(
+        db_session, org_id, SCOPE, methodology.settings.vigilancia
+    )
     assert {e.type_id for e in evidence} == {"log.window", "log.pattern"}
     assert {e.source_id for e in evidence} == {"log:sshd"}
     # log.pattern@2: la lista de origenes llega al valor, no solo al `source_id`. Sin esto,
@@ -104,7 +106,9 @@ def test_pattern_evidence_lists_every_origin_that_formed_it(db_session, methodol
 
     patron = next(
         e
-        for e in svc.collect_surveillance_evidence(db_session, org_id, SCOPE)
+        for e in svc.collect_surveillance_evidence(
+            db_session, org_id, SCOPE, methodology.settings.vigilancia
+        )
         if e.type_id == "log.pattern" and e.value["patron"] == "auth_failures_burst"
     )
 
@@ -118,14 +122,21 @@ def test_window_lists_every_origin_in_the_scope(db_session, methodology, tmp_pat
 
     window = next(
         e
-        for e in svc.collect_surveillance_evidence(db_session, org_id, SCOPE)
+        for e in svc.collect_surveillance_evidence(
+            db_session, org_id, SCOPE, methodology.settings.vigilancia
+        )
         if e.type_id == "log.window"
     )
 
     assert window.source_id == "cloudtrail+log:sshd"
 
 
-def test_patterns_before_fn07_keep_the_legacy_source_id(db_session, methodology, tmp_path):
+def test_evidence_comes_from_the_events_not_from_stale_pattern_rows(
+    db_session, methodology, tmp_path
+):
+    """Los patrones de la evaluacion se recalculan de los eventos seleccionados (docs/09 §98):
+    una fila `log_patterns` vieja o sin `fuentes` ya no decide el origen de la evidencia."""
+
     _ingest(db_session, methodology, _fallos(tmp_path, "f", "log:sshd"))
     org_id = db_session.query(Event).first().org_id
     for fila in db_session.query(LogPatternRow).all():
@@ -134,8 +145,11 @@ def test_patterns_before_fn07_keep_the_legacy_source_id(db_session, methodology,
 
     patterns = [
         e
-        for e in svc.collect_surveillance_evidence(db_session, org_id, SCOPE)
+        for e in svc.collect_surveillance_evidence(
+            db_session, org_id, SCOPE, methodology.settings.vigilancia
+        )
         if e.type_id == "log.pattern"
     ]
 
-    assert patterns and {e.source_id for e in patterns} == {"surveillance:org"}
+    assert patterns and {e.source_id for e in patterns} == {"log:sshd"}
+    assert all(e.value["fuentes"] == ["log:sshd"] for e in patterns)

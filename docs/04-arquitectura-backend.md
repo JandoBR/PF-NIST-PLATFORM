@@ -196,7 +196,7 @@ persiste la evidencia y evalúa todos los criterios. El **refresco selectivo** t
 |---|---|---|
 | `POST` | `/auth/login` | Login (usuario/contraseña) → token + usuario. Público. |
 | `GET` | `/auth/me` | Usuario de la sesión actual. |
-| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). Un `context` que no sea un objeto JSON da 422 antes de crear nada. |
+| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). Un `context` que no sea un objeto JSON da 422 antes de crear nada. `event_source_ids` (array JSON, opcional) limita los eventos consumidos: omitido = todos los del org+scope, `[]` = ninguno; un origen ajeno a la organización da 400 (docs/09 §98). |
 | `GET` | `/assessments` | Lista de evaluaciones de la organización (cada una con su resumen/Tier). |
 | `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
 | `GET` | `/jobs` | Historial de jobs de la organización, del más reciente al más antiguo. Filtros `estado`, `tipo` y `limit` (1–200, por defecto 50). Marca `fallido` los jobs activos que se quedaron colgados antes de listar (docs/09 §45). |
@@ -214,6 +214,7 @@ persiste la evidencia y evalúa todos los criterios. El **refresco selectivo** t
 | `POST` | `/orgs/{org_id}/events` | Carga eventos al stream de la organización (JSONL); encola `event_ingest`. |
 | `DELETE` | `/orgs/{id}/events` | Borra eventos, patrones e incidentes (con sus planes) de la organización. Lo usan los logs de ejemplo de la UI para empezar de cero; las evaluaciones ya hechas no cambian. 409 si hay una ingesta en curso (docs/09 §59). |
 | `GET` | `/orgs/{org_id}/incidents` | Lista incidentes operativos (filtrable por estado/severidad). |
+| `GET` | `/orgs/{org_id}/event-sources` | Orígenes de eventos (`Event.source_id`) de la organización, con `label`, `scope`, cantidad de eventos, rango `desde`/`hasta` y última ingesta (`?scope=` opcional). La UI los ofrece al crear la evaluación (docs/09 §98). |
 | `GET` | `/incidents/{id}` | Detalle, timeline y hechos del incidente. |
 | `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |
 | `PATCH` | `/incidents/{id}` | Cambia el estado del incidente (`open`…`closed`). Un paso por vez, sin retroceder; `closed` (terminal, desde cualquier estado abierto) exige `motivo` y lo mueve al historial. Transición inválida o sin motivo → 409 (docs/08 §4, docs/09 §52). |

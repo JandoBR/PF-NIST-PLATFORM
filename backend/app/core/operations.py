@@ -120,9 +120,9 @@ def ingest_events(
     """Flujo B completo (docs/08 §1): eventos -> patrones -> disparadores -> incidentes -> planes.
 
     El flujo A (evidencia de madurez) no se recalcula aqui: la proxima vez que se corra
-    `run_assessment` para este org/scope, `collect_surveillance_evidence` ya vera los
-    `log_patterns` persistidos ahora (docs/06 §6: "recalcular SOLO los criterios afectados" se
-    logra simplemente evaluando una nueva assessment, nunca mutando una anterior).
+    `run_assessment` para este org/scope, `collect_surveillance_evidence` ya vera los eventos
+    persistidos ahora y recalculara sus patrones (docs/06 §6: "recalcular SOLO los criterios
+    afectados" se logra simplemente evaluando una nueva assessment, nunca mutando una anterior).
     """
 
     org = get_or_create_organization(session, org_name)

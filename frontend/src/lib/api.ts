@@ -4,6 +4,7 @@ import type {
   ComparisonOut,
   CriterionResult,
   EventsAccepted,
+  EventSourceOut,
   Finding,
   IncidentOut,
   JobEstado,
@@ -142,6 +143,12 @@ export function logout(): void {
 export const listOrgIncidents = (orgId: string) =>
   request<IncidentOut[]>(`/orgs/${orgId}/incidents`);
 
+/** Orígenes de eventos de la organización: la evaluación elige cuáles consume (docs/09 §98). */
+export const listEventSources = (orgId: string, scope?: string) =>
+  request<EventSourceOut[]>(
+    `/orgs/${orgId}/event-sources${scope ? `?scope=${encodeURIComponent(scope)}` : ''}`
+  );
+
 export const ingestEvents = (orgId: string, file: File) => {
   const form = new FormData();
   form.append('file', file);
@@ -178,6 +185,8 @@ export interface CreateAssessmentInput {
   terraformFiles?: File[];
   ansibleFiles?: File[];
   documentFiles?: File[];
+  /** Orígenes de eventos a consumir; `undefined` = todos los del org+scope, `[]` = ninguno. */
+  eventSourceIds?: string[];
 }
 
 export const createAssessment = (input: CreateAssessmentInput) => {
@@ -187,6 +196,9 @@ export const createAssessment = (input: CreateAssessmentInput) => {
   form.append('ai_adjust', 'true');
   form.append('use_ai_for_documents', String((input.documentFiles?.length ?? 0) > 0));
   form.append('confirm_live_ai', 'true');
+  if (input.eventSourceIds !== undefined) {
+    form.append('event_source_ids', JSON.stringify(input.eventSourceIds));
+  }
   for (const f of input.terraformFiles ?? []) form.append('terraform_files', f);
   for (const f of input.ansibleFiles ?? []) form.append('ansible_files', f);
   for (const f of input.documentFiles ?? []) form.append('document_files', f);

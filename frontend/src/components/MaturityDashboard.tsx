@@ -97,6 +97,7 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
   }, [criteria, estadoFilter, funcFilter, query]);
 
   const tier = assessment.tier;
+  const eventos = assessment.reproducibility?.eventos;
 
   return (
     <div className="space-y-6">
@@ -113,6 +114,18 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
                     .map(([k, v]) => (k === 'modelo' ? v : `${k} ${v}`))
                     .join(' · ')}`
                 : 'Sin IA (determinista)'}
+            </span>
+          )}
+          {eventos && (
+            <span className="ml-2 text-slate-600" title={eventos.source_ids.join(', ')}>
+              ·{' '}
+              {eventos.conteo === 0
+                ? 'Sin eventos operativos'
+                : `${eventos.conteo} evento${eventos.conteo === 1 ? '' : 's'} de ${
+                    eventos.source_ids.length <= 2
+                      ? eventos.source_ids.join(', ')
+                      : `${eventos.source_ids.length} orígenes`
+                  }`}
             </span>
           )}
         </p>

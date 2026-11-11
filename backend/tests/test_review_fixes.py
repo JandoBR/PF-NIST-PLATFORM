@@ -347,7 +347,9 @@ def test_second_log_updates_the_patterns_instead_of_piling_up(db_session, method
     assert len(patrones) == len(set(patrones))  # uno por tipo
 
     org_id = db_session.query(Incident).first().org_id
-    evidence = svc.collect_surveillance_evidence(db_session, org_id, SCOPE)
+    evidence = svc.collect_surveillance_evidence(
+        db_session, org_id, SCOPE, methodology.settings.vigilancia
+    )
     results = {r.criterion_id: r for r in engine.evaluate_all(methodology, evidence)}
     assert results["CRI-RC-02"].final_score == 75  # el ultimo ejercicio fue ok y se verifico
 

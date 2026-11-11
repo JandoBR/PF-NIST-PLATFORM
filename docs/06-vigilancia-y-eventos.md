@@ -192,6 +192,14 @@ intervalo o su conteo; reingerir el mismo archivo agrega 0 patrones y no dispara
 pertenecen a una evaluación: se ingieren y consultan aunque nunca se haya evaluado. Si no hay una
 evaluación completada previa, simplemente no hay nada que refrescar.
 
+**Selección explícita de orígenes (docs/09 §98).** Una evaluación consume solo los orígenes de
+eventos que se le indican al crearla (`event_source_ids`); omitirlo significa todos los del
+`org`+`scope` y `[]` significa ninguno. La `log.window` y los `log.pattern` se derivan únicamente de
+esos eventos, recalculando los patrones en memoria con el código de la ingesta: no se leen filas de
+`log_patterns`, de modo que un log de otro escenario no puede colarse ni una fila vieja puede decidir
+un criterio. La selección queda registrada en `reproducibility.eventos`, junto con el conteo, el rango
+y un `sha256` de los eventos usados.
+
 **Refresco selectivo (implementado, FN-06).** El refresco **no** re-corre todo: reusa de la
 evaluación anterior las fuentes, la evidencia **no operativa** (Terraform/Ansible/`doc.claim`), los
 resultados y los planes de los criterios que **no** consumen vigilancia, y **recalcula solo los

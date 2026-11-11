@@ -8,13 +8,25 @@ import {
   Sparkles,
   ArrowRight,
   AlertTriangle,
+  Radar,
+  Check,
 } from 'lucide-react';
 import { DEMO_BUNDLES, fetchAsFile } from '@/data/demo';
-import { JobTimeoutError, createAssessment, getAssessment, getMethodology, isAbortError, pollJob } from '@/lib/api';
-import type { AssessmentAccepted, AssessmentDetail, JobEstado } from '@/lib/types';
+import { formatDbDate } from '@/lib/datetime';
+import {
+  JobTimeoutError,
+  createAssessment,
+  getAssessment,
+  getMethodology,
+  isAbortError,
+  listEventSources,
+  pollJob,
+} from '@/lib/api';
+import type { AssessmentAccepted, AssessmentDetail, EventSourceOut, JobEstado } from '@/lib/types';
 
 interface ContextSelectorProps {
   open: boolean;
+  orgId: string;
   onClose: () => void;
   onCreated: (assessment: AssessmentDetail) => void;
   /** Se llama apenas la API acepta el job (202), antes de que termine: permite al dashboard
@@ -24,12 +36,17 @@ interface ContextSelectorProps {
 
 type Mode = 'demo' | 'custom';
 
-export function ContextSelector({ open, onClose, onCreated, onAccepted }: ContextSelectorProps) {
+/** Scope por defecto del formulario: los orígenes de eventos se piden para ese mismo entorno. */
+const ASSESSMENT_SCOPE = 'entorno:produccion';
+
+export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }: ContextSelectorProps) {
   const [mode, setMode] = useState<Mode>('demo');
   const [bundleId, setBundleId] = useState(DEMO_BUNDLES[0].id);
   const [terraformFiles, setTerraformFiles] = useState<File[]>([]);
   const [ansibleFiles, setAnsibleFiles] = useState<File[]>([]);
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
+  const [eventSources, setEventSources] = useState<EventSourceOut[]>([]);
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [jobEstado, setJobEstado] = useState<JobEstado | null>(null);
@@ -63,7 +80,32 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
     };
   }, [open]);
 
+  // Orígenes de eventos de la organización: se listan todos seleccionados por defecto, y el
+  // usuario puede excluir alguno (docs/09 §98). Si no hay eventos, la sección no se pinta.
+  useEffect(() => {
+    if (!open) return;
+    let vigente = true;
+    listEventSources(orgId, ASSESSMENT_SCOPE)
+      .then((sources) => {
+        if (!vigente) return;
+        setEventSources(sources);
+        setSelectedSources(sources.map((s) => s.source_id));
+      })
+      .catch(() => undefined);
+    return () => {
+      vigente = false;
+    };
+  }, [open, orgId]);
+
   if (!open) return null;
+
+  function toggleSource(sourceId: string) {
+    setSelectedSources((current) =>
+      current.includes(sourceId)
+        ? current.filter((id) => id !== sourceId)
+        : [...current, sourceId]
+    );
+  }
 
   const hasCustomFiles = terraformFiles.length + ansibleFiles.length + documentFiles.length > 0;
   const canSubmit = mode === 'demo' || hasCustomFiles;
@@ -75,6 +117,9 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    // Cuando hay orígenes se manda la lista explícita (aunque estén todos): así la evaluación no
+    // cambia de alcance si más tarde se ingiere otro log. Sin orígenes se omite (docs/09 §98).
+    const eventSourceIds = eventSources.length > 0 ? selectedSources : undefined;
     try {
       let input;
       if (mode === 'demo') {
@@ -88,12 +133,14 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
           terraformFiles: tf,
           ansibleFiles: ans,
           documentFiles: docs,
+          eventSourceIds,
         };
       } else {
         input = {
           terraformFiles,
           ansibleFiles,
           documentFiles,
+          eventSourceIds,
         };
       }
 
@@ -233,6 +280,67 @@ export function ContextSelector({ open, onClose, onCreated, onAccepted }: Contex
               </div>
             )}
 
+
+            {eventSources.length > 0 && (
+              <div className="mt-5 rounded-xl border border-white/[0.06] bg-ink-900/30 p-4">
+                <div className="mb-1 flex items-center gap-2">
+                  <Radar className="h-4 w-4 text-cyan-400" />
+                  <h3 className="text-sm font-medium text-slate-200">Eventos operativos</h3>
+                </div>
+                <p className="mb-3 text-xs leading-relaxed text-slate-500">
+                  La evaluación solo leerá los eventos de los orígenes seleccionados. Si no eliges
+                  ninguno, evaluará sin evidencia operativa.
+                </p>
+                <div className="space-y-1.5">
+                  {eventSources.map((source) => {
+                    const active = selectedSources.includes(source.source_id);
+                    return (
+                      <button
+                        key={`${source.scope}:${source.source_id}`}
+                        type="button"
+                        onClick={() => toggleSource(source.source_id)}
+                        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
+                          active
+                            ? 'border-cyan-500/40 bg-cyan-500/[0.07]'
+                            : 'border-white/[0.06] bg-ink-900/40 hover:border-white/15'
+                        }`}
+                      >
+                        <span
+                          className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${
+                            active
+                              ? 'border-cyan-400 bg-cyan-500 text-ink-950'
+                              : 'border-white/20 text-transparent'
+                          }`}
+                        >
+                          <Check className="h-3 w-3" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium text-slate-200">
+                            {source.label}
+                          </span>
+                          <span className="block text-[11px] text-slate-500">
+                            {source.eventos} evento{source.eventos === 1 ? '' : 's'} ·{' '}
+                            {formatDbDate(source.desde, 'es', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                            {' — '}
+                            {formatDbDate(source.hasta, 'es', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3.5 text-xs text-amber-200">

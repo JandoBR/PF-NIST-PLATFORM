@@ -421,6 +421,7 @@ function App() {
 
       <ContextSelector
         open={selectorOpen}
+        orgId={user.org_id}
         onClose={() => setSelectorOpen(false)}
         onCreated={handleCreated}
         onAccepted={handleAccepted}

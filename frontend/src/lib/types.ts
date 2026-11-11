@@ -94,7 +94,28 @@ export interface AssessmentDetail extends AssessmentSummary {
   reproducibility?: {
     adapters: Record<string, { adapter: string; parser?: string }>;
     ai: Record<string, string | null> | null;
+    /** Qué eventos operativos consumió la evaluación (docs/09 §98). Ausente en anteriores. */
+    eventos?: {
+      /** La evaluación usó todos los orígenes del org+scope, no una lista explícita. */
+      todas: boolean;
+      source_ids: string[];
+      conteo: number;
+      desde: string | null;
+      hasta: string | null;
+      sha256: string;
+    } | null;
   } | null;
+}
+
+/** Origen de eventos (`Event.source_id`) disponible para elegir al evaluar. */
+export interface EventSourceOut {
+  source_id: string;
+  label: string;
+  scope: string;
+  eventos: number;
+  desde: string;
+  hasta: string;
+  ultima_ingesta: string | null;
 }
 
 export interface IncidentOut {

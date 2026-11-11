@@ -40,7 +40,7 @@ from app.evaluation import aggregation, tier
 from app.evaluation.schemas import CriterionResult
 from app.methodology import snapshot
 from app.methodology.loader import Methodology
-from app.models.tables import Assessment, User
+from app.models.tables import Assessment, Event, User
 from app.recommendations.findings import Finding, derive_findings
 from app.recommendations.plans import PLAN_ESTADOS, Plan
 from app.reports import pdf
@@ -122,6 +122,38 @@ def _parse_context(context: str) -> dict:
     return parsed
 
 
+def _parse_event_source_ids(session: Session, org_id: str, raw: str | None) -> list[str] | None:
+    """Seleccion de origenes de eventos del formulario (docs/09 §98). `None`/vacio = todos los
+    del org+scope; `[]` = ninguno; una lista solo puede nombrar origenes de la propia
+    organizacion (400 si no)."""
+
+    if raw is None or not raw.strip():
+        return None
+    try:
+        parsed = strict_loads(raw)
+    except (ValueError, RecursionError) as exc:
+        raise HTTPException(
+            status_code=422, detail=f"`event_source_ids` no es JSON valido: {exc}"
+        ) from exc
+    if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
+        raise HTTPException(
+            status_code=422, detail="`event_source_ids` debe ser un array JSON de cadenas."
+        )
+    seleccionados = sorted(set(parsed))
+    if not seleccionados:
+        return []
+    conocidos = {
+        row[0] for row in session.query(Event.source_id).filter_by(org_id=org_id).distinct().all()
+    }
+    ajenos = [source_id for source_id in seleccionados if source_id not in conocidos]
+    if ajenos:
+        raise HTTPException(
+            status_code=400,
+            detail="Origenes de eventos desconocidos para la organizacion: " + ", ".join(ajenos),
+        )
+    return seleccionados
+
+
 async def _save_uploads(files: list[UploadFile] | None, tipo: str) -> Path | None:
     if not files:
         return None
@@ -143,6 +175,7 @@ async def create_assessment(
     ai_adjust: bool = Form(False),
     use_ai_for_documents: bool = Form(False),
     context: str = Form("{}"),
+    event_source_ids: str | None = Form(None),
     confirm_live_ai: bool = Form(False),
     terraform_files: list[UploadFile] | None = File(None),
     ansible_files: list[UploadFile] | None = File(None),
@@ -167,6 +200,7 @@ async def create_assessment(
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
     contexto = _parse_context(context)
+    origenes_eventos = _parse_event_source_ids(session, user.org_id, event_source_ids)
 
     terraform_path = await _save_uploads(terraform_files, "terraform")
     ansible_path = await _save_uploads(ansible_files, "ansible")
@@ -188,6 +222,7 @@ async def create_assessment(
             "ai_requested": ai_requested,
             "apply_ai_adjustment": ai_adjust,
             "context": contexto,
+            "event_source_ids": origenes_eventos,
         },
         assessment_id=assessment.id,
     )

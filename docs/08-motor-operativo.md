@@ -43,15 +43,27 @@ El alcance de los datos es la **organización/entorno**, no la evaluación.
 
 ```text
 org / entorno
-  ├─ events        (continuo, append-only)
+  ├─ events        (continuo, append-only; cada uno con su `source_id`)
   ├─ log_patterns  (ventanas derivadas)
   ├─ incidents     (incidentes operativos)
   └─ plans         (origen = incidente)
-assessments consumen ventanas de events/log_patterns para derivar evidencia.
+assessments consumen los eventos de los orígenes que se eligen al crearlas y derivan su propia
+evidencia log.window/log.pattern de esos eventos (docs/09 §98).
 ```
 
 Esquema completo de `events`, `log_patterns`, `incidents` y `plans` en `04-arquitectura-backend.md §4`
 (fuente canónica).
+
+**Selección de orígenes.** El evento identifica su origen en `source_id` (`fuente` declarada o el
+archivo del que vino, docs/06 §2). `GET /orgs/{org_id}/event-sources` lista los orígenes disponibles
+con su cantidad de eventos, rango y última ingesta. Al crear una evaluación se puede pasar
+`event_source_ids` (array JSON): omitirlo significa **todos** los orígenes del `org`+`scope` (lo que
+sigue haciendo el refresco automático), y `[]` significa **ninguno**. La evaluación recalcula los
+patrones **en memoria** sobre los eventos seleccionados con el mismo código determinista de la
+ingesta, en vez de leer `log_patterns`: así un log de otro escenario no se filtra en el cálculo, la
+correlación entre fuentes seleccionadas sigue siendo correcta y una fila duplicada o vieja no decide
+un criterio. La selección, el conteo, el rango y un `sha256` de los eventos canónicos quedan en
+`reproducibility.eventos` de la evaluación.
 
 ## 4. Entidad `incident`
 
@@ -170,6 +182,12 @@ operativo.
 necesita — la IA es aumento opcional (U1/U2), no requisito; y (2) no debe gastar créditos sin que el
 usuario lo pida. La IA, cuando se usa, solo ve datos estructurados del criterio/disparador (nunca las
 líneas de log) y solo para redactar el plan (docs/05 §4).
+
+**La reevaluación automática hereda los orígenes de eventos de la evaluación anterior** (docs/09 §98).
+Si esa evaluación usó una lista explícita, el refresco usa la misma lista: un log excluido no entra por
+la puerta de atrás. Si usó todos (`todas: true` en `reproducibility.eventos`), sigue usando todos y una
+ingesta de un origen nuevo cuenta. Una evaluación anterior a esta función no tiene la marca y también
+usa todos.
 
 **El refresco es selectivo (docs/06 §6, FN-06):** reusa evidencia, resultados y planes de los
 criterios **no operativos** (incluido lo que produjo la IA) y **solo recalcula los criterios de

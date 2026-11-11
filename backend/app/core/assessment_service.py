@@ -15,9 +15,13 @@ lo que una correccion aplicada a esos mismos archivos se refleja en la siguiente
 from __future__ import annotations
 
 import hashlib
+import json
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.adapters.ansible.adapter import AnsibleAdapter
@@ -43,7 +47,6 @@ from app.models.tables import (
     Event,
     EvidenceRow,
     Job,
-    LogPatternRow,
     Organization,
     PlanRow,
     Source,
@@ -51,6 +54,8 @@ from app.models.tables import (
 from app.recommendations import plans as recommendations_plans
 from app.recommendations.plans import Plan
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
+from app.surveillance.events import RawEvent
+from app.surveillance.patterns import detect_patterns
 
 
 class AssessmentNotFoundError(Exception):
@@ -81,63 +86,232 @@ def _origin_source_id(origenes: set[str] | list[str] | None) -> str:
     return "+".join(sorted(set(origenes))) if origenes else "surveillance:org"
 
 
-def collect_surveillance_evidence(
-    session: Session, org_id: str, scope: str
-) -> list[EvidenceInstance]:
-    """Evidencia `log.window`/`log.pattern` desde lo ya ingerido para este org/scope (docs/08 §3:
-    "assessments consumen ventanas de events/log_patterns"). Nunca requiere una ruta de archivo:
-    es implicito, no un adaptador que haya que invocar explicitamente.
+def _naive(moment: datetime) -> datetime:
+    """SQLite descarta tzinfo al guardar `DateTime(timezone=True)`; normalizar antes de comparar."""
+
+    return moment.replace(tzinfo=None)
+
+
+def _as_utc(moment: datetime) -> datetime:
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+
+
+@dataclass(frozen=True)
+class EventSourceSummary:
+    """Un origen de eventos (`Event.source_id`) disponible para una organizacion."""
+
+    source_id: str
+    scope: str
+    eventos: int
+    desde: datetime
+    hasta: datetime
+    ultima_ingesta: datetime | None
+
+
+@dataclass(frozen=True)
+class SurveillanceSnapshot:
+    """Evidencia operativa de una seleccion de origenes, mas lo necesario para reproducirla.
+
+    `source_ids` es la seleccion resuelta (todos los origenes del org+scope si se pidio "todas"),
+    y `todas` distingue ese caso de una lista explicita: una reevaluacion hereda la seleccion
+    explicita, pero una evaluacion que uso todos los origenes sigue viendo los nuevos.
     """
 
-    events = session.query(Event).filter_by(org_id=org_id, scope=scope).all()
-    if not events:
-        return []
-    origenes_ventana = {e.source_id for e in events}
+    evidence: list[EvidenceInstance]
+    todas: bool
+    source_ids: list[str]
+    eventos: int
+    desde: datetime | None
+    hasta: datetime | None
+    sha256: str
 
-    desde = min(e.event_time for e in events)
-    hasta = max(e.event_time for e in events)
-    window = EvidenceInstance(
-        type_id="log.window",
-        type_version=1,
-        subject_type="scope",
-        subject_ref=scope,
-        scope=scope,
-        value={"desde": desde.isoformat(), "hasta": hasta.isoformat(), "completo": True},
-        source_id=_origin_source_id(origenes_ventana),
-        locator=Locator(event_id=f"{desde.isoformat()}..{hasta.isoformat()}"),
-        observed_at=hasta,
-        modality=Modality.OPERATIVA,
-        created_by="surveillance",
+
+def list_event_sources(
+    session: Session, org_id: str, scope: str | None = None
+) -> list[EventSourceSummary]:
+    """Origenes de eventos guardados del org (opcionalmente de un scope), con su rango y ultima
+    ingesta. La ultima ingesta es `max(creado_en)`: no hay una fila de ingesta por origen, y el
+    evento es lo unico que conserva cuando llego."""
+
+    query = session.query(
+        Event.source_id,
+        Event.scope,
+        func.count(Event.id),
+        func.min(Event.event_time),
+        func.max(Event.event_time),
+        func.max(Event.creado_en),
+    ).filter(Event.org_id == org_id)
+    if scope is not None:
+        query = query.filter(Event.scope == scope)
+    rows = query.group_by(Event.source_id, Event.scope).order_by(Event.source_id).all()
+    return [
+        EventSourceSummary(
+            source_id=source_id,
+            scope=row_scope,
+            eventos=conteo,
+            desde=_as_utc(desde),
+            hasta=_as_utc(hasta),
+            ultima_ingesta=_as_utc(ultima) if ultima is not None else None,
+        )
+        for source_id, row_scope, conteo, desde, hasta, ultima in rows
+    ]
+
+
+def stored_event_rows(session: Session, org_id: str, scope: str, source_ids: list[str] | None):
+    """Eventos guardados del org+scope, opcionalmente limitados a una seleccion de origenes."""
+
+    query = session.query(Event).filter_by(org_id=org_id, scope=scope)
+    if source_ids is not None:
+        if not source_ids:
+            return []
+        query = query.filter(Event.source_id.in_(source_ids))
+    rows = query.all()
+    rows.sort(key=lambda r: (_naive(r.event_time), _naive(r.creado_en), r.event_id))
+    return rows
+
+
+def _raw_events(rows) -> list[RawEvent]:
+    return [
+        RawEvent(
+            event_id=row.event_id,
+            event_time=_as_utc(row.event_time),
+            tipo=row.tipo,
+            recurso=row.recurso,
+            scope=row.scope,
+            actor=row.actor,
+            detalle=row.detalle or {},
+            fuente=row.source_id,
+        )
+        for row in rows
+    ]
+
+
+def _events_sha256(rows) -> str:
+    """Hash canonico de los eventos seleccionados (orden por tiempo e id, JSON estable)."""
+
+    hasher = hashlib.sha256()
+    for row in rows:
+        payload = {
+            "event_id": row.event_id,
+            "event_time": _as_utc(row.event_time).isoformat(),
+            "tipo": row.tipo,
+            "recurso": row.recurso,
+            "actor": row.actor,
+            "detalle": row.detalle or {},
+            "source_id": row.source_id,
+        }
+        hasher.update(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        )
+        hasher.update(b"\n")
+    return hasher.hexdigest()
+
+
+def surveillance_snapshot(
+    session: Session,
+    org_id: str,
+    scope: str,
+    settings,
+    source_ids: list[str] | None = None,
+) -> SurveillanceSnapshot:
+    """Evidencia `log.window`/`log.pattern` desde una seleccion de origenes de eventos.
+
+    Los patrones se recalculan en memoria sobre los eventos seleccionados con el mismo codigo
+    determinista de la ingesta, en vez de leer `log_patterns`: asi una evaluacion de un subconjunto
+    no arrastra patrones de otra fuente, la correlacion entre fuentes seleccionadas sigue siendo
+    correcta y una fila duplicada o vieja no puede decidir un criterio (docs/08 §3, docs/09 §98).
+    """
+
+    todas = source_ids is None
+    rows = stored_event_rows(session, org_id, scope, source_ids)
+    if todas:
+        seleccionados = sorted({row.source_id for row in rows})
+    else:
+        seleccionados = sorted(set(source_ids))
+
+    eventos = _raw_events(rows)
+    desde = eventos[0].event_time if eventos else None
+    hasta = eventos[-1].event_time if eventos else None
+    sha256 = _events_sha256(rows)
+
+    evidence: list[EvidenceInstance] = []
+    if eventos:
+        evidence.append(
+            EvidenceInstance(
+                type_id="log.window",
+                type_version=1,
+                subject_type="scope",
+                subject_ref=scope,
+                scope=scope,
+                value={"desde": desde.isoformat(), "hasta": hasta.isoformat(), "completo": True},
+                source_id=_origin_source_id(seleccionados),
+                locator=Locator(event_id=f"{desde.isoformat()}..{hasta.isoformat()}"),
+                observed_at=hasta,
+                modality=Modality.OPERATIVA,
+                created_by="surveillance",
+            )
+        )
+
+        fuentes = {evento.event_id: evento.fuente for evento in eventos}
+        for match in detect_patterns(eventos, settings):
+            fuentes_match = sorted(
+                {fuentes[event_id] for event_id in match.event_ids if fuentes.get(event_id)}
+            )
+            evidence.append(
+                EvidenceInstance(
+                    type_id="log.pattern",
+                    type_version=2,
+                    subject_type="scope",
+                    subject_ref=scope,
+                    scope=scope,
+                    value={
+                        "patron": match.patron,
+                        "resultado": match.resultado,
+                        "desde": match.desde.isoformat(),
+                        "hasta": match.hasta.isoformat(),
+                        "conteo": match.conteo,
+                        "fuentes": fuentes_match,
+                    },
+                    source_id=_origin_source_id(fuentes_match),
+                    locator=Locator(event_id=f"{match.patron}:{match.desde.isoformat()}"),
+                    observed_at=match.hasta,
+                    modality=Modality.OPERATIVA,
+                    created_by="surveillance",
+                )
+            )
+
+    return SurveillanceSnapshot(
+        evidence=evidence,
+        todas=todas,
+        source_ids=seleccionados,
+        eventos=len(rows),
+        desde=desde,
+        hasta=hasta,
+        sha256=sha256,
     )
 
-    patterns = session.query(LogPatternRow).filter_by(org_id=org_id, scope=scope).all()
-    pattern_evidence = [
-        EvidenceInstance(
-            type_id="log.pattern",
-            type_version=2,
-            subject_type="scope",
-            subject_ref=scope,
-            scope=scope,
-            value={
-                "patron": p.patron,
-                "resultado": p.resultado,
-                "desde": p.desde.isoformat(),
-                "hasta": p.hasta.isoformat(),
-                "conteo": p.conteo,
-                # Los origenes se guardaban en la fila y se perdian aqui: `source_id` solo puede
-                # llevar uno. Sin la lista ninguna regla puede hablar de correlacion
-                # (log.pattern@2, DE.AE-03).
-                "fuentes": sorted(p.fuentes or []),
-            },
-            source_id=_origin_source_id(p.fuentes),
-            locator=Locator(event_id=p.id),
-            observed_at=p.hasta,
-            modality=Modality.OPERATIVA,
-            created_by="surveillance",
-        )
-        for p in patterns
-    ]
-    return [window, *pattern_evidence]
+
+def collect_surveillance_evidence(
+    session: Session,
+    org_id: str,
+    scope: str,
+    settings,
+    source_ids: list[str] | None = None,
+) -> list[EvidenceInstance]:
+    """Evidencia operativa de una seleccion de origenes (todos si `source_ids` es `None`)."""
+
+    return surveillance_snapshot(session, org_id, scope, settings, source_ids).evidence
+
+
+def _eventos_entry(snapshot: SurveillanceSnapshot) -> dict[str, Any]:
+    return {
+        "todas": snapshot.todas,
+        "source_ids": snapshot.source_ids,
+        "conteo": snapshot.eventos,
+        "desde": snapshot.desde.isoformat() if snapshot.desde else None,
+        "hasta": snapshot.hasta.isoformat() if snapshot.hasta else None,
+        "sha256": snapshot.sha256,
+    }
 
 
 def _collect_evidence_and_sources(
@@ -149,8 +323,16 @@ def _collect_evidence_and_sources(
     documents_path: Path | None,
     scope: str,
     ai_client: AIClient | None,
-) -> tuple[list[EvidenceInstance], list[Source]]:
-    evidence: list[EvidenceInstance] = list(collect_surveillance_evidence(session, org_id, scope))
+    event_source_ids: list[str] | None = None,
+) -> tuple[list[EvidenceInstance], list[Source], SurveillanceSnapshot]:
+    snapshot = surveillance_snapshot(
+        session,
+        org_id,
+        scope,
+        methodology.settings.vigilancia,
+        event_source_ids,
+    )
+    evidence: list[EvidenceInstance] = list(snapshot.evidence)
     sources: list[Source] = []
 
     if terraform_path is not None:
@@ -178,7 +360,7 @@ def _collect_evidence_and_sources(
         tipos_solicitados = methodology.tipos_afirmacion_requeridos()
         evidence.extend(adapter.parse_path(documents_path, tipos_solicitados=tipos_solicitados))
 
-    return evidence, sources
+    return evidence, sources, snapshot
 
 
 def create_pending_assessment(
@@ -251,11 +433,15 @@ def run_pending_assessment(
     ai_client: AIClient | None = None,
     apply_ai_adjustment: bool = False,
     context: dict[str, Any] | None = None,
+    event_source_ids: list[str] | None = None,
 ) -> Assessment:
     """Ejecuta el pipeline (adaptadores + motor + persistencia) contra un `Assessment` ya
     creado por `create_pending_assessment`. Esto es lo que corre `app/workers/core.py` por cada
     job `assessment_run`; `run_assessment` (abajo) sigue siendo el atajo sincronico que usa la
-    CLI, implementado en terminos de esta misma funcion para no duplicar el pipeline."""
+    CLI, implementado en terminos de esta misma funcion para no duplicar el pipeline.
+
+    `event_source_ids` limita la evidencia operativa a esos origenes (`Event.source_id`); `None`
+    significa todos los del org+scope (docs/08 §3, docs/09 §98)."""
 
     assessment = session.get(Assessment, assessment_id)
     if assessment is None:
@@ -268,7 +454,7 @@ def run_pending_assessment(
     session.commit()
 
     try:
-        evidence, sources = _collect_evidence_and_sources(
+        evidence, sources, snapshot = _collect_evidence_and_sources(
             session,
             methodology,
             assessment.org_id,
@@ -277,15 +463,19 @@ def run_pending_assessment(
             documents_path,
             assessment.scope,
             ai_client,
+            event_source_ids,
         )
         results = engine.evaluate_all(methodology, evidence)
-        assessment.reproducibility = reproducibility.build(
-            methodology=methodology,
-            terraform=terraform_path is not None,
-            ansible=ansible_path is not None,
-            documents=documents_path is not None,
-            ai_client=ai_client,
-            ai_adjustment=apply_ai_adjustment,
+        assessment.reproducibility = reproducibility.with_eventos(
+            reproducibility.build(
+                methodology=methodology,
+                terraform=terraform_path is not None,
+                ansible=ansible_path is not None,
+                documents=documents_path is not None,
+                ai_client=ai_client,
+                ai_adjustment=apply_ai_adjustment,
+            ),
+            _eventos_entry(snapshot),
         )
 
         if apply_ai_adjustment and ai_client is not None:
@@ -328,6 +518,7 @@ def run_assessment(
     ai_client: AIClient | None = None,
     apply_ai_adjustment: bool = False,
     context: dict[str, Any] | None = None,
+    event_source_ids: list[str] | None = None,
 ) -> Assessment:
     """Atajo sincronico (CLI, tests): crea y ejecuta en un solo paso, sin pasar por la cola."""
 
@@ -342,6 +533,7 @@ def run_assessment(
         ai_client=ai_client,
         apply_ai_adjustment=apply_ai_adjustment,
         context=context,
+        event_source_ids=event_source_ids,
     )
 
 
@@ -352,6 +544,19 @@ def has_documents(session: Session, assessment_id: str) -> bool:
         session.query(Source).filter_by(assessment_id=assessment_id, tipo="documents").first()
         is not None
     )
+
+
+def event_source_selection(assessment: Assessment) -> list[str] | None:
+    """Seleccion de origenes que uso una evaluacion, para heredarla (docs/09 §98).
+
+    `None` si uso todos los origenes del org+scope (o si es anterior a esta funcion): asi una
+    reevaluacion sigue viendo los origenes nuevos. Una lista explicita se conserva tal cual.
+    """
+
+    eventos = (assessment.reproducibility or {}).get("eventos") or {}
+    if not eventos or eventos.get("todas", True):
+        return None
+    return list(eventos.get("source_ids") or [])
 
 
 def _resolve_previous_sources(previous: Assessment) -> dict[str, Path | None]:
@@ -405,8 +610,10 @@ def reevaluate(
     context: dict[str, Any] | None = None,
 ) -> Assessment:
     """Atajo sincronico (CLI, tests): crea una nueva evaluacion re-leyendo las mismas rutas que
-    la anterior, sin pasar por la cola."""
+    la anterior, sin pasar por la cola. La seleccion de origenes de eventos tambien se hereda."""
 
+    previous = session.get(Assessment, previous_assessment_id)
+    selection = event_source_selection(previous) if previous is not None else None
     assessment, paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
     return run_pending_assessment(
         session,
@@ -415,6 +622,7 @@ def reevaluate(
         ai_client=ai_client,
         apply_ai_adjustment=apply_ai_adjustment,
         context=context,
+        event_source_ids=selection,
         **paths,
     )
 
@@ -431,8 +639,11 @@ def enqueue_reevaluation(
 ) -> tuple[Assessment, Job]:
     """Crea una reevaluacion y encola su `assessment_run` en la cola del core. Lo usan
     `POST /assessments/{id}/reevaluate`, el refresco automatico de madurez (docs/08 §8) y el
-    fallback del refresco cuando cambia la metodologia."""
+    fallback del refresco cuando cambia la metodologia. Hereda la seleccion de origenes de
+    eventos de la evaluacion anterior (docs/09 §98)."""
 
+    previous = session.get(Assessment, previous_assessment_id)
+    event_source_ids = event_source_selection(previous) if previous is not None else None
     assessment, paths = create_pending_reevaluation(session, methodology, previous_assessment_id)
     job = dispatch_job(
         session,
@@ -448,6 +659,7 @@ def enqueue_reevaluation(
             "ai_requested": apply_ai_adjustment or request_documents_ai,
             "apply_ai_adjustment": apply_ai_adjustment,
             "context": context or {},
+            "event_source_ids": event_source_ids,
         },
         assessment_id=assessment.id,
     )

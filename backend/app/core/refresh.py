@@ -14,12 +14,13 @@ from sqlalchemy.orm import Session
 from app.core import reproducibility
 from app.core.assessment_service import (
     AssessmentNotFoundError,
-    collect_surveillance_evidence,
     create_pending_reevaluation,
     enqueue_reevaluation,
+    event_source_selection,
     has_documents,
     load_criterion_results,
     load_evidence,
+    surveillance_snapshot,
 )
 from app.core.dispatch import dispatch_job
 from app.core.repository import (
@@ -124,6 +125,9 @@ def enqueue_surveillance_refresh(
             "ai_requested": False,
             "apply_ai_adjustment": False,
             "context": {},
+            # Hereda la seleccion de origenes de la evaluacion anterior (docs/09 §98); `None`
+            # (uso todos) se mantiene como "todos", para que una ingesta nueva cuente.
+            "event_source_ids": event_source_selection(previous),
         },
         assessment_id=assessment.id,
     )
@@ -144,6 +148,7 @@ def run_surveillance_refresh(
     methodology: Methodology,
     assessment_id: str,
     previous_assessment_id: str,
+    event_source_ids: list[str] | None = None,
 ) -> Assessment:
     """Refresco selectivo de madurez (docs/06 §6, docs/11 FN-06).
 
@@ -174,7 +179,7 @@ def run_surveillance_refresh(
     session.commit()
 
     try:
-        _apply_selective_refresh(session, methodology, assessment, previous)
+        _apply_selective_refresh(session, methodology, assessment, previous, event_source_ids)
         assessment.estado = "completada"
     except Exception as exc:
         assessment.estado = "fallida"
@@ -216,7 +221,11 @@ def _clone_plan_row(row: PlanRow, assessment_id: str) -> PlanRow:
 
 
 def _apply_selective_refresh(
-    session: Session, methodology: Methodology, assessment: Assessment, previous: Assessment
+    session: Session,
+    methodology: Methodology,
+    assessment: Assessment,
+    previous: Assessment,
+    event_source_ids: list[str] | None = None,
 ) -> None:
     affected = {
         cid
@@ -264,9 +273,26 @@ def _apply_selective_refresh(
         )
     session.flush()
 
-    # 2. Evidencia de vigilancia fresca (los log.pattern/log.window actuales del org+scope).
-    fresh = collect_surveillance_evidence(session, assessment.org_id, assessment.scope)
-    session.add_all(evidence_to_row(assessment.id, item) for item in fresh)
+    # 2. Evidencia de vigilancia fresca de los origenes seleccionados (o todos).
+    snapshot = surveillance_snapshot(
+        session,
+        assessment.org_id,
+        assessment.scope,
+        methodology.settings.vigilancia,
+        event_source_ids,
+    )
+    assessment.reproducibility = reproducibility.with_eventos(
+        assessment.reproducibility,
+        {
+            "todas": snapshot.todas,
+            "source_ids": snapshot.source_ids,
+            "conteo": snapshot.eventos,
+            "desde": snapshot.desde.isoformat() if snapshot.desde else None,
+            "hasta": snapshot.hasta.isoformat() if snapshot.hasta else None,
+            "sha256": snapshot.sha256,
+        },
+    )
+    session.add_all(evidence_to_row(assessment.id, item) for item in snapshot.evidence)
     session.flush()
 
     # 3. Resultados: copiar los NO afectados (remapeando su evidencia) y recalcular los afectados.

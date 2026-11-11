@@ -87,6 +87,14 @@ def with_methodology(info: dict[str, Any] | None, methodology: Methodology) -> d
     return result
 
 
+def with_eventos(info: dict[str, Any] | None, eventos: dict[str, Any]) -> dict[str, Any]:
+    """Anota que eventos operativos consumio la evaluacion (seleccion, rango y hash)."""
+
+    result = dict(info or {"adapters": {}, "ai": None})
+    result["eventos"] = eventos
+    return result
+
+
 def with_plans_ai(info: dict[str, Any] | None, ai_client: AIClient | None) -> dict[str, Any] | None:
     """Anota que los planes se redactaron con IA (U3) en un `reproducibility` existente."""
 

@@ -85,6 +85,7 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
                 methodology,
                 message["assessment_id"],
                 message["previous_assessment_id"],
+                event_source_ids=message.get("event_source_ids"),
             )
         else:
             svc.run_pending_assessment(
@@ -103,6 +104,7 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
                 ai_client=ai_client,
                 apply_ai_adjustment=message.get("apply_ai_adjustment", False),
                 context=message.get("context") or {},
+                event_source_ids=message.get("event_source_ids"),
             )
         job_service.mark_done(session, job)
     except Exception as exc:  # noqa: BLE001

@@ -19,7 +19,13 @@ from sqlalchemy.orm import Session
 
 from app.ai.guard import check_live_ai_guard
 from app.api.deps import get_current_user, get_methodology, get_redis, get_session, require_same_org
-from app.api.schemas import EventsAccepted, EventsCleared, IncidentOut, OrganizationOut
+from app.api.schemas import (
+    EventsAccepted,
+    EventsCleared,
+    EventSourceOut,
+    IncidentOut,
+    OrganizationOut,
+)
 from app.core import assessment_service as svc
 from app.core import jobs as job_service
 from app.core import operations
@@ -113,6 +119,31 @@ def clear_events(
             detail="Hay una ingesta de eventos en curso; espera a que termine antes de limpiar.",
         )
     return EventsCleared(**operations.clear_operational_data(session, org.id))
+
+
+@router.get("/orgs/{org_id}/event-sources", response_model=list[EventSourceOut])
+def list_event_sources(
+    org_id: str,
+    scope: str | None = None,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[EventSourceOut]:
+    """Origenes de eventos disponibles para la organizacion (docs/09 §98): la UI los ofrece al
+    crear una evaluacion para que el consumo de eventos sea una eleccion explicita."""
+
+    org = _require_org(session, org_id, user)
+    return [
+        EventSourceOut(
+            source_id=source.source_id,
+            label=source.source_id,
+            scope=source.scope,
+            eventos=source.eventos,
+            desde=source.desde,
+            hasta=source.hasta,
+            ultima_ingesta=source.ultima_ingesta,
+        )
+        for source in svc.list_event_sources(session, org.id, scope)
+    ]
 
 
 @router.get("/orgs/{org_id}/incidents", response_model=list[IncidentOut])
