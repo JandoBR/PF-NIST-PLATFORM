@@ -13,21 +13,21 @@ recuperacion, y ademas es el que `CRI-RC-01` ya lee del proceso de recuperacion 
 
 from __future__ import annotations
 
-from datetime import datetime
-
-from app.evaluation.rules._common import best_found, by_type, doc_claims, result
+from app.evaluation.rules._common import (
+    best_found,
+    by_type,
+    doc_claims,
+    found,
+    latest_pattern,
+    merged_content,
+    pattern_moment,
+    result,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-RS-01"
 CRITERION_VERSION = 2
-
-
-def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance | None:
-    for item in by_type(evidence, "log.pattern"):
-        if item.value["patron"] == patron:
-            return item
-    return None
 
 
 def _es_de_respuesta(claim: EvidenceInstance) -> bool:
@@ -40,39 +40,31 @@ def _ventana_completa(evidence: list[EvidenceInstance]) -> bool:
     return bool(ventana and ventana[0].value["completo"])
 
 
-def _momento(pattern: EvidenceInstance | None, clave: str) -> datetime | None:
-    if pattern is None:
-        return None
-    try:
-        return datetime.fromisoformat(str(pattern.value[clave]))
-    except (KeyError, TypeError, ValueError):
-        return None
-
-
 def _escalamiento_posterior(
     escalado: EvidenceInstance | None, declarado: EvidenceInstance | None
 ) -> bool:
     """Solo cuenta un escalamiento cuyo ultimo evento es posterior a la declaracion.
 
     Un `escalation_done` anterior al `incident_declared` no es respuesta a ese incidente
-    (docs/08 §5, D3). Se usa `hasta` para admitir varias escalaciones en el patron: si la
-    ultima es posterior, hay al menos una que lo es.
+    (docs/08 §5, D3). Se usa el patron mas reciente (`_common.latest_pattern`) y su `hasta`:
+    con varias escalaciones vale la ultima, y si es posterior, hay al menos una que lo es.
     """
 
-    inicio = _momento(declarado, "hasta")
-    fin = _momento(escalado, "hasta")
+    inicio = pattern_moment(declarado, "hasta")
+    fin = pattern_moment(escalado, "hasta")
     return inicio is not None and fin is not None and fin > inicio
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    plan = best_found([c for c in doc_claims(evidence, "process_defined") if _es_de_respuesta(c)])
+    planes = found([c for c in doc_claims(evidence, "process_defined") if _es_de_respuesta(c)])
+    contenido, aportantes = merged_content(planes)
     escalation = best_found(doc_claims(evidence, "escalation_path"))
-    escalado = _patron(evidence, "escalation_done")
-    declarado = _patron(evidence, "incident_declared")
+    escalado = latest_pattern(evidence, "escalation_done")
+    declarado = latest_pattern(evidence, "incident_declared")
     completa = _ventana_completa(evidence)
     posterior = _escalamiento_posterior(escalado, declarado)
 
-    if plan is None and escalation is None:
+    if not planes and escalation is None:
         if completa and declarado is not None and not posterior:
             ventana = by_type(evidence, "log.window")
             return result(
@@ -101,14 +93,13 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Sin plan de respuesta documentado ni evidencia operativa suficiente.",
         )
 
-    contenido = plan.value.get("contenido", {}) if plan is not None else {}
     completo = bool(
-        plan is not None
-        and contenido.get("pasos")
+        contenido.get("pasos")
         and contenido.get("responsables")
         and contenido.get("criterios_recuperacion")
     )
-    ids = [e.id for e in (plan, escalation, escalado, declarado) if e is not None]
+    ids = [c.id for c in aportantes]
+    ids += [e.id for e in (escalation, escalado, declarado) if e is not None]
 
     if posterior:
         score = 100 if completo else 75

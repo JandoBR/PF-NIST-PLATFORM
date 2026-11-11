@@ -6,7 +6,14 @@ recuperacion; `backup_policy` se usa como senal minima si no hay procedimiento c
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    best_found,
+    doc_claims,
+    found,
+    merged_content,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -36,9 +43,10 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     candidatos = [c for c in process if _es_de_recuperacion(c)]
-    mejor = best_found(candidatos)
+    encontradas = found(candidatos)
+    contenido, aportantes = merged_content(encontradas)
 
-    if mejor is None:
+    if not encontradas:
         backup_ok = best_found(backups)
         if backup_ok is not None:
             return result(
@@ -54,7 +62,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             [c.id for c in process or backups],
         )
 
-    contenido = mejor.value.get("contenido", {})
+    ids = [c.id for c in aportantes or encontradas]
     if (
         contenido.get("pasos")
         and contenido.get("criterios_activacion")
@@ -65,7 +73,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             100,
             "Procedimiento de recuperacion con pasos, responsables y criterios de activacion.",
-            [mejor.id],
+            ids,
         )
     if contenido.get("pasos"):
         return result(
@@ -73,12 +81,12 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             75,
             "Procedimiento de recuperacion definido, sin criterios de activacion.",
-            [mejor.id],
+            ids,
         )
     return result(
         CRITERION_ID,
         Estado.EVALUADO,
         50,
         "Recuperacion mencionada de forma generica.",
-        [mejor.id],
+        ids,
     )

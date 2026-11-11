@@ -8,7 +8,14 @@ cuenta para GV-01 (docs/09 §60).
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    best_found,
+    doc_claims,
+    found,
+    merged_content,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -38,32 +45,32 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     candidatos = [c for c in process if _es_de_revision(c)]
-    mejor_proc = best_found(candidatos)
+    encontradas = found(candidatos)
+    contenido, aportantes = merged_content(encontradas)
     mejor_review = best_found(review)
 
-    if mejor_proc is None and mejor_review is None:
+    if not encontradas and mejor_review is None:
         return silencio_documental(
             CRITERION_ID,
             "Los documentos analizados no declaran un proceso de revision con metricas o ajustes.",
             [c.id for c in (*review, *process)],
         )
 
-    contenido = mejor_proc.value.get("contenido", {}) if mejor_proc else {}
-    if mejor_proc and (contenido.get("metricas") or contenido.get("ajustes")):
+    if encontradas and (contenido.get("metricas") or contenido.get("ajustes")):
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
             100,
             "Proceso de revision con metricas/resultados y evidencia de ajustes.",
-            [mejor_proc.id],
+            [c.id for c in aportantes],
         )
-    if mejor_proc is not None:
+    if encontradas:
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
             75,
             "Proceso de revision periodica definido, sin metricas ni evidencia de ajustes.",
-            [mejor_proc.id],
+            [c.id for c in aportantes or encontradas],
         )
     # Solo la frecuencia de revision de la politica (`policy_review`): eso es revisar un documento,
     # no la estrategia ni el desempeno (GV.OV). Cuenta como revision mencionada, no definida, y el

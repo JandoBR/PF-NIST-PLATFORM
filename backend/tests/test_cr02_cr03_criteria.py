@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from app.evaluation import engine
 from app.evaluation.rules import (
     gv04_strategy_review,
     id04_data_inventory,
@@ -90,6 +91,19 @@ def test_gv04_proceso_ajeno_es_insuficiente():
     assert (result.estado, result.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
 
 
+def test_gv04_las_metricas_pueden_venir_en_otro_fragmento():
+    """El proceso de revision y sus metricas pueden caer en fragmentos distintos del documento;
+    antes solo contaba el fragmento mas confiable (75)."""
+
+    proceso = _claim("process_defined", {"proceso": "revision", "pasos": "comite"})
+    metricas = _claim("process_defined", {"proceso": "revision", "metricas": True}, confianza=0.7)
+
+    result = gv04_strategy_review.evaluate([metricas, proceso])
+
+    assert result.final_score == 100
+    assert set(result.evidence_ids) == {proceso.id, metricas.id}
+
+
 # --- CRI-ID-04 ---
 
 
@@ -107,6 +121,16 @@ def test_id04_inventario_sin_tipos_de_datos_es_insuficiente():
     evidence = [_claim("data_inventory", {"activos": ["db"]})]
     result = id04_data_inventory.evaluate(evidence)
     assert (result.estado, result.final_score) == (Estado.EVIDENCIA_INSUFICIENTE, None)
+
+
+def test_id04_tipos_y_clasificacion_pueden_venir_en_fragmentos_distintos():
+    tipos = _claim("data_inventory", {"tipos_datos": ["email"]})
+    clasificacion = _claim("data_inventory", {"clasificacion": "pii"}, confianza=0.7)
+
+    result = id04_data_inventory.evaluate([clasificacion, tipos])
+
+    assert result.final_score == 100
+    assert set(result.evidence_ids) == {tipos.id, clasificacion.id}
 
 
 # --- CRI-RS-02 ---
@@ -188,3 +212,56 @@ def test_rs03_una_afirmacion_callada_no_tapa_a_la_que_declara_destinatarios():
     resultado = rs03_notification.evaluate([callada, util])
 
     assert resultado.final_score == 100 and resultado.evidence_ids == [util.id]
+
+
+def test_rs03_criterios_y_plazos_pueden_venir_en_otro_fragmento():
+    """La lista de destinatarios y el cuando/como notificar pueden caer en fragmentos distintos:
+    antes solo puntuaba el fragmento con destinatarios (75)."""
+
+    destinatarios = _claim(
+        "notification_list", {"destinatarios": ["CISO", "direccion"]}, confianza=0.95
+    )
+    criterios = _claim(
+        "notification_list",
+        {"criterios": "brecha confirmada", "plazos": "72h"},
+        confianza=0.7,
+    )
+
+    resultado = rs03_notification.evaluate([criterios, destinatarios])
+
+    assert resultado.final_score == 100
+    assert set(resultado.evidence_ids) == {destinatarios.id, criterios.id}
+
+
+# --- Contradicciones dentro de un documento (docs/09 §101) ------------------------------------
+
+
+def test_gv04_a_fragment_that_denies_the_metrics_does_not_reach_100(methodology):
+    revision = _claim(
+        "process_defined",
+        {"proceso": "revision", "pasos": "comite", "metricas": False},
+        confianza=0.95,
+    )
+    niega = _claim("process_defined", {"proceso": "revision", "metricas": True}, confianza=0.6)
+
+    (result,) = engine.evaluate_only(methodology, [niega, revision], ["CRI-GV-04"])
+
+    assert result.final_score == 75
+    assert "se contradice sobre metricas" in result.explanation
+
+
+def test_gv04_metrics_declared_in_another_document_do_count(methodology):
+    revision = _claim(
+        "process_defined",
+        {"proceso": "revision", "pasos": "comite", "metricas": False},
+        confianza=0.95,
+    )
+    otra = _claim("process_defined", {"proceso": "revision", "metricas": True}, confianza=0.6)
+    otra = otra.model_copy(
+        update={"subject_ref": "doc:otra-politica", "locator": Locator(file="otra.md")}
+    )
+
+    (result,) = engine.evaluate_only(methodology, [revision, otra], ["CRI-GV-04"])
+
+    assert result.final_score == 100
+    assert "se contradice" not in result.explanation

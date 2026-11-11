@@ -11,7 +11,13 @@ evidencia una categoria de siete resultados. Tres de las cinco facetas para el 1
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    doc_claims,
+    found,
+    merged_content,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -44,17 +50,20 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             " y tolerancia.",
         )
 
-    mejor = best_found(claims)
-    if mejor is None:
+    encontradas = found(claims)
+    if not encontradas:
         return silencio_documental(
             CRITERION_ID,
             "Los documentos analizados no declaran objetivos de riesgo ni tolerancia.",
             [c.id for c in claims],
         )
 
-    contenido = mejor.value.get("contenido", {})
+    contenido, aportantes = merged_content(encontradas)
+    if not aportantes:
+        aportantes = encontradas
     declaradas = [c for c in _CAMPOS if contenido.get(c)]
     faltantes = [_CAMPOS[c] for c in _CAMPOS if c not in declaradas]
+    ids = [c.id for c in aportantes]
 
     if contenido.get("objetivos_riesgo") and contenido.get("tolerancia"):
         if len(declaradas) >= _FACETAS_PARA_100:
@@ -64,7 +73,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
                 100,
                 "Estrategia de riesgo con objetivos, tolerancia y"
                 f" {len(declaradas)} de {len(_CAMPOS)} elementos de gestion declarados.",
-                [mejor.id],
+                ids,
             )
         return result(
             CRITERION_ID,
@@ -72,7 +81,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             75,
             "Objetivos de riesgo y tolerancia documentados, pero la estrategia no se desarrolla."
             f" Falta declarar: {', '.join(faltantes)}.",
-            [mejor.id],
+            ids,
         )
     if contenido.get("objetivos_riesgo"):
         return result(
@@ -80,12 +89,12 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             50,
             "Objetivos de riesgo definidos sin tolerancia explicita.",
-            [mejor.id],
+            ids,
         )
     return result(
         CRITERION_ID,
         Estado.EVALUADO,
         25,
         "Declaracion generica de gestionar riesgos, sin objetivos ni tolerancia concretos.",
-        [mejor.id],
+        ids,
     )

@@ -6,7 +6,13 @@ Documental (`doc.claim(tipo=data_inventory)`): el 100 exige tipos de datos **y**
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    doc_claims,
+    found,
+    merged_content,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -24,15 +30,16 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Sin documentos analizados (o sin afirmaciones utilizables) sobre inventario de datos.",
         )
 
-    mejor = best_found(claims)
-    if mejor is None:
+    encontradas = found(claims)
+    if not encontradas:
         return silencio_documental(
             CRITERION_ID,
             "Los documentos analizados no declaran un inventario de datos.",
             [c.id for c in claims],
         )
 
-    contenido = mejor.value.get("contenido", {})
+    contenido, aportantes = merged_content(encontradas)
+    ids = [c.id for c in aportantes or encontradas]
     tipos = contenido.get("tipos_datos")
     clasificacion = contenido.get("clasificacion")
 
@@ -42,7 +49,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             100,
             "Inventario de datos con tipos y clasificacion (incluye datos personales).",
-            [mejor.id],
+            ids,
         )
     if tipos or clasificacion:
         return result(
@@ -50,10 +57,10 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             50,
             "Inventario de datos parcial, sin tipos o sin clasificacion.",
-            [mejor.id],
+            ids,
         )
     return silencio_documental(
         CRITERION_ID,
         "El inventario documentado no describe tipos de datos ni su clasificacion.",
-        [mejor.id],
+        ids,
     )

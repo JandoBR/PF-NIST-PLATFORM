@@ -12,20 +12,13 @@ distintos** (`log.pattern@2.fuentes`). Un solo origen es deteccion, no correlaci
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, by_type, doc_claims
+from app.evaluation.rules._common import best_found, by_type, doc_claims, latest_pattern
 from app.evaluation.rules._common import result as build
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-DE-02"
 CRITERION_VERSION = 2
-
-
-def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance | None:
-    for item in by_type(evidence, "log.pattern"):
-        if item.value["patron"] == patron:
-            return item
-    return None
 
 
 def _fuentes(patron: EvidenceInstance) -> list[str]:
@@ -81,9 +74,9 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Sin ventana de observacion completa ni criterios de declaracion documentados.",
         )
 
-    alerta = _patron(evidence, "alert_raised")
-    declarado = _patron(evidence, "incident_declared")
-    oportunidad = _patron(evidence, "auth_failures_burst")
+    alerta = latest_pattern(evidence, "alert_raised")
+    declarado = latest_pattern(evidence, "incident_declared")
+    oportunidad = latest_pattern(evidence, "auth_failures_burst")
     positivo = alerta or declarado
 
     if oportunidad and not positivo:

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from app.evaluation import engine
 from app.evaluation.rules import (
     pr02_backup,
     rc02_backup_verification,
@@ -253,6 +254,53 @@ def test_rs01_plan_parcial_sin_ventana_scores_50():
     assert rs01_response_plan.evaluate(evidence).final_score == 50
 
 
+def test_rs01_el_traspaso_a_recuperacion_puede_venir_en_otro_fragmento():
+    """Pasos y responsables en un fragmento y el criterio de traspaso a recuperacion (RS.MA-05)
+    en otro: antes el plan quedaba parcial (50 sin ventana)."""
+
+    pasos = _claim(
+        "process_defined",
+        {"proceso": "respuesta", "pasos": "1. 2.", "responsables": "CISO"},
+    )
+    traspaso = _claim(
+        "process_defined",
+        {"proceso": "respuesta", "criterios_recuperacion": True},
+        confianza=0.7,
+    )
+
+    result = rs01_response_plan.evaluate([traspaso, pasos])
+
+    assert result.final_score == 75
+    assert set(result.evidence_ids) == {pasos.id, traspaso.id}
+
+
+def test_rs01_el_ultimo_escalamiento_es_el_que_cuenta():
+    """Con dos `escalation_done` en la ventana vale el mas reciente. Antes se tomaba el primero
+    de la lista y un escalamiento previo tapaba al posterior (docs/08 §5, D3)."""
+
+    evidence = [
+        _window(),
+        _pattern(
+            "incident_declared",
+            desde="2026-01-01T00:01:00Z",
+            hasta="2026-01-01T00:03:00Z",
+        ),
+        _pattern(
+            "escalation_done",
+            desde="2026-01-01T00:00:00Z",
+            hasta="2026-01-01T00:01:00Z",
+        ),
+        _pattern(
+            "escalation_done",
+            desde="2026-01-01T00:04:00Z",
+            hasta="2026-01-01T00:06:00Z",
+        ),
+        _plan_completo(),
+    ]
+
+    assert rs01_response_plan.evaluate(evidence).final_score == 100
+
+
 # -- CRI-RC-02 ----------------------------------------------------------------------
 
 
@@ -295,6 +343,65 @@ def test_rc02_fallo_prevalece_sobre_politica_scores_0():
     assert rc02_backup_verification.evaluate(evidence).final_score == 0
 
 
+def test_rc02_un_fallo_superado_por_una_verificacion_posterior_no_es_0():
+    """RC-03 cuenta la restauracion verificada como 100: RC-02 no puede quedarse en 0 por un
+    estado que la ventana ya dejo atras (docs/03 §6)."""
+
+    fallo = _pattern(
+        "restore_exercise_run",
+        resultado="fail",
+        desde="2026-01-01T00:01:00Z",
+        hasta="2026-01-01T00:05:00Z",
+    )
+    verificado = _pattern(
+        "restore_verified", desde="2026-01-01T00:10:00Z", hasta="2026-01-01T00:20:00Z"
+    )
+    politica = _claim("backup_policy", {"respaldo": True, "verificacion_integridad": True})
+
+    result = rc02_backup_verification.evaluate([_window(), fallo, verificado, politica])
+
+    assert result.final_score == 100
+    assert "superado" in result.explanation
+    assert fallo.id in result.evidence_ids
+
+
+def test_rc02_una_verificacion_anterior_al_fallo_no_lo_supera():
+    fallo = _pattern(
+        "restore_exercise_run",
+        resultado="fail",
+        desde="2026-01-01T00:10:00Z",
+        hasta="2026-01-01T00:20:00Z",
+    )
+    verificado = _pattern(
+        "restore_verified", desde="2026-01-01T00:01:00Z", hasta="2026-01-01T00:05:00Z"
+    )
+    politica = _claim("backup_policy", {"respaldo": True, "verificacion_integridad": True})
+
+    evidence = [_window(), verificado, fallo, politica]
+
+    assert rc02_backup_verification.evaluate(evidence).final_score == 0
+
+
+def test_rc02_varios_ejercicios_del_mismo_patron_usan_el_ultimo():
+    """Si la ventana trae un ejercicio fallido y despues uno exitoso, vale el estado final: 50
+    (exitoso sin verificacion final), no 0."""
+
+    fallo = _pattern(
+        "restore_exercise_run",
+        resultado="fail",
+        desde="2026-01-01T00:01:00Z",
+        hasta="2026-01-01T00:05:00Z",
+    )
+    exitoso = _pattern(
+        "restore_exercise_run",
+        resultado="ok",
+        desde="2026-01-01T00:10:00Z",
+        hasta="2026-01-01T00:20:00Z",
+    )
+
+    assert rc02_backup_verification.evaluate([_window(), fallo, exitoso]).final_score == 50
+
+
 # -- CRI-RC-03 ----------------------------------------------------------------------
 
 
@@ -325,3 +432,58 @@ def test_rc05_rules_all_insufficient_without_evidence():
     assert rs01_response_plan.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
     assert rc02_backup_verification.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
     assert rc03_recovery_communication.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+# -- Contradicciones dentro de un documento (docs/09 §101) --------------------------
+
+
+def _plan_sin_traspaso_negado(confianza: float) -> EvidenceInstance:
+    return _claim(
+        "process_defined",
+        {
+            "proceso": "respuesta",
+            "pasos": "1. 2.",
+            "responsables": "CISO",
+            "criterios_recuperacion": False,
+        },
+        confianza=confianza,
+    )
+
+
+def _patrones_de_respuesta() -> list[EvidenceInstance]:
+    return [
+        _pattern(
+            "incident_declared",
+            desde="2026-01-01T00:00:00Z",
+            hasta="2026-01-01T00:01:00Z",
+        ),
+        _pattern(
+            "escalation_done",
+            desde="2026-01-01T00:02:00Z",
+            hasta="2026-01-01T00:03:00Z",
+        ),
+    ]
+
+
+def test_rs01_a_fragment_that_denies_the_recovery_criteria_leaves_the_plan_in_75(methodology):
+    niega = _claim(
+        "process_defined", {"proceso": "respuesta", "criterios_recuperacion": True}, confianza=0.6
+    )
+
+    evidence = [_window(), *_patrones_de_respuesta(), _plan_sin_traspaso_negado(0.95), niega]
+    (result,) = engine.evaluate_only(methodology, evidence, ["CRI-RS-01"])
+
+    assert result.final_score == 75
+    assert "se contradice sobre criterios_recuperacion" in result.explanation
+
+
+def test_rs01_the_transfer_declared_in_another_document_does_count(methodology):
+    otra = _claim(
+        "process_defined", {"proceso": "respuesta", "criterios_recuperacion": True}, confianza=0.6
+    ).model_copy(update={"subject_ref": "doc:otra-politica", "locator": Locator(file="otra.md")})
+
+    evidence = [_window(), *_patrones_de_respuesta(), _plan_sin_traspaso_negado(0.95), otra]
+    (result,) = engine.evaluate_only(methodology, evidence, ["CRI-RS-01"])
+
+    assert result.final_score == 100
+    assert "se contradice" not in result.explanation

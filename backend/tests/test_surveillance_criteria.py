@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.evaluation import engine
 from app.evaluation.rules import (
     de02_event_analysis,
     de03_alert_notification,
@@ -319,6 +320,19 @@ def test_id05_documented_cycle_without_exercise_caps_at_75():
     assert id05_improvement.evaluate(evidence).final_score == 75
 
 
+def test_id05_metricas_y_planes_pueden_venir_en_fragmentos_distintos():
+    """El ciclo de mejora y el mantenimiento de planes (ID.IM-04) pueden caer en fragmentos
+    distintos del documento; antes solo contaba el fragmento mas confiable (75)."""
+
+    ciclo = _claim("process_defined", {"proceso": "mejora continua", "metricas": True})
+    planes = _claim("process_defined", {"planes_actualizados": True}, confianza=0.7)
+
+    result = id05_improvement.evaluate([_window(), _pattern("restore_exercise_run"), planes, ciclo])
+
+    assert result.final_score == 100
+    assert {ciclo.id, planes.id}.issubset(result.evidence_ids)
+
+
 def test_id05_generic_improvement_scores_50():
     evidence = [_claim("process_defined", {"proceso": "mejora", "pasos": "revisar"})]
     assert id05_improvement.evaluate(evidence).final_score == 50
@@ -373,3 +387,35 @@ def test_rc03_a_notification_list_without_recipients_is_not_cited():
     assert sin_lista.final_score == 75 and vacia.id not in sin_lista.evidence_ids
     con_lista = rc03_recovery_communication.evaluate([*verificado, vacia, completa])
     assert con_lista.final_score == 75 and completa.id in con_lista.evidence_ids
+
+
+def test_id05_a_fragment_that_denies_updating_plans_does_not_reach_100(methodology):
+    ciclo = _claim(
+        "process_defined",
+        {"proceso": "mejora continua", "metricas": True, "planes_actualizados": False},
+        confianza=0.95,
+    )
+    niega = _claim("process_defined", {"planes_actualizados": True}, confianza=0.6)
+
+    evidence = [_window(), _pattern("restore_exercise_run"), niega, ciclo]
+    (result,) = engine.evaluate_only(methodology, evidence, ["CRI-ID-05"])
+
+    assert result.final_score == 75
+    assert "se contradice sobre planes_actualizados" in result.explanation
+
+
+def test_id05_updated_plans_declared_in_another_document_do_count(methodology):
+    ciclo = _claim(
+        "process_defined",
+        {"proceso": "mejora continua", "metricas": True, "planes_actualizados": False},
+        confianza=0.95,
+    )
+    otra = _claim("process_defined", {"planes_actualizados": True}, confianza=0.6).model_copy(
+        update={"subject_ref": "doc:otra-politica", "locator": Locator(file="otra.md")}
+    )
+
+    evidence = [_window(), _pattern("restore_exercise_run"), ciclo, otra]
+    (result,) = engine.evaluate_only(methodology, evidence, ["CRI-ID-05"])
+
+    assert result.final_score == 100
+    assert "se contradice" not in result.explanation

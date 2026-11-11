@@ -11,7 +11,13 @@ puerta: sin el, silencio documental.
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    doc_claims,
+    found,
+    merged_content,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -47,8 +53,8 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             " proveedores y terceros.",
         )
 
-    mejor = best_found(claims)
-    if mejor is None:
+    encontradas = found(claims)
+    if not encontradas:
         return silencio_documental(
             CRITERION_ID,
             "Los documentos analizados no declaran un programa de riesgo de la cadena de"
@@ -56,13 +62,13 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             [c.id for c in claims],
         )
 
-    contenido = mejor.value.get("contenido") or {}
+    contenido, aportantes = merged_content(encontradas)
     if not contenido.get("programa"):
         return silencio_documental(
             CRITERION_ID,
             "La afirmacion menciona proveedores pero no declara un programa ni politicas de"
             " cadena de suministro.",
-            [mejor.id],
+            [c.id for c in aportantes or encontradas],
         )
 
     declarados = [c for c in _CAMPOS if contenido.get(c)]
@@ -76,5 +82,5 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         score,
         f"Programa de cadena de suministro con {len(declarados)} de {len(_CAMPOS)} practicas"
         f" declaradas.{detalle}",
-        [mejor.id],
+        [c.id for c in aportantes],
     )

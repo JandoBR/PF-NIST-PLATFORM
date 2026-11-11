@@ -1,9 +1,13 @@
 """OP-04: lo que el analisis no pudo resolver sale como hallazgo `limitacion`."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from app.core import assessment_service as svc
+from app.evaluation import engine
 from app.recommendations.findings import derive_findings
+from app.schemas.evidence import EvidenceInstance, Locator, Modality
 
 DB_CON_VARIABLES = """
 resource "aws_db_instance" "db" {
@@ -117,3 +121,50 @@ def test_the_api_returns_limitations_among_the_findings(
     findings = api_client.get(f"/assessments/{accepted['assessment_id']}/findings").json()
 
     assert any(f["tipo"] == "limitacion" and f["criterion_id"] == "CRI-PR-01" for f in findings)
+
+
+# -- Documento que se contradice (docs/09 §101) -------------------------------------
+
+
+def _claim(tipo: str, contenido: dict, confianza: float) -> EvidenceInstance:
+    return EvidenceInstance(
+        type_id="doc.claim",
+        type_version=2,
+        subject_type="document",
+        subject_ref="doc:politica",
+        scope="entorno:produccion",
+        value={
+            "tipo_afirmacion": tipo,
+            "contenido": contenido,
+            "encontrado": True,
+            "confianza": confianza,
+        },
+        source_id="test:limitaciones",
+        locator=Locator(file="politica.md"),
+        observed_at=datetime.now(UTC),
+        modality=Modality.DOCUMENTAL,
+        created_by="ai:extraction",
+    )
+
+
+def test_a_document_that_contradicts_itself_is_a_limitation_finding(methodology):
+    revision = _claim(
+        "process_defined",
+        {"proceso": "revision", "pasos": "comite", "metricas": False},
+        confianza=0.95,
+    )
+    niega = _claim("process_defined", {"proceso": "revision", "metricas": True}, confianza=0.6)
+
+    (result,) = engine.evaluate_only(methodology, [revision, niega], ["CRI-GV-04"])
+    limitaciones = [
+        f
+        for f in derive_findings(methodology, [result], [revision, niega])
+        if f.tipo == "limitacion"
+    ]
+
+    (conflicto,) = limitaciones
+    assert conflicto.criterion_id == "CRI-GV-04"
+    assert conflicto.titulo == "El documento politica.md se contradice sobre metricas"
+    assert "afirmacion mas confiable (no)" in conflicto.detalle
+    assert conflicto.severidad == "baja" and conflicto.score is None
+    assert set(conflicto.evidence_ids) == {revision.id, niega.id}

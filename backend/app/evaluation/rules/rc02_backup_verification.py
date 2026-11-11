@@ -7,7 +7,14 @@ disparador D4 (docs/08 §5). Sin ventana no se penaliza: se evalua solo lo docum
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found_with, by_type, doc_claims, result
+from app.evaluation.rules._common import (
+    best_found_with,
+    by_type,
+    doc_claims,
+    latest_pattern,
+    pattern_moment,
+    result,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -15,15 +22,25 @@ CRITERION_ID = "CRI-RC-02"
 CRITERION_VERSION = 1
 
 
-def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance | None:
-    for item in by_type(evidence, "log.pattern"):
-        if item.value["patron"] == patron:
-            return item
-    return None
-
-
 def _verificacion_documentada(claim: EvidenceInstance) -> bool:
     return bool((claim.value.get("contenido") or {}).get("verificacion_integridad"))
+
+
+def _superado_por_verificacion(
+    ejercicio: EvidenceInstance | None, verificado: EvidenceInstance | None
+) -> bool:
+    """Un ejercicio fallido no condena el criterio si una verificacion posterior lo supera.
+
+    La ventana puede traer un fallo y despues una restauracion verificada; RC-03 cuenta esa
+    verificacion como 100, asi que RC-02 no puede quedarse en 0 por un estado que la ventana ya
+    dejo atras. Sin marcas de tiempo no se asume la superacion: se mantiene el 0 conservador.
+    """
+
+    if ejercicio is None or ejercicio.value.get("resultado") != "fail" or verificado is None:
+        return False
+    fin_fallo = pattern_moment(ejercicio, "hasta")
+    fin_verificado = pattern_moment(verificado, "hasta")
+    return fin_fallo is not None and fin_verificado is not None and fin_verificado > fin_fallo
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
@@ -48,10 +65,11 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Sin ventana de observacion completa ni politica que exija verificacion.",
         )
 
-    ejercicio = _patron(evidence, "restore_exercise_run")
-    verificado = _patron(evidence, "restore_verified")
+    ejercicio = latest_pattern(evidence, "restore_exercise_run")
+    verificado = latest_pattern(evidence, "restore_verified")
+    superado = _superado_por_verificacion(ejercicio, verificado)
 
-    if ejercicio is not None and ejercicio.value["resultado"] == "fail":
+    if ejercicio is not None and ejercicio.value["resultado"] == "fail" and not superado:
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
@@ -61,13 +79,21 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     if verificado is not None and doc_verifica:
+        nota = (
+            " El ejercicio fallido anterior queda superado por la verificacion posterior."
+            if superado
+            else ""
+        )
+        ids = [ventana[0].id, verificacion.id, verificado.id]
+        if superado:
+            ids.append(ejercicio.id)
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
             100,
             "Politica exige verificacion de integridad y el escenario evidencia restauracion"
-            " verificada.",
-            [ventana[0].id, verificacion.id, verificado.id],
+            f" verificada.{nota}",
+            ids,
         )
 
     if verificado is not None:

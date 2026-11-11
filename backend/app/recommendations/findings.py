@@ -71,6 +71,7 @@ def derive_findings(
     if evidence is not None:
         from app.recommendations.contradictions import detect_contradictions  # evita ciclo
         from app.recommendations.limitations import (
+            detect_document_conflicts,
             detect_document_silence,
             detect_limitations,
             detect_unverified_quotes,
@@ -78,6 +79,7 @@ def derive_findings(
 
         findings.extend(detect_contradictions(evidence))
         findings.extend(detect_limitations(methodology, results, evidence))
+        findings.extend(detect_document_conflicts(results, evidence))
         findings.extend(detect_document_silence(methodology, results, evidence))
         findings.extend(detect_unverified_quotes(methodology, evidence))
     return findings

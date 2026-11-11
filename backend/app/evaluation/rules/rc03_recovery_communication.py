@@ -8,19 +8,18 @@ disparador D5 (docs/08 §5) abria un incidente por esa misma comunicacion faltan
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found_with, by_type, doc_claims, result
+from app.evaluation.rules._common import (
+    best_found_with,
+    by_type,
+    doc_claims,
+    latest_pattern,
+    result,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-RC-03"
 CRITERION_VERSION = 1
-
-
-def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance | None:
-    for item in by_type(evidence, "log.pattern"):
-        if item.value["patron"] == patron:
-            return item
-    return None
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
@@ -33,9 +32,9 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Sin ventana de observacion completa: no se puede concluir.",
         )
 
-    verificado = _patron(evidence, "restore_verified")
-    comunicado = _patron(evidence, "recovery_communicated")
-    ejercicio = _patron(evidence, "restore_exercise_run")
+    verificado = latest_pattern(evidence, "restore_verified")
+    comunicado = latest_pattern(evidence, "recovery_communicated")
+    ejercicio = latest_pattern(evidence, "restore_exercise_run")
     # Sin destinatarios no hay lista (docs/09 §47): igual que en DE-03 y RS-03.
     notificacion = best_found_with(doc_claims(evidence, "notification_list"), "destinatarios")
 

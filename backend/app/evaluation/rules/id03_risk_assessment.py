@@ -12,7 +12,13 @@ con pasos pero sin registro ni priorizacion evidencia `ID.RA-01` y nada mas, asi
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    doc_claims,
+    found,
+    merged_content,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -24,12 +30,15 @@ def _es_de_riesgos(claim: EvidenceInstance) -> bool:
     contenido = claim.value.get("contenido", {})
     proceso = str(contenido.get("proceso", "")).lower()
     # Por valor y no por presencia de la clave: el prompt pide `registro_riesgos`/`priorizacion`
-    # en todo `process_defined`, y un proceso de otro tipo los trae en null/false.
+    # en todo `process_defined`, y un proceso de otro tipo los trae en null/false. Los campos de
+    # ID.RA-04 son propios de este proceso, asi que un fragmento que solo los trae tambien cuenta.
     return bool(
         "riesgo" in proceso
         or "risk" in proceso
         or contenido.get("registro_riesgos")
         or contenido.get("priorizacion")
+        or contenido.get("impactos")
+        or contenido.get("probabilidades")
     )
 
 
@@ -53,15 +62,16 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             [c.id for c in claims],
         )
 
-    mejor = best_found(candidatos)
-    if mejor is None:
+    encontradas = found(candidatos)
+    contenido, aportantes = merged_content(encontradas)
+    if not encontradas:
         return silencio_documental(
             CRITERION_ID,
             "No se declara un proceso de evaluacion de riesgos.",
             [c.id for c in candidatos],
         )
 
-    contenido = mejor.value.get("contenido", {})
+    ids = [c.id for c in aportantes or encontradas]
     registrados = contenido.get("registro_riesgos") or contenido.get("priorizacion")
     # ID.RA-04: "se identifican y registran los impactos y probabilidades potenciales".
     cuantificados = contenido.get("impactos") or contenido.get("probabilidades")
@@ -73,7 +83,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             100,
             "Proceso de evaluacion de riesgos documentado, con registro, priorizacion y los"
             " impactos/probabilidades de cada riesgo.",
-            [mejor.id],
+            ids,
         )
     if contenido.get("pasos") and registrados:
         return result(
@@ -82,7 +92,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             75,
             "Proceso de evaluacion de riesgos con registro y priorizacion, pero sin registrar los"
             " impactos ni las probabilidades potenciales (ID.RA-04).",
-            [mejor.id],
+            ids,
         )
     if contenido.get("pasos"):
         return result(
@@ -90,12 +100,12 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             50,
             "Proceso de evaluacion de riesgos definido, sin registro ni priorizacion de riesgos.",
-            [mejor.id],
+            ids,
         )
     return result(
         CRITERION_ID,
         Estado.EVALUADO,
         25,
         "Evaluacion de riesgos descrita de forma generica, sin pasos concretos.",
-        [mejor.id],
+        ids,
     )

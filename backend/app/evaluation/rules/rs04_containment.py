@@ -12,19 +12,12 @@ documental, porque ningun evento del contrato declara la erradicacion por si sol
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, by_type, doc_claims, result
+from app.evaluation.rules._common import best_found, by_type, doc_claims, latest_pattern, result
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-RS-04"
 CRITERION_VERSION = 1
-
-
-def _patron(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance | None:
-    for item in by_type(evidence, "log.pattern"):
-        if item.value["patron"] == patron:
-            return item
-    return None
 
 
 def _es_de_contencion(claim: EvidenceInstance) -> bool:
@@ -46,8 +39,8 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     plan = best_found([c for c in doc_claims(evidence, "process_defined") if _es_de_contencion(c)])
     con_pasos = plan is not None and bool((plan.value.get("contenido") or {}).get("pasos"))
 
-    contenido = _patron(evidence, "containment_done")
-    declarado = _patron(evidence, "incident_declared")
+    contenido = latest_pattern(evidence, "containment_done")
+    declarado = latest_pattern(evidence, "incident_declared")
     ventana = by_type(evidence, "log.window")
     completa = bool(ventana and ventana[0].value["completo"])
 

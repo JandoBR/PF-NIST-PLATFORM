@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.evaluation import engine
 from app.evaluation.rules import gv05_org_context, gv06_supply_chain, pr07_awareness
 from app.evaluation.schemas import Estado
 from app.schemas.evidence import EvidenceInstance, Locator, Modality
@@ -72,6 +73,24 @@ def test_gv05_three_of_five_score_75_and_name_what_is_missing():
 def test_gv05_one_outcome_scores_50():
     result = gv05_org_context.evaluate([_claim("org_context", {"mision": "Procesar pagos"})])
     assert result.final_score == 50
+
+
+def test_gv05_the_five_outcomes_are_merged_across_chunks_of_the_same_document():
+    """El documento se parte en fragmentos y cada uno declara parte de GV.OC: puntuar solo el
+    fragmento mas confiable mediria uno de los cuatro, no el documento (daba 50, no 100)."""
+
+    fragmentos = [
+        _claim("org_context", {"mision": "Procesar pagos", "partes_interesadas": ["clientes"]}),
+        _claim("org_context", {"requisitos_legales": ["PCI DSS"]}, confianza=0.8),
+        _claim("org_context", {"servicios_criticos": ["plataforma"]}, confianza=0.7),
+        _claim("org_context", {"dependencias": ["nube"]}, confianza=0.6),
+    ]
+
+    result = gv05_org_context.evaluate(fragmentos)
+
+    assert result.final_score == 100
+    assert "Falta declarar" not in result.explanation
+    assert set(result.evidence_ids) == {c.id for c in fragmentos}
 
 
 def test_gv05_an_empty_context_claim_is_silence_not_zero():
@@ -142,6 +161,23 @@ def test_gv06_suppliers_mentioned_without_a_program_is_silence():
     assert "no equivale a 0" in result.explanation
 
 
+def test_gv06_the_practices_are_merged_across_chunks_of_the_same_document():
+    """El programa y las nueve practicas pueden caer en fragmentos distintos; antes solo contaba
+    el fragmento mas confiable y las practicas de los demas se perdian."""
+
+    programa = _claim("supplier_program", {"programa": True})
+    practicas = _claim(
+        "supplier_program",
+        {campo: True for campo in _FACETAS_SC[:7]},
+        confianza=0.7,
+    )
+
+    result = gv06_supply_chain.evaluate([practicas, programa])
+
+    assert result.final_score == 100
+    assert set(result.evidence_ids) == {programa.id, practicas.id}
+
+
 # -- CRI-PR-07 (concienciacion y formacion) ----------------------------------------
 
 
@@ -166,6 +202,16 @@ def test_pr07_specialized_roles_without_frequency_also_caps_at_75():
     assert pr07_awareness.evaluate([_claim("training_program", contenido)]).final_score == 75
 
 
+def test_pr07_frequency_and_specialized_roles_can_come_from_different_chunks():
+    programa = _claim("training_program", {"programa": True, "frecuencia": "anual"}, confianza=0.95)
+    roles = _claim("training_program", {"roles_especializados": True}, confianza=0.7)
+
+    result = pr07_awareness.evaluate([roles, programa])
+
+    assert result.final_score == 100
+    assert set(result.evidence_ids) == {programa.id, roles.id}
+
+
 def test_pr07_bare_program_scores_50():
     result = pr07_awareness.evaluate([_claim("training_program", {"programa": True})])
     assert result.final_score == 50
@@ -183,3 +229,80 @@ def test_pr07_a_low_confidence_claim_does_not_count():
     claim = _claim("training_program", {"programa": True, "frecuencia": "anual"})
     claim = claim.model_copy(update={"limitations": "confianza por debajo del umbral"})
     assert pr07_awareness.evaluate([claim]).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+# -- Contradicciones dentro de un documento (docs/09 §101) ---------------------------
+
+
+def test_gv06_a_document_that_denies_due_diligence_does_not_get_the_facet(methodology):
+    programa = _claim(
+        "supplier_program",
+        {
+            "programa": True,
+            "roles": True,
+            "integracion_riesgo": True,
+            "proveedores_priorizados": True,
+            "debida_diligencia": False,
+        },
+        confianza=0.95,
+    )
+    niega = _claim("supplier_program", {"programa": True, "debida_diligencia": True}, confianza=0.6)
+
+    (result,) = engine.evaluate_only(methodology, [niega, programa], ["CRI-GV-06"])
+
+    assert result.final_score == 50
+    assert "se contradice sobre debida_diligencia" in result.explanation
+
+
+def test_gv06_due_diligence_declared_in_another_document_does_count(methodology):
+    programa = _claim(
+        "supplier_program",
+        {
+            "programa": True,
+            "roles": True,
+            "integracion_riesgo": True,
+            "proveedores_priorizados": True,
+            "debida_diligencia": False,
+        },
+        confianza=0.95,
+    )
+    otra = _claim(
+        "supplier_program", {"programa": True, "debida_diligencia": True}, confianza=0.6
+    ).model_copy(update={"subject_ref": "doc:otra-politica", "locator": Locator(file="otra.md")})
+
+    (result,) = engine.evaluate_only(methodology, [programa, otra], ["CRI-GV-06"])
+
+    assert result.final_score == 75
+    assert "se contradice" not in result.explanation
+
+
+def test_pr07_a_fragment_that_denies_specialized_training_caps_at_75(methodology):
+    programa = _claim(
+        "training_program",
+        {"programa": True, "frecuencia": "anual", "roles_especializados": False},
+        confianza=0.95,
+    )
+    niega = _claim(
+        "training_program", {"programa": True, "roles_especializados": True}, confianza=0.6
+    )
+
+    (result,) = engine.evaluate_only(methodology, [niega, programa], ["CRI-PR-07"])
+
+    assert result.final_score == 75
+    assert "se contradice sobre roles_especializados" in result.explanation
+
+
+def test_pr07_specialized_training_declared_in_another_document_does_count(methodology):
+    programa = _claim(
+        "training_program",
+        {"programa": True, "frecuencia": "anual", "roles_especializados": False},
+        confianza=0.95,
+    )
+    otra = _claim(
+        "training_program", {"programa": True, "roles_especializados": True}, confianza=0.6
+    ).model_copy(update={"subject_ref": "doc:otra-politica", "locator": Locator(file="otra.md")})
+
+    (result,) = engine.evaluate_only(methodology, [programa, otra], ["CRI-PR-07"])
+
+    assert result.final_score == 100
+    assert "se contradice" not in result.explanation

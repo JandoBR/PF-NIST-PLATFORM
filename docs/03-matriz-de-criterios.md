@@ -23,6 +23,16 @@ Reglas transversales:
   (docs/09 §60). Un 0 exige evidencia explícita de ausencia, que en la práctica solo da la configuración
   técnica (p. ej. cifrado `disabled`) o un escenario de eventos (una falla observada).
 - Una afirmación cuya cita no aparece en el documento no cuenta para ningún criterio (docs/05 §2.3 E8).
+- **Afirmaciones fragmentadas:** un documento largo se parte en fragmentos y cada fragmento produce
+  su propio `doc.claim`. Cuando un criterio mide varias facetas del mismo tipo de afirmación (GV-02,
+  GV-03, GV-04, GV-05, GV-06, ID-03, ID-04, ID-05, PR-07, RC-01, RS-01 y RS-03), la regla agrega los
+  campos de todas las afirmaciones `encontrado=true` del tipo: por campo vale la afirmación más
+  confiable que lo declara —una que lo calla no compite—. Los booleanos se suman con `or` **entre
+  documentos** (la práctica declarada en un documento de la organización cuenta); dentro de un mismo
+  documento que se contradice —un fragmento declara la práctica y otro la niega— vale el valor de la
+  afirmación más confiable y la contradicción queda como limitación visible (docs/09 §101), porque un
+  `false` puede ser una negación explícita. Se citan todas las afirmaciones que aportaron
+  (docs/09 §99).
 - Las recomendaciones son plantillas; la IA las adapta y explica, sin ejecutar nada.
 
 Resumen de cobertura del catálogo:
@@ -461,11 +471,12 @@ Resumen de cobertura del catálogo:
 - **Regla:**
   - Sin ventana de eventos completa: 75 si la política de backups exige verificación de integridad; si no, `evidencia_insuficiente`.
   - Con ventana completa:
-    - 0: ejercicio de restauración fallido (`restore_exercise_run` con resultado `fail`).
+    - 0: ejercicio de restauración fallido (`restore_exercise_run` con resultado `fail`) que ninguna verificación posterior supera.
     - 100: la política exige verificación + restauración verificada (`restore_verified`).
     - 75: restauración verificada sin política documentada, o política que exige verificación sin evidencia operativa.
     - 50: ejercicio de restauración exitoso sin verificación final.
     - Sin ningún patrón aplicable ni política de verificación → `evidencia_insuficiente` (sin oportunidad, no se penaliza).
+  - Si hay varias filas del mismo patrón, vale la más reciente por su `hasta`: un fallo anterior a una restauración verificada no condena el criterio, porque la ventana ya dejó atrás ese estado (RC-03 cuenta la verificación como 100).
 - **Recomendación:** verificar integridad de backups antes de restaurar y registrar la prueba.
 
 ### CRI-RC-03 — Restauración verificada y comunicación de recuperación

@@ -5,4 +5,5 @@ el 1 de marzo de 2025 y aplica a todos los sistemas que procesan informacion de 
 
 ## Revision
 
-Esta politica se revisa con una frecuencia anual. La ultima revision se realizo el 2026-02-01.
+La politica declara una frecuencia de revision anual, pero no se ha revisado desde su aprobacion:
+la version vigente sigue siendo la del 1 de marzo de 2025 y no hay acta de revision posterior.

@@ -9,7 +9,13 @@ Sin destinatarios no hay lista: una afirmacion que no dice a quien se notifica n
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found_with, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    doc_claims,
+    found,
+    merged_content,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -28,15 +34,16 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             " interesados.",
         )
 
-    mejor = best_found_with(claims, "destinatarios")
-    if mejor is None:
+    encontradas = found(claims)
+    contenido, aportantes = merged_content(encontradas)
+    if not contenido.get("destinatarios"):
         return silencio_documental(
             CRITERION_ID,
             "Los documentos analizados no declaran a quien se notifica un incidente.",
-            [c.id for c in claims],
+            [c.id for c in encontradas or claims],
         )
 
-    contenido = mejor.value["contenido"]
+    ids = [c.id for c in aportantes]
     criterios = bool(contenido.get("criterios"))
     plazos = bool(contenido.get("plazos"))
 
@@ -46,7 +53,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             100,
             "Lista de notificacion con destinatarios, criterios y plazos.",
-            [mejor.id],
+            ids,
         )
 
     # 100 exige los tres datos: una lista sin criterios no dice cuando notificar, y una sin
@@ -57,4 +64,4 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         if criterios or plazos
         else "Lista de notificacion definida, sin criterios ni plazos."
     )
-    return result(CRITERION_ID, Estado.EVALUADO, 75, detalle, [mejor.id])
+    return result(CRITERION_ID, Estado.EVALUADO, 75, detalle, ids)

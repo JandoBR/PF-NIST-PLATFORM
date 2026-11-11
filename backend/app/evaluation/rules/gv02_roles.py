@@ -7,11 +7,22 @@ Cubre las cuatro subcategorias de `GV.RR`: el 100 exige un rol con **responsable
 responsabilidades y autoridad** (`GV.RR-01`/`GV.RR-02`) y, ademas, las otras dos facetas de la
 categoria -- recursos acordes a la estrategia (`GV.RR-03`) y la ciberseguridad en las practicas de
 recursos humanos (`GV.RR-04`). Nombrar a un CISO no es dotar a la funcion.
+
+El rol se elige por completitud, no por confianza; las dos facetas booleanas, en cambio, se agregan
+de cualquier fragmento del documento que las declare, salvo que el mismo documento las contradiga
+(`_common.merged_bool`, docs/09 §101).
 """
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    best_found,
+    doc_claims,
+    found,
+    merged_bool,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -84,7 +95,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             " responsabilidades.",
         )
 
-    encontradas = [c for c in claims if c.value.get("encontrado")]
+    encontradas = found(claims)
     if not encontradas:
         return silencio_documental(
             CRITERION_ID,
@@ -93,8 +104,14 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         )
 
     nivel, mejor = _mejor_claim(encontradas)
-    contenido = mejor.value.get("contenido", {})
+    contenido = dict(mejor.value.get("contenido", {}))
     roles = _roles_validos(contenido)
+    aportantes = {mejor.id: mejor}
+    for campo in ("recursos_asignados", "practicas_rh"):
+        contenido[campo], declarantes = merged_bool(encontradas, campo)
+        for claim in declarantes:
+            aportantes.setdefault(claim.id, claim)
+    ids = [c.id for c in aportantes.values()]
 
     if nivel == 3 and contenido.get("recursos_asignados") and contenido.get("practicas_rh"):
         return result(
@@ -103,7 +120,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             100,
             "Rol con responsable nombrado, responsabilidades y autoridad, recursos acordes a la"
             " estrategia de riesgo y ciberseguridad en las practicas de recursos humanos.",
-            [mejor.id],
+            ids,
         )
 
     if nivel > 0:
@@ -114,7 +131,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             75,
             f"Hay autoridad declarada, pero falta: {detalle}.",
-            [mejor.id],
+            ids,
         )
 
     if roles:
@@ -123,7 +140,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             50,
             "Roles definidos sin autoridad explicita.",
-            [mejor.id],
+            ids,
         )
 
     return result(
@@ -131,5 +148,5 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         Estado.EVALUADO,
         25,
         "Roles genericos mencionados sin un responsable nombrado.",
-        [mejor.id],
+        ids,
     )

@@ -3283,3 +3283,194 @@ elástica: la capacidad fija no es un positivo, es su ausencia declarada.
 de estas formas, que es exactamente por qué la suite no podía verlas (el mismo patrón que §95).
 
 **Verificación:** 830 tests, 2 skipped, `ruff` limpio; typecheck, lint y build del frontend limpios.
+
+## 98. Una evaluación consumía todos los eventos de su entorno, eligiera o no
+
+Una evaluación no elegía qué eventos leer: `collect_surveillance_evidence` tomaba **todos** los
+`events`/`log_patterns` del `org`+`scope`. En la demo, el log de un escenario ingerido 51 s antes se
+colaba en la evaluación de otro y llevaba RS-01/RS-04/RC-02 a cero. Además, nada quedaba registrado
+sobre qué eventos había usado la evaluación, así que el resultado no era reproducible, y los
+`log_patterns` se leían de filas que podían sobrar de ingestas anteriores (una regla tomaba la
+primera coincidencia).
+
+**Qué cambió:**
+- `GET /orgs/{org_id}/event-sources` lista los orígenes (`Event.source_id`: la `fuente` declarada o
+  el archivo de origen) con cantidad de eventos, rango `desde`/`hasta` y última ingesta
+  (`max(creado_en)`; no hay fila de ingesta por origen).
+- `POST /assessments` acepta `event_source_ids` (array JSON, opcional). Omitido = todos los orígenes
+  del `org`+`scope`, para no romper llamadas existentes ni el refresco automático; `[]` = ninguno;
+  un id que no pertenece a la organización da 400 antes de crear o subir nada. La selección viaja en
+  el payload del job y el reintento la conserva.
+- `collect_surveillance_evidence` -> `surveillance_snapshot`: filtra los eventos por la selección y
+  **recalcula los patrones en memoria** con `detect_patterns`, el mismo código determinista de la
+  ingesta, en vez de leer `log_patterns`. Así la ventana y los patrones describen exactamente los
+  eventos elegidos, la correlación entre fuentes seleccionadas sigue correcta y una fila duplicada o
+  vieja ya no puede decidir un criterio. `_patron()` y los consumidores operativos de
+  `log_patterns` no cambian: la ingesta sigue reemplazando las filas por scope.
+- `reproducibility.eventos` guarda `todas`, `source_ids`, `conteo`, `desde`, `hasta` y `sha256` de
+  los eventos canónicos (orden por tiempo e id, JSON estable). `GET /assessments/{id}` ya lo expone.
+- Re-evaluación y refresco automático **heredan** la selección: si la evaluación anterior usó una
+  lista explícita se conserva (un log excluido no entra por la puerta de atrás); si usó todos
+  (`todas: true`) sigue usando todos, para que una ingesta de un origen nuevo cuente. Una evaluación
+  sin la marca (anterior a este cambio) se trata como "todos".
+- Frontend: el diálogo "Nueva Evaluación" lista los orígenes con su conteo y rango, todos marcados
+  por defecto; si hay orígenes se manda la lista explícita (aunque estén todos) para que el alcance
+  no cambie solo. El dashboard muestra "N eventos de <origen(es)>" o "Sin eventos operativos".
+
+No hubo migración: todo va en el JSON `assessments.reproducibility` y en el payload del job.
+
+**Verificación:** tests nuevos en `tests/test_assessment_event_sources.py` (subconjunto, todos,
+`[]`, id ajeno 400, endpoint, worker, herencia en reevaluación y refresco, sin patrones duplicados)
+más los de servicio, API y workers; `ruff` limpio. Typecheck, lint y build del frontend limpios.
+
+## 99. Una afirmación por fragmento: el documento entero cuenta
+
+Un documento largo se parte en fragmentos y cada fragmento produce su propio `doc.claim`. La regla
+de GV.OC declaraba sus cinco resultados repartidos en cuatro afirmaciones (misión y partes
+interesadas, requisitos legales, servicios críticos, dependencias), pero `best_found` elegía **una**
+y medía solo sus campos: 50 sobre un contexto completo. GV-03 y GV-06 tenían la misma lectura
+latente: sus facetas son subcategorías distintas y pueden caer en fragmentos distintos.
+
+**A. Fusión por campo.** `_common.merged_content` arma el contenido de todas las afirmaciones
+`encontrado=true` del tipo: por cada campo vale la afirmación más confiable que **lo declara** (una
+que lo calla no compite) y los booleanos se suman con `or`, porque no hay un mecanismo de
+contradicción entre fragmentos del mismo documento (docs/02 §5 cubre documento contra documento y
+contra Terraform). Devuelve también las afirmaciones que aportaron, y las reglas las citan todas.
+Cambian GV-02 (solo los booleanos `recursos_asignados`/`practicas_rh`; el rol se sigue eligiendo por
+completitud, no por confianza), GV-03, GV-04, GV-05, GV-06, ID-03, ID-04, ID-05, PR-07, RC-01,
+RS-01 y RS-03. Quedan como estaban GV-01 (una política es un hecho único y ya toma la afirmación de
+mayor confianza), ID-01 e ID-02 (una sola faceta: el inventario de activos y la criticidad,
+respectivamente), DE-02, RS-02 y RS-04 (una faceta documental más la puerta operativa) y PR-02,
+RC-02, RC-03 y DE-03 en su parte de un solo campo (`best_found_with`). ID-03 y ID-05 amplían además
+su filtro de proceso con los campos que solo su subcategoría usa (`impactos`/`probabilidades` y
+`planes_actualizados`), para que un fragmento que solo los declara no quede fuera del proceso.
+
+**B. RC-02 contra RC-03.** Cualquier `restore_exercise_run` con `resultado=fail` daba 0, aunque una
+verificación posterior ya hubiera restaurado el servicio y RC-03 la contara como 100. Ahora un fallo
+superado por un `restore_verified` posterior (por `hasta`) no condena el criterio: se evalúa la
+verificación y el fallo se cita en la explicación. Sin marcas de tiempo se mantiene el 0 conservador.
+De paso, la lectura de patrones usaba la **primera** fila de la lista: `_common.latest_pattern`
+toma la más reciente por `hasta` con desempate determinista, y sustituye las copias de `_patron` de
+RC-02, RS-01, RS-04, RC-03, DE-02 e ID-05. En RS-01 esto importa: con dos escalamientos, el primero
+(anterior a la declaración) tapaba al posterior y daba 0; ahora vale el último.
+
+**C. La demo contaba la historia al revés.** La política de `gaps` decía última revisión
+`2026-02-01` (vigente → GV-01 100) y la de `mid`, `2025-03-15` (vencida → 75-79): el paquete con
+brechas se veía mejor en gobierno que el que está en mejora. `gaps` declara ahora que no se revisó
+desde su aprobación (2025-03-01) y `mid` una revisión de 2026-02-01 dentro de la frecuencia anual.
+El §66 describía la revisión vencida en `mid`; ahora ese estado está en `gaps`, y `mid` conserva los
+demás huecos (roles sin autoridad, proceso de riesgos sin registro, recuperación sin criterios), que
+es la progresión que la demo ya contaba en lo técnico.
+`backend/tests/fixtures/documents` y `tests/golden_ai/documents` son copias propias para las pruebas
+de extracción, no se leen desde `frontend/public/demo`; `test_demo_bundles` fija solo los puntajes
+técnicos (Terraform + Ansible) y no cambió ninguna expectativa.
+
+**Verificación:** 20 tests nuevos; 336 en el conjunto dirigido (reglas, helpers, vigilancia, demo y
+goldens) en verde, `ruff` limpio. **Ningún golden cambió**: el pipeline de los goldens no incluye
+documentos ni `log.pattern`.
+
+## 100. `respuesta_vacia` no era silencio del documento: era el presupuesto de razonamiento
+
+En una corrida del prototipo, 5 de ~60 extracciones U1 terminaron en `degradado` con
+`motivo: respuesta_vacia` tras tres intentos **idénticos**. La extracción devolvía `[]` y las reglas
+leían ese vacío como "el documento no lo declara" (`silencio_documental` → `evidencia_insuficiente`
+con el hallazgo "Ningun documento analizado lo declara"): una afirmación sobre el texto que nadie
+leyó.
+
+**La causa, con evidencia.** `DEEPSEEK_MODEL=deepseek-flash` es correcto: `GET /models` del
+proveedor devuelve exactamente `deepseek-flash` (DeepSeek-V4.1-Flash, 1M de contexto, pensamiento
+activo por defecto con `effort: high`) y `deepseek-v4-pro`. El problema era el cliente: `max_tokens`
+fijo en 2000 y `deepseek-flash` **razona antes de escribir**, con el razonamiento pagado del mismo
+presupuesto. En los logs de los fallos, `completion_tokens=2000` (el techo) y sin línea de tokens
+posterior; reproducido contra la API con los documentos del demo:
+
+```text
+max_tokens=1200 → finish_reason=length, completion=1200, reasoning_content≈5000 chars, content=""
+max_tokens=8000 → finish_reason=stop,   completion=4571, content=1968 chars (JSON válido)
+```
+
+Con `max_tokens` bajo el JSON **no empieza**: los tokens se van en `reasoning_content` y `content`
+queda vacío (o solo espacios, que es lo que deja el modo JSON cuando la salida no era JSON). El
+techo real observado con los 14 tipos de U1 fue de ~5250 tokens de completion, muy por encima de
+2000. Repetir tres veces con el mismo techo es repetir la misma petición condenada; que a veces el
+tercer intento saliera (`intentos: 3, ok`) era la variación natural del razonamiento, no una señal de
+que el reintento idéntico sirviera.
+
+**Cambios.**
+- `app/ai/client.py`: `max_tokens` 2000 → 16000 (`DEEPSEEK_MAX_TOKENS` para ajustarlo). El motivo del
+  degradado ahora lleva el `finish_reason` (`respuesta_vacia:length`, `json_invalido:stop`) y la línea
+  de tokens registra `finish=` y si hubo razonamiento. Si la respuesta se vacía por longitud, el
+  reintento **duplica el techo** (hasta 64000) en vez de repetir; `content_filter` no se reintenta y
+  una respuesta con solo espacios cuenta como vacía. `deepseek-flash` sigue siendo el modelo: no hay
+  que cambiar `DEEPSEEK_MODEL`.
+- `app/evaluation/rules/_common.py`: `documentos_sin_respuesta` + `es_silencio_documental` +
+  `marcar_sin_respuesta`. El motor lo aplica a todo resultado (`engine._evaluate_one`): si la regla
+  concluyó silencio documental y algún `doc.source.info` trae `sin_respuesta > 0`, la explicación
+  pasa a encabezarse con "Limitacion: la IA no respondió para N sección(es) de <documento>; esa
+  falta de respuesta no es silencio del documento y lo que no se pudo leer no se cuenta como
+  ausencia". Sigue siendo `evidencia_insuficiente`, nunca 0.
+- `app/recommendations/limitations.py`: esos criterios ya no generan "Ningun documento analizado lo
+  declara" (que culpaba al texto) sino "La IA no respondió para parte de los documentos", con el
+  número de secciones y archivos. El resto de los silencios no cambia.
+- `app/api/app.py`: el proceso de la API nunca configuró logging, así que los `ai_call` de U3 (la
+  generación de planes corre ahí) no llegaban a ningún sitio. Ahora usa el mismo
+  `basicConfig`/formato que `worker.core`, sin tocar los loggers de uvicorn.
+- `deploy/.env.example` y `backend/.env.example`: `DEEPSEEK_MODEL=deepseek-flash` se queda y se
+  documenta `DEEPSEEK_MAX_TOKENS=16000`.
+- Docs: docs/05 §5 (modelo, `max_tokens`, reintentos, razonamiento, chunk degradado ≠ silencio).
+
+**Verificación.** Reproducción en vivo: con el cliente parchado y `max_tokens=1200`, el primer
+intento devuelve `finish=length` con contenido vacío y el reintento a 2400 tokens devuelve
+`finish=stop` con 14 afirmaciones (`intentos: 2`). Tests nuevos: `test_ai_client_finish_reason.py`
+(vacío por longitud → sube el techo; motivo con `finish_reason`; techo acotado; espacios; filtro de
+contenido), `test_silence_sin_respuesta.py` (insuficiente + limitación + hallazgo correcto, sin
+cambiar el silencio normal) y `test_api_logging.py` (handler raíz con el formato de los workers,
+`app.ai.*` en INFO, uvicorn intacto). Los tests dirigidos de cliente, silencio, logging, motor y
+reglas quedan en verde y `ruff check`/`format --check` limpios.
+
+## 101. Un documento que se contradice y documentos partidos en trozos de más
+
+**A. El `or` de booleanos tapaba una negación explícita.** Desde §99, `_common.merged_content`
+funde campo a campo las afirmaciones del mismo tipo y suma los booleanos con `or`. Eso funcionaba
+entre documentos, pero dentro del mismo documento un `false` puede ser una negación explícita ("no
+se realiza X") y el `or` la borraba: un fragmento que negaba los recursos asignados no bajaba el
+puntaje de GV-02. Ahora los fragmentos se agrupan por documento (`subject_ref`, que la extracción
+arma como `doc:<stem>`): **entre documentos** se mantiene el `or`; **dentro de uno que se
+contradice** vale el valor de la afirmación más confiable (el mismo orden de `found`) y el caso se
+registra como `ContradiccionBooleana`. `merged_bool` expone la misma regla a GV-02, que hacía el
+`or` a mano para `recursos_asignados`/`practicas_rh`.
+
+La contradicción no se deja implícita: `contradicciones_booleanas(evidence)` se recalcula desde la
+misma evidencia que leen las reglas y el motor la aplica a todo resultado que haya citado una de
+las afirmaciones en conflicto (`marcar_contradicciones`, al lado de `marcar_sin_respuesta`). La
+explicación suma "Limitacion: el documento <archivo> se contradice sobre <campo> (vale sí/no, de la
+afirmación más confiable)" y `recommendations/limitations.py` emite un hallazgo `limitacion`
+("El documento <archivo> se contradice sobre <campo>") sin tocar ninguna de las doce reglas. El
+puntaje y el estado no cambian: la regla ya resolvió con esa misma regla.
+
+**B. El chunking partía por cada encabezado.** `extraction_text` hacía un chunk por encabezado
+Markdown y uno por página PDF; el adaptador cortaba en 20 chunks. Un documento con muchas
+subsecciones cortas producía muchas llamadas diminutas y sin contexto, y uno real con más de 20
+subsecciones dejaba de analizarse. Ahora las secciones/páginas consecutivas se agrupan hasta
+`DEFAULT_MAX_CHARS_PER_CHUNK` (8000 caracteres) sin partir ninguna; una mayor queda sola. El
+texto conserva los encabezados, así que el prompt no cambió (`extract_v4` sigue vigente: nunca
+mencionó "sección"). Cada `Chunk` guarda `Segmento(inicio, fin, locator)` por sección/página; la
+cita se valida contra el chunk completo (E8) y el locator de la afirmación se resuelve al tramo
+donde aparece `cita.fragmento`, con la primera sección como respaldo. El tope de 20 chunks ahora
+aplica a chunks agrupados y `doc.source.info` sigue contando secciones/páginas (total, analizadas,
+omitidas y sin respuesta), no chunks, que es lo que el informe y la UI muestran. `ADAPTER_VERSION`
+sube a 4.
+
+**C. Golden set.** El arnés (`golden_eval`) no indexa respuestas por texto del chunk: el cliente
+"oráculo" responde las afirmaciones anotadas cuya cita aparece en el fragmento recibido y
+`_check_citations` mide contra ese mismo texto. Al agrupar cambia el número de llamadas, pero no la
+anotación ni el emparejamiento, así que **ningún golden se regrabó**; el golden set pasa con menos
+llamadas.
+
+**Verificación:** tests nuevos por regla afectada por booleanos (GV-02, GV-03, GV-04, GV-06, ID-03,
+ID-05, PR-07, RS-01) con el conflicto dentro del documento y entre documentos, más
+`test_rules_common` (resolución y `contradicciones_booleanas`), `test_limitation_findings` (hallazgo
+del documento contradictorio), `test_document_extraction_text` (agrupación, presupuesto, sección
+sobredimensionada, bloques de código y páginas PDF) y `test_document_adapter` (locator por sección,
+tope y conteos). En la demo, las llamadas U1 bajan de 10→4 (`gaps`), 21→6 (`mid`) y 29→6 (`good`).
+Conjunto completo y `ruff` al final del cambio.

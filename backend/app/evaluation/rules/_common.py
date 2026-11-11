@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from functools import wraps
+from pathlib import PurePath
 
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
+
+#: Valores de un campo que no declaran nada. `False` no esta: un booleano en falso si dice algo.
+SIN_DATO = (None, "", [], {})
 
 
 def by_type(evidence: list[EvidenceInstance], type_id: str) -> list[EvidenceInstance]:
@@ -33,8 +39,179 @@ def best_found_with(claims: list[EvidenceInstance], campo: str) -> EvidenceInsta
     algo distinto, no dice nada sobre ese campo."""
 
     return best_found(
-        [c for c in claims if (c.value.get("contenido") or {}).get(campo) not in (None, "", [], {})]
+        [c for c in claims if (c.value.get("contenido") or {}).get(campo) not in SIN_DATO]
     )
+
+
+def _orden(claim: EvidenceInstance) -> tuple:
+    """Orden estable y determinista de las afirmaciones: confianza, documento, contenido."""
+
+    return (
+        -claim.value.get("confianza", 0),
+        claim.subject_ref,
+        json.dumps(claim.value.get("contenido", {}), sort_keys=True, ensure_ascii=False),
+    )
+
+
+def found(claims: list[EvidenceInstance]) -> list[EvidenceInstance]:
+    """Las afirmaciones `encontrado=true`, de mas a menos confiable y con desempate estable."""
+
+    return sorted((c for c in claims if c.value.get("encontrado")), key=_orden)
+
+
+@dataclass(frozen=True)
+class ContradiccionBooleana:
+    """Un campo booleano que un mismo documento declara y niega en fragmentos distintos.
+
+    `valor` es el que usa la regla: el de la afirmacion mas confiable del documento, porque un
+    `false` puede ser una negacion explicita ("no se realiza X") y sumarlo con `or` inflaria el
+    puntaje (docs/09 §101).
+    """
+
+    tipo_afirmacion: str
+    campo: str
+    documento: str
+    archivo: str
+    valor: bool
+    claim_ids: tuple[str, ...]
+
+
+def _archivo(claim: EvidenceInstance) -> str:
+    return PurePath(claim.locator.file).name if claim.locator.file else claim.subject_ref
+
+
+def _resolver_booleano(
+    declarantes: list[EvidenceInstance], tipo: str, campo: str
+) -> tuple[bool, list[EvidenceInstance], list[ContradiccionBooleana]]:
+    """Valor agregado de un campo booleano, las afirmaciones que lo aportan y sus contradicciones.
+
+    Entre documentos se mantiene el `or`: una practica declarada en un documento de la organizacion
+    cuenta aunque otro no la mencione. Dentro de un mismo documento no: si una afirmacion lo
+    declara y otra lo niega, vale la de mayor confianza (mismo orden que `found`) y la negacion no
+    desaparece, queda como `ContradiccionBooleana`.
+
+    `declarantes` viene en orden de `found`: la primera de cada documento es la mas confiable."""
+
+    por_documento: dict[str, list[EvidenceInstance]] = {}
+    for claim in declarantes:
+        por_documento.setdefault(claim.subject_ref, []).append(claim)
+
+    usados: list[EvidenceInstance] = []
+    conflictos: list[ContradiccionBooleana] = []
+    for documento in sorted(por_documento):
+        del_documento = por_documento[documento]
+        elegido = del_documento[0]
+        elegido_valor = bool(elegido.value["contenido"][campo])
+        if any(bool(c.value["contenido"][campo]) != elegido_valor for c in del_documento[1:]):
+            conflictos.append(
+                ContradiccionBooleana(
+                    tipo_afirmacion=tipo,
+                    campo=campo,
+                    documento=documento,
+                    archivo=_archivo(elegido),
+                    valor=elegido_valor,
+                    claim_ids=tuple(c.id for c in del_documento),
+                )
+            )
+        if elegido_valor:
+            usados.append(elegido)
+    return bool(usados), usados or declarantes[:1], conflictos
+
+
+def merged_bool(claims: list[EvidenceInstance], campo: str) -> tuple[bool, list[EvidenceInstance]]:
+    """Booleano agregado de varias afirmaciones del mismo tipo, con la regla de `merged_content`:
+    `or` entre documentos, valor de la mas confiable dentro de uno que se contradice."""
+
+    declarantes = [
+        c for c in found(claims) if isinstance((c.value.get("contenido") or {}).get(campo), bool)
+    ]
+    if not declarantes:
+        return False, []
+    valor, usados, _ = _resolver_booleano(
+        declarantes, str(declarantes[0].value.get("tipo_afirmacion", "")), campo
+    )
+    return valor, usados
+
+
+def merged_content(
+    claims: list[EvidenceInstance],
+) -> tuple[dict, list[EvidenceInstance]]:
+    """Contenido de varias afirmaciones del mismo tipo como si fueran una sola.
+
+    Un documento largo se parte en fragmentos y cada fragmento produce su propia afirmacion: GV.OC,
+    por ejemplo, reparte sus cinco datos en cuatro `doc.claim`. Puntuar solo la mejor afirmacion
+    mediria un fragmento y no el documento, asi que campo a campo se toma el valor de la afirmacion
+    mas confiable que **declara** ese campo -- una que lo calla no compite --, salvo los booleanos,
+    que se agregan con `or` entre documentos. Dentro de un mismo documento que se contradice (un
+    fragmento declara la practica y otro la niega) vale el valor de la afirmacion mas confiable, no
+    el `or`: un `false` puede ser una negacion explicita y sumarlo inflaria el puntaje (docs/09
+    §101). `contradicciones_booleanas` devuelve esos casos para que el motor los haga visibles.
+
+    Devuelve el contenido agregado y las afirmaciones que aportaron algun campo, para citarlas
+    todas. Sin afirmaciones `encontrado=true` el contenido queda vacio.
+    """
+
+    encontradas = found(claims)
+    contenido: dict = {}
+    aportantes: dict[str, EvidenceInstance] = {}
+    for campo in sorted({k for c in encontradas for k in (c.value.get("contenido") or {})}):
+        declarantes = [
+            c for c in encontradas if (c.value.get("contenido") or {}).get(campo) not in SIN_DATO
+        ]
+        if not declarantes:
+            continue
+        valores = [c.value["contenido"][campo] for c in declarantes]
+        if all(isinstance(v, bool) for v in valores):
+            valor, usados, _ = _resolver_booleano(
+                declarantes, str(declarantes[0].value.get("tipo_afirmacion", "")), campo
+            )
+            contenido[campo] = valor
+        else:
+            contenido[campo] = valores[0]
+            usados = declarantes[:1]
+        for claim in usados:
+            aportantes[claim.id] = claim
+    return contenido, sorted(aportantes.values(), key=_orden)
+
+
+def contradicciones_booleanas(
+    evidence: list[EvidenceInstance],
+) -> list[ContradiccionBooleana]:
+    """Campos booleanos que un mismo documento declara y niega (docs/09 §101).
+
+    Se calcula sobre la misma evidencia que leen las reglas (`doc.claim` con `encontrado=true` y
+    sin limitaciones), asi que lo que el motor anota es exactamente lo que `merged_content` uso."""
+
+    conflictos: list[ContradiccionBooleana] = []
+    tipos = sorted(
+        {
+            str(c.value.get("tipo_afirmacion"))
+            for c in by_type(evidence, "doc.claim")
+            if c.value.get("tipo_afirmacion")
+        }
+    )
+    for tipo in tipos:
+        encontradas = found(doc_claims(evidence, tipo))
+        campos = sorted(
+            {
+                campo
+                for c in encontradas
+                for campo, valor in (c.value.get("contenido") or {}).items()
+                if isinstance(valor, bool)
+            }
+        )
+        for campo in campos:
+            declarantes = [
+                c
+                for c in encontradas
+                if (c.value.get("contenido") or {}).get(campo) not in SIN_DATO
+            ]
+            if declarantes and all(
+                isinstance(c.value["contenido"][campo], bool) for c in declarantes
+            ):
+                _, _, del_campo = _resolver_booleano(declarantes, tipo, campo)
+                conflictos.extend(del_campo)
+    return conflictos
 
 
 def best_found(claims: list[EvidenceInstance]) -> EvidenceInstance | None:
@@ -44,15 +221,47 @@ def best_found(claims: list[EvidenceInstance]) -> EvidenceInstance | None:
     deterministico (docs/00 §7) y dos corridas con la misma evidencia deben citar lo mismo.
     """
 
-    encontradas = [c for c in claims if c.value.get("encontrado")]
-    if not encontradas:
+    encontradas = found(claims)
+    return encontradas[0] if encontradas else None
+
+
+def pattern_moment(pattern: EvidenceInstance | None, clave: str) -> datetime | None:
+    """Marca de tiempo de un `log.pattern` (`desde`/`hasta`) como `datetime` en UTC.
+
+    Devuelve `None` si el patron no la trae o no se puede leer: quien compare tiempos debe tratar
+    ese caso como desconocido, no inventar un orden."""
+
+    if pattern is None:
         return None
-    return min(
-        encontradas,
-        key=lambda c: (
-            -c.value.get("confianza", 0),
-            c.subject_ref,
-            json.dumps(c.value.get("contenido", {}), sort_keys=True, ensure_ascii=False),
+    valor = pattern.value.get(clave)
+    if valor is None:
+        return None
+    try:
+        momento = datetime.fromisoformat(str(valor))
+    except (TypeError, ValueError):
+        return None
+    return momento if momento.tzinfo else momento.replace(tzinfo=UTC)
+
+
+def latest_pattern(evidence: list[EvidenceInstance], patron: str) -> EvidenceInstance | None:
+    """El `log.pattern` mas reciente de ese patron, por su `hasta`.
+
+    Una ventana puede traer varias filas del mismo patron (un ejercicio fallido seguido de una
+    restauracion verificada, dos escalamientos, ...). Quedarse con la primera haria que el veredicto
+    dependiera del orden de ingesta: vale el ultimo estado que dejo la ventana. El desempate es
+    determinista y no usa el `id` (docs/00 §7)."""
+
+    candidatos = [e for e in by_type(evidence, "log.pattern") if e.value.get("patron") == patron]
+    if not candidatos:
+        return None
+    sin_fecha = datetime.min.replace(tzinfo=UTC)
+    return max(
+        candidatos,
+        key=lambda e: (
+            pattern_moment(e, "hasta") or sin_fecha,
+            pattern_moment(e, "desde") or sin_fecha,
+            e.subject_ref,
+            json.dumps(e.value, sort_keys=True, ensure_ascii=False),
         ),
     )
 
@@ -83,6 +292,14 @@ SILENCIO_DOCUMENTAL = (
     " Sin una afirmacion explicita no se puede concluir que falte: no equivale a 0."
 )
 
+#: Marca que deja `marcar_sin_respuesta` cuando la IA no contesto parte del texto enviado
+#: (docs/09 §100): una seccion sin respuesta no es un documento que calle.
+AVISO_SIN_RESPUESTA = "la IA no respondio para"
+SIN_RESPUESTA = (
+    f"Limitacion: {AVISO_SIN_RESPUESTA} {{secciones}} seccion(es) de {{documentos}}; esa falta de"
+    " respuesta no es silencio del documento y lo que no se pudo leer no se cuenta como ausencia."
+)
+
 
 def silencio_documental(
     criterion_id: str, explicacion: str, evidence_ids: list[str] | None = None
@@ -99,6 +316,84 @@ def silencio_documental(
         None,
         explicacion + SILENCIO_DOCUMENTAL,
         evidence_ids,
+    )
+
+
+def documentos_sin_respuesta(evidence: list[EvidenceInstance]) -> list[tuple[str, int]]:
+    """Documentos con secciones que se enviaron a la IA y no tuvieron respuesta (docs/09 §100)."""
+
+    pendientes: list[tuple[str, int]] = []
+    for item in by_type(evidence, "doc.source.info"):
+        secciones = item.value.get("sin_respuesta") or 0
+        if secciones:
+            pendientes.append((str(item.value.get("archivo") or item.subject_ref), int(secciones)))
+    return pendientes
+
+
+def es_silencio_documental(resultado: CriterionResult) -> bool:
+    """La regla concluyo silencio documental, con o sin la limitacion de secciones sin responder."""
+
+    return (
+        resultado.explanation.endswith(SILENCIO_DOCUMENTAL)
+        or AVISO_SIN_RESPUESTA in resultado.explanation
+    )
+
+
+def marcar_sin_respuesta(
+    resultado: CriterionResult, evidence: list[EvidenceInstance]
+) -> CriterionResult:
+    """Un silencio por secciones que la IA no respondio no es silencio del documento (docs/09 §100).
+
+    El motor lo aplica a todo resultado de regla, para que ninguna conclusion documental dependa de
+    trozos que nadie llego a leer. Sigue siendo `evidencia_insuficiente`: no se convierte en 0 ni
+    se inventa una ausencia."""
+
+    if resultado.estado != Estado.EVIDENCIA_INSUFICIENTE:
+        return resultado
+    if not es_silencio_documental(resultado) or AVISO_SIN_RESPUESTA in resultado.explanation:
+        return resultado
+    pendientes = documentos_sin_respuesta(evidence)
+    if not pendientes:
+        return resultado
+    detalle = SIN_RESPUESTA.format(
+        secciones=sum(secciones for _, secciones in pendientes),
+        documentos=", ".join(archivo for archivo, _ in pendientes),
+    )
+    conclusion = resultado.explanation.removesuffix(SILENCIO_DOCUMENTAL).strip()
+    return resultado.model_copy(update={"explanation": f"{detalle} {conclusion}"})
+
+
+#: Marca de la limitacion que deja `marcar_contradicciones` cuando un documento se contradice
+#: sobre un booleano que el criterio uso (docs/09 §101).
+AVISO_CONTRADICCION = "se contradice sobre"
+
+
+def marcar_contradicciones(
+    resultado: CriterionResult, evidence: list[EvidenceInstance]
+) -> CriterionResult:
+    """Hace visible que un documento se contradice sobre un booleano que el criterio uso.
+
+    El motor lo aplica a todo resultado que cite alguna de las afirmaciones en conflicto. La
+    explicacion dice que valor vale (el de la afirmacion mas confiable del documento) para que el
+    puntaje no dependa de un fragmento que nego la practica sin que nadie lo note. No cambia el
+    estado ni el puntaje: la regla ya resolvio con la misma regla que
+    `contradicciones_booleanas`."""
+
+    if resultado.estado in (Estado.ERROR, Estado.NO_APLICABLE) or not resultado.evidence_ids:
+        return resultado
+    citados = set(resultado.evidence_ids)
+    pendientes = [
+        c for c in contradicciones_booleanas(evidence) if citados.intersection(c.claim_ids)
+    ]
+    if not pendientes:
+        return resultado
+    detalle = "; ".join(
+        f"el documento {c.archivo} {AVISO_CONTRADICCION} {c.campo} (vale"
+        f" {'si' if c.valor else 'no'}, de la afirmacion mas confiable)"
+        for c in pendientes
+    )
+    return resultado.model_copy(
+        update={"explanation": f"{resultado.explanation} Limitacion: {detalle}."}
     )
 
 

@@ -47,6 +47,7 @@ from app.evaluation.rules import (
     rs03_notification,
     rs04_containment,
 )
+from app.evaluation.rules._common import marcar_contradicciones, marcar_sin_respuesta
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.loader import Methodology
 from app.schemas.evidence import EvidenceInstance
@@ -106,6 +107,8 @@ def _evaluate_one(
             explanation="Criterio en el catalogo sin regla de evaluacion implementada.",
         )
     result = rule(evidence)
+    result = marcar_sin_respuesta(result, evidence)
+    result = marcar_contradicciones(result, evidence)
     result.criterion_version = criterion.version
     if result.estado == Estado.EVALUADO and result.base_score == 0:
         # Un 0 es siempre evidencia explicita de ausencia o una falla observada (docs/01 §3,

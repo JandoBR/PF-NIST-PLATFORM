@@ -10,7 +10,12 @@ el texto). Se deriva de la evidencia que el propio criterio cito o pidio.
 from __future__ import annotations
 
 from app.ai.extraction import CITA_NO_LOCALIZABLE
-from app.evaluation.rules._common import SILENCIO_DOCUMENTAL
+from app.evaluation.rules._common import (
+    AVISO_SIN_RESPUESTA,
+    contradicciones_booleanas,
+    documentos_sin_respuesta,
+    es_silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.loader import Methodology
 from app.recommendations.findings import Finding
@@ -97,6 +102,7 @@ def detect_document_silence(
     documentos = _documentos_analizados(evidence)
     if not documentos:
         return []
+    pendientes = documentos_sin_respuesta(evidence)
     findings: list[Finding] = []
     for result in results:
         if result.estado != Estado.EVIDENCIA_INSUFICIENTE:
@@ -106,9 +112,29 @@ def detect_document_silence(
             continue
         # La regla dijo explicitamente que los documentos callan, o el criterio es solo
         # documental y no tuvo nada (el modelo ni siquiera marco el tipo como no encontrado).
-        if not (result.explanation.endswith(SILENCIO_DOCUMENTAL) or _es_documental(criterio)):
+        if not (es_silencio_documental(result) or _es_documental(criterio)):
             continue
         tipos = ", ".join(criterio.regla.get("tipos_afirmacion", [])) or "afirmaciones documentales"
+        if AVISO_SIN_RESPUESTA in result.explanation and pendientes:
+            # La IA dejo secciones sin responder (docs/09 §100): el hallazgo no puede decir que
+            # ningun documento lo declara, porque parte del texto no se llego a leer.
+            findings.append(
+                Finding(
+                    criterion_id=result.criterion_id,
+                    titulo="La IA no respondio para parte de los documentos",
+                    tipo="limitacion",
+                    severidad=SEVERIDAD,
+                    score=None,
+                    detalle=(
+                        f"La IA no respondio para {sum(n for _, n in pendientes)} seccion(es) de"
+                        f" {', '.join(a for a, _ in pendientes)}. Sin esa lectura"
+                        f" «{criterio.titulo}» queda en evidencia insuficiente: lo que no se pudo"
+                        f" leer ({tipos}) no se cuenta como ausencia ni como 0."
+                    ),
+                    evidence_ids=list(result.evidence_ids),
+                )
+            )
+            continue
         findings.append(
             Finding(
                 criterion_id=result.criterion_id,
@@ -124,6 +150,43 @@ def detect_document_silence(
                 evidence_ids=list(result.evidence_ids),
             )
         )
+    return findings
+
+
+def detect_document_conflicts(
+    results: list[CriterionResult], evidence: list[EvidenceInstance]
+) -> list[Finding]:
+    """Documentos que se contradicen sobre un booleano que el criterio uso (docs/09 §101).
+
+    A diferencia de `contradictions.py`, el choque no es entre fuentes distintas sino entre
+    fragmentos del mismo documento. No invalida la afirmacion: la regla ya resolvio con el valor de
+    la mas confiable. El hallazgo deja visible que ese valor podia ser el opuesto."""
+
+    conflictos = contradicciones_booleanas(evidence)
+    findings: list[Finding] = []
+    for result in results:
+        citados = set(result.evidence_ids)
+        for conflicto in conflictos:
+            if not citados.intersection(conflicto.claim_ids):
+                continue
+            valor = "si" if conflicto.valor else "no"
+            findings.append(
+                Finding(
+                    criterion_id=result.criterion_id,
+                    titulo=(
+                        f"El documento {conflicto.archivo} se contradice sobre {conflicto.campo}"
+                    ),
+                    tipo="limitacion",
+                    severidad=SEVERIDAD,
+                    score=None,
+                    detalle=(
+                        f"El documento {conflicto.archivo} declara y niega «{conflicto.campo}» en"
+                        f" fragmentos distintos. Se usa el valor de la afirmacion mas confiable"
+                        f" ({valor}); el fragmento que dice lo contrario no se suma."
+                    ),
+                    evidence_ids=list(conflicto.claim_ids),
+                )
+            )
     return findings
 
 

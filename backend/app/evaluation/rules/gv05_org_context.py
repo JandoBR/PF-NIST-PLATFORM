@@ -13,7 +13,13 @@ faltan: la lista es el valor de este criterio, no un numero suelto.
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    doc_claims,
+    found,
+    merged_content,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -41,8 +47,8 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             " organizacional.",
         )
 
-    mejor = best_found(claims)
-    if mejor is None:
+    encontradas = found(claims)
+    if not encontradas:
         return silencio_documental(
             CRITERION_ID,
             "Los documentos analizados no declaran el contexto organizacional (mision, partes"
@@ -50,7 +56,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             [c.id for c in claims],
         )
 
-    contenido = mejor.value.get("contenido") or {}
+    contenido, aportantes = merged_content(encontradas)
     declarados = [c for c in _CAMPOS if contenido.get(c) not in (None, "", [], {}, False)]
     faltantes = [_CAMPOS[c] for c in _CAMPOS if c not in declarados]
 
@@ -58,7 +64,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         return silencio_documental(
             CRITERION_ID,
             "La afirmacion de contexto no trae ninguno de los cinco datos de GV.OC.",
-            [mejor.id],
+            [c.id for c in encontradas],
         )
 
     detalle = f" Falta declarar: {', '.join(faltantes)}." if faltantes else ""
@@ -72,4 +78,10 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
         score = 50
         resumen = f"Contexto organizacional apenas esbozado ({len(declarados)} de 5 resultados)."
 
-    return result(CRITERION_ID, Estado.EVALUADO, score, resumen + detalle, [mejor.id])
+    return result(
+        CRITERION_ID,
+        Estado.EVALUADO,
+        score,
+        resumen + detalle,
+        [c.id for c in aportantes],
+    )

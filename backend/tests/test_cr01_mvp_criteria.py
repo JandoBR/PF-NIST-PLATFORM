@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from app.evaluation import engine
 from app.evaluation.rules import (
     de01_monitoring,
     gv02_roles,
@@ -187,6 +188,34 @@ def test_gv02_elige_el_rol_completo_entre_varios():
     assert gv02_roles.evaluate(evidence).final_score == 100
 
 
+def test_gv02_las_practicas_de_otro_fragmento_completan_el_rol():
+    """El rol completo y las practicas de GV.RR-03/04 pueden caer en fragmentos distintos del
+    mismo documento; antes solo contaba el fragmento elegido por su rol."""
+
+    rol = _claim(
+        "role_assigned",
+        {
+            "roles": [
+                {
+                    "rol": "CISO",
+                    "responsable": "Ana Torres",
+                    "responsabilidades": "programa de seguridad",
+                    "autoridad": "aprobar excepciones",
+                }
+            ]
+        },
+        confianza=0.95,
+    )
+    practicas = _claim(
+        "role_assigned", {"recursos_asignados": True, "practicas_rh": True}, confianza=0.7
+    )
+
+    result = gv02_roles.evaluate([practicas, rol])
+
+    assert result.final_score == 100
+    assert set(result.evidence_ids) == {rol.id, practicas.id}
+
+
 def test_gv02_no_declarado_es_insuficiente_no_0():
     """Conservador (docs/09 §60): que los documentos callen no prueba que no haya roles."""
 
@@ -246,6 +275,29 @@ def test_gv03_sin_tolerancia_es_50():
     assert gv03_risk_tolerance.evaluate(evidence).final_score == 50
 
 
+def test_gv03_la_estrategia_se_lee_de_todos_los_fragmentos_del_documento():
+    """Objetivos y tolerancia en un fragmento y las facetas en otro: antes puntuaba solo el
+    fragmento mas confiable (75) y perdia el resto de GV.RM."""
+
+    objetivos = _claim(
+        "risk_tolerance", {"objetivos_riesgo": "x", "tolerancia": "baja"}, confianza=0.95
+    )
+    facetas = _claim(
+        "risk_tolerance",
+        {
+            "integracion_empresarial": True,
+            "opciones_respuesta": True,
+            "metodo_estandarizado": True,
+        },
+        confianza=0.7,
+    )
+
+    result = gv03_risk_tolerance.evaluate([facetas, objetivos])
+
+    assert result.final_score == 100
+    assert set(result.evidence_ids) == {objetivos.id, facetas.id}
+
+
 def test_gv03_generico_es_25():
     evidence = [_claim("risk_tolerance", {})]
     assert gv03_risk_tolerance.evaluate(evidence).final_score == 25
@@ -285,6 +337,23 @@ def test_id03_registro_sin_impactos_ni_probabilidades_es_75():
 
     assert resultado.final_score == 75
     assert "ID.RA-04" in resultado.explanation
+
+
+def test_id03_registro_e_impactos_pueden_venir_en_otro_fragmento():
+    """El registro y los impactos/probabilidades de ID.RA-04 pueden estar en un fragmento distinto
+    del proceso: antes solo contaba el fragmento mas confiable (50)."""
+
+    proceso = _claim("process_defined", {"proceso": "riesgos", "pasos": "x"}, confianza=0.95)
+    registro = _claim(
+        "process_defined",
+        {"priorizacion": True, "impactos": True, "probabilidades": True},
+        confianza=0.7,
+    )
+
+    result = id03_risk_assessment.evaluate([registro, proceso])
+
+    assert result.final_score == 100
+    assert set(result.evidence_ids) == {proceso.id, registro.id}
 
 
 def test_id03_proceso_sin_registro_es_50():
@@ -370,6 +439,22 @@ def test_rc01_procedimiento_completo_es_100():
     assert rc01_recovery_procedure.evaluate(evidence).final_score == 100
 
 
+def test_rc01_los_criterios_de_activacion_pueden_venir_en_otro_fragmento():
+    procedimiento = _claim(
+        "process_defined",
+        {"proceso": "recuperacion", "pasos": "x", "responsables": "equipo"},
+        confianza=0.95,
+    )
+    activacion = _claim(
+        "process_defined", {"proceso": "recuperacion", "criterios_activacion": "y"}, confianza=0.7
+    )
+
+    result = rc01_recovery_procedure.evaluate([activacion, procedimiento])
+
+    assert result.final_score == 100
+    assert set(result.evidence_ids) == {procedimiento.id, activacion.id}
+
+
 def test_rc01_solo_backup_policy_es_50():
     evidence = [_claim("backup_policy", {"respaldo": True, "verificacion_integridad": True})]
     assert rc01_recovery_procedure.evaluate(evidence).final_score == 50
@@ -403,3 +488,145 @@ def test_de01_el_bucket_del_trail_no_cuenta_como_centralizacion():
 
 def test_de01_sin_configuracion_es_insuficiente():
     assert de01_monitoring.evaluate([]).estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+# --- Contradicciones dentro de un documento (docs/09 §101) ------------------------------------
+
+
+def test_gv02_a_document_that_denies_the_resources_in_another_fragment_does_not_get_them(
+    methodology,
+):
+    completa = _claim(
+        "role_assigned",
+        {
+            "roles": [
+                {
+                    "rol": "CISO",
+                    "responsable": "Ana",
+                    "responsabilidades": "programa",
+                    "autoridad": "decision",
+                }
+            ],
+            "recursos_asignados": False,
+            "practicas_rh": True,
+        },
+        confianza=0.95,
+    )
+    niega = _claim("role_assigned", {"recursos_asignados": True}, confianza=0.6)
+
+    (result,) = engine.evaluate_only(methodology, [niega, completa], ["CRI-GV-02"])
+
+    assert result.final_score == 75
+    assert "recursos asignados" in result.explanation
+    assert "se contradice sobre recursos_asignados" in result.explanation
+
+
+def test_gv02_the_same_resources_declared_in_another_document_do_count(methodology):
+    completa = _claim(
+        "role_assigned",
+        {
+            "roles": [
+                {
+                    "rol": "CISO",
+                    "responsable": "Ana",
+                    "responsabilidades": "programa",
+                    "autoridad": "decision",
+                }
+            ],
+            "recursos_asignados": False,
+            "practicas_rh": True,
+        },
+        confianza=0.95,
+    )
+    otra = _claim("role_assigned", {"recursos_asignados": True}, confianza=0.6).model_copy(
+        update={"subject_ref": "doc:otra-politica", "locator": Locator(file="otra.md")}
+    )
+
+    (result,) = engine.evaluate_only(methodology, [completa, otra], ["CRI-GV-02"])
+
+    assert result.final_score == 100
+    assert "se contradice" not in result.explanation
+
+
+def test_gv03_a_fragment_that_denies_a_facet_leaves_the_strategy_in_75(methodology):
+    estrategia = _claim(
+        "risk_tolerance",
+        {
+            "objetivos_riesgo": "x",
+            "tolerancia": "baja",
+            "integracion_empresarial": False,
+            "opciones_respuesta": True,
+            "lineas_comunicacion": True,
+        },
+        confianza=0.95,
+    )
+    niega = _claim("risk_tolerance", {"integracion_empresarial": True}, confianza=0.6)
+
+    (result,) = engine.evaluate_only(methodology, [niega, estrategia], ["CRI-GV-03"])
+
+    assert result.final_score == 75
+    assert "se contradice sobre integracion_empresarial" in result.explanation
+
+
+def test_gv03_the_facet_declared_in_another_document_counts(methodology):
+    estrategia = _claim(
+        "risk_tolerance",
+        {
+            "objetivos_riesgo": "x",
+            "tolerancia": "baja",
+            "integracion_empresarial": False,
+            "opciones_respuesta": True,
+            "lineas_comunicacion": True,
+        },
+        confianza=0.95,
+    )
+    otra = _claim("risk_tolerance", {"integracion_empresarial": True}, confianza=0.6).model_copy(
+        update={"subject_ref": "doc:otra-politica", "locator": Locator(file="otra.md")}
+    )
+
+    (result,) = engine.evaluate_only(methodology, [estrategia, otra], ["CRI-GV-03"])
+
+    assert result.final_score == 100
+    assert "se contradice" not in result.explanation
+
+
+def test_id03_a_fragment_that_denies_the_impacts_leaves_the_process_in_75(methodology):
+    proceso = _claim(
+        "process_defined",
+        {
+            "proceso": "riesgos",
+            "pasos": "x",
+            "registro_riesgos": True,
+            "impactos": False,
+            "probabilidades": False,
+        },
+        confianza=0.95,
+    )
+    niega = _claim("process_defined", {"proceso": "riesgos", "impactos": True}, confianza=0.6)
+
+    (result,) = engine.evaluate_only(methodology, [niega, proceso], ["CRI-ID-03"])
+
+    assert result.final_score == 75
+    assert "se contradice sobre impactos" in result.explanation
+
+
+def test_id03_impacts_declared_in_another_document_do_count(methodology):
+    proceso = _claim(
+        "process_defined",
+        {
+            "proceso": "riesgos",
+            "pasos": "x",
+            "registro_riesgos": True,
+            "impactos": False,
+            "probabilidades": False,
+        },
+        confianza=0.95,
+    )
+    otra = _claim(
+        "process_defined", {"proceso": "riesgos", "impactos": True}, confianza=0.6
+    ).model_copy(update={"subject_ref": "doc:otra-politica", "locator": Locator(file="otra.md")})
+
+    (result,) = engine.evaluate_only(methodology, [proceso, otra], ["CRI-ID-03"])
+
+    assert result.final_score == 100
+    assert "se contradice" not in result.explanation

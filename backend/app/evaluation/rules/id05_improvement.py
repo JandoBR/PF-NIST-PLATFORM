@@ -17,9 +17,11 @@ Oleada A la dejo fuera (docs/09 §72).
 from __future__ import annotations
 
 from app.evaluation.rules._common import (
-    best_found,
     by_type,
     doc_claims,
+    found,
+    latest_pattern,
+    merged_content,
     result,
     silencio_documental,
 )
@@ -31,10 +33,14 @@ CRITERION_VERSION = 2
 
 
 def _es_de_mejora(claim: EvidenceInstance) -> bool:
-    proceso = str((claim.value.get("contenido") or {}).get("proceso", "")).lower()
-    return any(
-        palabra in proceso
-        for palabra in ("mejora", "leccion", "lección", "lecciones", "retrospectiva", "madurez")
+    contenido = claim.value.get("contenido") or {}
+    proceso = str(contenido.get("proceso", "")).lower()
+    return bool(
+        any(
+            palabra in proceso
+            for palabra in ("mejora", "leccion", "lección", "lecciones", "retrospectiva", "madurez")
+        )
+        or contenido.get("planes_actualizados")
     )
 
 
@@ -42,19 +48,18 @@ def _ejercicio(evidence: list[EvidenceInstance]) -> EvidenceInstance | None:
     ventana = by_type(evidence, "log.window")
     if not ventana or not ventana[0].value["completo"]:
         return None
-    for item in by_type(evidence, "log.pattern"):
-        if item.value["patron"] == "restore_exercise_run":
-            return item
-    return None
+    return latest_pattern(evidence, "restore_exercise_run")
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     claims = doc_claims(evidence, "process_defined")
     candidatos = [c for c in claims if _es_de_mejora(c)]
-    mejor = best_found(candidatos)
+    encontradas = found(candidatos)
+    contenido, aportantes = merged_content(encontradas)
     ejercicio = _ejercicio(evidence)
+    ids = [c.id for c in aportantes or encontradas]
 
-    if mejor is None:
+    if not encontradas:
         if ejercicio is not None:
             return result(
                 CRITERION_ID,
@@ -78,7 +83,6 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Sin documentos analizados (o sin afirmaciones utilizables) sobre mejora continua.",
         )
 
-    contenido = mejor.value.get("contenido") or {}
     con_seguimiento = bool(contenido.get("metricas") or contenido.get("ajustes"))
     planes = bool(contenido.get("planes_actualizados"))
 
@@ -89,7 +93,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             100,
             "Ciclo de mejora con metricas/ajustes, un ejercicio observado que lo alimenta y planes"
             " que se mantienen con lo aprendido.",
-            [mejor.id, ejercicio.id],
+            [*ids, ejercicio.id],
         )
     if con_seguimiento and ejercicio is not None:
         return result(
@@ -98,7 +102,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             75,
             "Ciclo de mejora con metricas/ajustes y un ejercicio observado, pero no se declara que"
             " los planes se actualicen con lo aprendido (ID.IM-04).",
-            [mejor.id, ejercicio.id],
+            [*ids, ejercicio.id],
         )
     if con_seguimiento:
         return result(
@@ -106,7 +110,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             75,
             "Ciclo de mejora documentado con metricas/ajustes, sin ejercicios observados.",
-            [mejor.id],
+            ids,
         )
     if ejercicio is not None:
         return result(
@@ -115,12 +119,12 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             75,
             "Proceso de mejora documentado y ejercicio observado, sin metricas ni ajustes"
             " declarados.",
-            [mejor.id, ejercicio.id],
+            [*ids, ejercicio.id],
         )
     return result(
         CRITERION_ID,
         Estado.EVALUADO,
         50,
         "Mejora continua descrita de forma generica, sin metricas, ajustes ni ejercicios.",
-        [mejor.id],
+        ids,
     )

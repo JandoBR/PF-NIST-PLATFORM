@@ -11,7 +11,13 @@ tuvieron que limpiar (docs/09 §36, §57).
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, doc_claims, result, silencio_documental
+from app.evaluation.rules._common import (
+    doc_claims,
+    found,
+    merged_content,
+    result,
+    silencio_documental,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -30,20 +36,21 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             " concienciacion.",
         )
 
-    mejor = best_found(claims)
-    if mejor is None:
+    encontradas = found(claims)
+    if not encontradas:
         return silencio_documental(
             CRITERION_ID,
             "Los documentos analizados no declaran un programa de concienciacion ni de formacion.",
             [c.id for c in claims],
         )
 
-    contenido = mejor.value.get("contenido") or {}
+    contenido, aportantes = merged_content(encontradas)
+    ids = [c.id for c in aportantes or encontradas]
     if not contenido.get("programa"):
         return silencio_documental(
             CRITERION_ID,
             "La afirmacion no declara un programa de formacion (solo lo menciona).",
-            [mejor.id],
+            ids,
         )
 
     frecuencia = bool(contenido.get("frecuencia"))
@@ -56,7 +63,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             100,
             "Programa de concienciacion con periodicidad declarada y formacion especifica para"
             " roles especializados.",
-            [mejor.id],
+            ids,
         )
     if frecuencia:
         return result(
@@ -65,7 +72,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             75,
             "Programa de concienciacion con periodicidad declarada, sin formacion diferenciada"
             " para roles especializados (PR.AT-02).",
-            [mejor.id],
+            ids,
         )
     if por_rol:
         return result(
@@ -73,12 +80,12 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVALUADO,
             75,
             "Formacion para roles especializados declarada, sin periodicidad del programa general.",
-            [mejor.id],
+            ids,
         )
     return result(
         CRITERION_ID,
         Estado.EVALUADO,
         50,
         "Programa de formacion declarado sin periodicidad ni alcance por rol.",
-        [mejor.id],
+        ids,
     )
