@@ -30,7 +30,10 @@ from app.schemas.evidence import EvidenceInstance, Locator, Modality, Segmento
 #: que la Oleada A habia agregado sin bumpear (docs/09 §76).
 #: v4: `supplier_program`, `risk_tolerance` y `role_assigned` suman una faceta por subcategoria de
 #: GV.SC, GV.RM y GV.RR, que quedan completas (docs/09 §77).
-PROMPT_VERSION = "extract_v4"
+#: v5: un chunk agrupado puede traer varios tipos (y un inventario de activos junto a uno de datos);
+#: se pide extraer cada tipo por separado y reunir en `data_inventory.activos` los recursos
+#: tecnologicos de ambas secciones (docs/09 §103).
+PROMPT_VERSION = "extract_v5"
 
 #: Limitacion de una afirmacion cuya cita no aparece en el texto analizado (E8).
 CITA_NO_LOCALIZABLE = "cita no localizable en el texto analizado: no cuenta para puntuar"
@@ -66,7 +69,10 @@ _CONTENT_FIELDS: dict[str, str] = {
         " en la discusion del riesgo)"
     ),
     "data_inventory": (
-        "activos (lista de recursos), tipos_datos (lista), clasificacion (string|null),"
+        "activos (lista de recursos tecnologicos: tipos de recurso como aws_db_instance o"
+        " aws_s3_bucket, servidores, bases de datos, buckets, balanceadores, roles y politicas;"
+        " reune los del inventario de activos y los que menciona el de datos),"
+        " tipos_datos (lista de categorias de datos), clasificacion (string|null),"
         " criticidad (lista de {activo, nivel}|null)"
     ),
     "process_defined": (

@@ -1,5 +1,11 @@
 from app.ai.client import FakeAIClient
-from app.ai.extraction import extract_claims
+from app.ai.extraction import (
+    _CONTENT_FIELDS,
+    _SYSTEM_PROMPT,
+    PROMPT_VERSION,
+    _build_user_prompt,
+    extract_claims,
+)
 from app.schemas.evidence import Locator, Segmento
 
 LOCATOR = Locator(file="politica-seguridad.md", section="Politica de Seguridad de la Informacion")
@@ -393,3 +399,31 @@ def test_a_grouped_pdf_chunk_keeps_the_page_of_the_citation():
     )
 
     assert claim.locator.page == 4
+
+
+def test_prompt_v5_asks_for_each_type_independently():
+    """Un chunk agrupado trae varias secciones: la extraccion de un tipo no depende de los demas
+    (docs/09 §103)."""
+
+    assert PROMPT_VERSION == "extract_v5"
+    assert "cada tipo solicitado de forma independiente" in _SYSTEM_PROMPT
+    assert "varias secciones" in _SYSTEM_PROMPT
+
+
+def test_data_inventory_fields_include_technology_assets():
+    """El inventario de activos tecnologicos alimenta `data_inventory.activos`, que es lo que mira
+    CRI-ID-01; sin los tipos de recurso no hay cobertura verificable."""
+
+    campos = _CONTENT_FIELDS["data_inventory"]
+    assert "recursos tecnologicos" in campos
+    assert "aws_db_instance" in campos
+
+
+def test_user_prompt_declares_the_fields_of_every_requested_type():
+    prompt = _build_user_prompt("texto", ["data_inventory", "policy_exists"], "doc")
+
+    assert (
+        "Tipos de afirmacion a buscar en este fragmento: data_inventory, policy_exists." in prompt
+    )
+    assert "- data_inventory: activos (lista de recursos tecnologicos" in prompt
+    assert "- policy_exists: nombre (string), aprobada_por (string|null)" in prompt

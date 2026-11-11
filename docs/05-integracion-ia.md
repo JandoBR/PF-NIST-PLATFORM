@@ -39,6 +39,16 @@ no se localiza en ningún tramo (no debería: E8 ya lo validó) vale la primera.
 que fueron en un chunk respondido, `omitidas` las que dejó el tope y `sin_respuesta` las de un
 chunk que la IA no contestó.
 
+**Tipos independientes dentro del chunk (prompt v5, docs/09 §103).** Un chunk agrupado puede
+declarar varios tipos de afirmación a la vez, y el mismo tipo en secciones distintas (por ejemplo,
+un `## Inventario de activos` y un `## Inventario de datos`). `extract_v5` pide analizar cada tipo
+solicitado por separado y reunir en una sola afirmación del tipo lo que declare cada sección. En
+particular, el inventario de activos tecnológicos también es `data_inventory`: sus recursos (tipos
+`aws_*`, servidores, bases de datos, buckets, balanceadores, roles y políticas) van en
+`data_inventory.activos` junto a los del inventario de datos, porque CRI-ID-01 mide la cobertura de
+tipos de recurso sobre ese campo. `_CONTENT_FIELDS["data_inventory"]` nombra esos recursos para que
+el modelo no los confunda con categorías de datos (`tipos_datos`).
+
 ### 2.2 Contrato de salida (se valida estrictamente)
 
 ```json
