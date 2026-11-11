@@ -89,6 +89,30 @@ def test_upgrade_is_idempotent(tmp_path):
     assert second == []
 
 
+def test_ensure_schema_adds_the_ingest_identity_to_old_events(tmp_path, monkeypatch):
+    """Una BD de dev sin `events.ingest_id` ni `event_ingests` recibe ambos sin perder eventos."""
+
+    engine = _legacy_database(tmp_path, monkeypatch, "f3a1c9d2e4b7")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO organizations (id, nombre) VALUES ('o1', 'Org')"))
+        conn.execute(
+            text(
+                "INSERT INTO events (id, org_id, scope, event_id, event_time, tipo, recurso,"
+                " detalle, source_id, creado_en) VALUES ('ev1', 'o1', 'entorno:produccion',"
+                " 'e-1', '2026-09-20 03:10:00', 'auth_failure', 'srv-app-01', '{}',"
+                " 'siem-corp', '2026-09-20 03:11:00')"
+            )
+        )
+
+    ensure_schema(engine)
+
+    assert "ingest_id" in _columns(engine, "events")
+    assert "event_ingests" in inspect(engine).get_table_names()
+    with engine.begin() as conn:
+        ingest_id = conn.execute(text("SELECT ingest_id FROM events WHERE id = 'ev1'")).scalar_one()
+    assert ingest_id is None
+
+
 def test_ensure_schema_leaves_non_sqlite_engines_to_alembic(tmp_path):
     """`ensure_schema` no hace nada fuera de SQLite: ahi manda Alembic."""
 

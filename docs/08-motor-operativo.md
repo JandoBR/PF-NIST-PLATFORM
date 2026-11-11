@@ -43,27 +43,32 @@ El alcance de los datos es la **organización/entorno**, no la evaluación.
 
 ```text
 org / entorno
-  ├─ events        (continuo, append-only; cada uno con su `source_id`)
+  ├─ event_ingests (una fila por archivo subido)
+  ├─ events        (continuo, append-only; cada uno con su `source_id` y su `ingest_id`)
   ├─ log_patterns  (ventanas derivadas)
   ├─ incidents     (incidentes operativos)
   └─ plans         (origen = incidente)
-assessments consumen los eventos de los orígenes que se eligen al crearlas y derivan su propia
-evidencia log.window/log.pattern de esos eventos (docs/09 §98).
+assessments consumen las ingestas de eventos que se eligen al crearlas y derivan su propia
+evidencia log.window/log.pattern de esos eventos (docs/09 §102).
 ```
 
-Esquema completo de `events`, `log_patterns`, `incidents` y `plans` en `04-arquitectura-backend.md §4`
-(fuente canónica).
+Esquema completo de `event_ingests`, `events`, `log_patterns`, `incidents` y `plans` en
+`04-arquitectura-backend.md §4` (fuente canónica).
 
-**Selección de orígenes.** El evento identifica su origen en `source_id` (`fuente` declarada o el
-archivo del que vino, docs/06 §2). `GET /orgs/{org_id}/event-sources` lista los orígenes disponibles
-con su cantidad de eventos, rango y última ingesta. Al crear una evaluación se puede pasar
-`event_source_ids` (array JSON): omitirlo significa **todos** los orígenes del `org`+`scope` (lo que
-sigue haciendo el refresco automático), y `[]` significa **ninguno**. La evaluación recalcula los
-patrones **en memoria** sobre los eventos seleccionados con el mismo código determinista de la
-ingesta, en vez de leer `log_patterns`: así un log de otro escenario no se filtra en el cálculo, la
-correlación entre fuentes seleccionadas sigue siendo correcta y una fila duplicada o vieja no decide
-un criterio. La selección, el conteo, el rango y un `sha256` de los eventos canónicos quedan en
-`reproducibility.eventos` de la evaluación.
+**Selección de ingestas.** El evento identifica su sistema emisor en `source_id` (`fuente`
+declarada o el archivo del que vino, docs/06 §2), pero ese origen **no** separa un escenario de
+otro: los logs de ejemplo comparten `siem-corp`, `edr-endpoints`, `respaldo-bd` y
+`soar-respuesta`. La identidad que una evaluación elige es la **ingesta** (`events.ingest_id`), o
+sea el archivo que guardó el evento. `GET /orgs/{org_id}/event-ingests` lista las ingestas
+disponibles con su nombre de archivo, fecha de subida, cantidad de eventos, rango y sistemas
+emisores; los eventos anteriores a esta identidad se agrupan como `legacy`. Al crear una evaluación
+se puede pasar `event_ingest_ids` (array JSON): omitirlo significa **todas** las ingestas del
+`org`+`scope` (lo que sigue haciendo el refresco automático), y `[]` significa **ninguna**. La
+evaluación recalcula los patrones **en memoria** sobre los eventos seleccionados con el mismo código
+determinista de la ingesta, en vez de leer `log_patterns`: así un log de otro escenario no se filtra
+en el cálculo, la correlación entre fuentes seleccionadas sigue siendo correcta y una fila duplicada
+o vieja no decide un criterio. La selección, los nombres de archivo, el conteo, el rango y un
+`sha256` de los eventos canónicos quedan en `reproducibility.eventos` de la evaluación.
 
 ## 4. Entidad `incident`
 

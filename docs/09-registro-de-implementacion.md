@@ -3474,3 +3474,109 @@ del documento contradictorio), `test_document_extraction_text` (agrupación, pre
 sobredimensionada, bloques de código y páginas PDF) y `test_document_adapter` (locator por sección,
 tope y conteos). En la demo, las llamadas U1 bajan de 10→4 (`gaps`), 21→6 (`mid`) y 29→6 (`good`).
 Conjunto completo y `ruff` al final del cambio.
+
+## 102. La selección de eventos era por sistema emisor, y los tres escenarios comparten los mismos
+
+Al regenerar las capturas de la demo se ingirieron los tres logs de ejemplo
+(`flujo-correcto-demo.jsonl`, `incidentes-demo.jsonl`, `respuesta-parcial-demo.jsonl`) en la misma
+organización y se pidieron los orígenes disponibles: la respuesta mezclaba los tres archivos bajo
+`edr-endpoints`, `respaldo-bd`, `siem-corp` y `soar-respuesta`. El §98 había hecho que la evaluación
+eligiera "orígenes", pero el origen era `Event.source_id`, es decir el sistema **emisor** que declara
+la línea (`fuente`); los tres escenarios lo comparten. No había forma de decir "evalúa solo el log de
+respuesta parcial": elegir `siem-corp` traía eventos de los tres, y el escenario que se quería aislar
+se contaminaba igual que antes del §98. El fallo no se veía en los tests porque usaban escenarios con
+archivos de origen distinto (`events:<archivo>`), no los tres logs de la demo.
+
+**Qué cambió:**
+- `event_ingests` es la identidad nueva: una fila por archivo subido (`archivo`, `ruta`,
+  `ingerido_en`, `eventos`, `eventos_leidos`, `eventos_existentes`, `desde`, `hasta`, `fuentes[]`).
+  `events.ingest_id` apunta a ella y es nullable: los eventos ya guardados no tienen una ingesta que
+  los identifique. Migración `b8f2c5a91d47`; en SQLite de dev/test `ensure_schema` crea la tabla y
+  agrega la columna a las bases viejas sin tocar sus filas.
+- **Reingesta:** el evento duplicado conserva la ingesta que lo guardó primero. La subida nueva deja
+  su propia fila con `eventos = 0` y `eventos_existentes = <leídos>` como registro, pero no aparece en
+  la lista de ingestas elegibles: no aporta nada que una evaluación pueda consumir.
+- **Legacy:** los eventos sin `ingest_id` se agrupan en una pseudo-ingesta `legacy` por organización
+  (con la hora de su primer evento guardado y `archivo = null`), así una base anterior al cambio sigue
+  teniendo algo que elegir en vez de desaparecer del selector.
+- `GET /orgs/{org_id}/event-ingests` reemplaza a `/event-sources` (sin consumidores fuera del
+  frontend, que se actualiza en el mismo cambio): devuelve `ingest_id`, `archivo`, `ingerido_en`,
+  `eventos`, `desde`, `hasta` y `fuentes[]`, de la más reciente a la más antigua. El conteo, el rango
+  y las fuentes salen de los eventos guardados con ese `ingest_id` (y del `?scope=`), no del archivo
+  original: una reingesta parcial atribuye a cada ingesta solo lo que insertó.
+- `POST /assessments` acepta `event_ingest_ids` (mismo contrato que `event_source_ids`: omitido =
+  todas, `[]` = ninguna, id ajeno = 400). El payload del job y el reintento conservan la lista.
+- `surveillance_snapshot`/`collect_surveillance_evidence` filtran por `ingest_id` y siguen
+  recalculando los patrones en memoria. `log.window.source_id` vuelve a ser el conjunto de sistemas
+  emisores de los eventos elegidos (antes se estaba usando la selección como si fueran orígenes).
+  `reproducibility.eventos` guarda `todas`, `ingest_ids`, `archivos` (alineado con los ids, `null` en
+  legacy), `conteo`, `desde`, `hasta` y `sha256`. Reevaluación y refresco automático heredan la
+  selección por ingesta; una evaluación anterior al cambio (sin `ingest_ids`) se sigue tratando como
+  "todas".
+- `DELETE /orgs/{org_id}/events` borra también las ingestas de la organización.
+- Frontend: "Eventos operativos" lista una fila por ingesta con nombre de archivo, fecha de subida,
+  cantidad, rango y sistemas emisores (texto pequeño), todas marcadas por defecto; el dashboard
+  muestra los archivos usados o "Sin eventos operativos".
+
+**Verificación:** tests de `tests/test_assessment_event_sources.py` con los tres logs de la demo
+ingeridos en la misma organización: evaluar solo `incidentes-demo.jsonl` produce exactamente los
+patrones que ese archivo produce solo, aunque los tres declaren los mismos sistemas emisores; además
+reingesta sin duplicados, legacy seleccionable, 400 por id ajeno, endpoint, worker, herencia en
+reevaluación y refresco, y aislamiento por organización. `test_migrations` cubre la migración sobre
+una base con eventos viejos y `test_db_schema_upgrade` la reconciliación SQLite (columna nueva +
+tabla nueva sin perder eventos). `ruff` limpio; typecheck, lint y build del frontend limpios.
+
+## 103. Un chunk agrupado con inventario de activos y de datos: el modelo elegía uno de los dos
+
+**Síntoma.** En el bundle `good`, `gestion-de-riesgos.md` trae `## Inventario de activos` (ocho
+tipos de recurso `aws_*`) seguido de `## Inventario de datos`. Con el chunking agrupado de §101 el
+documento entero es un solo chunk, y en una corrida real U1 devolvió una única `data_inventory`
+cuyos `activos` eran categorías de datos ("base de datos de clientes", "repositorio de documentos"):
+CRI-ID-01 midió 0/8 tipos de Terraform y puntuó 25. Con un chunk por encabezado (§101 anterior) el
+mismo documento puntuaba 100.
+
+**Causa.** Se reprodujo con el cliente real de DeepSeek (`deepseek-flash`, temperatura 0) y el
+código de extracción de la app, sin caché: **N=6** corridas del chunk agrupado tal como lo arma el
+adaptador dieron 5/6 con los ocho `aws_*` en `data_inventory.activos` y **1/6 con cero**, el síntoma
+exacto; **N=4** corridas de la sección `## Inventario de activos` sola dieron 4/4. El prompt era el
+mismo en ambas variantes, así que la diferencia no es del prompt por sí solo ni pura varianza del
+modelo: al agrupar, las dos secciones compiten dentro del mismo fragmento y el prompt no decía cómo
+reconciliarlas (el inventario de activos también es `data_inventory`, pero `_CONTENT_FIELDS` lo
+describía como "lista de recursos" sin nombrar tipos de recurso). La varianza del modelo decide en
+qué corrida se pierde el inventario de activos, no si el riesgo existe.
+
+**Cambio.** `extract_v5` (el `extract_v4` queda intacto para trazabilidad) agrega dos párrafos: cada
+tipo solicitado se analiza de forma independiente y, si varias secciones declaran el mismo tipo, se
+reúnen en una sola afirmación; y el inventario de activos tecnológicos (tipos `aws_*`, servidores,
+bases de datos, buckets, balanceadores, roles y políticas) es `data_inventory` y sus recursos van en
+`activos`. `_CONTENT_FIELDS["data_inventory"].activos` nombra esos recursos y distingue
+`tipos_datos` (categorías de datos) de `activos` (recursos tecnológicos). `PROMPT_VERSION` sube a
+`extract_v5`; el esquema de respuesta y las reglas no cambian.
+
+**Evidencia (mismo código, misma metodología, sin caché).**
+
+| Variante | Corridas | `data_inventory` con `aws_*` |
+|---|---|---|
+| Agrupado, `gestion-de-riesgos.md`, antes | 6 | 5/6 (una corrida: 0 tipos, solo activos de datos) |
+| Sección `## Inventario de activos` sola, antes | 4 | 4/4 (ocho tipos) |
+| Agrupado, `mid/riesgos-e-inventario.md`, antes | 2 | 2/2 (`aws_db_instance`, `aws_s3_bucket`) |
+| Agrupado, `gestion-de-riesgos.md`, después | 10 | 10/10 (ocho tipos, en una sola afirmación con `tipos_datos` y `criticidad`) |
+| Sección sola, después | 4 | 4/4 (ocho tipos) |
+| Agrupado, `mid/riesgos-e-inventario.md`, después | 2 | 2/2 |
+
+Los otros cinco documentos del bundle `good` (y `continuidad`, `gobierno-y-proveedores`,
+`politica-seguridad` del `mid`) no declaran inventario: una corrida de cada uno no produjo
+`data_inventory` antes del cambio, que es el resultado correcto. Total de la investigación: 37
+llamadas reales, ninguna degradada; una llamada representativa del chunk agrupado consumió 2267
+tokens de prompt y 3921 de completion (6188 en total, 14 s).
+
+**Golden set.** No se regrabó nada: `golden_eval` no guarda respuestas por prompt ni indexa por
+texto del chunk (el cliente "oráculo" responde las anotaciones cuya cita aparece en el fragmento),
+así que la versión del prompt no participa del replay. La anotación de `gestion-de-riesgos.md` sigue
+valiendo (sigue esperando los activos de datos y la clasificación del inventario de datos). El único
+test que fijaba la versión es `test_op12_op14_ai_hardening`, actualizado a `extract_v5`.
+
+**Verificación:** tests nuevos en `test_ai_extraction` (la instrucción de independencia está en el
+prompt v5, `data_inventory.activos` nombra recursos tecnológicos y el prompt de usuario declara los
+campos de cada tipo pedido). `pytest` de `test_ai_extraction`, `test_op12_op14_ai_hardening`,
+`test_ai_golden` y `test_document_extraction_text` en verde, y `ruff` al final del cambio.

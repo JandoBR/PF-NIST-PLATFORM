@@ -19,10 +19,10 @@ import {
   getAssessment,
   getMethodology,
   isAbortError,
-  listEventSources,
+  listEventIngests,
   pollJob,
 } from '@/lib/api';
-import type { AssessmentAccepted, AssessmentDetail, EventSourceOut, JobEstado } from '@/lib/types';
+import type { AssessmentAccepted, AssessmentDetail, EventIngestOut, JobEstado } from '@/lib/types';
 
 interface ContextSelectorProps {
   open: boolean;
@@ -36,8 +36,20 @@ interface ContextSelectorProps {
 
 type Mode = 'demo' | 'custom';
 
-/** Scope por defecto del formulario: los orígenes de eventos se piden para ese mismo entorno. */
+/** Scope por defecto del formulario: las ingestas de eventos se piden para ese mismo entorno. */
 const ASSESSMENT_SCOPE = 'entorno:produccion';
+
+const RANGE_OPTIONS: Intl.DateTimeFormatOptions = {
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+};
+
+function rangeLabel(desde: string | null, hasta: string | null): string {
+  if (!desde || !hasta) return 'sin rango';
+  return `${formatDbDate(desde, 'es', RANGE_OPTIONS)} — ${formatDbDate(hasta, 'es', RANGE_OPTIONS)}`;
+}
 
 export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }: ContextSelectorProps) {
   const [mode, setMode] = useState<Mode>('demo');
@@ -45,8 +57,8 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
   const [terraformFiles, setTerraformFiles] = useState<File[]>([]);
   const [ansibleFiles, setAnsibleFiles] = useState<File[]>([]);
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
-  const [eventSources, setEventSources] = useState<EventSourceOut[]>([]);
-  const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [eventIngests, setEventIngests] = useState<EventIngestOut[]>([]);
+  const [selectedIngests, setSelectedIngests] = useState<string[]>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [jobEstado, setJobEstado] = useState<JobEstado | null>(null);
@@ -80,16 +92,16 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
     };
   }, [open]);
 
-  // Orígenes de eventos de la organización: se listan todos seleccionados por defecto, y el
-  // usuario puede excluir alguno (docs/09 §98). Si no hay eventos, la sección no se pinta.
+  // Ingestas de eventos de la organización: se listan todas seleccionadas por defecto, y el
+  // usuario puede excluir alguna (docs/09 §102). Si no hay ingestas, la sección no se pinta.
   useEffect(() => {
     if (!open) return;
     let vigente = true;
-    listEventSources(orgId, ASSESSMENT_SCOPE)
-      .then((sources) => {
+    listEventIngests(orgId, ASSESSMENT_SCOPE)
+      .then((ingests) => {
         if (!vigente) return;
-        setEventSources(sources);
-        setSelectedSources(sources.map((s) => s.source_id));
+        setEventIngests(ingests);
+        setSelectedIngests(ingests.map((i) => i.ingest_id));
       })
       .catch(() => undefined);
     return () => {
@@ -99,11 +111,11 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
 
   if (!open) return null;
 
-  function toggleSource(sourceId: string) {
-    setSelectedSources((current) =>
-      current.includes(sourceId)
-        ? current.filter((id) => id !== sourceId)
-        : [...current, sourceId]
+  function toggleIngest(ingestId: string) {
+    setSelectedIngests((current) =>
+      current.includes(ingestId)
+        ? current.filter((id) => id !== ingestId)
+        : [...current, ingestId]
     );
   }
 
@@ -117,9 +129,9 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    // Cuando hay orígenes se manda la lista explícita (aunque estén todos): así la evaluación no
-    // cambia de alcance si más tarde se ingiere otro log. Sin orígenes se omite (docs/09 §98).
-    const eventSourceIds = eventSources.length > 0 ? selectedSources : undefined;
+    // Cuando hay ingestas se manda la lista explícita (aunque estén todas): así la evaluación no
+    // cambia de alcance si más tarde se ingiere otro log. Sin ingestas se omite (docs/09 §102).
+    const eventIngestIds = eventIngests.length > 0 ? selectedIngests : undefined;
     try {
       let input;
       if (mode === 'demo') {
@@ -133,14 +145,14 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
           terraformFiles: tf,
           ansibleFiles: ans,
           documentFiles: docs,
-          eventSourceIds,
+          eventIngestIds,
         };
       } else {
         input = {
           terraformFiles,
           ansibleFiles,
           documentFiles,
-          eventSourceIds,
+          eventIngestIds,
         };
       }
 
@@ -281,24 +293,24 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
             )}
 
 
-            {eventSources.length > 0 && (
+            {eventIngests.length > 0 && (
               <div className="mt-5 rounded-xl border border-white/[0.06] bg-ink-900/30 p-4">
                 <div className="mb-1 flex items-center gap-2">
                   <Radar className="h-4 w-4 text-cyan-400" />
                   <h3 className="text-sm font-medium text-slate-200">Eventos operativos</h3>
                 </div>
                 <p className="mb-3 text-xs leading-relaxed text-slate-500">
-                  La evaluación solo leerá los eventos de los orígenes seleccionados. Si no eliges
-                  ninguno, evaluará sin evidencia operativa.
+                  La evaluación solo leerá los eventos de las ingestas seleccionadas. Si no eliges
+                  ninguna, evaluará sin evidencia operativa.
                 </p>
                 <div className="space-y-1.5">
-                  {eventSources.map((source) => {
-                    const active = selectedSources.includes(source.source_id);
+                  {eventIngests.map((ingesta) => {
+                    const active = selectedIngests.includes(ingesta.ingest_id);
                     return (
                       <button
-                        key={`${source.scope}:${source.source_id}`}
+                        key={ingesta.ingest_id}
                         type="button"
-                        onClick={() => toggleSource(source.source_id)}
+                        onClick={() => toggleIngest(ingesta.ingest_id)}
                         className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
                           active
                             ? 'border-cyan-500/40 bg-cyan-500/[0.07]'
@@ -316,23 +328,19 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-medium text-slate-200">
-                            {source.label}
+                            {ingesta.archivo ?? 'Eventos anteriores (sin ingesta registrada)'}
                           </span>
                           <span className="block text-[11px] text-slate-500">
-                            {source.eventos} evento{source.eventos === 1 ? '' : 's'} ·{' '}
-                            {formatDbDate(source.desde, 'es', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                            {' — '}
-                            {formatDbDate(source.hasta, 'es', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
+                            {ingesta.eventos} evento{ingesta.eventos === 1 ? '' : 's'} ·{' '}
+                            {rangeLabel(ingesta.desde, ingesta.hasta)}
+                          </span>
+                          <span className="block truncate text-[11px] text-slate-600">
+                            {ingesta.ingerido_en
+                              ? `Subido ${formatDbDate(ingesta.ingerido_en, 'es', RANGE_OPTIONS)}`
+                              : 'Subida sin fecha'}
+                            {ingesta.fuentes.length > 0
+                              ? ` · ${ingesta.fuentes.join(', ')}`
+                              : ''}
                           </span>
                         </span>
                       </button>

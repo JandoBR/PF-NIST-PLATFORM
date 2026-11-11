@@ -181,6 +181,35 @@ class PlanRow(Base):
     incident: Mapped[Incident | None] = relationship(back_populates="plans")
 
 
+class EventIngest(Base):
+    """Una ingesta: el archivo que se subio y lo que aporto (docs/09 §102).
+
+    Es la identidad que elige una evaluacion (docs/08 §3): el mismo `fuente` puede venir en varios
+    archivos, asi que el origen declarado por los eventos no sirve para separar un escenario de
+    otro. Los eventos de un archivo reingerido conservan la ingesta que los guardo primero; esta
+    fila queda como registro de la subida, con `eventos = 0` si no aporto ninguno nuevo.
+    """
+
+    __tablename__ = "event_ingests"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"))
+    #: Nombre del archivo subido (solo el basename, `safe_filename`).
+    archivo: Mapped[str] = mapped_column(String)
+    ruta: Mapped[str] = mapped_column(String)
+    ingerido_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    #: Eventos que esta ingesta guardo de verdad (los duplicados cuentan en
+    #: `eventos_existentes`, no aqui).
+    eventos: Mapped[int] = mapped_column(default=0)
+    eventos_leidos: Mapped[int] = mapped_column(default=0)
+    eventos_existentes: Mapped[int] = mapped_column(default=0)
+    desde: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    hasta: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fuentes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+
+
 class Event(Base):
     """Evento operativo, append-only, a nivel organizacion/entorno (docs/06 §2, docs/08 §3) —
     no pertenece a una evaluacion."""
@@ -197,6 +226,9 @@ class Event(Base):
     actor: Mapped[str | None] = mapped_column(String, nullable=True)
     detalle: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     source_id: Mapped[str] = mapped_column(String)
+    #: Ingesta que guardo el evento; `None` en los anteriores a la seleccion por ingesta, que se
+    #: agrupan como la pseudo-ingesta `legacy` (docs/09 §102).
+    ingest_id: Mapped[str | None] = mapped_column(ForeignKey("event_ingests.id"), nullable=True)
     creado_en: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

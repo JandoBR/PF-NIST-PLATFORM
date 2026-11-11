@@ -233,7 +233,9 @@ def cmd_events(args: argparse.Namespace) -> None:
         _abort(guard_error)
 
     client = _build_ai_client_if_needed(args.ai)
-    result = operations.ingest_events(session, methodology, args.org, args.jsonl, ai_client=client)
+    result = operations.ingest_events(
+        session, methodology, args.org, args.jsonl, ai_client=client, archivo=args.jsonl.name
+    )
 
     print(
         f"Eventos leidos: {result.eventos_ingeridos} "

@@ -94,11 +94,13 @@ export interface AssessmentDetail extends AssessmentSummary {
   reproducibility?: {
     adapters: Record<string, { adapter: string; parser?: string }>;
     ai: Record<string, string | null> | null;
-    /** Qué eventos operativos consumió la evaluación (docs/09 §98). Ausente en anteriores. */
+    /** Qué ingestas de eventos consumió la evaluación (docs/09 §102). Ausente en anteriores. */
     eventos?: {
-      /** La evaluación usó todos los orígenes del org+scope, no una lista explícita. */
+      /** La evaluación usó todas las ingestas del org+scope, no una lista explícita. */
       todas: boolean;
-      source_ids: string[];
+      ingest_ids: string[];
+      /** Nombre de archivo alineado con `ingest_ids`; `null` en la pseudo-ingesta legacy. */
+      archivos: (string | null)[];
       conteo: number;
       desde: string | null;
       hasta: string | null;
@@ -107,15 +109,16 @@ export interface AssessmentDetail extends AssessmentSummary {
   } | null;
 }
 
-/** Origen de eventos (`Event.source_id`) disponible para elegir al evaluar. */
-export interface EventSourceOut {
-  source_id: string;
-  label: string;
-  scope: string;
+/** Ingesta de eventos (un archivo subido) disponible para elegir al evaluar. */
+export interface EventIngestOut {
+  ingest_id: string;
+  /** `null` en la pseudo-ingesta `legacy`, que agrupa los eventos anteriores. */
+  archivo: string | null;
+  ingerido_en: string | null;
   eventos: number;
-  desde: string;
-  hasta: string;
-  ultima_ingesta: string | null;
+  desde: string | null;
+  hasta: string | null;
+  fuentes: string[];
 }
 
 export interface IncidentOut {

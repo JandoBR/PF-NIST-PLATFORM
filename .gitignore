@@ -51,3 +51,5 @@ backend/.data/
 *.njsproj
 *.sln
 *.sw?
+
+.opencode/

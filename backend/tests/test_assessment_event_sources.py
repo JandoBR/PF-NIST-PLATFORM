@@ -1,32 +1,37 @@
-"""Consumo explicito de eventos por evaluacion (docs/08 §3, docs/09 §98).
+"""Consumo explicito de eventos por evaluacion (docs/08 §3, docs/09 §102).
 
-Una evaluacion consume los origenes de eventos que se le piden, no todo lo guardado del org+scope:
-una ingesta de otro escenario no puede colarse en el calculo de madurez.
+Una evaluacion consume las ingestas de eventos que se le piden, no todo lo guardado del org+scope.
+Los tres escenarios de la demo comparten los mismos sistemas emisores (`fuente`): solo la ingesta
+(el archivo) separa un escenario de otro.
 """
 
 from pathlib import Path
 
 from app.core import assessment_service as svc
 from app.core import operations
-from app.models.tables import Event, Job
+from app.models.tables import Event, EventIngest, Job
 from tests.conftest import TEST_ORG_NAME, run_pending_jobs
 
 SCOPE = "entorno:produccion"
-SCENARIOS = Path(__file__).resolve().parent / "fixtures" / "scenarios"
+DEMO = Path(__file__).resolve().parents[2] / "frontend" / "public" / "demo" / "events"
+LOG_A = DEMO / "flujo-correcto-demo.jsonl"
+LOG_B = DEMO / "incidentes-demo.jsonl"
+LOG_C = DEMO / "respuesta-parcial-demo.jsonl"
 TERRAFORM_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "terraform"
-LOG_A = SCENARIOS / "e1b_fallos_sin_alerta.jsonl"
-LOG_B = SCENARIOS / "e2_flujo_correcto.jsonl"
-SOURCE_A = f"events:{LOG_A.name}"
-SOURCE_B = f"events:{LOG_B.name}"
 
 
-def _ingest_both(db_session, methodology) -> None:
-    operations.ingest_events(db_session, methodology, "Empresa Fuentes", LOG_A)
-    operations.ingest_events(db_session, methodology, "Empresa Fuentes", LOG_B)
+def _ingest(db_session, methodology, org: str, path: Path):
+    return operations.ingest_events(db_session, methodology, org, path)
 
 
 def _patterns(evidence):
     return [e for e in evidence if e.type_id == "log.pattern"]
+
+
+def _pattern_signature(evidence):
+    return {
+        (e.value["patron"], e.value["resultado"], e.value["conteo"]) for e in _patterns(evidence)
+    }
 
 
 def _upload_terraform(api_client, fixture: str, **form):
@@ -39,93 +44,153 @@ def _upload_terraform(api_client, fixture: str, **form):
         )
 
 
-def test_a_subset_of_sources_only_sees_its_own_events_and_patterns(db_session, methodology):
-    _ingest_both(db_session, methodology)
+def test_a_scenario_is_isolated_even_when_the_emitting_systems_overlap(db_session, methodology):
+    ingesta_a = _ingest(db_session, methodology, "Empresa Fuentes", LOG_A)
+    ingesta_b = _ingest(db_session, methodology, "Empresa Fuentes", LOG_B)
+    _ingest(db_session, methodology, "Empresa Fuentes", LOG_C)
 
-    assessment = svc.run_assessment(
+    solo_b = svc.run_assessment(
         db_session,
         methodology,
         org_name="Empresa Fuentes",
         scope=SCOPE,
-        event_source_ids=[SOURCE_B],
+        event_ingest_ids=[ingesta_b.ingest_id],
     )
-    evidence = svc.load_evidence(db_session, assessment.id)
-    patrones = {e.value["patron"] for e in _patterns(evidence)}
+    _ingest(db_session, methodology, "Empresa Base", LOG_B)
+    base = svc.run_assessment(db_session, methodology, org_name="Empresa Base", scope=SCOPE)
+    todos = svc.run_assessment(db_session, methodology, org_name="Empresa Fuentes", scope=SCOPE)
 
-    assert "incident_declared" in patrones and "escalation_done" in patrones
-    assert "auth_failures_burst" not in patrones  # ese patron es del log A, no seleccionado
-    window = next(e for e in evidence if e.type_id == "log.window")
-    assert window.source_id == SOURCE_B
-    assert window.value["desde"].startswith("2026-09-20T03:14:00")
+    evidencia_b = svc.load_evidence(db_session, solo_b.id)
+    assert _pattern_signature(evidencia_b) == _pattern_signature(
+        svc.load_evidence(db_session, base.id)
+    )
+    assert _pattern_signature(evidencia_b) != _pattern_signature(
+        svc.load_evidence(db_session, todos.id)
+    )
+
+    window = next(e for e in evidencia_b if e.type_id == "log.window")
+    assert window.source_id == "siem-corp"
+    assert solo_b.reproducibility["eventos"]["ingest_ids"] == [ingesta_b.ingest_id]
+    assert solo_b.reproducibility["eventos"]["archivos"] == [LOG_B.name]
+    assert ingesta_a.ingest_id != ingesta_b.ingest_id
 
 
-def test_omitting_the_selection_keeps_using_every_source(db_session, methodology):
-    _ingest_both(db_session, methodology)
+def test_omitting_the_selection_keeps_using_every_ingest(db_session, methodology):
+    _ingest(db_session, methodology, "Empresa Fuentes", LOG_A)
+    _ingest(db_session, methodology, "Empresa Fuentes", LOG_B)
+    ingesta_c = _ingest(db_session, methodology, "Empresa Fuentes", LOG_C)
 
     assessment = svc.run_assessment(
         db_session, methodology, org_name="Empresa Fuentes", scope=SCOPE
     )
-    evidence = svc.load_evidence(db_session, assessment.id)
-    patrones = {e.value["patron"] for e in _patterns(evidence)}
+    patrones = {e.value["patron"] for e in _patterns(svc.load_evidence(db_session, assessment.id))}
 
-    assert {"auth_failures_burst", "incident_declared", "escalation_done"} <= patrones
+    assert {"auth_failures_burst", "incident_declared", "containment_done"} <= patrones
     eventos = assessment.reproducibility["eventos"]
     assert eventos["todas"] is True
-    assert eventos["source_ids"] == sorted([SOURCE_A, SOURCE_B])
-    assert eventos["conteo"] == 9
+    assert eventos["conteo"] == 37
+    assert len(eventos["ingest_ids"]) == 3
+    assert ingesta_c.ingest_id in eventos["ingest_ids"]
+    assert LOG_C.name in eventos["archivos"]
 
 
 def test_empty_selection_consumes_no_events(db_session, methodology):
-    _ingest_both(db_session, methodology)
+    _ingest(db_session, methodology, "Empresa Fuentes", LOG_A)
+    _ingest(db_session, methodology, "Empresa Fuentes", LOG_B)
 
     assessment = svc.run_assessment(
         db_session,
         methodology,
         org_name="Empresa Fuentes",
         scope=SCOPE,
-        event_source_ids=[],
+        event_ingest_ids=[],
     )
     evidence = svc.load_evidence(db_session, assessment.id)
 
     assert not [e for e in evidence if e.type_id in {"log.window", "log.pattern"}]
     eventos = assessment.reproducibility["eventos"]
     assert eventos["todas"] is False
-    assert eventos["source_ids"] == []
+    assert eventos["ingest_ids"] == []
+    assert eventos["archivos"] == []
     assert eventos["conteo"] == 0
     assert eventos["desde"] is None and eventos["hasta"] is None
     assert len(eventos["sha256"]) == 64
 
 
-def test_reproducibility_records_selection_range_and_a_stable_hash(db_session, methodology):
-    _ingest_both(db_session, methodology)
+def test_reproducibility_records_the_ingest_range_and_a_stable_hash(db_session, methodology):
+    ingesta_a = _ingest(db_session, methodology, "Empresa Fuentes", LOG_A)
+    ingesta_b = _ingest(db_session, methodology, "Empresa Fuentes", LOG_B)
+    ingesta_c = _ingest(db_session, methodology, "Empresa Fuentes", LOG_C)
 
-    solo_a = svc.run_assessment(
+    solo_c = svc.run_assessment(
         db_session,
         methodology,
         org_name="Empresa Fuentes",
         scope=SCOPE,
-        event_source_ids=[SOURCE_A],
+        event_ingest_ids=[ingesta_c.ingest_id],
     )
     solo_b = svc.run_assessment(
         db_session,
         methodology,
         org_name="Empresa Fuentes",
         scope=SCOPE,
-        event_source_ids=[SOURCE_B],
+        event_ingest_ids=[ingesta_b.ingest_id],
     )
 
-    eventos_a = solo_a.reproducibility["eventos"]
+    eventos_c = solo_c.reproducibility["eventos"]
     eventos_b = solo_b.reproducibility["eventos"]
-    assert eventos_a["source_ids"] == [SOURCE_A]
-    assert eventos_a["conteo"] == 6
-    assert eventos_a["desde"] == "2026-09-20T03:10:00+00:00"
-    assert eventos_a["hasta"] == "2026-09-20T03:10:50+00:00"
-    assert len(eventos_a["sha256"]) == 64
-    assert eventos_a["sha256"] != eventos_b["sha256"]
+    assert eventos_c["ingest_ids"] == [ingesta_c.ingest_id]
+    assert eventos_c["archivos"] == [LOG_C.name]
+    assert eventos_c["conteo"] == 13
+    assert eventos_c["desde"] == "2026-09-20T03:10:00+00:00"
+    assert eventos_c["hasta"] == "2026-09-20T10:40:00+00:00"
+    assert len(eventos_c["sha256"]) == 64
+    assert eventos_c["sha256"] != eventos_b["sha256"]
+    assert ingesta_a.ingest_id not in eventos_c["ingest_ids"]
 
 
-def test_patterns_are_detected_once_per_type_across_sources(db_session, methodology):
-    _ingest_both(db_session, methodology)
+def test_reingesting_the_same_file_keeps_the_first_ingest(db_session, methodology):
+    first = _ingest(db_session, methodology, "Empresa Repetida", LOG_B)
+    second = _ingest(db_session, methodology, "Empresa Repetida", LOG_B)
+
+    assert (second.eventos_nuevos, second.eventos_existentes) == (0, 9)
+    filas = db_session.query(EventIngest).order_by(EventIngest.ingerido_en).all()
+    assert len(filas) == 2
+    segunda = db_session.get(EventIngest, second.ingest_id)
+    assert (segunda.eventos, segunda.eventos_leidos, segunda.eventos_existentes) == (0, 9, 9)
+    assert {e.ingest_id for e in db_session.query(Event).all()} == {first.ingest_id}
+    assert [i.ingest_id for i in svc.list_event_ingests(db_session, first.org_id, SCOPE)] == [
+        first.ingest_id
+    ]
+
+
+def test_events_without_ingest_identity_stay_selectable_as_legacy(db_session, methodology):
+    ingesta = _ingest(db_session, methodology, "Empresa Legado", LOG_B)
+    for evento in db_session.query(Event).all():
+        evento.ingest_id = None
+    db_session.commit()
+
+    resumen = svc.list_event_ingests(db_session, ingesta.org_id, SCOPE)
+    assert [(i.ingest_id, i.archivo, i.eventos) for i in resumen] == [("legacy", None, 9)]
+
+    assessment = svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Legado",
+        scope=SCOPE,
+        event_ingest_ids=["legacy"],
+    )
+    patrones = {e.value["patron"] for e in _patterns(svc.load_evidence(db_session, assessment.id))}
+    assert "incident_declared" in patrones
+    eventos = assessment.reproducibility["eventos"]
+    assert eventos["ingest_ids"] == ["legacy"]
+    assert eventos["archivos"] == [None]
+    assert eventos["conteo"] == 9
+
+
+def test_patterns_are_detected_once_per_type_across_ingests(db_session, methodology):
+    _ingest(db_session, methodology, "Empresa Fuentes", LOG_A)
+    _ingest(db_session, methodology, "Empresa Fuentes", LOG_C)
 
     assessment = svc.run_assessment(
         db_session, methodology, org_name="Empresa Fuentes", scope=SCOPE
@@ -136,26 +201,32 @@ def test_patterns_are_detected_once_per_type_across_sources(db_session, methodol
     assert patrones.count("auth_failures_burst") == 1
 
 
-def test_event_sources_endpoint_lists_origins_with_their_range(
+def test_event_ingests_endpoint_lists_file_count_and_range(
     api_client, db_session, methodology, auth_user
 ):
-    operations.ingest_events(db_session, methodology, TEST_ORG_NAME, LOG_A)
-    operations.ingest_events(db_session, methodology, TEST_ORG_NAME, LOG_B)
+    ingesta_a = _ingest(db_session, methodology, TEST_ORG_NAME, LOG_A)
+    ingesta_b = _ingest(db_session, methodology, TEST_ORG_NAME, LOG_B)
 
-    response = api_client.get(f"/orgs/{auth_user.org_id}/event-sources", params={"scope": SCOPE})
+    response = api_client.get(f"/orgs/{auth_user.org_id}/event-ingests", params={"scope": SCOPE})
 
     assert response.status_code == 200
-    by_id = {s["source_id"]: s for s in response.json()}
-    assert set(by_id) == {SOURCE_A, SOURCE_B}
-    assert by_id[SOURCE_A]["eventos"] == 6
-    assert by_id[SOURCE_A]["desde"].startswith("2026-09-20T03:10:00")
-    assert by_id[SOURCE_A]["ultima_ingesta"] is not None
+    by_id = {i["ingest_id"]: i for i in response.json()}
+    assert set(by_id) == {ingesta_a.ingest_id, ingesta_b.ingest_id}
+    assert by_id[ingesta_a.ingest_id]["archivo"] == LOG_A.name
+    assert by_id[ingesta_a.ingest_id]["eventos"] == 15
+    assert by_id[ingesta_a.ingest_id]["desde"].startswith("2026-09-20T03:10:00")
+    assert by_id[ingesta_a.ingest_id]["ingerido_en"] is not None
+    assert by_id[ingesta_a.ingest_id]["fuentes"] == [
+        "edr-endpoints",
+        "respaldo-bd",
+        "siem-corp",
+        "soar-respuesta",
+    ]
+    assert response.json()[0]["ingest_id"] == ingesta_b.ingest_id
 
 
-def test_api_rejects_event_sources_from_another_org(api_client):
-    response = _upload_terraform(
-        api_client, "good", event_source_ids='["events:de-otra-org.jsonl"]'
-    )
+def test_api_rejects_event_ingests_from_another_org(api_client):
+    response = _upload_terraform(api_client, "good", event_ingest_ids='["legacy"]')
 
     assert response.status_code == 400
 
@@ -163,57 +234,74 @@ def test_api_rejects_event_sources_from_another_org(api_client):
 def test_api_selection_reaches_the_worker_and_the_evidence(
     api_client, db_session, methodology, fake_redis, auth_user
 ):
-    operations.ingest_events(db_session, methodology, TEST_ORG_NAME, LOG_A)
-    operations.ingest_events(db_session, methodology, TEST_ORG_NAME, LOG_B)
+    _ingest(db_session, methodology, TEST_ORG_NAME, LOG_A)
+    ingesta_b = _ingest(db_session, methodology, TEST_ORG_NAME, LOG_B)
 
-    accepted = _upload_terraform(api_client, "good", event_source_ids=f'["{SOURCE_B}"]').json()
+    accepted = _upload_terraform(
+        api_client, "good", event_ingest_ids=f'["{ingesta_b.ingest_id}"]'
+    ).json()
     run_pending_jobs(db_session, methodology, fake_redis)
 
     evidence = api_client.get(f"/assessments/{accepted['assessment_id']}/evidence").json()
     patrones = [e["value"]["patron"] for e in evidence if e["type_id"] == "log.pattern"]
-    assert "auth_failures_burst" not in patrones
+    assert "containment_done" not in patrones
 
     detail = api_client.get(f"/assessments/{accepted['assessment_id']}").json()
-    assert detail["reproducibility"]["eventos"]["source_ids"] == [SOURCE_B]
+    assert detail["reproducibility"]["eventos"]["ingest_ids"] == [ingesta_b.ingest_id]
+    assert detail["reproducibility"]["eventos"]["archivos"] == [LOG_B.name]
 
 
-def test_reevaluation_inherits_an_explicit_selection(
+def test_reevaluation_inherits_an_explicit_ingest_selection(
     api_client, db_session, methodology, fake_redis, auth_user
 ):
-    operations.ingest_events(db_session, methodology, TEST_ORG_NAME, LOG_A)
-    operations.ingest_events(db_session, methodology, TEST_ORG_NAME, LOG_B)
-    accepted = _upload_terraform(api_client, "good", event_source_ids=f'["{SOURCE_B}"]').json()
+    _ingest(db_session, methodology, TEST_ORG_NAME, LOG_A)
+    ingesta_b = _ingest(db_session, methodology, TEST_ORG_NAME, LOG_B)
+    accepted = _upload_terraform(
+        api_client, "good", event_ingest_ids=f'["{ingesta_b.ingest_id}"]'
+    ).json()
     run_pending_jobs(db_session, methodology, fake_redis)
 
     reeval = api_client.post(f"/assessments/{accepted['assessment_id']}/reevaluate")
 
     assert reeval.status_code == 202
     job = db_session.get(Job, reeval.json()["job_id"])
-    assert job.payload["event_source_ids"] == [SOURCE_B]
+    assert job.payload["event_ingest_ids"] == [ingesta_b.ingest_id]
 
 
-def test_auto_refresh_inherits_the_explicit_selection(db_session, methodology, fake_redis):
+def test_auto_refresh_inherits_the_explicit_ingest_selection(db_session, methodology, fake_redis):
     from app.core import refresh
 
-    _ingest_both(db_session, methodology)
+    _ingest(db_session, methodology, "Empresa Fuentes", LOG_A)
+    ingesta_b = _ingest(db_session, methodology, "Empresa Fuentes", LOG_B)
     previous = svc.run_assessment(
         db_session,
         methodology,
         org_name="Empresa Fuentes",
         scope=SCOPE,
-        event_source_ids=[SOURCE_B],
+        event_ingest_ids=[ingesta_b.ingest_id],
     )
 
     _, job = refresh.enqueue_surveillance_refresh(db_session, methodology, fake_redis, previous.id)
 
-    assert job.payload["event_source_ids"] == [SOURCE_B]
+    assert job.payload["event_ingest_ids"] == [ingesta_b.ingest_id]
 
 
-def test_event_sources_are_scoped_to_the_org(db_session, methodology):
-    _ingest_both(db_session, methodology)
+def test_clearing_the_operational_data_also_removes_the_ingests(db_session, methodology):
+    ingesta = _ingest(db_session, methodology, "Empresa Limpia", LOG_B)
+
+    operations.clear_operational_data(db_session, ingesta.org_id)
+
+    assert db_session.query(EventIngest).count() == 0
+    assert svc.list_event_ingests(db_session, ingesta.org_id, SCOPE) == []
+
+
+def test_event_ingests_are_scoped_to_the_org(db_session, methodology):
+    _ingest(db_session, methodology, "Empresa Fuentes", LOG_A)
+    _ingest(db_session, methodology, "Empresa Otra", LOG_B)
     org_id = db_session.query(Event).first().org_id
 
-    sources = svc.list_event_sources(db_session, org_id, SCOPE)
+    ingests = svc.list_event_ingests(db_session, org_id, SCOPE)
 
-    assert {s.source_id for s in sources} == {SOURCE_A, SOURCE_B}
-    assert svc.list_event_sources(db_session, "otra-org", SCOPE) == []
+    assert len(ingests) == 1
+    assert ingests[0].archivo == LOG_A.name
+    assert svc.list_event_ingests(db_session, "otra-org", SCOPE) == []

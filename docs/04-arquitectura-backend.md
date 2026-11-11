@@ -139,7 +139,8 @@ porque toca el modelo de evidencias.
 | `tier_estimates` | `id`, `assessment_id`, `tier`, `provisional bool`, `justificacion`, `faltantes jsonb` |
 | `findings` | `id`, `assessment_id`, `criterion_id`, `tipo` (`brecha`\|`contradiccion`\|`limitacion`), `titulo`, `detalle`, `severidad`, `evidence_ids[]` |
 | `plans` | `id`, `incident_id?`, `assessment_id?`, `criterion_id`, `origen` (`criterio`\|`evento`), `titulo`, `prioridad`, `objetivo`, `pasos jsonb`, `verificacion`, `dependencias jsonb`, `estado` (`pendiente`\|`en_progreso`\|`hecho`, **seguimiento, no puntaje** — docs/05 §4.4), `generado_por`, `diagnostico_observable?`, `hipotesis jsonb`, `comprobaciones_seguras jsonb`, `advertencia?`, `creado_en` |
-| `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id` |
+| `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id`, `ingest_id?` (ingesta que lo guardó; `NULL` en los anteriores, docs/09 §102), `creado_en` |
+| `event_ingests` | `id`, `org_id`, `archivo`, `ruta`, `ingerido_en`, `eventos`, `eventos_leidos`, `eventos_existentes`, `desde?`, `hasta?`, `fuentes[]`. Una fila por `POST /orgs/{org_id}/events` (docs/09 §102); la reingesta sin eventos nuevos queda con `eventos = 0` |
 | `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `fuentes[]` (origen de los eventos, FN-07), `creado_en` |
 | `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `criterios[]`, `timeline jsonb`, `motivo_cierre?`, `creado_en`, `actualizado_en`. Único por (`org_id`, `scope`, `correlation_key`): la clave sale de los eventos y dos organizaciones pueden compartirla (docs/09 §62); el `scope` separa producción de staging (docs/09 §88) |
 | `jobs` | `id`, `assessment_id?`, `org_id?`, `tipo`, `estado`, `progreso`, `error`, `payload?` (entradas para reintentar, docs/09 §46), `resultado?` (resumen de la ingesta, FN-03), `creado_en`, `tomado_en`, `actualizado_en` |
@@ -196,7 +197,7 @@ persiste la evidencia y evalúa todos los criterios. El **refresco selectivo** t
 |---|---|---|
 | `POST` | `/auth/login` | Login (usuario/contraseña) → token + usuario. Público. |
 | `GET` | `/auth/me` | Usuario de la sesión actual. |
-| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). Un `context` que no sea un objeto JSON da 422 antes de crear nada. `event_source_ids` (array JSON, opcional) limita los eventos consumidos: omitido = todos los del org+scope, `[]` = ninguno; un origen ajeno a la organización da 400 (docs/09 §98). |
+| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). Un `context` que no sea un objeto JSON da 422 antes de crear nada. `event_ingest_ids` (array JSON, opcional) limita las ingestas de eventos consumidas: omitido = todas las del org+scope, `[]` = ninguna; una ingesta ajena a la organización da 400 (docs/09 §102). |
 | `GET` | `/assessments` | Lista de evaluaciones de la organización (cada una con su resumen/Tier). |
 | `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
 | `GET` | `/jobs` | Historial de jobs de la organización, del más reciente al más antiguo. Filtros `estado`, `tipo` y `limit` (1–200, por defecto 50). Marca `fallido` los jobs activos que se quedaron colgados antes de listar (docs/09 §45). |
@@ -212,9 +213,9 @@ persiste la evidencia y evalúa todos los criterios. El **refresco selectivo** t
 | `PATCH` | `/assessments/{id}/plans/{plan_id}` | Cambia el estado de seguimiento del plan (`pendiente`\|`en_progreso`\|`hecho`). No afecta el puntaje (docs/05 §4.4). |
 | `GET` | `/orgs` | Organización de la sesión (solo la propia). |
 | `POST` | `/orgs/{org_id}/events` | Carga eventos al stream de la organización (JSONL); encola `event_ingest`. |
-| `DELETE` | `/orgs/{id}/events` | Borra eventos, patrones e incidentes (con sus planes) de la organización. Lo usan los logs de ejemplo de la UI para empezar de cero; las evaluaciones ya hechas no cambian. 409 si hay una ingesta en curso (docs/09 §59). |
+| `DELETE` | `/orgs/{id}/events` | Borra eventos, patrones, ingestas e incidentes (con sus planes) de la organización. Lo usan los logs de ejemplo de la UI para empezar de cero; las evaluaciones ya hechas no cambian. 409 si hay una ingesta en curso (docs/09 §59). |
 | `GET` | `/orgs/{org_id}/incidents` | Lista incidentes operativos (filtrable por estado/severidad). |
-| `GET` | `/orgs/{org_id}/event-sources` | Orígenes de eventos (`Event.source_id`) de la organización, con `label`, `scope`, cantidad de eventos, rango `desde`/`hasta` y última ingesta (`?scope=` opcional). La UI los ofrece al crear la evaluación (docs/09 §98). |
+| `GET` | `/orgs/{org_id}/event-ingests` | Ingestas de eventos de la organización (`?scope=` opcional): `ingest_id`, `archivo`, `ingerido_en`, `eventos`, rango `desde`/`hasta` y `fuentes[]`, de la más reciente a la más antigua. Los eventos anteriores a la identidad por ingesta se agrupan como `legacy`. La UI las ofrece al crear la evaluación (docs/09 §102). |
 | `GET` | `/incidents/{id}` | Detalle, timeline y hechos del incidente. |
 | `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |
 | `PATCH` | `/incidents/{id}` | Cambia el estado del incidente (`open`…`closed`). Un paso por vez, sin retroceder; `closed` (terminal, desde cualquier estado abierto) exige `motivo` y lo mueve al historial. Transición inválida o sin motivo → 409 (docs/08 §4, docs/09 §52). |

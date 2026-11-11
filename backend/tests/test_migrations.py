@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "criterion_results",
     "plans",
     "events",
+    "event_ingests",
     "log_patterns",
     "incidents",
 }
@@ -224,3 +225,34 @@ def test_existing_incidents_survive_the_scope_migration(tmp_path, monkeypatch):
         total = conn.execute(text("SELECT count(*) FROM incidents")).scalar_one()
 
     assert total == 2
+
+
+def test_event_ingest_migration_keeps_existing_events_as_legacy(tmp_path, monkeypatch):
+    """Los eventos guardados antes de la identidad por ingesta quedan sin `ingest_id` (legacy)."""
+
+    db_path = tmp_path / "ingestas.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    _upgrade("f3a1c9d2e4b7")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO organizations (id, nombre) VALUES ('o1', 'Org')"))
+        conn.execute(
+            text(
+                "INSERT INTO events (id, org_id, scope, event_id, event_time, tipo, recurso,"
+                " detalle, source_id, creado_en) VALUES ('ev1', 'o1', 'entorno:produccion',"
+                " 'e-1', '2026-09-20 03:10:00', 'auth_failure', 'srv-app-01', '{}',"
+                " 'siem-corp', '2026-09-20 03:11:00')"
+            )
+        )
+
+    _upgrade_head()
+
+    inspector = inspect(engine)
+    assert "event_ingests" in inspector.get_table_names()
+    columnas = {c["name"]: c for c in inspector.get_columns("events")}
+    assert columnas["ingest_id"]["nullable"] is True
+    with engine.begin() as conn:
+        ingest_id = conn.execute(text("SELECT ingest_id FROM events WHERE id = 'ev1'")).scalar_one()
+        ingestas = conn.execute(text("SELECT count(*) FROM event_ingests")).scalar_one()
+    assert ingest_id is None and ingestas == 0

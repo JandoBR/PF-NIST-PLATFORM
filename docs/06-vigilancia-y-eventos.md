@@ -37,7 +37,9 @@ Formato JSONL, un evento por línea:
 ```
 
 > `fuente` es el campo del contrato JSONL; al normalizar se persiste como `source_id` en `events`
-> (docs/04 §4). Los demás campos se conservan.
+> (docs/04 §4). Los demás campos se conservan. Además, cada evento guarda el `ingest_id` de la
+> subida que lo insertó (docs/09 §102): es la identidad que separa un archivo de otro, porque dos
+> escenarios pueden declarar los mismos sistemas emisores.
 
 Campos obligatorios: `event_id`, `event_time`, `tipo`, `recurso`, `scope`.
 `event_time` es el **tiempo del evento**, no el de reproducción. Se normaliza a UTC: un valor sin
@@ -192,13 +194,15 @@ intervalo o su conteo; reingerir el mismo archivo agrega 0 patrones y no dispara
 pertenecen a una evaluación: se ingieren y consultan aunque nunca se haya evaluado. Si no hay una
 evaluación completada previa, simplemente no hay nada que refrescar.
 
-**Selección explícita de orígenes (docs/09 §98).** Una evaluación consume solo los orígenes de
-eventos que se le indican al crearla (`event_source_ids`); omitirlo significa todos los del
-`org`+`scope` y `[]` significa ninguno. La `log.window` y los `log.pattern` se derivan únicamente de
-esos eventos, recalculando los patrones en memoria con el código de la ingesta: no se leen filas de
-`log_patterns`, de modo que un log de otro escenario no puede colarse ni una fila vieja puede decidir
-un criterio. La selección queda registrada en `reproducibility.eventos`, junto con el conteo, el rango
-y un `sha256` de los eventos usados.
+**Selección explícita de ingestas (docs/09 §102).** Una evaluación consume solo las ingestas de
+eventos que se le indican al crearla (`event_ingest_ids`); omitirlo significa todas las del
+`org`+`scope` y `[]` significa ninguna. La selección es por **ingesta** (el archivo subido), no por
+`source_id`: los escenarios de la demo declaran los mismos sistemas emisores, así que el origen del
+evento no sirve para aislar uno de otro. La `log.window` y los `log.pattern` se derivan únicamente
+de esos eventos, recalculando los patrones en memoria con el código de la ingesta: no se leen filas
+de `log_patterns`, de modo que un log de otro escenario no puede colarse ni una fila vieja puede
+decidir un criterio. La selección queda registrada en `reproducibility.eventos` (`ingest_ids` y los
+nombres de `archivos`), junto con el conteo, el rango y un `sha256` de los eventos usados.
 
 **Refresco selectivo (implementado, FN-06).** El refresco **no** re-corre todo: reusa de la
 evaluación anterior las fuentes, la evidencia **no operativa** (Terraform/Ansible/`doc.claim`), los

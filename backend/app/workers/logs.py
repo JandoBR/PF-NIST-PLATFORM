@@ -97,6 +97,7 @@ def process_message(
             message["org_nombre"],
             Path(message["jsonl_path"]),
             ai_client=ai_client,
+            archivo=message.get("archivo"),
         )
         # Antes de marcar el job como completado: que la evaluacion refrescada ya exista cuando el
         # cliente que sondea vea "completado" (asi aparece en el historial enseguida).

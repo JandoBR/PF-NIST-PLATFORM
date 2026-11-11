@@ -98,6 +98,9 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
 
   const tier = assessment.tier;
   const eventos = assessment.reproducibility?.eventos;
+  const ingestas = (eventos?.archivos ?? []).map(
+    (archivo) => archivo ?? 'eventos anteriores (sin ingesta registrada)'
+  );
 
   return (
     <div className="space-y-6">
@@ -117,14 +120,12 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
             </span>
           )}
           {eventos && (
-            <span className="ml-2 text-slate-600" title={eventos.source_ids.join(', ')}>
+            <span className="ml-2 text-slate-600" title={ingestas.join(', ')}>
               ·{' '}
               {eventos.conteo === 0
                 ? 'Sin eventos operativos'
                 : `${eventos.conteo} evento${eventos.conteo === 1 ? '' : 's'} de ${
-                    eventos.source_ids.length <= 2
-                      ? eventos.source_ids.join(', ')
-                      : `${eventos.source_ids.length} orígenes`
+                    ingestas.length <= 2 ? ingestas.join(', ') : `${ingestas.length} ingestas`
                   }`}
             </span>
           )}

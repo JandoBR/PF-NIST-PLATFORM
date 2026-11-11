@@ -23,6 +23,7 @@ from app.core.repository import (
 from app.methodology.loader import Methodology
 from app.models.tables import (
     Event,
+    EventIngest,
     Incident,
     LogPatternRow,
     Organization,
@@ -83,6 +84,8 @@ def _stored_events(session: Session, org_id: str, scope: str) -> list[RawEvent]:
 @dataclass
 class IngestResult:
     org_id: str
+    #: Ingesta recien creada, la identidad que una evaluacion puede elegir (docs/09 §102).
+    ingest_id: str
     #: Eventos leidos del archivo (nuevos + los que ya estaban).
     eventos_ingeridos: int
     nuevos_incidentes: list[Incident]
@@ -116,8 +119,15 @@ def ingest_events(
     org_name: str,
     jsonl_path: Path,
     ai_client: AIClient | None = None,
+    archivo: str | None = None,
 ) -> IngestResult:
     """Flujo B completo (docs/08 §1): eventos -> patrones -> disparadores -> incidentes -> planes.
+
+    Cada llamada deja una fila en `event_ingests` (docs/09 §102): nombre del archivo, cuando se
+    ingirio, cuantos eventos aporto y el rango de tiempos. Esa fila es la identidad que una
+    evaluacion elige para consumir solo los eventos de ese archivo. Reingerir el mismo archivo no
+    duplica eventos: los ya guardados conservan la ingesta que los inserto primero y la nueva fila
+    queda con `eventos = 0` y `eventos_existentes = <los que ya estaban>`.
 
     El flujo A (evidencia de madurez) no se recalcula aqui: la proxima vez que se corra
     `run_assessment` para este org/scope, `collect_surveillance_evidence` ya vera los eventos
@@ -127,6 +137,18 @@ def ingest_events(
 
     org = get_or_create_organization(session, org_name)
     raw_events = load_events_jsonl(jsonl_path)
+
+    ingesta = EventIngest(
+        org_id=org.id,
+        archivo=archivo or Path(jsonl_path).name,
+        ruta=str(jsonl_path),
+        eventos_leidos=len(raw_events),
+        desde=min((e.event_time for e in raw_events), default=None),
+        hasta=max((e.event_time for e in raw_events), default=None),
+        fuentes=sorted({_event_source_id(e.fuente, jsonl_path) for e in raw_events}) or None,
+    )
+    session.add(ingesta)
+    session.flush()
 
     por_scope: dict[str, list] = {}
     for evento in raw_events:
@@ -160,6 +182,7 @@ def ingest_events(
                     actor=evento.actor,
                     detalle=evento.detalle,
                     source_id=_event_source_id(evento.fuente, jsonl_path),
+                    ingest_id=ingesta.id,
                 )
             )
         session.flush()
@@ -218,9 +241,12 @@ def ingest_events(
             session.query(PlanRow).filter_by(incident_id=incident.id).delete()
             session.add(row)
 
+    ingesta.eventos = eventos_nuevos
+    ingesta.eventos_existentes = len(raw_events) - eventos_nuevos
     session.commit()
     return IngestResult(
         org_id=org.id,
+        ingest_id=ingesta.id,
         eventos_ingeridos=len(raw_events),
         eventos_nuevos=eventos_nuevos,
         nuevos_incidentes=nuevos,
@@ -265,7 +291,7 @@ def update_incident_estado(
 
 
 def clear_operational_data(session: Session, org_id: str) -> dict[str, int]:
-    """Borra los eventos, patrones e incidentes (con sus planes) de una organizacion.
+    """Borra los eventos, patrones, ingestas e incidentes (con sus planes) de una organizacion.
 
     Pensado para los logs de ejemplo de la UI: cada boton muestra un escenario desde cero, sin
     arrastrar incidentes del anterior. Las evaluaciones ya hechas no cambian: guardan su propia
@@ -282,6 +308,7 @@ def clear_operational_data(session: Session, org_id: str) -> dict[str, int]:
         "incidentes": session.query(Incident).filter_by(org_id=org_id).delete(),
         "patrones": session.query(LogPatternRow).filter_by(org_id=org_id).delete(),
         "eventos": session.query(Event).filter_by(org_id=org_id).delete(),
+        "ingestas": session.query(EventIngest).filter_by(org_id=org_id).delete(),
     }
     session.commit()
     return borrado

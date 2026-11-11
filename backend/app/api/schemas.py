@@ -129,6 +129,7 @@ class EventsCleared(BaseModel):
     patrones: int
     incidentes: int
     planes: int
+    ingestas: int = 0
 
 
 class EventsAccepted(BaseModel):
@@ -138,17 +139,18 @@ class EventsAccepted(BaseModel):
     job_id: str
 
 
-class EventSourceOut(BaseModel):
-    """Origen de eventos (`Event.source_id`) que una evaluacion puede consumir (docs/09 §98).
+class EventIngestOut(BaseModel):
+    """Ingesta de eventos que una evaluacion puede consumir (docs/09 §102).
 
-    `label` es el nombre visible (el `fuente` declarado por los eventos o el archivo de origen) y
-    `ultima_ingesta` es la ultima vez que se guardo un evento de ese origen, no la hora del evento.
+    `archivo` es el nombre subido (`None` en la pseudo-ingesta `legacy`, que agrupa los eventos
+    anteriores a este cambio), `ingerido_en` es cuando se subio (no la hora de los eventos) y
+    `eventos`/`desde`/`hasta`/`fuentes` describen los eventos guardados con ese `ingest_id`.
     """
 
-    source_id: str
-    label: str
-    scope: str
+    ingest_id: str
+    archivo: str | None = None
+    ingerido_en: datetime | None = None
     eventos: int
-    desde: datetime
-    hasta: datetime
-    ultima_ingesta: datetime | None = None
+    desde: datetime | None = None
+    hasta: datetime | None = None
+    fuentes: list[str] = []
