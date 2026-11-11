@@ -216,6 +216,7 @@ def evaluate_extraction(
                     grabador,
                     chunk_text=chunk.text,
                     chunk_locator=chunk.locator,
+                    segmentos=chunk.segmentos,
                     tipos_solicitados=tipos,
                     doc_id=ruta.stem,
                     source_id="golden",

@@ -8,6 +8,27 @@ METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "documents"
 
 _FAKE_RESPONSES = {
+    "Politica de Seguridad de la Informacion": {
+        "afirmaciones": [
+            {
+                "tipo": "policy_exists",
+                "encontrado": True,
+                "contenido": {
+                    "nombre": "Politica de Seguridad de la Informacion",
+                    "aprobada_por": "Direccion General",
+                },
+                "cita": {"fragmento": "aprobada por la Direccion General el 1 de marzo de 2025"},
+                "confianza": 0.9,
+            },
+            {
+                "tipo": "policy_review",
+                "encontrado": True,
+                "contenido": {"frecuencia": "anual", "ultima_revision": "2026-02-01"},
+                "cita": {"fragmento": "La ultima revision se realizo el 2026-02-01"},
+                "confianza": 0.85,
+            },
+        ]
+    },
     "aprobada por la Direccion General": {
         "afirmaciones": [
             {
@@ -19,17 +40,6 @@ _FAKE_RESPONSES = {
                 },
                 "cita": {"fragmento": "aprobada por la Direccion General el 1 de marzo de 2025"},
                 "confianza": 0.9,
-            }
-        ]
-    },
-    "revisa con una frecuencia anual": {
-        "afirmaciones": [
-            {
-                "tipo": "policy_review",
-                "encontrado": True,
-                "contenido": {"frecuencia": "anual", "ultima_revision": "2026-02-01"},
-                "cita": {"fragmento": "La ultima revision se realizo el 2026-02-01"},
-                "confianza": 0.85,
             }
         ]
     },
@@ -51,8 +61,11 @@ def test_document_adapter_produces_doc_claim_evidence_with_citations():
     assert len(claims) == 2
     tipos = {e.value["tipo_afirmacion"] for e in claims}
     assert tipos == {"policy_exists", "policy_review"}
-    for claim in claims:
-        assert claim.locator.section is not None
+    # Las dos secciones van en un solo chunk, pero cada cita conserva la seccion de donde sale.
+    assert {claim.locator.section for claim in claims} == {
+        "Politica de Seguridad de la Informacion",
+        "Revision",
+    }
 
 
 def test_document_without_matching_keywords_produces_no_evidence():
@@ -81,6 +94,7 @@ def test_chunks_beyond_the_cap_are_skipped_not_sent(tmp_path):
         source_id="test:largo",
         scope="entorno:produccion",
         max_chunks_per_document=2,
+        max_chars_per_chunk=10,  # cada seccion, sola, ya supera este presupuesto
     )
 
     adapter.parse_path(doc, tipos_solicitados=["policy_exists"])
@@ -139,7 +153,9 @@ def test_partial_answers_are_counted(tmp_path):
     doc.write_text("# A\nmanual de operaciones\n# B\naprobada por la Direccion General\n")
 
     (info,) = _info(
-        _adapter(FakeAIClient(_FAKE_RESPONSES)).parse_path(doc, tipos_solicitados=["policy_exists"])
+        _adapter(FakeAIClient(_FAKE_RESPONSES), max_chars_per_chunk=10).parse_path(
+            doc, tipos_solicitados=["policy_exists"]
+        )
     )
 
     assert (info.value["secciones"], info.value["analizadas"], info.value["sin_respuesta"]) == (
@@ -155,9 +171,11 @@ def test_the_section_cap_is_recorded_as_omitted(tmp_path):
     doc.write_text("\n".join(secciones))
 
     (info,) = _info(
-        _adapter(FakeAIClient(_FAKE_RESPONSES), max_chunks_per_document=2).parse_path(
-            doc, tipos_solicitados=["policy_exists"]
-        )
+        _adapter(
+            FakeAIClient(_FAKE_RESPONSES),
+            max_chunks_per_document=2,
+            max_chars_per_chunk=10,
+        ).parse_path(doc, tipos_solicitados=["policy_exists"])
     )
 
     assert (info.value["secciones"], info.value["analizadas"], info.value["omitidas"]) == (5, 2, 3)

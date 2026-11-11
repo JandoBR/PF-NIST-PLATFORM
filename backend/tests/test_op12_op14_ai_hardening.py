@@ -45,9 +45,14 @@ class _Completions:
         return outcome
 
 
-def _response(content: str):
+def _response(content: str, finish_reason: str = "stop"):
     return SimpleNamespace(
-        choices=[SimpleNamespace(message=SimpleNamespace(content=content))],
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=content, reasoning_content=None),
+                finish_reason=finish_reason,
+            )
+        ],
         usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15),
     )
 

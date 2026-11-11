@@ -19,11 +19,25 @@ observación ya registrada.
 ### 2.1 Flujo
 
 ```text
-Documento → extracción de texto → chunking (por sección/página)
+Documento → extracción de texto → chunking (secciones/páginas agrupadas por presupuesto)
           → prompt de extracción con preguntas cerradas por tipo_afirmacion
           → JSON validado con Pydantic → validación de citas → evidencia doc.claim
           → descarte si no hay cita o confianza < umbral
 ```
+
+**Chunks agrupados (adaptador de documentos v4, docs/09 §101).** Las secciones Markdown (por
+encabezado `#`..`######`) y las páginas PDF con texto se agrupan consecutivas hasta
+`DEFAULT_MAX_CHARS_PER_CHUNK` (8000 caracteres) sin partir ninguna: un documento con muchas
+subsecciones cortas produce una sola llamada en vez de una por subtítulo, y las facetas no quedan
+fragmentadas. Una sección o página mayor que el presupuesto queda sola en su chunk (no se recorta).
+El texto conserva los encabezados Markdown para que el modelo vea la estructura. Cada `Chunk`
+guarda los offsets de sus secciones (`Segmento`): la cita se valida contra el chunk completo, pero
+el locator de la afirmación se resuelve a la sección/página donde aparece el `cita.fragmento`; si
+no se localiza en ningún tramo (no debería: E8 ya lo validó) vale la primera. El tope de
+`DEFAULT_MAX_CHUNKS_PER_DOCUMENT` (20) aplica a chunks agrupados, no a secciones; por eso
+`doc.source.info` sigue contando **secciones/páginas**: `secciones` es el total, `analizadas` las
+que fueron en un chunk respondido, `omitidas` las que dejó el tope y `sin_respuesta` las de un
+chunk que la IA no contestó.
 
 ### 2.2 Contrato de salida (se valida estrictamente)
 
@@ -181,12 +195,12 @@ fuentes de verdad (evidencia vs. clic) y rompería el determinismo y la reproduc
 | Parámetro | Valor |
 |---|---|
 | SDK | `openai` (`OpenAI(base_url="https://api.deepseek.com", api_key=...)`) |
-| Modelo | `deepseek-flash` (configurable) |
+| Modelo | `deepseek-flash` (DeepSeek-V4.1-Flash, configurable; los ids vigentes son `deepseek-flash` y `deepseek-v4-pro`) |
 | Modo de salida | `response_format={"type": "json_object"}` |
-| Temperatura | 0.0–0.3 según caso |
-| `max_tokens` | Generoso y configurable para evitar truncar el JSON |
+| Temperatura | 0.0–0.3 según caso (en modo razonamiento DeepSeek la ignora) |
+| `max_tokens` | 16000 por defecto (`DEEPSEEK_MAX_TOKENS`). El razonamiento del modelo consume este mismo presupuesto: con 2000 el JSON quedaba vacío |
 | Timeout | 60 s |
-| Reintentos | Hasta 2 con backoff (1 s, 2 s), solo ante timeout, error de conexión, 429 o 5xx |
+| Reintentos | Hasta 2 con backoff (1 s, 2 s), solo ante timeout, error de conexión, 429 o 5xx; si la respuesta se agota por longitud, el reintento duplica `max_tokens` (hasta 64000) |
 | Errores permanentes | 401/403 (clave inválida), 400 u otro 4xx: degradan de inmediato, sin reintento |
 | Concurrencia | `AI_MAX_CONCURRENCY` (6 por defecto; 1 = secuencial) |
 
@@ -205,9 +219,24 @@ valor inválido cae a 6; menor que 1 se trata como 1). Si DeepSeek responde 429,
 permanente (p. ej. 401 por clave inválida) degrada en el primer intento y no consume reintentos; una
 respuesta vacía o un JSON que no parsea también termina en degradado.
 
+Una respuesta vacía no siempre es una respuesta sin contenido: `deepseek-flash` razona antes de
+escribir y ese razonamiento sale del mismo `max_tokens`, así que un presupuesto corto deja
+`finish_reason="length"` y `content` vacío (o solo espacios, que es lo que deja el modo JSON cuando
+la salida no era JSON). Antes eso se reintentaba tres veces con el mismo techo y terminaba en
+`degradado` sin más pista que "respuesta vacía". Ahora el motivo registra el `finish_reason`
+(`respuesta_vacia:length`) y el reintento sube el techo en vez de repetir la misma petición.
+
+**Un chunk degradado no es un documento que calle.** El adaptador cuenta las secciones enviadas y
+sin respuesta en `doc.source.info` (`sin_respuesta`), y el motor añade a cualquier conclusión de
+silencio documental la limitación "la IA no respondió para N sección(es) de <documento>": el
+resultado sigue siendo `evidencia_insuficiente` (nunca 0), pero el hallazgo dice que falta una
+lectura, no que el texto no lo declare (docs/09 §100).
+
 Notas de la documentación de DeepSeek:
 
 - El modo JSON exige `response_format={"type": "json_object"}` y la palabra “json” en el prompt.
+- Con razonamiento activado (por defecto), `reasoning_content` viaja aparte de `content` y los
+  tokens de razonamiento cuentan contra `max_tokens`.
 - Puede devolver contenido vacío ocasionalmente; hay que manejarlo como caso esperado.
 - JSON válido no significa contenido correcto: siempre se valida esquema y reglas.
 
@@ -217,6 +246,7 @@ Manejo de fallos:
 timeout / conexión / 429 / 5xx
   → reintento 1 → reintento 2 → degradado (ajuste 0 / extracción descartada)
 401/403/400 (permanente) → degradado inmediato, sin reintento
+respuesta vacía con finish_reason=length → reintento 1/2 con el doble de max_tokens
 respuesta vacía / JSON inválido / esquema inválido → degradado
   → registrar en ai_adjustments / log de extracción con motivo
 ```

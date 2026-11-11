@@ -15,7 +15,7 @@ from app.ai.calllog import call_context
 from app.ai.client import AIClient
 from app.ai.quotes import quote_in_text
 from app.ai.schemas import ExtractionResponse
-from app.schemas.evidence import EvidenceInstance, Locator, Modality
+from app.schemas.evidence import EvidenceInstance, Locator, Modality, Segmento
 
 #: El texto del sistema (`prompts/extract_vN.txt`) no es el prompt completo: `_contenido_esperado`
 #: le agrega los campos de `_CONTENT_FIELDS` para los tipos que pide el catalogo. Un cambio ahi
@@ -265,6 +265,24 @@ def _build_user_prompt(chunk_text: str, tipos_solicitados: list[str], doc_id: st
     )
 
 
+def _locator_de_cita(
+    fragmento: str,
+    chunk_text: str,
+    chunk_locator: Locator,
+    segmentos: tuple[Segmento, ...],
+) -> Locator:
+    """Locator de la seccion/pagina que contiene la cita (docs/05 §2.1).
+
+    El chunk agrupa varias secciones; la posicion de la cita dentro del texto agrupado decide cual
+    se cita, no la primera. Si no se localiza en ningun tramo -- no deberia: E8 ya la valido --
+    vale el locator del primer tramo, que es el del chunk."""
+
+    for segmento in segmentos:
+        if quote_in_text(fragmento, chunk_text[segmento.inicio : segmento.fin]):
+            return segmento.locator
+    return chunk_locator
+
+
 def extract_claims(
     client: AIClient,
     *,
@@ -275,8 +293,12 @@ def extract_claims(
     source_id: str,
     scope: str,
     confianza_minima: float,
+    segmentos: tuple[Segmento, ...] = (),
 ) -> list[EvidenceInstance]:
-    """Ejecuta U1 sobre un chunk y devuelve evidencia `doc.claim` (reglas E1-E7, docs/05 §2.3)."""
+    """Ejecuta U1 sobre un chunk y devuelve evidencia `doc.claim` (reglas E1-E7, docs/05 §2.3).
+
+    `segmentos` son las secciones/paginas que el chunk agrupa: con ellas el locator de cada
+    afirmacion apunta a la seccion/pagina de su cita y no a la primera del chunk."""
 
     user_prompt = _build_user_prompt(chunk_text, tipos_solicitados, doc_id)
     with call_context(paso="U1", prompt_version=PROMPT_VERSION, doc_id=doc_id):
@@ -311,13 +333,20 @@ def extract_claims(
 
         locator = chunk_locator
         if claim.cita is not None:
-            locator = Locator(
-                file=chunk_locator.file,
-                page=claim.cita.pagina if claim.cita.pagina is not None else chunk_locator.page,
-                section=(
-                    claim.cita.seccion if claim.cita.seccion is not None else chunk_locator.section
-                ),
-            )
+            if segmentos:
+                locator = _locator_de_cita(
+                    claim.cita.fragmento, chunk_text, chunk_locator, segmentos
+                )
+            else:
+                locator = Locator(
+                    file=chunk_locator.file,
+                    page=claim.cita.pagina if claim.cita.pagina is not None else chunk_locator.page,
+                    section=(
+                        claim.cita.seccion
+                        if claim.cita.seccion is not None
+                        else chunk_locator.section
+                    ),
+                )
 
         evidence.append(
             EvidenceInstance(

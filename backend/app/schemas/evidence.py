@@ -28,6 +28,17 @@ class Locator(BaseModel):
     event_id: str | None = None
 
 
+class Segmento(BaseModel):
+    """Tramo de un chunk agrupado: rango de caracteres dentro de su texto y locator de la
+    seccion/pagina que lo origino (docs/05 §2.1)."""
+
+    inicio: int
+    fin: int
+    locator: Locator
+
+    model_config = {"frozen": True}
+
+
 class EvidenceInstance(BaseModel):
     """Observacion normalizada, append-only (docs/01 §2.2)."""
 

@@ -1,6 +1,6 @@
 from app.ai.client import FakeAIClient
 from app.ai.extraction import extract_claims
-from app.schemas.evidence import Locator
+from app.schemas.evidence import Locator, Segmento
 
 LOCATOR = Locator(file="politica-seguridad.md", section="Politica de Seguridad de la Informacion")
 
@@ -297,3 +297,99 @@ def test_low_confidence_and_unlocatable_quote_are_both_recorded():
     )
 
     assert "confianza baja" in claim.limitations and CITA_NO_LOCALIZABLE in claim.limitations
+
+
+# -- Chunks agrupados: el locator vuelve a la seccion/pagina de la cita ------------------------
+
+
+def _grouped_claim(fragmento: str):
+    texto = "# Gobierno\nCISO designado.\n\n# Respaldos\nLos respaldos son diarios."
+    inicio_respaldos = texto.index("# Respaldos")
+    segmentos = (
+        Segmento(
+            inicio=0,
+            fin=inicio_respaldos,
+            locator=Locator(file="doc.md", section="Gobierno"),
+        ),
+        Segmento(
+            inicio=inicio_respaldos,
+            fin=len(texto),
+            locator=Locator(file="doc.md", section="Respaldos"),
+        ),
+    )
+    client = FakeAIClient(
+        {
+            "Respaldos": {
+                "afirmaciones": [
+                    {
+                        "tipo": "backup_policy",
+                        "encontrado": True,
+                        "contenido": {"respaldo": True},
+                        "cita": {"fragmento": fragmento},
+                        "confianza": 0.9,
+                    }
+                ]
+            }
+        }
+    )
+    (claim,) = extract_claims(
+        client,
+        chunk_text=texto,
+        chunk_locator=segmentos[0].locator,
+        segmentos=segmentos,
+        tipos_solicitados=["backup_policy"],
+        doc_id="doc",
+        source_id="s",
+        scope="e",
+        confianza_minima=0.6,
+    )
+    return claim
+
+
+def test_a_grouped_chunk_keeps_the_section_of_the_citation():
+    claim = _grouped_claim("Los respaldos son diarios")
+
+    assert claim.locator.section == "Respaldos"
+
+
+def test_an_unlocatable_fragment_falls_back_to_the_first_section():
+    claim = _grouped_claim("texto que no esta en ningun tramo")
+
+    assert claim.locator.section == "Gobierno"
+    assert claim.limitations is not None  # E8 sigue marcandola
+
+
+def test_a_grouped_pdf_chunk_keeps_the_page_of_the_citation():
+    texto = "pagina uno\n\npagina dos"
+    segmentos = (
+        Segmento(inicio=0, fin=10, locator=Locator(file="doc.pdf", page=3)),
+        Segmento(inicio=12, fin=25, locator=Locator(file="doc.pdf", page=4)),
+    )
+    client = FakeAIClient(
+        {
+            "pagina dos": {
+                "afirmaciones": [
+                    {
+                        "tipo": "policy_exists",
+                        "encontrado": True,
+                        "contenido": {"nombre": "Politica"},
+                        "cita": {"fragmento": "pagina dos"},
+                        "confianza": 0.9,
+                    }
+                ]
+            }
+        }
+    )
+    (claim,) = extract_claims(
+        client,
+        chunk_text=texto,
+        chunk_locator=segmentos[0].locator,
+        segmentos=segmentos,
+        tipos_solicitados=["policy_exists"],
+        doc_id="doc",
+        source_id="s",
+        scope="e",
+        confianza_minima=0.6,
+    )
+
+    assert claim.locator.page == 4

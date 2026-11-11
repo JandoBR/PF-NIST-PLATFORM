@@ -216,4 +216,7 @@ documentos con retención o frecuencia de revisión distintas.
   Un PDF cifrado con contraseña se omite (cero secciones), no tumba la evaluación.
 - Acepta BOM UTF-8 y los tags `!vault`/`!unsafe` de Ansible como valores opacos; no descifra vaults.
   Un encabezado Markdown dentro de un bloque de código no se trata como sección.
+- Las secciones/páginas consecutivas se agrupan en chunks de hasta 8000 caracteres sin partir
+  ninguna (docs/05 §2.1); un documento con muchas subsecciones cortas no supera el tope de chunks
+  y cada cita conserva la sección/página de donde sale.
 - Los logs son simulados; su valor está en demostrar el flujo, no en vigilar un sistema real.

@@ -20,6 +20,13 @@ logger = logging.getLogger("app.ai.client")
 DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 DEFAULT_TIMEOUT_SECONDS = 60
+#: Techo de tokens por respuesta, no gasto: se factura solo lo generado. `deepseek-flash` es un
+#: modelo de razonamiento por defecto y el razonamiento consume el mismo presupuesto que el JSON;
+#: con 2000 el JSON quedaba vacio (`finish_reason="length"`, docs/09 §100).
+DEFAULT_MAX_TOKENS = 16000
+#: Si el primer intento se agota por longitud, el reintento duplica el techo hasta este valor:
+#: repetir la misma peticion con el mismo presupuesto da el mismo resultado (docs/09 §100).
+MAX_TOKENS_CEILING = 64000
 MAX_RETRIES = 2
 #: Espera antes del reintento n (1-based): BACKOFF_BASE_SECONDS * 2**(n-1) -> 1 s, 2 s (docs/05 §5).
 BACKOFF_BASE_SECONDS = 1.0
@@ -58,6 +65,19 @@ def _reintentable(exc: Exception) -> bool:
     return isinstance(exc, APIStatusError) and (exc.status_code == 429 or exc.status_code >= 500)
 
 
+def _max_tokens_configurado() -> int:
+    """`DEEPSEEK_MAX_TOKENS` (docs/05 §5); un valor invalido no debe tumbar una evaluacion."""
+
+    raw = os.environ.get("DEEPSEEK_MAX_TOKENS")
+    if not raw:
+        return DEFAULT_MAX_TOKENS
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("DEEPSEEK_MAX_TOKENS=%r no es un entero; uso %s", raw, DEFAULT_MAX_TOKENS)
+        return DEFAULT_MAX_TOKENS
+
+
 class DeepSeekClient:
     """Implementacion real: SDK `openai` apuntando a la API de DeepSeek (docs/05 §5)."""
 
@@ -67,6 +87,7 @@ class DeepSeekClient:
         model: str | None = None,
         base_url: str | None = None,
         timeout: int = DEFAULT_TIMEOUT_SECONDS,
+        max_tokens: int | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._sleep = sleep
@@ -79,13 +100,23 @@ class DeepSeekClient:
         base_url = base_url or os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
         self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
         self.model = model or os.environ.get("DEEPSEEK_MODEL", DEFAULT_MODEL)
+        self.max_tokens = max_tokens or _max_tokens_configurado()
+        self.max_tokens_ceiling = max(MAX_TOKENS_CEILING, self.max_tokens)
         #: Se incluye en la clave de cache junto al modelo: cambiar de endpoint cambia el resultado.
         self.base_url = base_url
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
+        """JSON o `None`. El motivo del degradado queda en el log, con `finish_reason`.
+
+        Un contenido vacio no siempre es "el modelo no dijo nada": con `finish_reason="length"` es
+        el presupuesto de tokens agotado -- el razonamiento del modelo lo consumio antes de escribir
+        el JSON. En ese caso el reintento sube `max_tokens` en vez de repetir la misma peticion.
+        """
+
         inicio = time.monotonic()
         motivo = "sin_intentos"
         intentos = 0
+        max_tokens = self.max_tokens
         for intento in range(MAX_RETRIES + 1):
             if intento > 0:
                 self._sleep(BACKOFF_BASE_SECONDS * 2 ** (intento - 1))
@@ -99,7 +130,7 @@ class DeepSeekClient:
                     ],
                     response_format={"type": "json_object"},
                     temperature=0.0,
-                    max_tokens=2000,
+                    max_tokens=max_tokens,
                 )
             except Exception as exc:  # error de red o de la API: reintentar solo lo transitorio
                 motivo = f"error:{type(exc).__name__}"
@@ -119,21 +150,33 @@ class DeepSeekClient:
                     "total": usage.total_tokens,
                 }
                 logger.info(
-                    "DeepSeek %s tokens: prompt=%s completion=%s total=%s",
+                    "DeepSeek %s tokens: prompt=%s completion=%s total=%s max_tokens=%s"
+                    " finish=%s razonamiento=%s",
                     self.model,
                     usage.prompt_tokens,
                     usage.completion_tokens,
                     usage.total_tokens,
+                    max_tokens,
+                    response.choices[0].finish_reason,
+                    bool(getattr(response.choices[0].message, "reasoning_content", None)),
                 )
 
-            content = response.choices[0].message.content
+            finish_reason = response.choices[0].finish_reason
+            content = (response.choices[0].message.content or "").strip()
             if not content:
-                motivo = "respuesta_vacia"
+                motivo = f"respuesta_vacia:{finish_reason}"
+                if finish_reason == "length":
+                    if max_tokens >= self.max_tokens_ceiling:
+                        break
+                    max_tokens = min(max_tokens * 2, self.max_tokens_ceiling)
+                    continue
+                if finish_reason == "content_filter":
+                    break  # la misma peticion volveria a filtrarse: no se insiste
                 continue
             try:
                 parsed = json.loads(content)
             except json.JSONDecodeError:
-                motivo = "json_invalido"
+                motivo = f"json_invalido:{finish_reason}"
                 continue
             log_call(
                 resultado="ok",

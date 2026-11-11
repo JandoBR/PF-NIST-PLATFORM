@@ -32,6 +32,23 @@ from app.core.seed import ensure_seed_users
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(REPO_ROOT / ".env")
 
+#: Formato comun con los workers (`app.workers.core`, docs/09 §100).
+LOG_FORMAT = "%(asctime)s %(name)s %(message)s"
+
+
+def configure_logging() -> None:
+    """Da un destino a los loggers de `app.*` en el proceso de la API (docs/09 §100).
+
+    Sin esto, el arbol `app.ai.*` no tenia handler: los `ai_call` de U3 (la generacion de planes
+    corre en este proceso) y los del cliente no llegaban a ningun sitio, asi que un plan degradado
+    parecia una generacion sin llamadas. `basicConfig` no toca los loggers propios de uvicorn
+    (tienen sus handlers y `propagate=False`), solo instala el del logger raiz."""
+
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
+
+configure_logging()
+
 logger = logging.getLogger("app.api")
 
 

@@ -25,8 +25,8 @@ def methodology():
 
 
 def _fake_extraction_client() -> FakeAIClient:
-    """Respuestas indexadas por palabras que solo aparecen en el chunk correcto del fixture:
-    la seccion principal cita 'Direccion General'; la seccion Revision cita 'frecuencia anual'."""
+    """Una respuesta por chunk: el fixture cabe en un chunk agrupado (seccion principal y
+    Revision), asi que la respuesta trae las dos afirmaciones (docs/05 §2.1)."""
 
     ultima_revision = (date.today() - timedelta(days=30)).isoformat()
     return FakeAIClient(
@@ -45,20 +45,16 @@ def _fake_extraction_client() -> FakeAIClient:
                             "fragmento": "aprobada por la Direccion General el 1 de marzo de 2025"
                         },
                         "confianza": 0.9,
-                    }
-                ]
-            },
-            "frecuencia anual": {
-                "afirmaciones": [
+                    },
                     {
                         "tipo": "policy_review",
                         "encontrado": True,
                         "contenido": {"frecuencia": "anual", "ultima_revision": ultima_revision},
                         "cita": {"fragmento": "se revisa con una frecuencia anual"},
                         "confianza": 0.9,
-                    }
+                    },
                 ]
-            },
+            }
         }
     )
 
