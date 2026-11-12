@@ -3840,3 +3840,89 @@ respuesta a incidentes y la dirección del plan de exposición (`permitidas: tru
 **Verificación:** `tests/test_ai_golden.py` (17 pruebas: anotación consistente, oráculo perfecto
 al 100 % de recall/precisión, y una mutación por cada fallo), la suite completa en verde y
 `ruff check`/`ruff format --check` limpios.
+
+## 108. Un replay del store no daba la misma evaluación que la corrida en vivo
+
+**Síntoma.** Se evaluó cada escenario demo (`gaps`, `mid`, `good`) dos veces con los mismos
+documentos, logs y Terraform. La segunda corrida tuvo **todos** los chunks de U1 como *hit* del
+store persistente, pero el resultado cambió: en `mid`, `CRI-RS-01` bajaba a 75 y `CRI-ID-01/03/04`
+caían a `evidencia_insuficiente`; en `gaps`, `CRI-PR-07` pasaba de `no_implementado` 0 a
+`evidencia_insuficiente` y `CRI-GV-03` de 25 a `evidencia_insuficiente`. Comparando
+`GET /assessments/{id}/evidence` de las dos evaluaciones, las afirmaciones eran las mismas salvo
+tres: `supplier_program {programa:false, requisitos_contractuales:false}`,
+`process_defined {proceso:"otro"}` y `data_inventory {}`, que en la corrida 1 eran `inexistente` y
+en la 2 `vigente`; y la corrida 2 no tenía ningún `doc.source.info` (6 en la 1).
+
+**Causa.**
+
+1. `voting.claims_to_raw` armaba la respuesta cruda con `tipo`, `encontrado`, `contenido`, `cita` y
+   `confianza`, pero **no con `estado_declarado`**. El replay pasa otra vez por
+   `_claims_from_raw`, que lee el campo ausente con el valor de compatibilidad de pre-v6:
+   `vigente`. La negación se perdía en el store y una misma evaluación dependía de si el chunk
+   venía del modelo o de la tabla `ai_results`.
+2. El adaptador de documentos decide si emitir `doc.source.info` con `_CountingClient.respondidas`:
+   un documento cuyas secciones no contestó la IA no se marca como analizado. En un replay
+   `extract_claims` devuelve el resultado del store **sin llamar al cliente**, así que el contador
+   quedaba en 0 y el documento perdía sus conteos de secciones; el motor, además, dejaba de ver
+   `sin_respuesta`.
+3. `contradictions._absence_disagreement` agrupaba por `(scope, tipo_afirmacion)` y
+   `_common.aplicar_estado_declarado` miraba todas las declaraciones de ese tipo. Una negación de
+   `process_defined {proceso:"otro"}` —que no identifica ninguna práctica— se comparaba con los
+   procesos de respuesta, riesgos y recuperación de otros documentos: la contradicción excluía
+   también las afirmaciones **vigentes** y `RS-01`/`ID-03` se quedaban sin evidencia. Lo mismo con
+   un `data_inventory {}` que el modelo emitió como negación de una frase sobre servicios críticos
+   (facetas de `org_context`), que contradecía el inventario real de otro documento y dejaba a
+   `ID-01`/`ID-04` en `evidencia_insuficiente`.
+
+**Cambio.**
+
+- `estado_declarado` se vota como campo cerrado (`vigente|inexistente|planificado`) en
+  `voting._votar_grupo`, fuera de `contenido`, y `claims_to_raw` lo guarda con la afirmación. Un
+  valor fuera de la lista no vota. El replay reconstruye el mismo `doc.claim` que la corrida en
+  vivo, campo por campo.
+- `extract_claims` acepta `on_replay` y lo llama cuando el chunk salió del store. El adaptador de
+  documentos pasa `_CountingClient.marcar_respondida`: un resultado guardado es una respuesta que la
+  IA ya dio, así que el replay emite el mismo `doc.source.info` (`secciones`, `analizadas`,
+  `omitidas`, `sin_respuesta`).
+- La negación y la contradicción se resuelven por **faceta** (`_common.faceta`): un
+  `process_defined` se compara por su proceso canónico, no solo por su tipo; negar el proceso de
+  recuperación no toca el criterio del proceso de respuesta. `contradictions._absence_disagreement`
+  agrupa por faceta y `_criterios_de` usa el mismo mapa.
+- Una negación o un plan tiene que **identificar qué niega o planifica**
+  (`extraction._identifica_la_practica`): `process_defined` exige un `proceso` concreto (no `otro`)
+  y, salvo los tipos en los que el propio tipo nombra la práctica (`policy_exists`, `role_assigned`,
+  `supplier_program`, `training_program`), exige algún campo de `contenido`. Si no lo identifica se
+  descarta antes de votar: no puede poner un criterio a 0 ni contradecir a otro documento.
+
+No cambia el prompt (`extract_v6`) ni la salida del adaptador, así que `PROMPT_VERSION` y
+`ADAPTER_VERSION` quedan igual. La semántica central de las reglas documentales sí cambia:
+`criteria.yml` sube a **v26**.
+
+**Evidencia.** `e_mid_1.json`/`e_mid_2.json` y `c_mid_1.json`/`c_mid_2.json` del estudio en vivo
+(la API no se volvió a llamar para este arreglo). Los tests reproducen los valores reales de esas
+afirmaciones:
+
+| Escenario | Corrida 1 (en vivo) | Corrida 2 (replay, antes) | Con el arreglo |
+|---|---|---|---|
+| `mid` `CRI-ID-01` | `evidencia_insuficiente` (contradicción `data_inventory`) | igual | `evaluado` 25, cita el inventario de `riesgos-e-inventario.md` |
+| `mid` `CRI-ID-03` | `evidencia_insuficiente` (proceso `otro` negaba el de riesgos) | igual | `evaluado`, usa el proceso de riesgos |
+| `mid` `CRI-ID-04` | `evidencia_insuficiente` | igual | `evaluado` 50 (tipos de datos, sin clasificación) |
+| `mid` `CRI-RS-01` | 75 con nota de contradicción ajena | igual | `evaluado` con el proceso de respuesta, sin la nota |
+| `mid` `doc.source.info` | 6 documentos | 0 | 6 documentos y los mismos conteos |
+| `mid` negaciones | `inexistente` en 3 afirmaciones | las 3 como `vigente` | `inexistente` en las 3 |
+| `gaps` `CRI-PR-07` | `no_implementado` 0 (`training_program` inexistente) | `evidencia_insuficiente` | 0, la negación sobrevive al store |
+| `gaps` `CRI-GV-03` | 25 (`risk_tolerance` con `confianza` 0,3 y sin limitación) | `evidencia_insuficiente` | misma validación en vivo y en replay |
+
+El 0,3 sin limitación de `gaps` no lo puede producir el código actual (una confianza por debajo del
+umbral siempre deja la limitación): era una fila de una versión anterior del voto. Lo que importa es
+que ahora la corrida en vivo y el replay validan el mismo crudo con el mismo umbral, así que la
+afirmación no puede cambiar de estado entre las dos.
+
+**Verificación.** `tests/test_ai_store.py` (el replay devuelve el mismo `value` que la corrida en
+vivo, negación incluida, y el mismo `doc.source.info`), `tests/test_ai_voting.py` (el estado se vota
+como campo cerrado), `tests/test_ai_extraction.py` (se descarta `process_defined` con proceso `otro`
+y la negación vacía de `data_inventory`; se conserva la negación vacía que el tipo identifica),
+`tests/test_declared_state.py` (negar un proceso no pone a 0 el criterio de otro; la misma faceta en
+otro documento sigue siendo contradicción visible; los cuatro criterios de `mid` con los valores
+reales de la corrida 1). Suite completa: **1036 passed, 2 skipped**; `ruff check` y
+`ruff format --check` limpios.

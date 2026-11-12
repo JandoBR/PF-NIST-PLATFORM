@@ -59,7 +59,10 @@
 # v25: toda regla documental lee `estado_declarado` (doc.claim@3): una negacion explicita o un plan
 #      declarado no acreditan la practica. Es central (engine/_common), no cambia el tramo de cada
 #      regla (docs/09 §106).
-version: 25
+# v26: la negacion y la contradiccion se resuelven por faceta (el proceso de `process_defined`) y
+#      una negacion sin faceta no puede convertir un criterio en 0 ni contradecir a otro documento
+#      (docs/09 §108).
+version: 26
 criterios:
   - id: CRI-GV-01
     version: 1

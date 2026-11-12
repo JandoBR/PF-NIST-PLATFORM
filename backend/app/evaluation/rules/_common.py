@@ -104,6 +104,50 @@ def es_plan_declarado(claim: EvidenceInstance) -> bool:
     )
 
 
+#: Proceso declarado (`process_defined.contenido.proceso`) -> faceta canonica. `process_defined`
+#: sirve a criterios distintos segun el proceso, asi que negar "otro" no niega la practica de
+#: respuesta ni la de riesgos (docs/09 §108).
+_PROCESO_ALIAS: tuple[tuple[str, str], ...] = (
+    ("respuesta", "respuesta"),
+    ("response", "respuesta"),
+    ("escalamiento", "respuesta"),
+    ("recuperacion", "recuperacion"),
+    ("recovery", "recuperacion"),
+    ("riesgo", "riesgos"),
+    ("risk", "riesgos"),
+    ("analisis", "analisis incidentes"),
+    ("contencion", "contencion"),
+    ("erradicacion", "contencion"),
+    ("mejora", "mejora"),
+    ("leccion", "mejora"),
+    ("revision", "revision"),
+    ("desempeno", "revision"),
+    ("incidente", "analisis incidentes"),
+)
+
+
+def proceso_faceta(claim: EvidenceInstance) -> str | None:
+    """Faceta del proceso que declara una `process_defined`, o `None` si no identifica ninguna."""
+
+    proceso = str((claim.value.get("contenido") or {}).get("proceso") or "").lower()
+    for palabra, faceta in _PROCESO_ALIAS:
+        if palabra in proceso:
+            return faceta
+    return None
+
+
+def faceta(claim: EvidenceInstance) -> tuple[str, ...]:
+    """Que practica declara la afirmacion, para no mezclar facetas de un mismo tipo.
+
+    Un `process_defined` de respuesta y uno de recuperacion son practicas distintas aunque
+    compartan el tipo; el resto de tipos declara una sola faceta (docs/09 §108)."""
+
+    tipo = str(claim.value.get("tipo_afirmacion"))
+    if tipo == "process_defined":
+        return (tipo, proceso_faceta(claim) or "")
+    return (tipo,)
+
+
 def _declaraciones(claims: list[EvidenceInstance], tipo: str) -> list[EvidenceInstance]:
     return [
         c
@@ -141,7 +185,11 @@ def aplicar_estado_declarado(
     aca se deja la nota visible por si la exclusion no llego a aplicarse. Una regla que no pudo
     acreditar nada (`evidencia_insuficiente`) tambien pasa a 0: con una negacion o un plan delante,
     el documento no calla, dice que la practica no esta. El motor lo aplica a todas las reglas,
-    igual que `marcar_sin_respuesta` y `marcar_contradicciones`."""
+    igual que `marcar_sin_respuesta` y `marcar_contradicciones`.
+
+    Solo cuentan las declaraciones de la **misma faceta** que el criterio cito: `RS-01` lee el
+    `process_defined` de respuesta y la negacion de "recuperacion" pertenece a `RC-01`, no a el
+    (docs/09 §108)."""
 
     if (
         resultado.estado in (Estado.ERROR, Estado.NO_APLICABLE)
@@ -157,7 +205,8 @@ def aplicar_estado_declarado(
         return resultado
 
     for tipo in sorted({str(c.value.get("tipo_afirmacion")) for c in citadas}):
-        declaraciones = _declaraciones(todas, tipo)
+        facetas = {faceta(c) for c in citadas if str(c.value.get("tipo_afirmacion")) == tipo}
+        declaraciones = [c for c in _declaraciones(todas, tipo) if faceta(c) in facetas]
         negadas = [c for c in declaraciones if estado_declarado(c) == ESTADO_INEXISTENTE]
         planes = [c for c in declaraciones if estado_declarado(c) == ESTADO_PLANIFICADO]
         if not negadas and not planes:

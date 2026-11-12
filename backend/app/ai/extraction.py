@@ -7,6 +7,7 @@ filtra y normaliza; la regla de cada criterio vive en `app/evaluation/rules`.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -206,6 +207,26 @@ _ROL_MAX_CHARS = 120
 #: se interpreta y la afirmacion se descarta (no se convierte un error de formato en una ausencia).
 _ESTADOS_DECLARADOS = ("vigente", "inexistente", "planificado")
 
+#: Procesos de `process_defined` que identifican una faceta concreta que algun criterio evalua.
+#: "otro" (o un proceso ausente) no identifica ninguna: negar u planificar "otro" no dice que
+#: practica falta, asi que no puede convertir un criterio en 0 (docs/09 §108).
+_PROCESOS_ESPECIFICOS = (
+    "riesgos",
+    "respuesta",
+    "recuperacion",
+    "revision",
+    "analisis",
+    "contencion",
+    "mejora",
+)
+
+#: Tipos en los que el propio tipo nombra lo negado: "no hay politica" identifica la practica sin
+#: rellenar `contenido`. En el resto, una negacion o un plan sin campos no dice que falta (un
+#: `data_inventory` vacio no distingue "no hay datos" de "no se nombro ningun dato") y se descarta.
+_NEGACION_IDENTIFICADA_POR_TIPO = frozenset(
+    {"policy_exists", "role_assigned", "supplier_program", "training_program"}
+)
+
 #: Campos de `contenido` que expresan una cantidad o un plazo y por eso se normalizan a digitos.
 _CAMPOS_CANTIDAD: dict[str, tuple[str, ...]] = {
     "backup_policy": ("retencion",),
@@ -213,6 +234,24 @@ _CAMPOS_CANTIDAD: dict[str, tuple[str, ...]] = {
     "notification_list": ("plazos",),
     "process_defined": ("criterios_activacion",),
 }
+
+
+def _identifica_la_practica(tipo: str, contenido: dict) -> bool:
+    """Una negacion o un plan tiene que decir que practica niega o planifica (docs/09 §108).
+
+    Si no lo dice no puede convertir un criterio en 0 ni contradecir a otro documento: este ultimo
+    daria `evidencia_insuficiente` por una ausencia que nadie identifico. Por eso se descarta al
+    extraer, antes de votar.
+    """
+
+    if tipo in _NEGACION_IDENTIFICADA_POR_TIPO:
+        return True
+    if not any(not str(campo).startswith("_") for campo in contenido):
+        return False
+    if tipo == "process_defined":
+        proceso = str(contenido.get("proceso") or "").strip().lower()
+        return any(palabra in proceso for palabra in _PROCESOS_ESPECIFICOS)
+    return True
 
 
 def _estado_declarado(valor: object) -> str | None:
@@ -392,6 +431,13 @@ def _claims_from_raw(
             estado = _estado_declarado(claim.estado_declarado)
             if estado is None:
                 continue  # E5: un estado de la practica que no se entiende no se interpreta
+        contenido = _sanitize_content(claim.tipo, claim.contenido)
+        if estado in ("inexistente", "planificado") and not _identifica_la_practica(
+            claim.tipo, contenido
+        ):
+            # Una negacion o un plan que no dice que practica niega o planifica no puede puntuar
+            # (ni contradecir): seria una ausencia inventada (docs/09 §108).
+            continue
         if claim.encontrado and claim.confianza < confianza_minima:
             limitaciones.append(f"confianza baja ({claim.confianza} < {confianza_minima})")  # E3
         if claim.encontrado and not quote_in_text(claim.cita.fragmento, chunk_text):
@@ -427,7 +473,7 @@ def _claims_from_raw(
                 scope=scope,
                 value={
                     "tipo_afirmacion": claim.tipo,
-                    "contenido": _sanitize_content(claim.tipo, claim.contenido),
+                    "contenido": contenido,
                     "encontrado": claim.encontrado,
                     "confianza": claim.confianza,
                     # v2: la cita textual, para poder mostrarla y auditarla despues.
@@ -488,11 +534,16 @@ def extract_claims(
     scope: str,
     confianza_minima: float,
     segmentos: tuple[Segmento, ...] = (),
+    on_replay: Callable[[], None] | None = None,
 ) -> list[EvidenceInstance]:
     """Ejecuta U1 sobre un chunk y devuelve evidencia `doc.claim` (reglas E1-E7, docs/05 §2.3).
 
     `segmentos` son las secciones/paginas que el chunk agrupa: con ellas el locator de cada
     afirmacion apunta a la seccion/pagina de su cita y no a la primera del chunk.
+
+    `on_replay` se llama cuando el resultado sale del store: para el adaptador es una respuesta
+    que la IA ya dio, y sin avisar contaria el documento como no analizado y perderia su
+    `doc.source.info` (docs/09 §108).
 
     Con store persistente, el resultado se lee y se guarda por insumo canonico; en un miss corre
     `U1_VOTES` corridas (3 por defecto) y guarda la afirmacion votada. Las corridas se validan
@@ -507,6 +558,8 @@ def extract_claims(
     if store is not None and n > 1:
         guardado = store.get("U1", PROMPT_VERSION, input_sha256)
         if guardado is not None:
+            if on_replay is not None:
+                on_replay()
             return _claims_from_raw(
                 guardado,
                 chunk_text=chunk_text,

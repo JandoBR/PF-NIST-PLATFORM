@@ -573,3 +573,96 @@ def test_a_review_frequency_written_with_words_is_understood():
 )
 def test_review_frequency_quantities(texto, esperado):
     assert _sanitize_content("policy_review", {"frecuencia": texto})["frecuencia"] == esperado
+
+
+@pytest.mark.parametrize("estado", ["inexistente", "planificado"])
+def test_a_claim_about_the_process_otro_does_not_identify_a_practice(estado):
+    """Negar "otro" no dice que practica falta: antes hacia que RS-01, ID-03 y RC-01 se
+    contradijeran entre si y perdieran sus afirmaciones vigentes (docs/09 §108)."""
+
+    claim = _extract_one(
+        {
+            "tipo": "process_defined",
+            "encontrado": True,
+            "estado_declarado": estado,
+            "contenido": {"proceso": "otro"},
+            "cita": {"fragmento": "Todavia no hay un procedimiento escrito"},
+            "confianza": 0.9,
+        },
+        chunk_text="Todavia no hay un procedimiento escrito",
+        tipos=["process_defined"],
+    )
+
+    assert claim is None
+
+
+def test_a_denial_without_content_is_discarded_unless_the_type_names_the_practice():
+    """Un `data_inventory` vacio no distingue "no hay datos" de "no se nombro ningun dato"; una
+    `policy_exists` vacia si identifica la politica. El primero no puede contradecir el inventario
+    que otro documento declara (docs/09 §108)."""
+
+    client = FakeAIClient(
+        {
+            "afirmacion": {
+                "afirmaciones": [
+                    {
+                        "tipo": "data_inventory",
+                        "encontrado": True,
+                        "estado_declarado": "inexistente",
+                        "contenido": {},
+                        "cita": {"fragmento": "No hay inventario de los servicios criticos"},
+                        "confianza": 0.9,
+                    },
+                    {
+                        "tipo": "policy_exists",
+                        "encontrado": True,
+                        "estado_declarado": "inexistente",
+                        "contenido": {},
+                        "cita": {"fragmento": "La politica no esta aprobada"},
+                        "confianza": 0.9,
+                    },
+                    {
+                        "tipo": "supplier_program",
+                        "encontrado": True,
+                        "estado_declarado": "inexistente",
+                        "contenido": {"programa": False, "requisitos_contractuales": False},
+                        "cita": {"fragmento": "No existe un programa de proveedores"},
+                        "confianza": 0.9,
+                    },
+                ]
+            }
+        }
+    )
+
+    evidence = extract_claims(
+        client,
+        chunk_text=(
+            "afirmacion No hay inventario de los servicios criticos. La politica no esta aprobada."
+            " No existe un programa de proveedores."
+        ),
+        chunk_locator=LOCATOR,
+        tipos_solicitados=["data_inventory", "policy_exists", "supplier_program"],
+        doc_id="doc",
+        source_id="test:doc",
+        scope="entorno:produccion",
+        confianza_minima=0.6,
+    )
+
+    assert {e.value["tipo_afirmacion"] for e in evidence} == {"policy_exists", "supplier_program"}
+
+
+def test_an_empty_plan_for_a_program_is_kept_because_the_type_identifies_it():
+    claim = _extract_one(
+        {
+            "tipo": "training_program",
+            "encontrado": True,
+            "estado_declarado": "planificado",
+            "contenido": {},
+            "cita": {"fragmento": "La formacion se implementara en 2027"},
+            "confianza": 0.9,
+        },
+        chunk_text="La formacion se implementara en 2027",
+        tipos=["training_program"],
+    )
+
+    assert claim is not None and claim.value["estado_declarado"] == "planificado"

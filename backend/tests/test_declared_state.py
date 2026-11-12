@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from app.ai import extraction
 from app.evaluation import engine
 from app.evaluation.contradictions import detect
 from app.evaluation.rules import pr02_backup
@@ -335,3 +336,178 @@ def test_retention_written_with_words_scores_like_digits(methodology):
     referencia = _evaluate(methodology, [*tecnico, con_digitos], "CRI-PR-02")
 
     assert resultado.final_score == referencia.final_score == 100
+
+
+# -- faceta del proceso: negar "otro" no niega respuesta ni riesgos (docs/09 §108) ------------
+
+
+def test_a_denied_process_does_not_zero_another_process_criterion(methodology):
+    """En la corrida 1 de mid, una negacion de `process_defined` con proceso "otro" en
+    respuesta-incidentes hacia que la contradiccion excluyera tambien el proceso de respuesta y
+    el de riesgos, que si estaban declarados."""
+
+    respuesta = _claim(
+        "process_defined",
+        {
+            "proceso": "respuesta",
+            "pasos": "triaje inicial, clasificacion del impacto y contencion",
+            "responsables": "equipo de guardia",
+        },
+        doc="respuesta-incidentes",
+    )
+    negacion = _claim(
+        "process_defined", {"proceso": "recuperacion"}, estado="inexistente", doc="otro-documento"
+    )
+
+    assert [c for c in detect([respuesta, negacion]) if c.criterion_id == "CRI-RS-01"] == []
+    resultado = _evaluate(methodology, [respuesta, negacion], "CRI-RS-01")
+
+    assert resultado.estado == Estado.EVALUADO
+    assert resultado.final_score is not None and resultado.final_score > 0
+
+
+def test_a_denied_process_of_the_same_facet_in_another_document_is_still_a_contradiction(
+    methodology,
+):
+    respuesta = _claim("process_defined", {"proceso": "respuesta", "pasos": "triaje"}, doc="manual")
+    negacion = _claim(
+        "process_defined", {"proceso": "respuesta"}, estado="inexistente", doc="diagnostico"
+    )
+
+    contradicciones = [c for c in detect([respuesta, negacion]) if c.criterion_id == "CRI-RS-01"]
+    assert len(contradicciones) == 1
+    assert set(contradicciones[0].excluded_claim_ids) == {respuesta.id, negacion.id}
+
+    resultado = _evaluate(methodology, [respuesta, negacion], "CRI-RS-01")
+    assert resultado.estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+# -- corrida 1 de mid: valores reales de la evidencia guardada (docs/09 §108) ------------------
+
+
+TEXTO_GOBIERNO = (
+    "No hay todavia un inventario de los servicios criticos de los que dependen los clientes ni de"
+    " las dependencias externas de la operacion; el equipo de arquitectura lo tiene como pendiente."
+)
+TEXTO_RIESGOS = (
+    "El inventario de activos incluye: aws_db_instance (bases de datos de clientes y de reportes) y"
+    " aws_s3_bucket (documentos y exportes). Una vez al ano el responsable de seguridad identifica"
+    " las amenazas principales con cada area, estima su impacto y acuerda las medidas a tomar."
+)
+TEXTO_RESPUESTA = (
+    "Todavia no hay un procedimiento escrito de erradicacion ni una lista de pasos acordada. El"
+    " equipo de guardia hace el triaje inicial, clasifica el incidente por su impacto y aplica las"
+    " medidas de contencion."
+)
+
+
+def _claims_from_raw(doc: str, texto: str, afirmaciones: list[dict]) -> list[EvidenceInstance]:
+    return extraction._claims_from_raw(
+        {"afirmaciones": afirmaciones},
+        chunk_text=texto,
+        chunk_locator=Locator(file=f"{doc}.md"),
+        tipos_solicitados=["data_inventory", "process_defined"],
+        doc_id=doc,
+        source_id="test:mid",
+        scope=SCOPE,
+        confianza_minima=0.6,
+    )
+
+
+def _mid_run_1_claims() -> list[EvidenceInstance]:
+    """Las afirmaciones de `e_mid_1.json` que hacian caer ID-01/03/04 y RS-01."""
+
+    return [
+        *_claims_from_raw(
+            "gobierno-y-proveedores",
+            TEXTO_GOBIERNO,
+            [
+                {
+                    "tipo": "data_inventory",
+                    "encontrado": True,
+                    "estado_declarado": "inexistente",
+                    "contenido": {},
+                    "cita": {"fragmento": TEXTO_GOBIERNO},
+                    "confianza": 0.9,
+                }
+            ],
+        ),
+        *_claims_from_raw(
+            "riesgos-e-inventario",
+            TEXTO_RIESGOS,
+            [
+                {
+                    "tipo": "data_inventory",
+                    "encontrado": True,
+                    "estado_declarado": "vigente",
+                    "contenido": {
+                        "activos": ["aws_db_instance", "aws_s3_bucket"],
+                        "tipos_datos": ["nombres", "correos", "cifras de ventas"],
+                    },
+                    "cita": {"fragmento": TEXTO_RIESGOS.split(" Una vez")[0]},
+                    "confianza": 0.9,
+                },
+                {
+                    "tipo": "process_defined",
+                    "encontrado": True,
+                    "estado_declarado": "vigente",
+                    "contenido": {
+                        "proceso": "riesgos",
+                        "impactos": True,
+                        "responsables": "responsable de seguridad",
+                    },
+                    "cita": {"fragmento": TEXTO_RIESGOS.split(" Una vez al ano ")[1]},
+                    "confianza": 0.9,
+                },
+            ],
+        ),
+        *_claims_from_raw(
+            "respuesta-incidentes",
+            TEXTO_RESPUESTA,
+            [
+                {
+                    "tipo": "process_defined",
+                    "encontrado": True,
+                    "estado_declarado": "inexistente",
+                    "contenido": {"proceso": "otro"},
+                    "cita": {"fragmento": TEXTO_RESPUESTA.split(" El equipo")[0]},
+                    "confianza": 0.9,
+                },
+                {
+                    "tipo": "process_defined",
+                    "encontrado": True,
+                    "estado_declarado": "vigente",
+                    "contenido": {
+                        "proceso": "respuesta",
+                        "pasos": "triaje inicial, clasificacion del impacto y contencion",
+                        "responsables": "equipo de guardia y responsable de seguridad",
+                    },
+                    "cita": {"fragmento": TEXTO_RESPUESTA.split(" El equipo")[1]},
+                    "confianza": 0.9,
+                },
+            ],
+        ),
+    ]
+
+
+def test_mid_run_1_spurious_denials_are_discarded_before_scoring():
+    claims = _mid_run_1_claims()
+
+    assert {c.value["tipo_afirmacion"] for c in claims} == {"data_inventory", "process_defined"}
+    assert not [c for c in claims if c.value["estado_declarado"] == "inexistente"]
+    assert {
+        c.value["contenido"].get("proceso") for c in claims if "proceso" in c.value["contenido"]
+    } == {
+        "respuesta",
+        "riesgos",
+    }
+
+
+@pytest.mark.parametrize("criterion_id", ["CRI-ID-01", "CRI-ID-03", "CRI-ID-04", "CRI-RS-01"])
+def test_mid_run_1_inventory_and_process_criteria_are_not_left_without_evidence(
+    methodology, criterion_id
+):
+    resultado = _evaluate(methodology, _mid_run_1_claims(), criterion_id)
+
+    assert resultado.estado == Estado.EVALUADO
+    assert resultado.final_score is not None

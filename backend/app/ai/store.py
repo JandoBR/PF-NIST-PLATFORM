@@ -14,6 +14,9 @@ La clave es un insumo **canonico**, no el prompt tal cual:
 - U3: JSON {criterio+version, plantilla, severidad, score, cantidad de evidencia}.
 
 Asi la misma evidencia con UUIDs distintos (otra evaluacion, otro contenedor) es el mismo insumo.
+
+`FORMATO` entra en `params_hash`: subirla invalida lo guardado cuando cambia la forma de lo que
+se persiste (docs/09 §108, donde una fila vieja se reprodujo sin `estado_declarado`).
 """
 
 from __future__ import annotations
@@ -33,6 +36,8 @@ from app.ai import voting
 from app.ai.calllog import current_context, log_call
 from app.core.db import build_session_factory
 from app.models.tables import AIResult
+
+FORMATO = 2
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session, sessionmaker

@@ -16,10 +16,11 @@ def _claim(
     confianza: float = 0.9,
     cita: str = "cita",
     locator: Locator | None = None,
+    estado: str | None = "vigente",
 ) -> EvidenceInstance:
     return EvidenceInstance(
         type_id="doc.claim",
-        type_version=2,
+        type_version=3,
         subject_type="document",
         subject_ref="doc:d",
         scope="entorno:produccion",
@@ -29,6 +30,7 @@ def _claim(
             "encontrado": encontrado,
             "confianza": confianza,
             "cita": cita,
+            "estado_declarado": estado,
         },
         source_id="test:doc",
         locator=locator or Locator(file="d.md", section="S"),
@@ -165,6 +167,36 @@ def test_an_unusable_claim_still_survives_visible_with_its_limitations():
 
     (claim,) = claims
     assert claim.limitations == CITA_NO_LOCALIZABLE
+
+
+def test_estado_declarado_is_voted_as_a_closed_field():
+    """La negacion es parte de la afirmacion: dos corridas `inexistente` ganan a una `vigente`."""
+
+    claims = vote(
+        [
+            [_claim(contenido={"programa": False}, estado="inexistente")],
+            [_claim(contenido={"programa": False}, estado="inexistente")],
+            [_claim(contenido={"programa": False}, estado="vigente")],
+        ]
+    )
+
+    (claim,) = claims
+    assert claim.value["estado_declarado"] == "inexistente"
+
+
+def test_estado_declarado_does_not_vote_mixed_with_an_invalid_value():
+    """Un valor fuera de la lista cerrada no es un estado: no arrastra el voto."""
+
+    claims = vote(
+        [
+            [_claim(estado="planificado")],
+            [_claim(estado="planificado")],
+            [_claim(estado="PENDIENTE")],
+        ]
+    )
+
+    (claim,) = claims
+    assert claim.value["estado_declarado"] == "planificado"
 
 
 def test_boolean_and_enum_values_are_compared_exactly():

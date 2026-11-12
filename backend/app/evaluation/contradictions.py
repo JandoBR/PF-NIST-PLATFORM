@@ -34,6 +34,8 @@ from app.evaluation.rules._common import (
     doc_claims,
     es_ausencia_declarada,
     estado_declarado,
+    faceta,
+    proceso_faceta,
 )
 from app.evaluation.rules.pr02_backup import retencion_politica_dias
 from app.evaluation.schemas import CriterionResult
@@ -61,16 +63,17 @@ _CRITERIOS_POR_TIPO: dict[str, tuple[str, ...]] = {
     "data_inventory": ("CRI-ID-01", "CRI-ID-02", "CRI-ID-04"),
 }
 
-#: `process_defined` sirve a varios criterios segun el `proceso` que declara el documento.
-_CRITERIOS_POR_PROCESO: tuple[tuple[str, str], ...] = (
-    ("respuesta", "CRI-RS-01"),
-    ("recuperacion", "CRI-RC-01"),
-    ("riesgos", "CRI-ID-03"),
-    ("analisis", "CRI-RS-02"),
-    ("contencion", "CRI-RS-04"),
-    ("mejora", "CRI-ID-05"),
-    ("revision", "CRI-GV-04"),
-)
+#: `process_defined` sirve a varios criterios segun el proceso que declara el documento; la faceta
+#: sale de `_common.faceta`, asi que dos procesos distintos nunca comparten contradiccion.
+_CRITERIOS_POR_FACETA: dict[str, str] = {
+    "respuesta": "CRI-RS-01",
+    "recuperacion": "CRI-RC-01",
+    "riesgos": "CRI-ID-03",
+    "analisis incidentes": "CRI-RS-02",
+    "contencion": "CRI-RS-04",
+    "mejora": "CRI-ID-05",
+    "revision": "CRI-GV-04",
+}
 
 
 def _criterios_de(claim: EvidenceInstance) -> tuple[str, ...]:
@@ -78,8 +81,8 @@ def _criterios_de(claim: EvidenceInstance) -> tuple[str, ...]:
 
     tipo = str(claim.value.get("tipo_afirmacion"))
     if tipo == "process_defined":
-        proceso = str((claim.value.get("contenido") or {}).get("proceso", "")).lower()
-        return tuple(criterio for palabra, criterio in _CRITERIOS_POR_PROCESO if palabra in proceso)
+        criterio = _CRITERIOS_POR_FACETA.get(proceso_faceta(claim) or "")
+        return (criterio,) if criterio is not None else ()
     return _CRITERIOS_POR_TIPO.get(tipo, ())
 
 
@@ -242,24 +245,26 @@ def _documents_disagree(
 def _absence_disagreement(evidence: list[EvidenceInstance]) -> list[Contradiction]:
     """Un documento niega la practica y otro la declara vigente (docs/02 §5, docs/09 §106).
 
-    Es el caso de borde de `aplicar_estado_declarado`: la ausencia no se impone sobre otro
-    documento. Se registran ambos lados y, como en cualquier documento-vs-documento, ninguno cuenta
-    para puntuar el criterio afectado; sin exclusion, la regla acreditaria la version vigente y la
-    negacion quedaria invisible."""
+    Se compara por **faceta**, no solo por tipo: una negacion del proceso de recuperacion no
+    contradice el proceso de respuesta de otro documento, y antes excluia sus afirmaciones del
+    criterio equivocado (docs/09 §108). Es el caso de borde de `aplicar_estado_declarado`: la
+    ausencia no se impone sobre otro documento. Se registran ambos lados y, como en cualquier
+    documento-vs-documento, ninguno cuenta para puntuar el criterio afectado; sin exclusion, la
+    regla acreditaria la version vigente y la negacion quedaria invisible."""
 
     claims = [
         c
         for c in by_type(evidence, "doc.claim")
         if c.value.get("encontrado") and c.limitations is None
     ]
-    grupos: dict[tuple[str, str], list[EvidenceInstance]] = {}
+    grupos: dict[tuple[str, tuple[str, ...]], list[EvidenceInstance]] = {}
     for claim in claims:
-        clave = (claim.scope, str(claim.value.get("tipo_afirmacion")))
+        clave = (claim.scope, faceta(claim))
         grupos.setdefault(clave, []).append(claim)
 
     findings: list[Contradiction] = []
     for clave, grupo in sorted(grupos.items()):
-        tipo = clave[1]
+        tipo = str(grupo[0].value.get("tipo_afirmacion"))
         ausencias = [c for c in grupo if es_ausencia_declarada(c)]
         vigentes = [c for c in grupo if estado_declarado(c) == "vigente"]
         if not ausencias or not vigentes:
@@ -275,8 +280,9 @@ def _absence_disagreement(evidence: list[EvidenceInstance]) -> list[Contradictio
         )
         if not criterios:
             continue
+        practica = tipo if len(clave[1]) == 1 or not clave[1][1] else f"{tipo} ({clave[1][1]})"
         detalle = (
-            f"{' y '.join(sorted({c.subject_ref for c in ausencias}))} declara que {tipo} no"
+            f"{' y '.join(sorted({c.subject_ref for c in ausencias}))} declara que {practica} no"
             f" existe; {' y '.join(sorted({c.subject_ref for c in vigentes}))} lo declara vigente."
             " Se registran ambos; ninguno cuenta para el puntaje."
         )

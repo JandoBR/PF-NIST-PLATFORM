@@ -2,17 +2,22 @@
 
 from __future__ import annotations
 
+import json
 import threading
+from pathlib import Path
 
+from app.adapters.documents.adapter import DocumentAdapter
 from app.ai import extraction
 from app.ai.calllog import call_context
 from app.ai.store import AIResultStore, StoreAIClient
 from app.core.db import build_engine, build_session_factory, create_all
+from app.methodology.loader import load_methodology
 from app.models.tables import AIResult, Organization
 from app.schemas.evidence import Locator
 
 LOCATOR = Locator(file="politica.md", section="Politica")
 CHUNK = "La politica fue aprobada por la Direccion General el 1 de marzo de 2025."
+METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
 
 
 class _CountingClient:
@@ -39,6 +44,13 @@ class _ScriptedClient:
         with self._lock:
             self.calls += 1
             return self._responses.pop(0)
+
+
+class _NoCallClient:
+    """Falla si se llega al modelo: el resultado tiene que salir del store."""
+
+    def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
+        raise AssertionError("el replay no debe llamar al modelo")
 
 
 def _engine(tmp_path):
@@ -78,6 +90,7 @@ def _claim(
     contenido: dict | None = None,
     confianza: float = 0.9,
     cita: str = "La politica fue aprobada por la Direccion General el 1 de marzo de 2025.",
+    estado: str | None = "vigente",
 ) -> dict:
     return {
         "tipo": tipo,
@@ -85,20 +98,27 @@ def _claim(
         "contenido": contenido if contenido is not None else {"nombre": "Politica"},
         "cita": {"fragmento": cita},
         "confianza": confianza,
+        "estado_declarado": estado,
     }
 
 
-def _extraer(client):
+def _extraer(client, tipos: list[str] | None = None):
     return extraction.extract_claims(
         client,
         chunk_text=CHUNK,
         chunk_locator=LOCATOR,
-        tipos_solicitados=["policy_exists"],
+        tipos_solicitados=tipos or ["policy_exists"],
         doc_id="politica",
         source_id="test:doc",
         scope="entorno:produccion",
         confianza_minima=0.6,
     )
+
+
+def _por_tipo_y_valor(evidence):
+    """Evidencia comparable entre dos corridas: sin ids ni marcas de tiempo."""
+
+    return sorted((e.type_id, json.dumps(e.value, sort_keys=True)) for e in evidence)
 
 
 # -- Store ------------------------------------------------------------------------------------
@@ -251,6 +271,87 @@ def test_u1_second_extraction_reads_the_store_instead_of_calling_ai(tmp_path, mo
     assert claims[0].value["contenido"] == {"nombre": "Politica"}
 
 
+def test_u1_replay_round_trips_every_claim_field_including_estado(tmp_path, monkeypatch):
+    """Un replay del store tiene que devolver la misma evidencia que la corrida en vivo.
+
+    `claims_to_raw` omitia `estado_declarado`: la negacion se leia como vigente al releerla y una
+    misma evaluacion daba resultados distintos segun si el chunk venia del modelo o del store
+    (docs/09 §108).
+    """
+
+    monkeypatch.setenv("U1_VOTES", "3")
+    engine = _engine(tmp_path)
+    org = _org(engine, "Org")
+    negacion = {
+        "afirmaciones": [
+            _claim(
+                tipo="supplier_program",
+                contenido={"programa": False, "requisitos_contractuales": False},
+                estado="inexistente",
+            )
+        ]
+    }
+    live = _extraer(
+        StoreAIClient(
+            _ScriptedClient([negacion, negacion, {"afirmaciones": [_claim(estado="vigente")]}]),
+            _store(engine, org),
+        ),
+        tipos=["supplier_program"],
+    )
+
+    replay = _extraer(
+        StoreAIClient(_NoCallClient(), _store(engine, org)), tipos=["supplier_program"]
+    )
+
+    (primera,) = live
+    (segunda,) = replay
+    assert primera.value["estado_declarado"] == "inexistente"
+    assert segunda.value == primera.value
+    assert (segunda.locator, segunda.subject_ref) == (primera.locator, primera.subject_ref)
+
+
+def test_replay_emits_the_same_document_source_info_as_the_live_run(tmp_path, monkeypatch):
+    """El adaptador contaba `doc.source.info` como "no respondido" al releer del store.
+
+    El resultado guardado es una respuesta que la IA ya dio: el documento se analizo igual y el
+    replay tiene que emitir los mismos conteos (docs/09 §108)."""
+
+    monkeypatch.setenv("U1_VOTES", "3")
+    engine = _engine(tmp_path)
+    org = _org(engine, "Org")
+    documento = tmp_path / "documentos" / "politica.md"
+    documento.parent.mkdir()
+    documento.write_text(
+        "# Politica\nLa politica fue aprobada por la Direccion General el 1 de marzo de 2025.\n",
+        encoding="utf-8",
+    )
+    methodology = load_methodology(METHODOLOGY_DIR)
+    respuesta = {"afirmaciones": [_claim()]}
+
+    def _analizar(client):
+        adapter = DocumentAdapter(
+            StoreAIClient(client, _store(engine, org)),
+            methodology,
+            source_id="test:info",
+            scope="entorno:produccion",
+        )
+        return adapter.parse_path(documento, tipos_solicitados=["policy_exists"])
+
+    live = _analizar(_ScriptedClient([respuesta, respuesta, respuesta]))
+    replay = _analizar(_NoCallClient())
+
+    assert _por_tipo_y_valor(live) == _por_tipo_y_valor(replay)
+    (info,) = [e for e in replay if e.type_id == "doc.source.info"]
+    assert info.value == {
+        "titulo": "politica",
+        "archivo": "politica.md",
+        "secciones": 1,
+        "analizadas": 1,
+        "omitidas": 0,
+        "sin_respuesta": 0,
+    }
+
+
 def test_u1_votes_1_is_a_single_call_and_uses_the_wrapper_cache(tmp_path, monkeypatch):
     monkeypatch.setenv("U1_VOTES", "1")
     engine = _engine(tmp_path)
@@ -342,3 +443,17 @@ def test_build_default_client_uses_the_db_store_with_a_session(tmp_path, monkeyp
     monkeypatch.delenv("DEEPSEEK_API_KEY")
     with session_factory() as session:
         assert isinstance(build_default_client(session=session, org_id=org.id), NullAIClient)
+
+
+def test_store_format_is_part_of_the_params_hash():
+    from app.ai import store
+    from app.ai.client import DeepSeekClient
+
+    client = DeepSeekClient(api_key="x", model="m", timeout=1, max_tokens=100)
+    antes = client.params_hash
+    original = store.FORMATO
+    try:
+        store.FORMATO = original + 1
+        assert client.params_hash != antes
+    finally:
+        store.FORMATO = original

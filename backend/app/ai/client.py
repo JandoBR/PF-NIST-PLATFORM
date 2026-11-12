@@ -131,7 +131,14 @@ class DeepSeekClient:
     def params(self) -> dict:
         """Parametros que, si cambian, invalidan una respuesta guardada (docs/05 §7)."""
 
-        return {"temperature": 0.0, "max_tokens": self.max_tokens, "razonamiento": True}
+        from app.ai.store import FORMATO
+
+        return {
+            "temperature": 0.0,
+            "max_tokens": self.max_tokens,
+            "razonamiento": True,
+            "formato": FORMATO,
+        }
 
     @property
     def params_hash(self) -> str:

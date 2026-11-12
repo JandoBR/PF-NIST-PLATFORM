@@ -98,7 +98,7 @@ cantidades a dígitos con su unidad (“noventa días” → “90 días”) sin
 | E6 | Un chunk sin afirmaciones no genera evidencia; el documento completo se marca como analizado. |
 | E7 | Los prompts son **fijos por versión** (`prompt_version`); el modelo no los modifica. |
 | E8 | La cita de una afirmación encontrada **debe aparecer en el texto enviado** (sin distinguir mayúsculas, acentos, espacios ni puntuación/markdown; `app/ai/quotes.py`, la misma comparación que usa el golden set). Si no aparece, la afirmación se guarda con la limitación "cita no localizable" y no cuenta para ningún criterio; se informa como hallazgo `limitacion`. La cita se guarda en la evidencia (`doc.claim@3`). |
-| E9 | Cada afirmación `encontrado=true` declara `estado_declarado`: `vigente`, `inexistente` (negación explícita) o `planificado` (futuro). El motor convierte las dos últimas en `no_implementado` (0) citando el documento; un valor no reconocido descarta la afirmación y una afirmación sin el campo se lee como `vigente` (docs/01 §3, docs/09 §106). |
+| E9 | Cada afirmación `encontrado=true` declara `estado_declarado`: `vigente`, `inexistente` (negación explícita) o `planificado` (futuro). El motor convierte las dos últimas en `no_implementado` (0) citando el documento; un valor no reconocido descarta la afirmación y una afirmación sin el campo se lee como `vigente` (docs/01 §3, docs/09 §106). Una negación o un plan tiene que identificar la práctica: `process_defined` exige un `proceso` concreto (no `otro`) y, salvo en los tipos en que el propio tipo la nombra (`policy_exists`, `role_assigned`, `supplier_program`, `training_program`), no puede venir sin campos de `contenido`; si no la identifica se descarta antes de votar para que no ponga un criterio a 0 ni contradiga a otro documento (docs/09 §108). |
 
 ### 2.4 Por qué las reglas no las genera la IA
 
@@ -125,6 +125,9 @@ la validación normal (E3 confianza y E8 cita literal) antes de votar:
 - campo por campo, un valor gana si aparece en 2 corridas (texto comparado sin mayúsculas ni
   espacios sobrantes; booleanos, enums y fechas exactos); en listas se conserva cada elemento
   presente en 2 corridas; `null` y ausente son el mismo estado, así que sin mayoría el campo no va;
+- `estado_declarado` se vota aparte como campo cerrado (`vigente|inexistente|planificado`), no
+  dentro de `contenido`: es lo que convierte una afirmación en negación o en plan, y tiene que
+  sobrevivir al store;
 - la cita y el locator salen de la corrida de mayor confianza que apoya la afirmación, y la
   confianza es la mediana de esas corridas. Los empates se rompen por confianza y luego por índice
   de corrida, siempre igual.
@@ -133,7 +136,10 @@ Una afirmación que ninguna corrida pudo validar (confianza baja o cita no local
 si la mayoría de las corridas la produjo se conserva con sus limitaciones: sigue visible y no cuenta
 para puntuar, como antes de votar. El resultado votado (y un resumen de cada corrida cruda en
 `meta`) se guarda en el store persistente (docs/05 §7); la próxima evaluación con el mismo insumo lo
-lee sin llamar al modelo.
+lee sin llamar al modelo. `voting.claims_to_raw` guarda **todos** los campos de la afirmación
+(`tipo_afirmacion`, `contenido`, `encontrado`, `confianza`, `cita` y `estado_declarado`): releer del
+store pasa otra vez por la validación normal y tiene que reconstruir exactamente la misma evidencia
+que la corrida en vivo (docs/09 §108).
 
 **Garantía de determinismo.** Para un mismo insumo canónico —texto de chunk + documento + tipos
 (U1), o criterio + valores de evidencia sin ids (U2)— la primera extracción ya es una mayoría de 3,
@@ -398,6 +404,12 @@ una corrida respondió, no hay mayoría y no se guarda, para reintentar en la pr
 y reemplaza la respuesta guardada. La CLI/local, sin sesión de BD, mantiene la cache en disco para
 U2/U3 y para U1 con `U1_VOTES=1`; con votación las tres corridas tienen que llegar al modelo (por
 eso no hay una entrada votada en disco).
+
+Un replay no cambia la evidencia: el resultado guardado se valida igual que una respuesta nueva y
+tiene que producir los mismos `doc.claim` (todos los campos, `estado_declarado` incluido) y el mismo
+`doc.source.info` que la corrida en vivo. `extract_claims` avisa cuando el chunk salió del store
+(`on_replay`) porque, para el adaptador de documentos, es una respuesta que la IA ya dio: sin ese
+aviso el documento se contaba como no analizado y perdía sus conteos de secciones (docs/09 §108).
 
 Principio operativo: **si la IA desaparece, el sistema sigue funcionando** con `S = B` y extracción
 documental deshabilitada, declarando la limitación.

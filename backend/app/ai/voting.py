@@ -9,8 +9,11 @@ validadas (E3 confianza, E8 cita literal).
 El voto es generico sobre `contenido`: no hay una lista de campos por tipo. Un campo escalar
 gana si el mismo valor normalizado aparece en >= umbral corridas; las listas se combinan elemento
 por elemento; `null` y ausente son el mismo estado (sin mayoria -> el campo no va).
+`estado_declarado` se vota aparte como campo cerrado (`vigente|inexistente|planificado`), y
 `process_defined` se agrupa por (tipo, proceso) para no perder la afirmacion de "mejora" cuando el
-modelo la fusiona con la de "respuesta".
+modelo la fusiona con la de "respuesta". `claims_to_raw` conserva todos los campos de la
+afirmacion, para que un replay desde el store reconstruya exactamente la misma evidencia
+(docs/09 §108).
 """
 
 from __future__ import annotations
@@ -23,6 +26,10 @@ from app.schemas.evidence import EvidenceInstance
 
 DEFAULT_VOTES = 3
 _MISSING = object()
+
+#: Estados que declara el documento (docs/09 §106). Es un campo cerrado: un valor fuera de la
+#: lista no vota y, sin mayoria, se queda el de la afirmacion de mayor confianza.
+_ESTADOS_DECLARADOS = ("vigente", "inexistente", "planificado")
 
 
 def votes() -> int:
@@ -73,6 +80,16 @@ def _confianza(claim: EvidenceInstance) -> float:
         return float((claim.value or {}).get("confianza") or 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _estado(claim: EvidenceInstance) -> str | None:
+    """`estado_declarado` normalizado, o `None` si el valor no esta en la lista cerrada."""
+
+    valor = (claim.value or {}).get("estado_declarado")
+    if valor is None:
+        return None
+    normalizado = str(valor).strip().lower()
+    return normalizado if normalizado in _ESTADOS_DECLARADOS else None
 
 
 def _mejor(claims: list[tuple[int, EvidenceInstance]]) -> tuple[int, EvidenceInstance]:
@@ -184,12 +201,20 @@ def _votar_grupo(claims: list[tuple[int, EvidenceInstance]], threshold: int) -> 
         encontrado = bool((seleccionada.value or {}).get("encontrado"))
 
     confianzas = [_confianza(claim) for _, claim in claims]
+    hay_mayoria_estado, estado = _votar_escalar(
+        [(idx, _confianza(c), _estado(c)) for idx, c in claims], threshold
+    )
+    if not hay_mayoria_estado:
+        estado = _estado(seleccionada)
     valor = {
         **(base.value or {}),
         "contenido": _votar_contenido(claims, threshold),
         "encontrado": encontrado,
         "confianza": float(median(confianzas)),
         "cita": (seleccionada.value or {}).get("cita"),
+        # Campo cerrado y obligatorio con `encontrado=true` desde `doc.claim@3`: se vota como los
+        # demas y se guarda con la afirmacion, o el replay perderia la negacion (docs/09 §108).
+        "estado_declarado": estado,
     }
     return base.model_copy(
         update={
@@ -264,6 +289,7 @@ def claims_to_raw(claims: list[EvidenceInstance]) -> dict[str, Any]:
                     else None
                 ),
                 "confianza": valor.get("confianza", 0.0),
+                "estado_declarado": valor.get("estado_declarado"),
             }
         )
     return {"afirmaciones": afirmaciones}

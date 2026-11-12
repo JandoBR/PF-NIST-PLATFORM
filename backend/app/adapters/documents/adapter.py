@@ -49,6 +49,11 @@ class _CountingClient:
             self.respondidas += 1
         return respuesta
 
+    def marcar_respondida(self) -> None:
+        """Un resultado del store es una respuesta que la IA ya dio a este chunk (docs/09 §108)."""
+
+        self.respondidas += 1
+
 
 def _secciones(chunk: Chunk) -> int:
     """Secciones/paginas del documento que el chunk agrupa (un chunk vacio cuenta como una)."""
@@ -141,6 +146,7 @@ class DocumentAdapter:
             source_id=self.source_id,
             scope=self.scope,
             confianza_minima=self._confianza_minima,
+            on_replay=contador.marcar_respondida,
         )
         return claims, contador.respondidas > 0
 
