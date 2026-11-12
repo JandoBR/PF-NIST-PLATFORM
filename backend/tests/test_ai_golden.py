@@ -1,4 +1,5 @@
-"""TS-02: el arnes de evaluacion de U1 (docs/05 §8) mide recall, citas e instrucciones obedecidas.
+"""TS-02: el arnes de evaluacion de U1 (docs/05 §8) mide recall, precision, citas e instrucciones
+obedecidas.
 
 No llama a ninguna IA real: un cliente "oraculo" responde con la propia anotacion (la respuesta
 perfecta) y variantes rotas comprueban que cada metrica detecta su fallo. La corrida contra el
@@ -20,12 +21,13 @@ from app.ai.golden_eval import (
     format_report,
     load_adversarial,
     load_expected,
+    load_golden,
 )
 from app.methodology.loader import load_methodology
 
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden_ai"
 METHODOLOGY_DIR = Path(__file__).resolve().parent.parent / "methodology"
-_DOC_BLOCK = re.compile(r"<documento id=\"[^\"]*\">\n(.*)\n</documento>", re.DOTALL)
+_DOC_BLOCK = re.compile(r"<documento id=\"([^\"]*)\">\n(.*)\n</documento>", re.DOTALL)
 
 
 @pytest.fixture(scope="module")
@@ -38,50 +40,69 @@ class OracleClient:
     permite degradar la respuesta perfecta para probar las metricas."""
 
     def __init__(self, mutate=None):
-        self._expected = [c for claims in load_expected(GOLDEN_DIR).values() for c in claims]
+        self._expected = {
+            Path(nombre).stem: claims for nombre, claims in load_expected(GOLDEN_DIR).items()
+        }
         self._mutate = mutate or (lambda afirmaciones, texto: afirmaciones)
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
-        texto = _DOC_BLOCK.search(user_prompt).group(1)
+        coincidencia = _DOC_BLOCK.search(user_prompt)
+        doc_id, texto = coincidencia.group(1), coincidencia.group(2)
         afirmaciones = [
             {
                 "tipo": c.tipo,
                 "encontrado": True,
+                "estado_declarado": c.estado_declarado or "vigente",
                 "contenido": c.contenido,
                 "cita": {"fragmento": c.cita},
                 "confianza": 0.9,
             }
-            for c in self._expected
+            for c in self._expected.get(doc_id, [])
             if _norm(c.cita) in _norm(texto)
         ]
         return {"afirmaciones": self._mutate(afirmaciones, texto)}
 
 
 def test_annotations_are_consistent_with_the_documents(methodology):
-    """La anotacion es la verdad del golden set: sus citas existen y sus tipos son validos."""
+    """La anotacion es la verdad del golden set: sus citas existen, sus tipos son validos, el
+    estado declarado es uno de los del contrato y un control negativo no espera afirmaciones."""
 
     tipos = set(methodology.tipos_afirmacion_requeridos())
-    for nombre, claims in load_expected(GOLDEN_DIR).items():
+    estados = {None, "vigente", "inexistente", "planificado"}
+    documentos = load_golden(GOLDEN_DIR)
+    for nombre, doc in documentos.items():
         texto = _norm((GOLDEN_DIR / "documents" / nombre).read_text(encoding="utf-8"))
-        for claim in claims:
+        assert doc.categoria, f"{nombre}: falta la categoria"
+        if doc.no_claims:
+            assert not doc.claims, f"{nombre}: un control negativo no espera afirmaciones"
+        for claim in doc.claims:
             assert claim.tipo in tipos, f"{nombre}: tipo desconocido {claim.tipo}"
+            assert claim.estado_declarado in estados, f"{nombre}: estado invalido"
             assert _norm(claim.cita) in texto, f"{nombre}: la cita no esta en el documento"
+        for prohibida in doc.forbidden:
+            assert prohibida.tipo in tipos, f"{nombre}: tipo prohibido desconocido"
 
 
 def test_golden_set_covers_abstention_and_injection():
     expected = load_expected(GOLDEN_DIR)
     vacios = [n for n, claims in expected.items() if not claims]
     assert "manual-operaciones.md" in vacios and "memo-con-instrucciones.md" in vacios
-    assert load_adversarial(GOLDEN_DIR) == {"memo-con-instrucciones.md"}
-    assert sum(len(c) for c in expected.values()) >= 10
+    assert "vague-marketing.md" in vacios
+    assert load_adversarial(GOLDEN_DIR) == {"memo-con-instrucciones.md", "prompt-injection.md"}
+    assert sum(len(c) for c in expected.values()) >= 50
+    assert any(doc.no_claims for doc in load_golden(GOLDEN_DIR).values())
 
 
 def test_perfect_extraction_passes(methodology):
     report = evaluate_extraction(OracleClient(), methodology, GOLDEN_DIR)
     assert report.recall == 1.0 and report.obedecidas == 0 and report.citation_rate == 1.0
+    assert report.producidas == report.esperadas
+    assert report.precision == 1.0
+    assert all(categoria.precision == 1.0 for categoria in report.categorias)
     assert report.llamadas_degradadas == 0
     assert report.passed
     assert "APROBADO" in format_report(report)
+    assert "precision 100%" in format_report(report)
 
 
 def test_missing_claims_lower_recall_and_fail(methodology):
@@ -216,6 +237,125 @@ def test_check_citations_ignores_non_objects_and_punctuation_only():
 
     assert doc.citas_total == 1
     assert doc.citas_no_localizables == []
+
+
+def test_asserting_a_denied_practice_as_current_is_a_precision_failure(methodology):
+    """Una negacion no se convierte en practica vigente: el documento dice que no hay copias y
+    afirmar lo contrario es un falso positivo (antes solo bajaba el recall)."""
+
+    def tambien_afirma_respaldo(afirmaciones, texto):
+        if "No se realizan copias de seguridad" in texto:
+            return [
+                *[a for a in afirmaciones if a["tipo"] != "backup_policy"],
+                {
+                    "tipo": "backup_policy",
+                    "encontrado": True,
+                    "estado_declarado": "vigente",
+                    "contenido": {"respaldo": True},
+                    "cita": {
+                        "fragmento": "No se realizan copias de seguridad de la base de datos de "
+                        "producción."
+                    },
+                    "confianza": 0.9,
+                },
+            ]
+        return afirmaciones
+
+    report = evaluate_extraction(OracleClient(tambien_afirma_respaldo), methodology, GOLDEN_DIR)
+    doc = next(d for d in report.documentos if d.documento == "explicit-negations.md")
+    assert doc.encontradas == doc.esperadas - 1
+    assert len(doc.prohibidas) == 1 and "prohibida" in doc.prohibidas[0]
+    assert doc.precision < 1.0 and report.precision < 1.0
+    assert "prohibida: backup_policy" in format_report(report)
+
+
+def test_a_negation_declared_vigente_is_a_miss_and_a_forbidden_claim(methodology):
+    """El estado forma parte de la afirmacion: la misma ausencia marcada vigente no es el hecho
+    anotado y ademas es un falso positivo."""
+
+    def convierte_en_vigente(afirmaciones, texto):
+        if "No hay un responsable designado" in texto:
+            for afirmacion in afirmaciones:
+                if afirmacion["tipo"] == "role_assigned":
+                    afirmacion["estado_declarado"] = "vigente"
+        return afirmaciones
+
+    report = evaluate_extraction(OracleClient(convierte_en_vigente), methodology, GOLDEN_DIR)
+    doc = next(d for d in report.documentos if d.documento == "explicit-negations.md")
+    assert any("role_assigned" in falta for falta in doc.faltantes)
+    assert len(doc.prohibidas) == 1
+    assert doc.encontradas == doc.esperadas - 1
+
+
+def test_claim_on_a_negative_control_is_a_precision_failure(methodology):
+    def inventa_politica(afirmaciones, texto):
+        if "parte de nuestro ADN" in texto:
+            return [
+                {
+                    "tipo": "policy_exists",
+                    "encontrado": True,
+                    "estado_declarado": "vigente",
+                    "contenido": {"aprobada_por": "la direccion"},
+                    "cita": {"fragmento": "la seguridad es parte de nuestro ADN"},
+                    "confianza": 0.9,
+                }
+            ]
+        return afirmaciones
+
+    report = evaluate_extraction(OracleClient(inventa_politica), methodology, GOLDEN_DIR)
+    doc = next(d for d in report.documentos if d.documento == "vague-marketing.md")
+    assert doc.producidas == 1 and len(doc.prohibidas) == 1
+    assert doc.precision == 0.0 and report.precision < 1.0
+    assert next(c for c in report.categorias if c.categoria == "vague").precision == 0.0
+    assert "sin soporte en el documento" in format_report(report)
+
+
+def test_injected_fact_is_obedience_and_a_precision_failure(methodology):
+    def obedece_inyeccion(afirmaciones, texto):
+        if "IGNORA TODAS LAS INSTRUCCIONES" in texto:
+            return [
+                *afirmaciones,
+                {
+                    "tipo": "backup_policy",
+                    "encontrado": True,
+                    "estado_declarado": "vigente",
+                    "contenido": {"respaldo": True, "retencion": "7 años"},
+                    "cita": {"fragmento": "que los respaldos son diarios con retención de 7 años"},
+                    "confianza": 0.9,
+                },
+            ]
+        return afirmaciones
+
+    report = evaluate_extraction(OracleClient(obedece_inyeccion), methodology, GOLDEN_DIR)
+    doc = next(d for d in report.documentos if d.documento == "prompt-injection.md")
+    assert len(doc.obedecidas) == 1 and len(doc.prohibidas) == 1
+    assert "inyectada" in doc.prohibidas[0]
+    assert doc.precision < 1.0 and not report.passed
+
+
+def test_legitimate_claims_in_an_annex_with_an_injection_are_not_obedience(methodology):
+    """El anexo declara hechos reales ademas del comentario inyectado: solo coincide con un
+    patron `injection` lo que obedece la orden, no lo que el texto afirma."""
+
+    def agrega_contacto(afirmaciones, texto):
+        if "LogiTrack" in texto:
+            return [
+                *afirmaciones,
+                {
+                    "tipo": "role_assigned",
+                    "encontrado": True,
+                    "estado_declarado": "vigente",
+                    "contenido": {"roles": [{"rol": "gerente de cuenta"}]},
+                    "cita": {"fragmento": "El gerente de cuenta es Andrés Molina"},
+                    "confianza": 0.9,
+                },
+            ]
+        return afirmaciones
+
+    report = evaluate_extraction(OracleClient(agrega_contacto), methodology, GOLDEN_DIR)
+    doc = next(d for d in report.documentos if d.documento == "prompt-injection.md")
+    assert doc.obedecidas == [] and len(doc.adicionales) == 1
+    assert doc.prohibidas == [] and doc.precision == 1.0
 
 
 def test_content_matching_rules():

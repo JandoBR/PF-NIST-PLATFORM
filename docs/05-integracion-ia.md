@@ -404,12 +404,83 @@ documental deshabilitada, declarando la limitación.
 
 ## 8. Evaluación de la IA
 
+El arnés de TS-02 (`backend/app/ai/golden_eval.py`) corre U1 con el mismo chunking y las mismas
+reglas E1-E8 que el pipeline sobre un golden set anotado a mano (`backend/tests/golden_ai/`). Mide
+cuatro cosas, por documento, por categoría y en total:
+
+| Métrica | Qué mide | Criterio de éxito |
+|---|---|---|
+| Recall | Afirmaciones esperadas que la IA encontró (tipo, campos clave y `estado_declarado` cuando el documento niega o planifica) | ≥ 90 % |
+| Precisión | Afirmaciones producidas que no son un falso positivo: una práctica negada o planificada declarada vigente, un dato inyectado obedecido o cualquier afirmación en un documento `no_claims` | ≥ 95 % |
+| Citas | `cita.fragmento` que aparece literalmente en el texto enviado | 100 % |
+| Abstención | Afirmaciones encontradas en documentos `adversarial` (instrucciones dirigidas al modelo) | 0 instrucciones obedecidas |
+
+Lo adicional que la IA afirme y el texto soporte **no es un error**: los documentos se toman como
+correctos y solo se informa para revisión humana. La evaluación real cuesta dinero y se lanza con
+`python -m app.main eval-ai --confirm-live-ai` (pasa por el guard de IA viva, usa `U1_VOTES=3` y
+el prompt `extract_v6`). Los tests usan un cliente oráculo que responde con la propia anotación:
+no hay llamadas reales en la suite.
+
+**Composición del golden set.** 21 documentos en 15 categorías, 59 afirmaciones esperadas, 14
+patrones prohibidos, 2 documentos adversariales y 1 control negativo estricto (`no_claims`:
+`vague-marketing.md`), además de la abstención esperada en `manual-operaciones.md` y en los dos
+adversariales. Los 13 documentos nuevos salen
+del estudio de extracción (docs/09 §105-§107) y cubren los modos de fallo que faltaban.
+
+| Categoría | Documentos | Qué cubre |
+|---|---|---|
+| formal-policy | 6 | Política, roles, riesgos, incidentes, continuidad, proveedores |
+| negative-control | 1 | Un manual que declara no contener políticas |
+| adversarial | 2 | Inyección en comentario HTML y en un memo |
+| negación / planificado / contradictorio | 3 | Ausencias explícitas, planes a futuro, dos secciones que se contradicen |
+| vague / outdated | 2 | Marketing sin hechos, política desactualizada |
+| numbers / dates | 2 | Cantidades en palabras (se anotan en dígitos) y fechas en varios formatos |
+| compliance / contract | 2 | SoA ISO 27001 y anexo contractual |
+| long | 1 | Plan de continuidad de dos chunks |
+| bilingual / email | 2 | Español-inglés y un hilo de correo |
+
+El formato de anotación es retrocompatible: `claims` es lo que U1 debe encontrar (la cita sigue
+siendo literal), y se suman `category`, `forbidden` (qué no debe aparecer), `no_claims` (documento
+sin hechos válidos) y `estado_declarado` en la afirmación. Una afirmación `forbidden` solo cuenta
+si la IA la declara **vigente**: negar o planificar la misma práctica es el comportamiento
+esperado.
+
+**Línea base real (DeepSeek `deepseek-flash`, `extract_v6`, votación de 3, 22 chunks / 66
+llamadas).**
+
+| Categoría | Recall | Precisión |
+|---|---|---|
+| formal-policy (6) | 94 % (15/16) | 100 % (24) |
+| negative-control (1) | — (0 esperadas) | 100 % (1) |
+| adversarial (2) | 50 % (1/2) | 100 % (4) |
+| negation (1) | 83 % (5/6) | 100 % (5) |
+| planned (1) | 80 % (4/5) | 100 % (6) |
+| contradictory (1) | 100 % (1/1) | 100 % (1) |
+| vague (1) | — (0 esperadas) | 100 % (0) |
+| outdated (1) | 67 % (2/3) | 100 % (5) |
+| numbers (1) | 100 % (4/4) | 100 % (5) |
+| dates (1) | 100 % (3/3) | 100 % (3) |
+| compliance (1) | 100 % (4/4) | 100 % (7) |
+| contract (1) | 50 % (1/2) | 100 % (5) |
+| long (1) | 75 % (6/8) | 100 % (19) |
+| bilingual (1) | 100 % (2/2) | 100 % (4) |
+| email (1) | 67 % (2/3) | 100 % (4) |
+| **Total** | **85 % (50/59)** | **100 % (93/93)** |
+
+La corrida queda por debajo de dos criterios: recall 85 % (mínimo 90 %) y citas localizables
+96 % (275/285, sobre todo citas que unen secciones con `[...]` en el plan largo). La precisión y
+la abstención se cumplen: ninguna práctica negada o planificada se declaró vigente y no se obedeció
+ninguna inyección (las tres afirmaciones extra del anexo son hechos del propio texto —rol,
+notificación y contexto—, no datos de la orden). Los fallos de recall son cinco detalles de
+`plazos`/`retencion` omitidos, el plan de continuidad negado, el rol de la política desactualizada,
+el proceso de mejora de respuesta a incidentes y la dirección del plan de exposición.
+
+**Otras pruebas de IA** (fuera del golden set de U1):
+
 | Prueba | Método | Criterio de éxito |
 |---|---|---|
-| Extracción correcta | Golden set de documentos anotados manualmente | ≥ 90 % de afirmaciones esperadas; lo adicional citado del texto no es error (`python -m app.main eval-ai`, docs/09 §43) |
-| Abstención | Documentos sin la información | No debe afirmar lo que el texto no dice (citas verificadas; 0 instrucciones incrustadas obedecidas) |
-| Citas | Verificación de fragmentos contra el texto | 100 % de citas localizables |
 | Ajuste dentro de límites | Casos con B/A conocidos | `S` siempre en `[B−D, B+D]` acotado |
 | Justificación válida | Referencias a evidencia real | 100 % de IDs existentes |
 | Degradación | Simulación de fallos (vacío, timeout) | Evaluación completa con `degradado`, sin crash |
 | Valor del ajuste | Comparación con/sin IA contra rúbrica humana | El ajuste no empeora la clasificación humana; se reporta |
+

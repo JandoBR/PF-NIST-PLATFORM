@@ -1,0 +1,25 @@
+De: camila.duarte@andino.example
+Para: luis.paredes@andino.example; diego.salazar@andino.example
+CC: sara.ospina@andino.example
+Asunto: RE: RE: continuidad y respaldos — cifras para el comité
+
+Luis, gracias por la aclaración. Confirmo lo que quedó en la llamada:
+
+- Los respaldos completos se hacen los domingos y se retienen 60 días; los incrementales son
+  diarios y se retienen 7 días.
+- Sobre el objetivo de disponibilidad, la junta ratificó 99,8 % para la plataforma de recaudo; la
+  tolerancia sigue en dos horas de interrupción por mes.
+- Dependemos de AWS para la infraestructura y de la pasarela de pagos del Banco del Sur; si
+  cualquiera de los dos falla, el recaudo se detiene.
+
+No encontré el documento de la política de seguridad en la carpeta compartida, ¿lo tienes tú?
+
+Saludos,
+Camila
+
+> El 12/05/2026 09:14, Luis Paredes escribió:
+> Camila, te paso el resumen. Ojo: el respaldo de la base de clientes va aparte y todavía no
+> tiene retención definida.
+>
+> > El 11/05/2026 18:02, Camila Duarte escribió:
+> > ¿Me confirmas las cifras de respaldos y disponibilidad? Es para el comité del jueves.

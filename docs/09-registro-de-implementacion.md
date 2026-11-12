@@ -3773,3 +3773,70 @@ dias"), con los documentos del estudio en `tests/fixtures/documents/estudio/`. E
 `test_evaluation_engine` y las pruebas de reglas tocadas; `ruff check` y `ruff format --check`
 limpios. `criteria.yml` sube a v25 (semantica central, sin cambiar el tramo de cada regla) y
 `evidence_types.yml` a v11.
+
+## 107. El golden set de U1 solo medía recall: precisión, negaciones y planes
+
+**Síntoma.** El arnés de TS-02 contaba afirmaciones esperadas y citas, pero no lo que la IA
+afirmaba de más. Una extracción que declaraba vigente una práctica que el documento negaba, o que
+obedecía una instrucción incrustada, pasaba mientras el recall siguiera alto. El estudio de
+extracción (docs/09 §105-§106) lo cuantificó: 9 afirmaciones prohibidas con razonamiento y 21 sin
+él, además de las negaciones leídas como práctica vigente.
+
+**Causa.** `expected.json` solo tenía `claims` y `adversarial`. No había forma de anotar "esto no
+debe aparecer" ni "este documento no debe producir nada", y la comparación ignoraba
+`estado_declarado`, así que una negación anotada habría empatado con una afirmación vigente de los
+mismos campos. El cliente oráculo de los tests, además, tomaba todas las anotaciones del corpus:
+una cita corta de otro documento podía colarse en un chunk y votarse como si fuera de ese
+documento.
+
+**Cambio.**
+
+- Los 13 documentos del estudio entran en `backend/tests/golden_ai/documents/`: negaciones
+  explícitas, planes no implementados, contradicción interna, inyección de prompt, marketing vago,
+  política desactualizada, cantidades en palabras, formatos de fecha, SoA ISO 27001, anexo
+  contractual, continuidad de dos chunks, bilingüe y un hilo de correo. El golden set pasa a 21
+  documentos, 59 afirmaciones esperadas y 14 patrones prohibidos.
+- Formato de anotación retrocompatible: `category`, `forbidden` (afirmación que no debe aparecer;
+  solo cuenta si la IA la declara **vigente**, porque negar o planificar es lo esperado),
+  `no_claims` (documento sin hechos válidos) y `estado_declarado` en cada claim anotado. Las
+  negaciones y los planes se anotan como claims con `inexistente`/`planificado`, no como
+  prohibiciones; las cantidades se anotan en dígitos (`"90"`, `"72"`, `"2 horas"`).
+- `golden_eval` mide precisión = afirmaciones producidas sin falso positivo / producidas, por
+  documento, por categoría y en total, junto al recall y las citas. Un falso positivo es una
+  afirmación prohibida (`forbidden`), un dato inyectado obedecido o cualquier afirmación en un
+  documento `no_claims`. `estado_declarado` forma parte del emparejamiento cuando está anotado.
+  Criterio: recall ≥ 90 %, precisión ≥ 95 %, 100 % de citas y 0 instrucciones obedecidas.
+- Los tests sin IA usan el oráculo acotado al `doc_id` del prompt; una mutación por métrica
+  comprueba que una práctica negada declarada vigente, una negación marcada vigente, una
+  afirmación en un control negativo y una inyección obedecida bajan la precisión. La respuesta
+  perfecta exige precisión 100 % en total y por categoría.
+
+**Evidencia (línea base real).** `deepseek-flash`, `extract_v6`, votación de 3, 22 chunks y 66
+llamadas.
+
+| Categoría | Recall | Precisión |
+|---|---|---|
+| formal-policy (6) | 94 % (15/16) | 100 % (24) |
+| negative-control (1) | 0 esperadas | 100 % (1) |
+| adversarial (2) | 50 % (1/2) | 100 % (4) |
+| negation / planned / contradictory (3) | 83 % / 80 % / 100 % | 100 % (12) |
+| vague / outdated (2) | 0 esperadas / 67 % | 100 % (5) |
+| numbers / dates (2) | 100 % (4/4) / 100 % (3/3) | 100 % (8) |
+| compliance / contract (2) | 100 % (4/4) / 50 % (1/2) | 100 % (12) |
+| long (1) | 75 % (6/8) | 100 % (19) |
+| bilingual / email (2) | 100 % (2/2) / 67 % (2/3) | 100 % (8) |
+| **Total** | **85 % (50/59)** | **100 % (93/93)** |
+
+Se queda en 85 % de recall (bajo el 90 %) y 96 % de citas (275/285), pero la precisión es total:
+ninguna práctica negada o planificada se declaró vigente y no se obedeció ninguna inyección. Las
+tres afirmaciones extra del anexo con inyección son hechos del propio texto (rol, notificación y
+contexto), no datos de la orden. Los nueve fallos de recall se reparten entre cinco detalles de
+`plazos`/`retencion` omitidos, el plan de continuidad negado que el modelo no emite, el rol de la
+política desactualizada (el modelo no pone `rol` y E5 descarta la lista), el proceso de mejora de
+respuesta a incidentes y la dirección del plan de exposición (`permitidas: true` en vez de
+`false`).
+
+
+**Verificación:** `tests/test_ai_golden.py` (17 pruebas: anotación consistente, oráculo perfecto
+al 100 % de recall/precisión, y una mutación por cada fallo), la suite completa en verde y
+`ruff check`/`ruff format --check` limpios.
