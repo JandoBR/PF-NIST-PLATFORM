@@ -278,3 +278,57 @@ def test_ai_cannot_raise_an_observed_failure_scored_by_the_engine():
     ajustados = engine.apply_ai_adjustments(methodology, results, evidence, client, {})
     final = next(r for r in ajustados if r.criterion_id == "CRI-RC-02")
     assert final.final_score == 0 and final.degradado is False
+
+
+# -- Insumo canonico de U2 (docs/05 §7, docs/09 §105) ------------------------------------------
+
+
+def test_the_prompt_uses_synthetic_ids_and_the_response_is_mapped_back():
+    from app.ai.adjustment import _build_user_prompt, _canonical_evidence
+
+    real_id = "3f6c0e42-8f4a-4f0e-9d9a-1a2b3c4d5e6f"
+    result = _result(evidence_ids=[real_id])
+    by_id = _evidence_by_id(real_id)
+    evidencias = _canonical_evidence(result, by_id)
+
+    prompt = _build_user_prompt(_methodology().criterios["CRI-PR-01"], result, evidencias, {}, D)
+    assert '"id": "e1"' in prompt
+    assert real_id not in prompt
+
+    client = FakeAIClient({"CRI-PR-01": _fake_response(evidencias_referenciadas=["e1"])})
+    final = adjust(client, _methodology().criterios["CRI-PR-01"], result, by_id, {}, ALPHA, D)
+
+    assert final.degradado is False  # e1 se remapeo al id real y J5 lo acepta
+    assert final.final_score is not None and final.final_score > result.base_score
+
+
+def test_the_u2_key_is_stable_across_evidence_uuids():
+    from app.ai.adjustment import _canonical_evidence, _u2_input_sha256
+
+    criterion = _methodology().criterios["CRI-PR-01"]
+    result_a = _result(evidence_ids=["uuid-a"])
+    result_b = _result(evidence_ids=["uuid-b"])
+
+    sha_a = _u2_input_sha256(
+        criterion, result_a, _canonical_evidence(result_a, _evidence_by_id("uuid-a")), {}, ALPHA, D
+    )
+    sha_b = _u2_input_sha256(
+        criterion, result_b, _canonical_evidence(result_b, _evidence_by_id("uuid-b")), {}, ALPHA, D
+    )
+
+    assert sha_a == sha_b
+
+
+def test_two_evidence_items_with_different_ids_are_ordered_by_value():
+    from app.ai.adjustment import _canonical_evidence
+
+    uno = _evidence_by_id("uuid-a")["uuid-a"]
+    otro = uno.model_copy(
+        update={"id": "uuid-b", "value": {"estado": "enabled", "mecanismo": None, "llave": None}}
+    )
+    result = _result(evidence_ids=["uuid-b", "uuid-a"])
+    evidencias = _canonical_evidence(result, {"uuid-a": uno, "uuid-b": otro})
+
+    # Mismo orden sin importar el orden de entrada en `result.evidence_ids`.
+    result_invertido = _result(evidence_ids=["uuid-a", "uuid-b"])
+    assert _canonical_evidence(result_invertido, {"uuid-a": uno, "uuid-b": otro}) == evidencias

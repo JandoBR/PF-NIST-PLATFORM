@@ -207,6 +207,17 @@ export const createAssessment = (input: CreateAssessmentInput) => {
 
 export const listAssessments = () => request<AssessmentDetail[]>('/assessments');
 
+/** Reevaluación de la misma fuente. `reextraer` ignora los resultados de IA guardados y vuelve a
+ * llamar al modelo (U1/U2/U3): sirve para regenerar una evaluación cuando cambió el prompt o se
+ * sospecha una extracción vieja (docs/09 §105). */
+export const reevaluateAssessment = (id: string, opts: { reextraer?: boolean } = {}) => {
+  const params = new URLSearchParams({ ai_adjust: 'true', confirm_live_ai: 'true' });
+  if (opts.reextraer) params.set('reextraer', 'true');
+  return request<AssessmentAccepted>(`/assessments/${id}/reevaluate?${params}`, {
+    method: 'POST',
+  });
+};
+
 export const getAssessment = (id: string) => request<AssessmentDetail>(`/assessments/${id}`);
 
 export const getCriteria = (id: string) =>

@@ -11,15 +11,22 @@ import os
 import time
 from collections.abc import Callable
 from functools import lru_cache
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from app.ai.calllog import log_call
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 logger = logging.getLogger("app.ai.client")
 
 DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com"
-DEFAULT_TIMEOUT_SECONDS = 60
+#: Con razonamiento activo el p90 medido fue 54 s y los chunks que agotan 16k tokens se reintentan
+#: a 32k (hasta ~3 min): 60 s mataba respuestas que si iban a llegar (docs/09 §105).
+DEFAULT_TIMEOUT_SECONDS = 180
+#: Techo del timeout de un reintento por longitud; se duplica junto con `max_tokens`.
+MAX_TIMEOUT_SECONDS = 600
 #: Techo de tokens por respuesta, no gasto: se factura solo lo generado. `deepseek-flash` es un
 #: modelo de razonamiento por defecto y el razonamiento consume el mismo presupuesto que el JSON;
 #: con 2000 el JSON quedaba vacio (`finish_reason="length"`, docs/09 §100).
@@ -78,6 +85,21 @@ def _max_tokens_configurado() -> int:
         return DEFAULT_MAX_TOKENS
 
 
+def _timeout_configurado() -> int:
+    """`DEEPSEEK_TIMEOUT_SECONDS` (docs/05 §5): la IA con razonamiento tarda mas que un chat."""
+
+    raw = os.environ.get("DEEPSEEK_TIMEOUT_SECONDS")
+    if not raw:
+        return DEFAULT_TIMEOUT_SECONDS
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        logger.warning(
+            "DEEPSEEK_TIMEOUT_SECONDS=%r no es un entero; uso %s", raw, DEFAULT_TIMEOUT_SECONDS
+        )
+        return DEFAULT_TIMEOUT_SECONDS
+
+
 class DeepSeekClient:
     """Implementacion real: SDK `openai` apuntando a la API de DeepSeek (docs/05 §5)."""
 
@@ -86,7 +108,7 @@ class DeepSeekClient:
         api_key: str | None = None,
         model: str | None = None,
         base_url: str | None = None,
-        timeout: int = DEFAULT_TIMEOUT_SECONDS,
+        timeout: int | None = None,
         max_tokens: int | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
@@ -98,12 +120,24 @@ class DeepSeekClient:
         from openai import OpenAI  # import diferido: no requerido si no hay API key
 
         base_url = base_url or os.environ.get("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL)
-        self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
+        self.timeout = timeout or _timeout_configurado()
+        self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=self.timeout)
         self.model = model or os.environ.get("DEEPSEEK_MODEL", DEFAULT_MODEL)
         self.max_tokens = max_tokens or _max_tokens_configurado()
         self.max_tokens_ceiling = max(MAX_TOKENS_CEILING, self.max_tokens)
         #: Se incluye en la clave de cache junto al modelo: cambiar de endpoint cambia el resultado.
         self.base_url = base_url
+
+    def params(self) -> dict:
+        """Parametros que, si cambian, invalidan una respuesta guardada (docs/05 §7)."""
+
+        return {"temperature": 0.0, "max_tokens": self.max_tokens, "razonamiento": True}
+
+    @property
+    def params_hash(self) -> str:
+        from app.ai.store import sha256_json  # evita cargar la BD para usar el cliente solo
+
+        return sha256_json(self.params())
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
         """JSON o `None`. El motivo del degradado queda en el log, con `finish_reason`.
@@ -117,6 +151,7 @@ class DeepSeekClient:
         motivo = "sin_intentos"
         intentos = 0
         max_tokens = self.max_tokens
+        timeout = self.timeout
         for intento in range(MAX_RETRIES + 1):
             if intento > 0:
                 self._sleep(BACKOFF_BASE_SECONDS * 2 ** (intento - 1))
@@ -131,6 +166,7 @@ class DeepSeekClient:
                     response_format={"type": "json_object"},
                     temperature=0.0,
                     max_tokens=max_tokens,
+                    timeout=timeout,
                 )
             except Exception as exc:  # error de red o de la API: reintentar solo lo transitorio
                 motivo = f"error:{type(exc).__name__}"
@@ -169,6 +205,7 @@ class DeepSeekClient:
                     if max_tokens >= self.max_tokens_ceiling:
                         break
                     max_tokens = min(max_tokens * 2, self.max_tokens_ceiling)
+                    timeout = min(timeout * 2, MAX_TIMEOUT_SECONDS)
                     continue
                 if finish_reason == "content_filter":
                     break  # la misma peticion volveria a filtrarse: no se insiste
@@ -219,8 +256,18 @@ class NullAIClient:
         return None
 
 
-def build_default_client() -> AIClient:
-    """Fabrica usada por la CLI/orquestacion: real (con cache) si hay API key, degradado si no."""
+def build_default_client(
+    *,
+    session: Session | None = None,
+    org_id: str | None = None,
+    reextraer: bool = False,
+) -> AIClient:
+    """Fabrica usada por la API/workers/CLI.
+
+    Con `session` + `org_id` (camino de produccion: api y workers) el resultado se cachea en la
+    tabla `ai_results`, por organizacion. Sin ellos (CLI/local) se mantiene la cache en disco
+    historica; `reextraer` ignora lo guardado y reescribe la respuesta nueva (docs/09 §105).
+    """
 
     api_key = os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
@@ -228,7 +275,21 @@ def build_default_client() -> AIClient:
 
     from app.ai.cache import CachingAIClient  # evita import circular a nivel de modulo
 
-    return CachingAIClient(DeepSeekClient(api_key=api_key))
+    real = DeepSeekClient(api_key=api_key)
+    if session is None or not org_id:
+        return CachingAIClient(real)
+
+    from app.ai.store import AIResultStore, StoreAIClient
+
+    store = AIResultStore.from_session(
+        session,
+        org_id,
+        model=real.model,
+        base_url=real.base_url,
+        params_hash=real.params_hash,
+        reextraer=reextraer,
+    )
+    return StoreAIClient(real, store)
 
 
 def describe_client(client: AIClient) -> str:

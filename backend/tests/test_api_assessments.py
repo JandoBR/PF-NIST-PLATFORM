@@ -349,3 +349,42 @@ def test_detail_exposes_reproducibility(api_client, db_session, methodology, fak
     info = detail["reproducibility"]
     assert info["adapters"]["terraform"]["adapter"] == TERRAFORM_ADAPTER_VERSION
     assert info["ai"] is None
+
+
+def test_reevaluate_with_reextraer_carries_the_flag_to_the_job(
+    api_client, db_session, methodology, fake_redis
+):
+    """`reextraer=true` descarta el store de IA y reejecuta U1/U2/U3 (docs/09 §105)."""
+
+    from app.models.tables import Job, Source
+
+    before = _create_and_complete(api_client, db_session, methodology, fake_redis, "good")
+    db_session.add(
+        Source(
+            assessment_id=before["id"],
+            tipo="documents",
+            ruta="/tmp/documento.md",
+            sha256="0" * 64,
+        )
+    )
+    db_session.commit()
+
+    accepted = api_client.post(
+        f"/assessments/{before['id']}/reevaluate",
+        params={"confirm_live_ai": "true", "reextraer": "true"},
+    )
+
+    assert accepted.status_code == 202
+    job = db_session.get(Job, accepted.json()["job_id"])
+    assert job.payload["reextraer"] is True
+    assert job.payload["ai_requested"] is True
+
+
+def test_create_assessment_accepts_the_reextraer_flag(api_client, db_session):
+    from app.models.tables import Job
+
+    response = _upload_terraform(api_client, "good", reextraer="true")
+
+    assert response.status_code == 202
+    job = db_session.get(Job, response.json()["job_id"])
+    assert job.payload["reextraer"] is True

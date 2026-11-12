@@ -27,6 +27,7 @@ from app.core.queue import (
     message_version_error,
 )
 from app.methodology.loader import Methodology, load_methodology
+from app.models.tables import Organization
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -96,8 +97,12 @@ def process_message(
     job_service.mark_taken(session, job)
     try:
         ai_requested = bool(message.get("ai_requested"))
-        ai_client = build_default_client() if ai_requested else None
+        ai_client = None
         if ai_requested:
+            org = session.query(Organization).filter_by(nombre=message["org_nombre"]).one_or_none()
+            ai_client = build_default_client(
+                session=session, org_id=org.id if org is not None else None
+            )
             logger.info("Job %s: IA %s", job.id, describe_client(ai_client))
         result = operations.ingest_events(
             session,

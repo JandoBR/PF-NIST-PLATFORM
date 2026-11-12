@@ -79,3 +79,18 @@ def test_cache_persists_across_client_instances(tmp_path):
 
     assert result == {"afirmaciones": ["x"]}
     assert other_inner.calls == 0
+
+
+def test_store_bypass_skips_the_disk_cache(tmp_path):
+    """La votacion de U1 necesita tres respuestas reales, no tres lecturas del mismo JSON."""
+
+    from app.ai.store import store_bypass
+
+    inner = _CountingClient({"afirmaciones": []})
+    client = CachingAIClient(inner, cache_dir=tmp_path)
+
+    with store_bypass():
+        client.complete_json("system", "user A")
+        client.complete_json("system", "user A")
+
+    assert inner.calls == 2

@@ -405,7 +405,11 @@ function App() {
             </button>
           </div>
         ) : tab === 'dashboard' ? (
-          <MaturityDashboard assessment={assessment} criteria={criteria} />
+          <MaturityDashboard
+            assessment={assessment}
+            criteria={criteria}
+            onReevaluated={handleAccepted}
+          />
         ) : tab === 'recommendations' ? (
           <RecommendationEngine
             key={assessment.id}

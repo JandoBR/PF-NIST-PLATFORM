@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from app.ai.calllog import log_call
+from app.ai.store import bypass_active
 
 if TYPE_CHECKING:
     from app.ai.client import AIClient
@@ -40,6 +41,10 @@ class CachingAIClient:
         return self._cache_dir / f"{key}.json"
 
     def complete_json(self, system_prompt: str, user_prompt: str) -> dict | None:
+        if bypass_active():
+            # Votacion de U1 (docs/09 §105): cada corrida tiene que llegar al modelo; si la
+            # segunda leyera esta cache, votar seria comparar una respuesta consigo misma.
+            return self._inner.complete_json(system_prompt, user_prompt)
         cache_file = self._cache_file(system_prompt, user_prompt)
         if cache_file.exists():
             try:

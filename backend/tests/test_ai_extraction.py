@@ -1,9 +1,14 @@
+from pathlib import Path
+
+import pytest
+
 from app.ai.client import FakeAIClient
 from app.ai.extraction import (
     _CONTENT_FIELDS,
     _SYSTEM_PROMPT,
     PROMPT_VERSION,
     _build_user_prompt,
+    _sanitize_content,
     extract_claims,
 )
 from app.schemas.evidence import Locator, Segmento
@@ -54,8 +59,9 @@ def test_extracts_claim_with_valid_citation():
     assert claim.value["tipo_afirmacion"] == "policy_exists"
     assert claim.value["contenido"]["aprobada_por"] == "Direccion General"
     assert claim.value["cita"] == "aprobada por la Direccion General el 1 de marzo de 2025"
-    assert claim.type_version == 2
+    assert claim.type_version == 3
     assert claim.limitations is None
+    assert claim.value["estado_declarado"] == "vigente"  # sin campo explicito: v6 lo exige igual
 
 
 def test_found_claim_without_citation_is_discarded():
@@ -401,13 +407,16 @@ def test_a_grouped_pdf_chunk_keeps_the_page_of_the_citation():
     assert claim.locator.page == 4
 
 
-def test_prompt_v5_asks_for_each_type_independently():
+def test_prompt_v6_asks_for_each_type_independently_and_the_declared_state():
     """Un chunk agrupado trae varias secciones: la extraccion de un tipo no depende de los demas
-    (docs/09 §103)."""
+    (docs/09 §103), y una negacion o un plan no se confunde con la practica vigente (§106)."""
 
-    assert PROMPT_VERSION == "extract_v5"
+    assert PROMPT_VERSION == "extract_v6"
     assert "cada tipo solicitado de forma independiente" in _SYSTEM_PROMPT
     assert "varias secciones" in _SYSTEM_PROMPT
+    assert "estado_declarado" in _SYSTEM_PROMPT
+    assert "inexistente" in _SYSTEM_PROMPT and "planificado" in _SYSTEM_PROMPT
+    assert "noventa dias" in _SYSTEM_PROMPT and "90 dias" in _SYSTEM_PROMPT
 
 
 def test_data_inventory_fields_include_technology_assets():
@@ -427,3 +436,140 @@ def test_user_prompt_declares_the_fields_of_every_requested_type():
     )
     assert "- data_inventory: activos (lista de recursos tecnologicos" in prompt
     assert "- policy_exists: nombre (string), aprobada_por (string|null)" in prompt
+
+
+# -- v6: estado declarado de la practica (docs/09 §106) ---------------------------------------
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def _extract_one(
+    afirmacion: dict,
+    *,
+    chunk_text: str,
+    tipos: list[str],
+    doc_id: str = "doc",
+):
+    client = FakeAIClient({"afirmacion": {"afirmaciones": [afirmacion]}})
+    evidence = extract_claims(
+        client,
+        chunk_text=f"afirmacion {chunk_text}",
+        chunk_locator=LOCATOR,
+        tipos_solicitados=tipos,
+        doc_id=doc_id,
+        source_id="test:doc",
+        scope="entorno:produccion",
+        confianza_minima=0.6,
+    )
+    return evidence[0] if evidence else None
+
+
+def test_a_missing_declared_state_reads_as_vigente_for_older_claims():
+    claim = _extract_one(
+        {
+            "tipo": "policy_exists",
+            "encontrado": True,
+            "contenido": {"nombre": "Politica"},
+            "cita": {"fragmento": "Politica aprobada"},
+            "confianza": 0.9,
+        },
+        chunk_text="Politica aprobada",
+        tipos=["policy_exists"],
+    )
+
+    assert claim is not None and claim.value["estado_declarado"] == "vigente"
+
+
+def test_an_explicit_negation_keeps_its_literal_citation():
+    texto = (FIXTURES / "documents" / "estudio" / "explicit-negations.md").read_text(
+        encoding="utf-8"
+    )
+    negacion = "No hay un procedimiento documentado de respuesta a incidentes"
+
+    claim = _extract_one(
+        {
+            "tipo": "process_defined",
+            "encontrado": True,
+            "estado_declarado": "inexistente",
+            "contenido": {"proceso": "respuesta"},
+            "cita": {"fragmento": negacion},
+            "confianza": 0.9,
+        },
+        chunk_text=texto,
+        tipos=["process_defined"],
+    )
+
+    assert claim is not None
+    assert claim.value["estado_declarado"] == "inexistente"
+    assert claim.value["cita"] == negacion
+    assert claim.limitations is None  # E8: la negacion es literal del documento
+
+
+def test_an_unrecognized_declared_state_discards_the_claim():
+    claim = _extract_one(
+        {
+            "tipo": "policy_exists",
+            "encontrado": True,
+            "estado_declarado": "quizas despues",
+            "contenido": {"nombre": "Politica"},
+            "cita": {"fragmento": "Politica"},
+            "confianza": 0.9,
+        },
+        chunk_text="Politica",
+        tipos=["policy_exists"],
+    )
+
+    assert claim is None
+
+
+def test_a_claim_not_found_has_no_declared_state():
+    claim = _extract_one(
+        {"tipo": "policy_exists", "encontrado": False, "confianza": 0.0},
+        chunk_text="nada",
+        tipos=["policy_exists"],
+    )
+
+    assert claim is not None and claim.value["estado_declarado"] is None
+
+
+@pytest.mark.parametrize(
+    ("tipo", "contenido", "campo", "esperado"),
+    [
+        ("backup_policy", {"retencion": "noventa días"}, "retencion", "90 días"),
+        ("risk_tolerance", {"tolerancia": "cuatro horas al mes"}, "tolerancia", "4 horas al mes"),
+        (
+            "notification_list",
+            {"plazos": "setenta y dos horas"},
+            "plazos",
+            "72 horas",
+        ),
+        (
+            "process_defined",
+            {"criterios_activacion": "cada tres meses"},
+            "criterios_activacion",
+            "cada 3 meses",
+        ),
+    ],
+)
+def test_number_words_in_quantity_fields_become_digits(tipo, contenido, campo, esperado):
+    assert _sanitize_content(tipo, contenido)[campo] == esperado
+
+
+def test_a_review_frequency_written_with_words_is_understood():
+    limpio = _sanitize_content("policy_review", {"frecuencia": "cada tres meses"})
+
+    assert limpio["frecuencia"] == "trimestral"
+
+
+@pytest.mark.parametrize(
+    ("texto", "esperado"),
+    [
+        ("cada 12 meses", "anual"),
+        ("cada 1 año", "anual"),
+        ("cada 6 meses", "semestral"),
+        ("cada 1 mes", "mensual"),
+        ("cada tres meses", "trimestral"),
+    ],
+)
+def test_review_frequency_quantities(texto, esperado):
+    assert _sanitize_content("policy_review", {"frecuencia": texto})["frecuencia"] == esperado

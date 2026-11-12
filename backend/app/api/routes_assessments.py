@@ -172,6 +172,7 @@ async def create_assessment(
     scope: str = Form("entorno:produccion"),
     ai_adjust: bool = Form(False),
     use_ai_for_documents: bool = Form(False),
+    reextraer: bool = Form(False),
     context: str = Form("{}"),
     event_ingest_ids: str | None = Form(None),
     confirm_live_ai: bool = Form(False),
@@ -191,7 +192,7 @@ async def create_assessment(
             ),
         )
 
-    ai_requested = ai_adjust or (use_ai_for_documents and bool(document_files))
+    ai_requested = ai_adjust or ((use_ai_for_documents or reextraer) and bool(document_files))
     guard_error = check_live_ai_guard(
         ai_requested, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai
     )
@@ -219,6 +220,7 @@ async def create_assessment(
             "documents_path": str(documents_path) if documents_path else None,
             "ai_requested": ai_requested,
             "apply_ai_adjustment": ai_adjust,
+            "reextraer": reextraer,
             "context": contexto,
             "event_ingest_ids": origenes_eventos,
         },
@@ -314,7 +316,7 @@ def create_plans(
     guard_error = check_live_ai_guard(use_ai, os.environ.get("DEEPSEEK_API_KEY"), confirm_live_ai)
     if guard_error:
         raise HTTPException(status_code=409, detail=guard_error)
-    client = build_default_client() if use_ai else None
+    client = build_default_client(session=session, org_id=user.org_id) if use_ai else None
 
     svc.generate_plans(session, methodology, assessment_id, ai_client=client)
     return svc.load_plans(session, assessment_id)
@@ -349,6 +351,7 @@ def update_plan_estado(
 def reevaluate_assessment(
     assessment_id: str,
     ai_adjust: bool = False,
+    reextraer: bool = False,
     context: str = "{}",
     confirm_live_ai: bool = False,
     user: User = Depends(get_current_user),
@@ -372,6 +375,7 @@ def reevaluate_assessment(
         assessment_id,
         apply_ai_adjustment=ai_adjust,
         request_documents_ai=tiene_documentos,
+        reextraer=reextraer,
         context=contexto,
     )
 

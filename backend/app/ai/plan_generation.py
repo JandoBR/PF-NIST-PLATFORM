@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from app.ai.calllog import call_context
 from app.ai.client import AIClient
 from app.ai.schemas import PlanContentResponse
+from app.ai.store import sha256_json
 from app.methodology.schemas import CriterionDefinition
 
 PROMPT_VERSION = "plan_v1"
@@ -22,15 +23,26 @@ _PROMPT_PATH = Path(__file__).parent / "prompts" / f"{PROMPT_VERSION}.txt"
 _SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 
 
+def _payload(
+    criterion: CriterionDefinition, severidad: str, score: float, evidence_ids: list[str]
+) -> dict:
+    """Insumo canonico de U3: el hallazgo sin ids de evidencia (solo cuantos la respaldan)."""
+
+    return {
+        "criterio": {"id": criterion.id, "version": criterion.version},
+        "plantilla_recomendacion": criterion.recomendacion,
+        "hallazgo": {
+            "severidad": severidad,
+            "score": score,
+            "evidencias": len(evidence_ids),
+        },
+    }
+
+
 def _build_user_prompt(
     criterion: CriterionDefinition, severidad: str, score: float, evidence_ids: list[str]
 ) -> str:
-    payload = {
-        "criterio": {"id": criterion.id, "titulo": criterion.titulo},
-        "plantilla_recomendacion": criterion.recomendacion,
-        "hallazgo": {"severidad": severidad, "score": score, "evidence_ids": evidence_ids},
-    }
-    return json.dumps(payload, ensure_ascii=False)
+    return json.dumps(_payload(criterion, severidad, score, evidence_ids), ensure_ascii=False)
 
 
 def _template_fallback(criterion: CriterionDefinition) -> PlanContentResponse:
@@ -54,7 +66,13 @@ def generate_plan_content(
     """Nunca devuelve None: degrada a la plantilla del criterio si la IA no es usable."""
 
     user_prompt = _build_user_prompt(criterion, severidad, score, evidence_ids)
-    with call_context(paso="U3", prompt_version=PROMPT_VERSION, criterion_id=criterion.id):
+    input_sha256 = sha256_json(_payload(criterion, severidad, score, evidence_ids))
+    with call_context(
+        paso="U3",
+        prompt_version=PROMPT_VERSION,
+        criterion_id=criterion.id,
+        input_sha256=input_sha256,
+    ):
         raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
     if raw is None:
         return _template_fallback(criterion)

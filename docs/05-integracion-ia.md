@@ -49,6 +49,15 @@ particular, el inventario de activos tecnológicos también es `data_inventory`:
 tipos de recurso sobre ese campo. `_CONTENT_FIELDS["data_inventory"]` nombra esos recursos para que
 el modelo no los confunda con categorías de datos (`tipos_datos`).
 
+**Estado declarado y cantidades (prompt v6, docs/09 §106).** Cada afirmación `encontrado=true` trae
+`estado_declarado`: `vigente` (la práctica es actual), `inexistente` (el documento la niega
+explícitamente: “no hay responsable de seguridad”) o `planificado` (“se implementará en 2027”). Una
+negación no es una descripción incompleta: se deja el contenido mínimo (p. ej. el `proceso` que
+falta) y la cita es la frase literal que niega o planifica. El prompt también pide normalizar las
+cantidades a dígitos con su unidad (“noventa días” → “90 días”) sin tocar la cita, y las fechas a
+`YYYY-MM-DD`. El extractor descarta una afirmación cuyo estado no reconoce y, al no venir el campo
+(afirmación anterior a v6), lo lee como `vigente`.
+
 ### 2.2 Contrato de salida (se valida estrictamente)
 
 ```json
@@ -57,6 +66,7 @@ el modelo no los confunda con categorías de datos (`tipos_datos`).
     {
       "tipo": "policy_exists",
       "encontrado": true,
+      "estado_declarado": "vigente",
       "contenido": {
         "nombre": "Política de Seguridad de la Información",
         "aprobada_por": "Dirección General",
@@ -84,15 +94,51 @@ el modelo no los confunda con categorías de datos (`tipos_datos`).
 | E2 | Sin `cita.fragmento` la afirmación se descarta. |
 | E3 | `confianza < 0.6` (configurable) → no cuenta como evidencia suficiente; se guarda como limitación. |
 | E4 | El modelo nunca completa campos no declarados; los deja ausentes. |
-| E5 | Campos de tipo fecha/rol se validan contra formatos esperados; valores absurdos se descartan. |
+| E5 | Campos de tipo fecha/rol se validan contra formatos esperados; valores absurdos se descartan. Las cantidades escritas con palabras se normalizan a dígitos con su unidad en los campos de cantidad (retención, tolerancia, plazos, criterios de activación) y la frecuencia se reconoce desde una cantidad (“cada tres meses” → `trimestral`). |
 | E6 | Un chunk sin afirmaciones no genera evidencia; el documento completo se marca como analizado. |
 | E7 | Los prompts son **fijos por versión** (`prompt_version`); el modelo no los modifica. |
 | E8 | La cita de una afirmación encontrada **debe aparecer en el texto enviado** (sin distinguir mayúsculas, acentos, espacios ni puntuación/markdown; `app/ai/quotes.py`, la misma comparación que usa el golden set). Si no aparece, la afirmación se guarda con la limitación "cita no localizable" y no cuenta para ningún criterio; se informa como hallazgo `limitacion`. La cita se guarda en la evidencia (`doc.claim@2`). |
+| E9 | Cada afirmación `encontrado=true` declara `estado_declarado`: `vigente`, `inexistente` (negación explícita) o `planificado` (futuro). El motor convierte las dos últimas en `no_implementado` (0) citando el documento; un valor no reconocido descarta la afirmación y una afirmación sin el campo se lee como `vigente` (docs/01 §3, docs/09 §106). |
 
 ### 2.4 Por qué las reglas no las genera la IA
 
 El criterio ya está definido en `criteria.yml`. La IA solo responde: “¿el documento declara X?, ¿dónde,
 con qué detalle?”. El motor aplica la regla.
+
+### 2.5 Votación (mayoría de 3) y determinismo
+
+`deepseek-flash` razona antes de responder y en ese modo **ignora `temperature`**: la misma entrada
+no da siempre la misma salida (docs/09 §105). El estudio de varianza midió 30 documentos × 5
+corridas: por sí sola, la extracción repite el 73 % de los campos clave entre corridas y el 83 % de
+las afirmaciones. Con **pensar activado + mayoría-de-3 por campo** el recall usable es 94.3 % y la
+precisión 98.8 % (sin pensar: 93.8 % / 92.7 %), y la estabilidad por campo sube a 88 %. Por eso se
+mantiene el razonamiento y se vota; no se apaga para “hacerlo determinista”.
+
+En cada chunk que no está en el store se ejecutan `U1_VOTES` corridas (3 por defecto; `1` = sin
+votación) en paralelo, acotadas por el mismo semáforo de `app/ai/parallel.py`. Cada corrida pasa por
+la validación normal (E3 confianza y E8 cita literal) antes de votar:
+
+- las afirmaciones se agrupan por `tipo`; `process_defined` se agrupa además por `proceso`, para que
+  una afirmación de “mejora” que el modelo fusiona con “respuesta” en una corrida no pierda su grupo;
+- un grupo sobrevive si al menos 2 corridas produjeron una afirmación **usable** para él (con N
+  configurable, mayoría estricta: `N//2 + 1`, mínimo 2);
+- campo por campo, un valor gana si aparece en 2 corridas (texto comparado sin mayúsculas ni
+  espacios sobrantes; booleanos, enums y fechas exactos); en listas se conserva cada elemento
+  presente en 2 corridas; `null` y ausente son el mismo estado, así que sin mayoría el campo no va;
+- la cita y el locator salen de la corrida de mayor confianza que apoya la afirmación, y la
+  confianza es la mediana de esas corridas. Los empates se rompen por confianza y luego por índice
+  de corrida, siempre igual.
+
+Una afirmación que ninguna corrida pudo validar (confianza baja o cita no localizable) no vota, pero
+si la mayoría de las corridas la produjo se conserva con sus limitaciones: sigue visible y no cuenta
+para puntuar, como antes de votar. El resultado votado (y un resumen de cada corrida cruda en
+`meta`) se guarda en el store persistente (docs/05 §7); la próxima evaluación con el mismo insumo lo
+lee sin llamar al modelo.
+
+**Garantía de determinismo.** Para un mismo insumo canónico —texto de chunk + documento + tipos
+(U1), o criterio + valores de evidencia sin ids (U2)— la primera extracción ya es una mayoría de 3,
+y a partir de ahí el store devuelve exactamente el mismo resultado en cualquier contenedor con la
+misma BD. Un `reextraer=true` explícito descarta lo guardado y vuelve a votar.
 
 ## 3. U2 — Ajuste Contextual Acotado
 
@@ -125,6 +171,11 @@ Parámetros iniciales (en `methodology/settings.yml`):
 | `max_criterios_ajustados_por_evaluacion` | sin límite por defecto (`ia.max_criterios_ajustados_por_evaluacion` en `settings.yml`) | Control de costo/tiempo. Con tope, se ajustan los criterios de mayor peso (desempate por id); el resto conserva S = B sin marcarse `degradado`. |
 
 ### 3.3 Reglas de aplicación
+
+El prompt de U2 no recibe los UUIDs de la evidencia: la lista se ordena por valor y se etiqueta
+`e1`, `e2`, …; al leer la respuesta, esas referencias se remapean a los ids reales de la evaluación
+en curso antes de aplicar J5. Así el mismo criterio con los mismos hechos reutiliza el resultado
+aunque venga de otra evaluación con UUIDs distintos, y una referencia inventada sigue degradando.
 
 | # | Regla |
 |---|---|
@@ -209,7 +260,8 @@ fuentes de verdad (evidencia vs. clic) y rompería el determinismo y la reproduc
 | Modo de salida | `response_format={"type": "json_object"}` |
 | Temperatura | 0.0–0.3 según caso (en modo razonamiento DeepSeek la ignora) |
 | `max_tokens` | 16000 por defecto (`DEEPSEEK_MAX_TOKENS`). El razonamiento del modelo consume este mismo presupuesto: con 2000 el JSON quedaba vacío |
-| Timeout | 60 s |
+| Timeout | 180 s por intento (`DEEPSEEK_TIMEOUT_SECONDS`); cada reintento por longitud duplica el timeout hasta 600 s. El p90 medido con razonamiento es 54 s y un reintento a 32k puede pasar de 2 min |
+| Caché | Tabla `ai_results` por organización (docs/05 §7); `U1_VOTES` (3 por defecto) corridas por chunk nuevo y voto por mayoría |
 | Reintentos | Hasta 2 con backoff (1 s, 2 s), solo ante timeout, error de conexión, 429 o 5xx; si la respuesta se agota por longitud, el reintento duplica `max_tokens` (hasta 64000) |
 | Errores permanentes | 401/403 (clave inválida), 400 u otro 4xx: degradan de inmediato, sin reintento |
 | Concurrencia | `AI_MAX_CONCURRENCY` (6 por defecto; 1 = secuencial) |
@@ -298,7 +350,7 @@ Usuario (json):
   { "criterion": {...regla y rúbrica...},
     "base_score": 25,
     "estado": "evaluado",
-    "evidencias": [ { "id": "ev_1042", "tipo": "...", "valor": {...}, "limitaciones": "..." } ],
+    "evidencias": [ { "id": "e1", "tipo": "...", "valor": {...}, "limitaciones": "..." } ],
     "contexto": { "sector": "...", "activos_criticos": ["..."], "perfil_objetivo": "..." },
     "margen_maximo": 20 }
 ```
@@ -320,8 +372,32 @@ Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extrac
 | Exfiltración de datos sensibles | **Pendiente para uso real** (docs/12 SEC-07): el prototipo no redacta secretos; el documento se envía tal cual a la IA. |
 | Alucinación de evidencia | U1 exige cita; U2 exige IDs existentes y que `criterion_id`/`puntaje_base_recibido` coincidan con lo enviado; validación de esquema; sin cita/ID → descarte. |
 | Respuestas vacías, truncadas o no finitas | Manejo explícito, reintentos limitados, degradación controlada. Puntajes y confianza se validan en rango (`0–100`, `0–1`); `NaN`/`Infinity` degradan a `S = B`, no rompen la evaluación. |
-| Costos | Límite de chunks por documento, límite de tokens, llamadas concurrentes acotadas por `AI_MAX_CONCURRENCY` y caché de extracción por hash del prompt **+ modelo + base URL**. Una entrada de caché corrupta se trata como miss, no tumba la evaluación. |
+| Costos | Límite de chunks por documento, límite de tokens, llamadas concurrentes acotadas por `AI_MAX_CONCURRENCY` y store persistente de resultados por insumo canónico (texto+criterio, sin ids) **+ modelo + endpoint + parámetros + versión de prompt**. U1 vota 3 corridas solo en un miss; una respuesta degradada no se guarda. |
 | Envenenamiento del contexto | El contexto del formulario se valida y no puede contradecir hechos técnicos. |
+
+**Store persistente de resultados (`ai_results`).** Antes la cache era un directorio por
+contenedor (`backend/.cache/ai_extraction`): api, worker-core y worker-logs tenían cada uno el suyo,
+no estaba montado y se perdía en cada recreación; además la clave era el prompt completo, que en U2
+incluía UUIDs de evidencia y por eso nunca acertaba (U2 es ~75 % de las llamadas). Ahora cada
+resultado se guarda en la tabla `ai_results` con la organización en la clave (nunca se reutiliza
+entre organizaciones): `(org_id, kind, model, base_url, params_hash, prompt_version,
+input_sha256)`. `input_sha256` es el insumo canónico, no el texto del prompt:
+
+| Paso | Insumo canónico |
+|---|---|
+| U1 | JSON `{texto del chunk, id del documento, tipos ordenados}` |
+| U2 | JSON `{criterio+versión, base, estado, valores de evidencia sin ids ordenados, contexto, α, D}` |
+| U3 | JSON `{criterio+versión, plantilla, severidad, score, cantidad de evidencia}` |
+
+Dos workers que calculan el mismo insumo a la vez no duplican la fila: la unique es la clave
+completa y el segundo conserva la primera respuesta. Un fallo de BD al leer se trata como miss (la
+evaluación sigue), y `None` (degradado) nunca se guarda. En U1, un miss con `U1_VOTES=3` ejecuta las
+tres corridas y guarda una sola respuesta votada (con el resumen de las crudas en `meta`); si solo
+una corrida respondió, no hay mayoría y no se guarda, para reintentar en la próxima evaluación.
+`reextraer=true` (POST de evaluación o reevaluación, botón «Re-extraer con IA») ignora las lecturas
+y reemplaza la respuesta guardada. La CLI/local, sin sesión de BD, mantiene la cache en disco para
+U2/U3 y para U1 con `U1_VOTES=1`; con votación las tres corridas tienen que llegar al modelo (por
+eso no hay una entrada votada en disco).
 
 Principio operativo: **si la IA desaparece, el sistema sigue funcionando** con `S = B` y extracción
 documental deshabilitada, declarando la limitación.

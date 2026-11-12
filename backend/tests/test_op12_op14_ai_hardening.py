@@ -328,7 +328,7 @@ def test_assessment_records_model_and_prompt_versions_when_ai_participates(db_se
     ai = assessment.reproducibility["ai"]
     assert ai == {
         "modelo": "deepseek-test",
-        "extraccion": "extract_v5",
+        "extraccion": "extract_v6",
         "ajuste": "adjust_v1",
     }
     assert set(assessment.reproducibility["adapters"]) == {"terraform", "documents"}

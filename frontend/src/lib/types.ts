@@ -93,7 +93,16 @@ export interface AssessmentDetail extends AssessmentSummary {
   tier: TierEstimate;
   reproducibility?: {
     adapters: Record<string, { adapter: string; parser?: string }>;
-    ai: Record<string, string | null> | null;
+    ai: {
+      modelo?: string | null;
+      extraccion?: string;
+      ajuste?: string;
+      planes?: string;
+      /** Hits/misses del store persistente por paso (U1/U2/U3) y votos de U1 (docs/05 §7). */
+      cache?: Record<string, { hits: number; misses: number }>;
+      votos?: number;
+      params_hash?: string;
+    } | null;
     /** Qué ingestas de eventos consumió la evaluación (docs/09 §102). Ausente en anteriores. */
     eventos?: {
       /** La evaluación usó todas las ingestas del org+scope, no una lista explícita. */

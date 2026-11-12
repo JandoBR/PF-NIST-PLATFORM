@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from app.ai.calllog import call_context
 from app.ai.client import AIClient
 from app.ai.schemas import AdjustmentResponse
+from app.ai.store import sha256_json
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.schemas import CriterionDefinition
 from app.schemas.evidence import EvidenceInstance
@@ -31,32 +32,100 @@ _SYSTEM_PROMPT = _PROMPT_PATH.read_text(encoding="utf-8")
 _ADJUSTABLE_STATES = (Estado.EVALUADO, Estado.NO_IMPLEMENTADO)
 
 
+def _canonical_evidence(
+    result: CriterionResult, evidence_by_id: dict[str, EvidenceInstance]
+) -> list[tuple[str, EvidenceInstance]]:
+    """Evidencia mostrada, ordenada por contenido (no por UUID) y con ids sinteticos `e1`, `e2`...
+
+    El orden por valor hace que dos evaluaciones con los mismos hechos y UUIDs distintos generen
+    el mismo prompt y la misma clave de store (docs/05 §7, docs/09 §105)."""
+
+    items = [(eid, evidence_by_id[eid]) for eid in result.evidence_ids if eid in evidence_by_id]
+    return sorted(
+        items,
+        key=lambda item: (
+            item[1].type_id,
+            sha256_json(
+                {
+                    "valor": item[1].value,
+                    "limitaciones": item[1].limitations,
+                }
+            ),
+        ),
+    )
+
+
+def _u2_input_sha256(
+    criterion: CriterionDefinition,
+    result: CriterionResult,
+    evidencias: list[tuple[str, EvidenceInstance]],
+    context: dict[str, Any],
+    alpha: float,
+    divergencia_maxima: float,
+) -> str:
+    """Insumo canonico de U2: valores sin ids, ordenados, mas los parametros que lo condicionan."""
+
+    return sha256_json(
+        {
+            "criterion": {"id": criterion.id, "version": criterion.version},
+            "base_score": result.base_score,
+            "estado": result.estado.value,
+            "evidencias": [
+                {
+                    "tipo": evidence.type_id,
+                    "valor": evidence.value,
+                    "limitaciones": evidence.limitations,
+                }
+                for _, evidence in evidencias
+            ],
+            "contexto": context,
+            "alpha": alpha,
+            "D": divergencia_maxima,
+        }
+    )
+
+
 def _build_user_prompt(
     criterion: CriterionDefinition,
     result: CriterionResult,
-    evidence_by_id: dict[str, EvidenceInstance],
+    evidencias: list[tuple[str, EvidenceInstance]],
     context: dict[str, Any],
     divergencia_maxima: float,
 ) -> str:
-    evidencias = [
-        {
-            "id": eid,
-            "tipo": evidence_by_id[eid].type_id,
-            "valor": evidence_by_id[eid].value,
-            "limitaciones": evidence_by_id[eid].limitations,
-        }
-        for eid in result.evidence_ids
-        if eid in evidence_by_id
-    ]
     payload = {
-        "criterion": {"id": criterion.id, "titulo": criterion.titulo, "regla": criterion.regla},
+        "criterion": {
+            "id": criterion.id,
+            "version": criterion.version,
+            "titulo": criterion.titulo,
+            "regla": criterion.regla,
+        },
         "base_score": result.base_score,
         "estado": result.estado.value,
-        "evidencias": evidencias,
+        # Ids sinteticos en el orden canonico: la respuesta se remapea a los ids reales antes de
+        # validar, asi que el modelo nunca ve un UUID que cambie entre evaluaciones.
+        "evidencias": [
+            {
+                "id": f"e{indice}",
+                "tipo": evidence.type_id,
+                "valor": evidence.value,
+                "limitaciones": evidence.limitations,
+            }
+            for indice, (_, evidence) in enumerate(evidencias, start=1)
+        ],
         "contexto": context,
         "margen_maximo": divergencia_maxima,
     }
     return json.dumps(payload, ensure_ascii=False)
+
+
+def _map_references(
+    references: list[str], evidencias: list[tuple[str, EvidenceInstance]]
+) -> list[str]:
+    """`e1`/`e2`... del prompt canonico -> ids reales de esta evaluacion; lo desconocido se deja
+    como vino para que la validacion de J5 lo rechace."""
+
+    por_indice = {f"e{indice}": eid for indice, (eid, _) in enumerate(evidencias, start=1)}
+    return [por_indice.get(reference, reference) for reference in references]
 
 
 def _degraded(result: CriterionResult) -> CriterionResult:
@@ -93,8 +162,17 @@ def adjust(
         return result
     assert result.base_score is not None
 
-    user_prompt = _build_user_prompt(criterion, result, evidence_by_id, context, divergencia_maxima)
-    with call_context(paso="U2", prompt_version=PROMPT_VERSION, criterion_id=criterion.id):
+    evidencias = _canonical_evidence(result, evidence_by_id)
+    user_prompt = _build_user_prompt(criterion, result, evidencias, context, divergencia_maxima)
+    input_sha256 = _u2_input_sha256(
+        criterion, result, evidencias, context, alpha, divergencia_maxima
+    )
+    with call_context(
+        paso="U2",
+        prompt_version=PROMPT_VERSION,
+        criterion_id=criterion.id,
+        input_sha256=input_sha256,
+    ):
         raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
     if raw is None:
         return _degraded(result)
@@ -109,13 +187,16 @@ def adjust(
     if parsed.criterion_id != criterion.id or parsed.puntaje_base_recibido != result.base_score:
         return _degraded(result)
 
-    if not parsed.evidencias_referenciadas:
+    referenciadas = _map_references(parsed.evidencias_referenciadas, evidencias)
+    if not referenciadas:
         return _degraded(result)  # J5: la justificacion debe citar evidencia existente
-    mostradas = {eid for eid in result.evidence_ids if eid in evidence_by_id}
-    if any(eid not in mostradas for eid in parsed.evidencias_referenciadas):
+    mostradas = {eid for eid, _ in evidencias}
+    if any(eid not in mostradas for eid in referenciadas):
         # J5: solo cuenta lo que se le mostro para este criterio. Un id real de la evaluacion que no
         # estaba en el prompt tambien es una cita inventada.
         return _degraded(result)
+
+    parsed = parsed.model_copy(update={"evidencias_referenciadas": referenciadas})
 
     propuesto = parsed.puntaje_propuesto
     if result.estado == Estado.NO_IMPLEMENTADO and propuesto > result.base_score:

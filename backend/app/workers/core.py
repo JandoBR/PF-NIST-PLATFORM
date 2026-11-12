@@ -81,8 +81,18 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
     job_service.mark_taken(session, job)
     try:
         ai_requested = bool(message.get("ai_requested"))
-        ai_client = build_default_client() if ai_requested else None
+        ai_client = None
         if ai_requested:
+            assessment = (
+                svc.get_assessment(session, message["assessment_id"])
+                if message.get("assessment_id")
+                else None
+            )
+            ai_client = build_default_client(
+                session=session,
+                org_id=assessment.org_id if assessment is not None else None,
+                reextraer=bool(message.get("reextraer")),
+            )
             logger.info("Job %s: IA %s", job.id, describe_client(ai_client))
         if message.get("selective_refresh"):
             # Refresco selectivo (docs/06 §6, FN-06): reusa lo previo, recalcula solo lo operativo.

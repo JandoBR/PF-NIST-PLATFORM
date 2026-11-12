@@ -3625,3 +3625,151 @@ sí; `en_progreso` con latido de job no se reapea; adopción y descarte por rein
 `tests/test_workers_core.py` y `tests/test_workers_logs.py` (el worker ejecuta un job dado por
 perdido en la cola y descarta el viejo si ya fue reintentado) y `tests/test_api_jobs.py` (`GET
 /jobs/{id}` no falla un job que solo espera). `ruff check` y `ruff format --check` limpios.
+
+## 105. La cache de IA vivía en un directorio por contenedor y U2 nunca acertaba; U1 se vuelve determinista votando
+
+**Síntoma.** Cada evaluación con documentos volvía a pagar casi todas las llamadas y dos corridas
+sobre las mismas fuentes no daban el mismo resultado. El estudio de varianza (30 documentos × 5
+corridas, `deepseek-flash`, `extract_v5`) midió la causa y el remedio.
+
+**Causa 1 — cache privada y perdible.** `app/ai/cache.py` guardaba un JSON por prompt en
+`backend/.cache/ai_extraction`, un directorio del contenedor que no está montado en
+`docker-compose`: api, `worker-core` y `worker-logs` tenían cada uno su copia, y cada `docker
+compose up` la borraba. La clave era `sha256(modelo, base_url, system_prompt, user_prompt)`.
+
+**Causa 2 — U2 jamás acertaba.** El prompt de U2 embebe los UUID de evidencia de la evaluación;
+la misma evidencia en dos evaluaciones produce UUID distintos, así que la clave cambiaba siempre.
+U2 es ~75 % de las llamadas (una por criterio ajustable).
+
+**Causa 3 — U1 con razonamiento no es determinista.** `deepseek-flash` razona por defecto e ignora
+`temperature=0.0`. En 5 corridas por documento, solo el 73.4 % de los campos clave y el 82.7 % de
+las afirmaciones coincidieron entre corridas (pensar apagado: 86.0 % / 93.5 %), pero apagarlo
+duplica las citas inválidas (59 vs 28 descartadas por E8) y las afirmaciones prohibidas (21 vs 9).
+La comparación con/sin razonamiento:
+
+| métrica | pensar ON | pensar OFF |
+|---|---|---|
+| recall usable | 92.4 % | 93.2 % |
+| precisión | 95.2 % | 89.6 % |
+| **mayoría-de-3 recall / precisión** | **94.3 % / 98.8 %** | 93.8 % / 92.7 % |
+| latencia mediana / p90 | 21.3 s / 54.3 s | 3.8 s / 7.6 s |
+| corridas que agotaron 16k y reintentaron | 5/150 | 0/150 |
+
+La decisión es mantener el razonamiento y votar: la precisión (no sobrestimar un control) importa
+más que 1 pp de recall, y la mayoría cierra la brecha de recall.
+
+**Cambio.**
+
+- Tabla `ai_results` (migración `c7a1e5d904b3`) con `org_id`, `kind` (`U1`/`U2`/`U3`), `model`,
+  `base_url`, `params_hash`, `prompt_version`, `input_sha256`, `output`, `meta`, `created_at` y una
+  unique sobre la clave completa. El store (`app/ai/store.py`) reemplaza la cache en disco en api y
+  workers (la CLI sin sesión de BD conserva `CachingAIClient`). Dos workers que calculan el mismo
+  insumo a la vez quedan en una sola fila (el segundo conserva la primera respuesta); un fallo de
+  BD degrada a miss, y un `None` nunca se guarda. La organización es parte de la clave: no se
+  reutiliza nada entre organizaciones.
+- Insumo canónico por paso: U1 = `{chunk, doc, tipos ordenados}`; U2 = criterio+versión,
+  base, estado, **valores** de evidencia sin ids y ordenados, contexto, α y D; U3 = hallazgo sin
+  ids. U2 recibe ids sintéticos `e1`, `e2`, … y `adjust` los remapea a los UUID de la evaluación
+  actual antes de validar J5; una referencia que no exista sigue degradando.
+- U1: en un miss se corren `U1_VOTES` extracciones en paralelo (3 por defecto; `1` = sin voto),
+  acotadas por el semáforo de `app/ai/parallel.py`, cada una validada (E3/E8) antes de votar. El
+  voto es genérico sobre `contenido`: mayoría por campo (texto normalizado; booleanos/enums/fechas
+  exactos), listas por elemento, `null`/ausente como un mismo estado; `process_defined` se agrupa
+  por `(tipo, proceso)`; cita/locator de la corrida de mayor confianza y mediana de confianza. Los
+  empates se rompen por confianza e índice de corrida. El resultado votado y un resumen de las
+  corridas crudas quedan en `ai_results.meta`. Si solo una corrida respondió no hay mayoría y no se
+  guarda.
+- Cliente: timeout de 180 s (`DEEPSEEK_TIMEOUT_SECONDS`), que se duplica (hasta 600 s) en el
+  reintento por longitud; el razonamiento sigue activo y `temperature` no cambia.
+- `reextraer` opcional en `POST /assessments` y `POST /assessments/{id}/reevaluate`, en el payload
+  del job; en el dashboard, «Re-extraer con IA» sobre una evaluación con documentos. Ignora las
+  lecturas y reescribe la respuesta fresca.
+- `assessments.reproducibility.ai` registra `cache` (hits/misses por U1/U2/U3), `votos` y
+  `params_hash`.
+
+**Garantía.** Para el mismo insumo canónico, la primera extracción ya es mayoría de 3 y desde ahí
+el store devuelve el mismo resultado en cualquier contenedor con la misma BD (identidad comprobada
+con dos clientes sobre la misma base). No se promete determinismo del proveedor: se promete no
+volver a preguntarle lo mismo.
+
+**Configuración.** `U1_VOTES` (3) y `DEEPSEEK_TIMEOUT_SECONDS` (180) en `backend/.env.example` y
+`deploy/.env.example`.
+
+**Verificación:** `tests/test_ai_store.py` (hit/miss, aislamiento por organización, misma BD y
+clientes distintos, `reextraer`, inserción concurrente, U1 con 3 votos y con `U1_VOTES=1`, no se
+guarda sin mayoría), `tests/test_ai_voting.py` (mayoría, empate, agrupación por proceso, listas,
+`null`, cita/confianza, umbral), `tests/test_ai_adjustment.py` (prompt con ids sintéticos, remapeo
+y clave estable entre UUIDs), `tests/test_ai_cache.py`, `tests/test_api_assessments.py`
+(`reextraer` en POST y en reevaluación) y `tests/test_migrations.py` (tabla y unique).
+
+## 106. Una negacion o un plan se leian como practica vigente y las cantidades en palabras no se normalizaban
+
+**Sintoma.** Dos fallos del estudio de extraccion (thinking ON y OFF) que sobrevivieron al analisis
+del modelo porque son del contrato, no del modelo. (1) Un documento que dice "no hay un responsable
+designado para seguridad de la informacion" o "no existe un procedimiento documentado de respuesta"
+producia `doc.claim` con `encontrado=true` y campos rellenos ("No hay procedimiento documentado...",
+`pasos` con texto), asi que CRI-GV-02 daba 75 y CRI-RC-01 50 aunque el documento declarara la
+ausencia; los planes ("se implementara en 2027", "se prohibira") a veces se tomaban como practica
+actual. (2) Las cantidades escritas con palabras ("noventa dias", "setenta y dos horas") quedaban
+verbatim: `pr02` lee la retencion con `(\d+)` y CRI-PR-02 se quedaba en 75 aunque la politica dijera
+90 dias.
+
+**Causa.** El contrato de U1 solo tenia `encontrado` (declara / no declara) y ninguna forma de decir
+"declara que NO existe" o "declara que sera despues": una negacion completa los mismos campos que una
+afirmacion. Las reglas suman toda afirmacion `encontrado=true` (`found`, `merged_content`,
+`best_found`), asi que no habia donde ver la negacion aunque el texto la citara. Y el contenido se
+guardaba tal cual: ninguna capa convertia palabras a digitos, y la regla que parsea la cantidad no
+tenia respaldo.
+
+**Cambio.** `doc.claim@3` (evidence_types v11) suma `estado_declarado`: `vigente`, `inexistente` o
+`planificado`, obligatorio con `encontrado=true`; la cita (`cita.fragmento`) es la frase literal que
+niega o planifica. `extract_v6` (PROMPT_VERSION) lo pide con ejemplos de negacion y de plan, y pide
+normalizar las cantidades a digitos con su unidad sin tocar la cita. Al extraer, un valor que no se
+reconoce descarta la afirmacion y una afirmacion sin el campo (anterior a v6) se lee como `vigente`
+(compatibilidad con lo ya guardado).
+
+La semantica es **central**, en `_common.aplicar_estado_declarado`, que el motor aplica a toda regla
+igual que `marcar_sin_respuesta` y `marcar_contradicciones`: si la afirmacion que la regla cito es
+`inexistente`, el criterio pasa a `no_implementado` con 0 y la explicacion cita el documento ("El
+documento X declara que no existe: ..."); si es `planificado`, tampoco se acredita (0) porque un plan
+es informacion explicita de que hoy no esta en marcha, y `found` excluye los planes de la suma de
+contenido para que no aporten campos. El 0 no es silencio: el documento habla y dice que la practica
+no esta (docs/01 §3). Si una regla no pudo acreditar nada y aun asi cita la negacion o el plan, el
+resultado tambien es 0; para eso `RS-01`, `RS-04`, `RC-02` y `DE-02` citan ahora sus afirmaciones en
+las ramas de `evidencia_insuficiente` que antes no citaban nada.
+
+Si **otro documento** declara la practica vigente, no se elige ganador: `contradictions._absence_disagreement`
+registra el hallazgo con ambos lados y excluye las afirmaciones de ese tipo para el criterio afectado
+(docs/02 §5), con un mapa tipo -> criterios porque `detect` es global. Es la contraparte documental
+del mecanismo de contradiccion ya existente.
+
+Las cantidades se normalizan en `app/ai/numbers.py` (parser determinista de cardinales espanol e
+ingles basico, hasta millones, "un/una", "medio", "dos semanas", "cada tres meses"): se aplica en
+`_sanitize_content` a los campos de cantidad (`backup_policy.retencion`, `risk_tolerance.tolerancia`,
+`notification_list.plazos`, `process_defined.criterios_activacion`), a la frecuencia ("cada tres
+meses" -> `trimestral`) y como respaldo en `pr02.retencion_politica_dias` antes del `(\d+)`. La cita
+no se toca.
+
+**Evidencia (corpus del estudio, 18 llamadas reales, 2 corridas por modo, extract_v6, sin cache).**
+
+| Documento | Modo | `estado_declarado` | Resultado |
+|---|---|---|---|
+| `explicit-negations.md` | thinking / no-thinking | las cinco ausencias salen `inexistente` | GV-02, RC-01 y GV-06 = `no_implementado` 0 en 2/2 por modo (antes GV-02 75, RC-01 50) |
+| `planned-not-implemented.md` | thinking | programa de proveedores y formacion `planificado` | GV-06 y PR-07 = 0 en 2/2 |
+| `planned-not-implemented.md` | no-thinking | ademas de los planes, una afirmacion "vigente" que dice que no hay programa | PR-07 = 0 con la exclusion de planes de `found` (la corrida previa al ajuste daba 75) |
+| `numbers-in-words.md` | thinking / no-thinking | retencion "90 dias"/"90 días", plazos "72 horas", tolerancia "4 horas" | `retencion_politica_dias` = 90 en 4/4; con el test de PR-02, "noventa dias" puntua igual que "90 dias" |
+| `contradictory.md` | thinking / no-thinking | dos retenciones vigentes del mismo documento | sigue siendo conflicto documental, sin cambios |
+
+No se persiguio el 0 en `contradictory.md`: sus dos secciones son dos afirmaciones vigentes del
+mismo documento y el criterio las resuelve como antes (docs/09 §101).
+
+**Verificacion:** `tests/test_ai_numbers.py` (parser), `tests/test_ai_extraction.py` (estado
+obligatorio, cita literal de la negacion, valor invalido descartado, cantidades y frecuencia),
+`tests/test_declared_state.py` (GV-02/RC-01 y el resto de reglas documentales a 0; plan no
+acreditado; contradiccion documento-vs-documento visible; PR-02 con "noventa dias" igual que con "90
+dias"), con los documentos del estudio en `tests/fixtures/documents/estudio/`. En verde junto con
+`test_contradictions`, `test_rules_common`, `test_cr05_docclaim_criteria`, `test_golden`,
+`test_ai_golden`, `test_op12_op14_ai_hardening`, `test_criteria_matrix_doc`, `test_findings`,
+`test_evaluation_engine` y las pruebas de reglas tocadas; `ruff check` y `ruff format --check`
+limpios. `criteria.yml` sube a v25 (semantica central, sin cambiar el tramo de cada regla) y
+`evidence_types.yml` a v11.

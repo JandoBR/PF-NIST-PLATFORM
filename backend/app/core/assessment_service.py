@@ -545,6 +545,9 @@ def run_pending_assessment(
             results = engine.apply_ai_adjustments(
                 methodology, results, evidence, ai_client, context or {}
             )
+        assessment.reproducibility = reproducibility.with_ai_cache(
+            assessment.reproducibility, ai_client
+        )
         results = _cap_contradicted(session, assessment, results, evidence)
 
         for source in sources:
@@ -698,12 +701,14 @@ def enqueue_reevaluation(
     *,
     apply_ai_adjustment: bool = False,
     request_documents_ai: bool = False,
+    reextraer: bool = False,
     context: dict[str, Any] | None = None,
 ) -> tuple[Assessment, Job]:
     """Crea una reevaluacion y encola su `assessment_run` en la cola del core. Lo usan
     `POST /assessments/{id}/reevaluate`, el refresco automatico de madurez (docs/08 §8) y el
     fallback del refresco cuando cambia la metodologia. Hereda la seleccion de ingestas de
-    eventos de la evaluacion anterior (docs/09 §102)."""
+    eventos de la evaluacion anterior (docs/09 §102). `reextraer` descarta lo guardado en el
+    store de IA y reejecuta U1/U2/U3 (docs/09 §105)."""
 
     previous = session.get(Assessment, previous_assessment_id)
     event_ingest_ids = event_ingest_selection(previous) if previous is not None else None
@@ -721,6 +726,7 @@ def enqueue_reevaluation(
             # `doc.claim` de la evaluacion anterior (docs/09 §74).
             "ai_requested": apply_ai_adjustment or request_documents_ai,
             "apply_ai_adjustment": apply_ai_adjustment,
+            "reextraer": reextraer,
             "context": context or {},
             "event_ingest_ids": event_ingest_ids,
         },
@@ -771,6 +777,9 @@ def generate_plans(
         }
     if ai_client is not None:
         assessment.reproducibility = reproducibility.with_plans_ai(
+            assessment.reproducibility, ai_client
+        )
+        assessment.reproducibility = reproducibility.with_ai_cache(
             assessment.reproducibility, ai_client
         )
     session.query(PlanRow).filter_by(assessment_id=assessment_id).delete()

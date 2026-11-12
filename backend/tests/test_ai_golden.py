@@ -95,7 +95,9 @@ def test_missing_claims_lower_recall_and_fail(methodology):
     assert "NO APROBADO" in format_report(report)
 
 
-def test_recall_above_threshold_tolerates_a_miss(methodology):
+def test_recall_above_threshold_tolerates_a_miss(methodology, monkeypatch):
+    # Sin votación: con U1_VOTES=3 las otras dos corridas recuperarían la afirmación omitida.
+    monkeypatch.setenv("U1_VOTES", "1")
     omitida = []
 
     def omite_la_primera(afirmaciones, _texto):

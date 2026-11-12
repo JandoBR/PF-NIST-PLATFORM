@@ -300,6 +300,45 @@ class Incident(Base):
     plans: Mapped[list[PlanRow]] = relationship(back_populates="incident")
 
 
+class AIResult(Base):
+    """Resultado de una llamada de IA, por organizacion y por insumo canonico (docs/05 §7).
+
+    Reemplaza la cache en disco de cada contenedor: el resultado sobrevive a recrear api/workers
+    y dos contenedores con la misma BD reutilizan las mismas respuestas. La clave no incluye
+    ids/uuids de evidencia: el insumo se canonicaliza en `app/ai/store.py`, y las referencias de
+    U2 se remapean a la evaluacion actual al leer. `output` es el JSON crudo que devolvio el
+    modelo (para U1, la afirmacion ya votada); `meta` guarda tokens/votos/resumen de corridas.
+    """
+
+    __tablename__ = "ai_results"
+    __table_args__ = (
+        UniqueConstraint(
+            "org_id",
+            "kind",
+            "model",
+            "base_url",
+            "params_hash",
+            "prompt_version",
+            "input_sha256",
+            name="uq_ai_results_key",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"))
+    kind: Mapped[str] = mapped_column(String)  # 'U1' | 'U2' | 'U3'
+    model: Mapped[str] = mapped_column(String)
+    base_url: Mapped[str] = mapped_column(String)
+    params_hash: Mapped[str] = mapped_column(String)
+    prompt_version: Mapped[str] = mapped_column(String)
+    input_sha256: Mapped[str] = mapped_column(String)
+    output: Mapped[Any] = mapped_column(JSON)
+    meta: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
 class Job(Base):
     """Trabajo en cola (docs/04 §4, columnas `id, assessment_id?, org_id?, tipo, estado,
     progreso, error, creado_en, tomado_en`). `tipo` es `assessment_run` (pipeline completo de

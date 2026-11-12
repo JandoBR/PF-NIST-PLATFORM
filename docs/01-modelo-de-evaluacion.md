@@ -85,6 +85,8 @@ Las instancias **nunca se sobrescriben**. Una nueva recolección crea instancias
 Reglas:
 
 - **La ausencia de evidencia no es una falla**: es `evidencia_insuficiente`. Esto incluye el **silencio documental**: que los documentos analizados no declaren algo (o el modelo lo marque como no encontrado) no es `no_implementado`, porque la organización puede no haber aportado el documento correspondiente (docs/09 §60).
+- **La ausencia declarada sí es una falla.** Si el documento niega explícitamente la práctica (“no hay un responsable designado para seguridad de la información”, “no existe un procedimiento documentado de respuesta”), no hay silencio: el documento habla y dice que la práctica no está. La afirmación llega con `estado_declarado: inexistente` y el criterio es `no_implementado` con 0, citando el documento (docs/09 §106). No se exige que la negación venga de la configuración técnica.
+- **Un plan declarado no acredita la práctica de hoy.** “Se implementará en 2027” o “se prohibirá” llegan con `estado_declarado: planificado`: es información explícita de que la práctica no está en marcha, así que el criterio tampoco se acredita (`no_implementado`, 0) y la explicación lo dice. Si otro documento distinto la declara vigente, vale esa declaración; una negación y una afirmación de documentos distintos se registran como contradicción y ninguna de las dos cuenta para ese criterio (docs/02 §5).
 - `no_aplicable` exige un motivo explícito y queda auditado.
 - Un estado `error` es visible y no se oculta promediando.
 
@@ -285,6 +287,9 @@ Una evaluación registra:
 - Versiones de tipos de evidencia usadas.
 - Versión de adaptadores/parsers.
 - Modelo y versión de prompt de IA (para ajustes y extracción).
+- Uso del store de IA: hits/misses por paso (U1/U2/U3), número de votos de U1 y `params_hash` del
+  modelo; con eso se explica si una corrida reutilizó resultados y si cambió algún parámetro del
+  cliente (docs/05 §7, docs/09 §105).
 
 Implementado en `assessments.reproducibility` (adaptador y parser por fuente; modelo y prompt de
 IA solo si participó; snapshot de la metodología), docs/09 §37. `methodology_version` se fija al

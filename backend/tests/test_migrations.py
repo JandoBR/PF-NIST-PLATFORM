@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "event_ingests",
     "log_patterns",
     "incidents",
+    "ai_results",
 }
 
 
@@ -256,3 +257,30 @@ def test_event_ingest_migration_keeps_existing_events_as_legacy(tmp_path, monkey
         ingest_id = conn.execute(text("SELECT ingest_id FROM events WHERE id = 'ev1'")).scalar_one()
         ingestas = conn.execute(text("SELECT count(*) FROM event_ingests")).scalar_one()
     assert ingest_id is None and ingestas == 0
+
+
+def test_migrated_ai_results_have_the_full_cache_key(tmp_path, monkeypatch):
+    """La unicidad de `ai_results` es la clave completa (org, paso, modelo, endpoint,
+    parametros, prompt e insumo); sin ella dos workers duplicarian filas (docs/09 §105)."""
+
+    db_path = tmp_path / "migrated.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+
+    _upgrade_head()
+
+    inspector = inspect(create_engine(f"sqlite:///{db_path}"))
+    columnas = {c["name"]: c for c in inspector.get_columns("ai_results")}
+    assert {"org_id", "kind", "model", "base_url", "params_hash", "prompt_version"} <= set(columnas)
+    assert columnas["input_sha256"]["nullable"] is False
+    unicas = [sorted(u["column_names"]) for u in inspector.get_unique_constraints("ai_results")]
+    assert unicas == [
+        [
+            "base_url",
+            "input_sha256",
+            "kind",
+            "model",
+            "org_id",
+            "params_hash",
+            "prompt_version",
+        ]
+    ]

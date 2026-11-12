@@ -18,6 +18,7 @@ from app.adapters.documents.adapter import ADAPTER_VERSION as DOCUMENTS_ADAPTER_
 from app.adapters.terraform.adapter import ADAPTER_VERSION as TERRAFORM_ADAPTER_VERSION
 from app.ai import adjustment, extraction, plan_generation
 from app.ai.client import AIClient, NullAIClient
+from app.ai.store import store_for
 from app.methodology import snapshot
 from app.methodology.loader import Methodology
 
@@ -103,5 +104,24 @@ def with_plans_ai(info: dict[str, Any] | None, ai_client: AIClient | None) -> di
     info = dict(info or {"adapters": {}, "ai": None})
     ai = dict(info.get("ai") or {"modelo": model_name(ai_client)})
     ai["planes"] = plan_generation.PROMPT_VERSION
+    info["ai"] = ai
+    return info
+
+
+def with_ai_cache(info: dict[str, Any] | None, ai_client: AIClient | None) -> dict[str, Any] | None:
+    """Anota el uso del store de IA: hits/misses por paso, votos de U1 y hash de parametros.
+
+    Se llama al terminar el pipeline (y otra vez tras generar planes con IA), porque las
+    estadisticas son del cliente y solo estan completas cuando ya corrieron U1/U2/U3 (docs/01 §10).
+    """
+
+    store = store_for(ai_client)
+    if store is None:
+        return info
+    info = dict(info or {"adapters": {}, "ai": None})
+    ai = dict(info.get("ai") or {"modelo": store.model})
+    ai["cache"] = store.stats()
+    ai["votos"] = store.votes
+    ai["params_hash"] = store.params_hash
     info["ai"] = ai
     return info

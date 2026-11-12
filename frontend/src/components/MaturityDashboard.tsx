@@ -10,9 +10,11 @@ import {
   Lock,
   Library,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
-import { downloadExecutiveReport, getMethodology } from '@/lib/api';
+import { downloadExecutiveReport, getMethodology, reevaluateAssessment } from '@/lib/api';
 import type {
+  AssessmentAccepted,
   AssessmentDetail,
   CriterionResult,
   Estado,
@@ -33,6 +35,8 @@ type TableMode = 'criteria' | 'privacy';
 interface DashboardProps {
   assessment: AssessmentDetail;
   criteria: CriterionResult[];
+  /** Se llama al aceptar (202) una reevaluación con IA: la nueva evaluación pasa a ser la activa. */
+  onReevaluated?: (accepted: AssessmentAccepted) => void;
 }
 
 const FILTERS: { key: Estado | 'all'; label: string }[] = [
@@ -44,11 +48,13 @@ const FILTERS: { key: Estado | 'all'; label: string }[] = [
   { key: 'error', label: 'Error' },
 ];
 
-export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
+export function MaturityDashboard({ assessment, criteria, onReevaluated }: DashboardProps) {
   const [estadoFilter, setEstadoFilter] = useState<Estado | 'all'>('all');
   const [funcFilter, setFuncFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [tableMode, setTableMode] = useState<TableMode>('criteria');
+  const [reextrayendo, setReextrayendo] = useState(false);
+  const [reextraerError, setReextraerError] = useState<string | null>(null);
   // Cobertura DEL CATALOGO (AMP-04): metadato del producto, constante para esta version de
   // metodologia, asi que se pide una sola vez y no depende de la evaluacion que se este viendo.
   // Si falla, la seccion no se pinta: es metadato y nunca debe tumbar la matriz.
@@ -101,6 +107,24 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
   const ingestas = (eventos?.archivos ?? []).map(
     (archivo) => archivo ?? 'eventos anteriores (sin ingesta registrada)'
   );
+  const ai = assessment.reproducibility?.ai;
+  const tieneDocumentos = Boolean(assessment.reproducibility?.adapters?.documents);
+  const enCurso = assessment.estado === 'pendiente' || assessment.estado === 'en_progreso';
+
+  async function handleReextraer() {
+    if (!onReevaluated || reextrayendo || enCurso) return;
+    setReextrayendo(true);
+    setReextraerError(null);
+    try {
+      onReevaluated(await reevaluateAssessment(assessment.id, { reextraer: true }));
+    } catch (err) {
+      setReextraerError(
+        err instanceof Error ? err.message : 'No se pudo iniciar la re-extracción.'
+      );
+    } finally {
+      setReextrayendo(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -109,15 +133,22 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
           {assessment.estado === 'en_progreso' || assessment.estado === 'pendiente'
             ? 'Evaluación en curso…'
             : `Evaluación ${assessment.estado}`}
-          {assessment.reproducibility && (
+          {ai && (
             <span className="ml-2 text-slate-600">
               ·{' '}
-              {assessment.reproducibility.ai
-                ? `IA: ${Object.entries(assessment.reproducibility.ai)
-                    .map(([k, v]) => (k === 'modelo' ? v : `${k} ${v}`))
-                    .join(' · ')}`
-                : 'Sin IA (determinista)'}
+              {`IA: ${[
+                ai.modelo,
+                ai.extraccion && `extracción ${ai.extraccion}`,
+                ai.ajuste && `ajuste ${ai.ajuste}`,
+                ai.planes && `planes ${ai.planes}`,
+                ai.votos && `votos ${ai.votos}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}`}
             </span>
+          )}
+          {assessment.reproducibility && !ai && (
+            <span className="ml-2 text-slate-600">· Sin IA (determinista)</span>
           )}
           {eventos && (
             <span className="ml-2 text-slate-600" title={ingestas.join(', ')}>
@@ -130,13 +161,33 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
             </span>
           )}
         </p>
-        <DownloadPdfButton
-          label="Informe PDF"
-          onDownload={() => downloadExecutiveReport(assessment.id)}
-          disabled={assessment.estado !== 'completada'}
-          disabledReason="El informe está disponible cuando la evaluación termina."
-        />
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {tieneDocumentos && onReevaluated && (
+            <button
+              onClick={() => void handleReextraer()}
+              disabled={enCurso || reextrayendo}
+              className="btn-ghost border border-white/10 px-3 py-2 text-xs"
+              title="Vuelve a llamar a la IA sobre los mismos documentos, ignorando los resultados guardados (U1 con voto por mayoría de 3). Útil si cambió el prompt o sospechas una extracción vieja."
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${reextrayendo ? 'animate-spin' : ''}`} />
+              {reextrayendo ? 'Re-encolando…' : 'Re-extraer con IA'}
+            </button>
+          )}
+          <DownloadPdfButton
+            label="Informe PDF"
+            onDownload={() => downloadExecutiveReport(assessment.id)}
+            disabled={assessment.estado !== 'completada'}
+            disabledReason="El informe está disponible cuando la evaluación termina."
+          />
+        </div>
       </div>
+
+      {reextraerError && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/[0.07] p-3.5 text-xs text-rose-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <p className="leading-relaxed">{reextraerError}</p>
+        </div>
+      )}
 
       {assessment.estado === 'fallida' && (
         <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/[0.07] p-3.5 text-xs text-rose-200">

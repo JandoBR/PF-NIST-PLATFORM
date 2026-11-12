@@ -6,15 +6,20 @@ filtra y normaliza; la regla de cada criterio vive en `app/evaluation/rules`.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from pydantic import ValidationError
 
+from app.ai import voting
 from app.ai.calllog import call_context
 from app.ai.client import AIClient
+from app.ai.numbers import normalizar_cantidades
+from app.ai.parallel import map_ordered
 from app.ai.quotes import quote_in_text
 from app.ai.schemas import ExtractionResponse
+from app.ai.store import sha256_json, store_bypass, store_for
 from app.schemas.evidence import EvidenceInstance, Locator, Modality, Segmento
 
 #: El texto del sistema (`prompts/extract_vN.txt`) no es el prompt completo: `_contenido_esperado`
@@ -33,7 +38,9 @@ from app.schemas.evidence import EvidenceInstance, Locator, Modality, Segmento
 #: v5: un chunk agrupado puede traer varios tipos (y un inventario de activos junto a uno de datos);
 #: se pide extraer cada tipo por separado y reunir en `data_inventory.activos` los recursos
 #: tecnologicos de ambas secciones (docs/09 §103).
-PROMPT_VERSION = "extract_v5"
+#: v6: cada afirmacion declara `estado_declarado` (vigente|inexistente|planificado) y se pide
+#: normalizar las cantidades escritas con palabras (docs/09 §106).
+PROMPT_VERSION = "extract_v6"
 
 #: Limitacion de una afirmacion cuya cita no aparece en el texto analizado (E8).
 CITA_NO_LOCALIZABLE = "cita no localizable en el texto analizado: no cuenta para puntuar"
@@ -194,6 +201,46 @@ _FRECUENCIAS = {"mensual", "trimestral", "semestral", "anual"}
 _FECHA_MINIMA = date(1990, 1, 1)
 _ROL_MAX_CHARS = 120
 
+#: Estados que el documento puede declarar sobre la practica (prompt v6, docs/09 §106). Una
+#: afirmacion sin estado es de antes de v6 y se lee como vigente; un estado que no se entiende no
+#: se interpreta y la afirmacion se descarta (no se convierte un error de formato en una ausencia).
+_ESTADOS_DECLARADOS = ("vigente", "inexistente", "planificado")
+
+#: Campos de `contenido` que expresan una cantidad o un plazo y por eso se normalizan a digitos.
+_CAMPOS_CANTIDAD: dict[str, tuple[str, ...]] = {
+    "backup_policy": ("retencion",),
+    "risk_tolerance": ("tolerancia",),
+    "notification_list": ("plazos",),
+    "process_defined": ("criterios_activacion",),
+}
+
+
+def _estado_declarado(valor: object) -> str | None:
+    """Estado declarado normalizado, o `None` si el modelo respondio algo que no se entiende."""
+
+    if valor is None:
+        return "vigente"
+    normalizado = str(valor).strip().lower()
+    return normalizado if normalizado in _ESTADOS_DECLARADOS else None
+
+
+def _frecuencia(texto: str) -> str | None:
+    """Frecuencia reconocida a partir del texto, incluida una cantidad escrita con palabras
+    ("cada tres meses" -> "trimestral")."""
+
+    normalizado = normalizar_cantidades(str(texto)).strip().lower()
+    if normalizado in _FRECUENCIAS:
+        return normalizado
+    if re.search(r"\b12\s*(mes|meses)\b|\b1\s*a(?:ñ|n)os?\b", normalizado):
+        return "anual"
+    if re.search(r"\b6\s*(mes|meses)\b", normalizado):
+        return "semestral"
+    if re.search(r"\b3\s*(mes|meses)\b", normalizado):
+        return "trimestral"
+    if re.search(r"\b1\s*mes\b", normalizado):
+        return "mensual"
+    return None
+
 
 def _sanitize_content(tipo: str, contenido: dict) -> dict:
     """E5 (docs/05 §2.3): campos de fecha/rol se validan contra formatos esperados y los valores
@@ -215,9 +262,18 @@ def _sanitize_content(tipo: str, contenido: dict) -> dict:
                 limpio["ultima_revision"] = None
                 descartados.append(f"ultima_revision={ultima!r}: fecha invalida o fuera de rango")
         frecuencia = limpio.get("frecuencia")
-        if frecuencia is not None and str(frecuencia).lower() not in _FRECUENCIAS:
-            limpio["frecuencia"] = None
-            descartados.append(f"frecuencia={frecuencia!r}: no es una frecuencia reconocida")
+        if frecuencia is not None:
+            reconocida = _frecuencia(frecuencia)
+            if reconocida is None:
+                limpio["frecuencia"] = None
+                descartados.append(f"frecuencia={frecuencia!r}: no es una frecuencia reconocida")
+            elif str(frecuencia).strip().lower() not in _FRECUENCIAS:
+                limpio["frecuencia"] = reconocida
+
+    for campo in _CAMPOS_CANTIDAD.get(tipo, ()):
+        valor = limpio.get(campo)
+        if isinstance(valor, str) and valor.strip():
+            limpio[campo] = normalizar_cantidades(valor)
 
     if tipo == "role_assigned" and "roles" in limpio:
         roles = limpio["roles"]
@@ -267,6 +323,7 @@ def _build_user_prompt(chunk_text: str, tipos_solicitados: list[str], doc_id: st
         f'<documento id="{doc_id}">\n{chunk_text}\n</documento>\n\n'
         f"Tipos de afirmacion a buscar en este fragmento: {tipos}.\n"
         f"Para 'contenido', usa estos campos por tipo:\n{_contenido_esperado(tipos_solicitados)}\n"
+        "En cada afirmacion indica 'estado_declarado': vigente, inexistente o planificado.\n"
         "Responde en JSON con el esquema indicado."
     )
 
@@ -289,8 +346,16 @@ def _locator_de_cita(
     return chunk_locator
 
 
-def extract_claims(
-    client: AIClient,
+def _u1_input_sha256(chunk_text: str, tipos_solicitados: list[str], doc_id: str) -> str:
+    """Insumo canonico de U1: sin ids de evidencia, tipos ordenados (docs/05 §7)."""
+
+    return sha256_json(
+        {"chunk_text": chunk_text, "doc_id": doc_id, "tipos": sorted(tipos_solicitados)}
+    )
+
+
+def _claims_from_raw(
+    raw: dict | None,
     *,
     chunk_text: str,
     chunk_locator: Locator,
@@ -301,14 +366,8 @@ def extract_claims(
     confianza_minima: float,
     segmentos: tuple[Segmento, ...] = (),
 ) -> list[EvidenceInstance]:
-    """Ejecuta U1 sobre un chunk y devuelve evidencia `doc.claim` (reglas E1-E7, docs/05 §2.3).
+    """Valida y convierte una respuesta cruda de U1 en evidencia (E1-E8, docs/05 §2.3)."""
 
-    `segmentos` son las secciones/paginas que el chunk agrupa: con ellas el locator de cada
-    afirmacion apunta a la seccion/pagina de su cita y no a la primera del chunk."""
-
-    user_prompt = _build_user_prompt(chunk_text, tipos_solicitados, doc_id)
-    with call_context(paso="U1", prompt_version=PROMPT_VERSION, doc_id=doc_id):
-        raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
     if raw is None:
         return []  # degradado: sin respuesta util, no se inventa evidencia (E4/J4)
 
@@ -328,6 +387,11 @@ def extract_claims(
             continue  # E2: una afirmacion encontrada sin cita.fragmento se descarta
 
         limitaciones: list[str] = []
+        estado: str | None = None
+        if claim.encontrado:
+            estado = _estado_declarado(claim.estado_declarado)
+            if estado is None:
+                continue  # E5: un estado de la practica que no se entiende no se interpreta
         if claim.encontrado and claim.confianza < confianza_minima:
             limitaciones.append(f"confianza baja ({claim.confianza} < {confianza_minima})")  # E3
         if claim.encontrado and not quote_in_text(claim.cita.fragmento, chunk_text):
@@ -357,7 +421,7 @@ def extract_claims(
         evidence.append(
             EvidenceInstance(
                 type_id="doc.claim",
-                type_version=2,
+                type_version=3,
                 subject_type="document",
                 subject_ref=f"doc:{doc_id}",
                 scope=scope,
@@ -368,6 +432,9 @@ def extract_claims(
                     "confianza": claim.confianza,
                     # v2: la cita textual, para poder mostrarla y auditarla despues.
                     "cita": claim.cita.fragmento if claim.cita is not None else None,
+                    # v3: si el documento afirma la practica como vigente, la niega o la declara
+                    # planificada (docs/09 §106). Ausente solo en afirmaciones no encontradas.
+                    "estado_declarado": estado,
                 },
                 source_id=source_id,
                 locator=locator,
@@ -379,3 +446,120 @@ def extract_claims(
         )
 
     return evidence
+
+
+def _run_once(
+    client: AIClient,
+    *,
+    user_prompt: str,
+    input_sha256: str,
+    voto: int,
+    bypass: bool,
+    **parse: object,
+) -> tuple[dict | None, list[EvidenceInstance]]:
+    """Una corrida cruda de U1. En una votacion, `bypass` evita que la segunda corrida sea un
+    "hit": votar sobre tres veces el mismo resultado guardado no dice nada (docs/05 §7)."""
+
+    with call_context(
+        paso="U1",
+        prompt_version=PROMPT_VERSION,
+        doc_id=parse["doc_id"],
+        input_sha256=input_sha256,
+        voto=voto,
+    ):
+        if bypass:
+            with store_bypass():
+                raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
+        else:
+            # Sin votacion el resultado si se puede reutilizar: lo cachea el propio cliente
+            # (store en BD en api/workers, disco en la CLI) por el mismo insumo canonico.
+            raw = client.complete_json(_SYSTEM_PROMPT, user_prompt)
+    return raw, _claims_from_raw(raw, **parse)
+
+
+def extract_claims(
+    client: AIClient,
+    *,
+    chunk_text: str,
+    chunk_locator: Locator,
+    tipos_solicitados: list[str],
+    doc_id: str,
+    source_id: str,
+    scope: str,
+    confianza_minima: float,
+    segmentos: tuple[Segmento, ...] = (),
+) -> list[EvidenceInstance]:
+    """Ejecuta U1 sobre un chunk y devuelve evidencia `doc.claim` (reglas E1-E7, docs/05 §2.3).
+
+    `segmentos` son las secciones/paginas que el chunk agrupa: con ellas el locator de cada
+    afirmacion apunta a la seccion/pagina de su cita y no a la primera del chunk.
+
+    Con store persistente, el resultado se lee y se guarda por insumo canonico; en un miss corre
+    `U1_VOTES` corridas (3 por defecto) y guarda la afirmacion votada. Las corridas se validan
+    por separado antes de votar, para que una cita inventada o de baja confianza no arrastre el
+    voto (docs/05 §2.4)."""
+
+    user_prompt = _build_user_prompt(chunk_text, tipos_solicitados, doc_id)
+    input_sha256 = _u1_input_sha256(chunk_text, tipos_solicitados, doc_id)
+    n = voting.votes()
+    store = store_for(client)
+
+    if store is not None and n > 1:
+        guardado = store.get("U1", PROMPT_VERSION, input_sha256)
+        if guardado is not None:
+            return _claims_from_raw(
+                guardado,
+                chunk_text=chunk_text,
+                chunk_locator=chunk_locator,
+                tipos_solicitados=tipos_solicitados,
+                doc_id=doc_id,
+                source_id=source_id,
+                scope=scope,
+                confianza_minima=confianza_minima,
+                segmentos=segmentos,
+            )
+
+    parse = {
+        "chunk_text": chunk_text,
+        "chunk_locator": chunk_locator,
+        "tipos_solicitados": tipos_solicitados,
+        "doc_id": doc_id,
+        "source_id": source_id,
+        "scope": scope,
+        "confianza_minima": confianza_minima,
+        "segmentos": segmentos,
+    }
+    if n <= 1:
+        raw, claims = _run_once(
+            client,
+            user_prompt=user_prompt,
+            input_sha256=input_sha256,
+            voto=1,
+            bypass=False,
+            **parse,
+        )
+        runs = [(raw, claims)]
+    else:
+        runs = map_ordered(
+            lambda indice: _run_once(
+                client,
+                user_prompt=user_prompt,
+                input_sha256=input_sha256,
+                voto=indice + 1,
+                bypass=True,
+                **parse,
+            ),
+            range(n),
+        )
+        claims = voting.vote([claims for _, claims in runs])
+
+    if store is not None and n > 1:
+        if sum(1 for raw, _ in runs if raw is not None) >= voting.umbral(n):
+            store.put(
+                "U1",
+                PROMPT_VERSION,
+                input_sha256,
+                voting.claims_to_raw(claims),
+                voting.run_summary(runs),
+            )
+    return claims

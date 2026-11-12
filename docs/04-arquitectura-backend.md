@@ -54,7 +54,7 @@ De ese mismo stream cuelgan dos consumidores: **madurez** (evidencia por ventana
 | BD | PostgreSQL | JSONB para `value`, `locator`, metadatos. |
 | Cola | Redis (listas `RPUSH`/`BLPOP`) | Dos colas: trabajos del core (`assessment_run`) y del pipeline de logs (`event_ingest`). Streams con consumer groups es el diseño objetivo a mayor escala (docs/12 §1). |
 | Trabajos | Workers propios leyendo de Redis | Sin Celery; un worker por tipo de trabajo. |
-| Caché | Disco | Caché de extracción IA por hash de prompt (`app/ai/cache.py`); no usa Redis. |
+| Caché | BD (`ai_results`) | Resultados de IA por organización e insumo canónico (U1/U2/U3); la CLI sin BD usa disco (`app/ai/cache.py`). Ver docs/05 §7. |
 | Contenedores | Docker + docker-compose | API, workers, Postgres y Redis; ver §11. |
 | Parsing TF | `python-hcl2` | Solo bloques y valores; expresiones → unknown. |
 | Parsing Ansible | `PyYAML` + inspección de estructura | Sin ejecutar nada. |
@@ -144,6 +144,7 @@ porque toca el modelo de evidencias.
 | `log_patterns` | `id`, `org_id`, `scope`, `patron`, `resultado`, `desde`, `hasta`, `conteo`, `fuentes[]` (origen de los eventos, FN-07), `creado_en` |
 | `incidents` | `id`, `org_id`, `scope`, `correlation_key`, `titulo`, `estado`, `severidad`, `first_event_time`, `last_event_time`, `event_ids[]`, `criterios[]`, `timeline jsonb`, `motivo_cierre?`, `creado_en`, `actualizado_en`. Único por (`org_id`, `scope`, `correlation_key`): la clave sale de los eventos y dos organizaciones pueden compartirla (docs/09 §62); el `scope` separa producción de staging (docs/09 §88) |
 | `jobs` | `id`, `assessment_id?`, `org_id?`, `tipo`, `estado`, `progreso`, `error`, `payload?` (entradas para reintentar, docs/09 §46), `resultado?` (resumen de la ingesta, FN-03), `creado_en`, `tomado_en`, `actualizado_en` |
+| `ai_results` | `id`, `org_id`, `kind` (`U1`\|`U2`\|`U3`), `model`, `base_url`, `params_hash`, `prompt_version`, `input_sha256`, `output jsonb`, `meta jsonb` (votos y resumen de corridas crudas), `created_at`. Único por la clave completa: resultados de IA compartidos por api/workers y aislados por organización (docs/05 §7, docs/09 §105) |
 
 > `evidence_definitions`, `criteria_catalog`, `ai_adjustments`, `findings`, `score_aggregates` y
 > `tier_estimates` son parte del diseño, **no tablas persistidas**: la metodología es YAML-only y
@@ -234,7 +235,7 @@ tiempos y el heartbeat se configuran con `JOB_STALE_TIMEOUT_SECONDS`,
 | `GET` | `/incidents/{id}` | Detalle, timeline y hechos del incidente. |
 | `GET` | `/incidents/{id}/plans` | Planes asociados al incidente. |
 | `PATCH` | `/incidents/{id}` | Cambia el estado del incidente (`open`…`closed`). Un paso por vez, sin retroceder; `closed` (terminal, desde cualquier estado abierto) exige `motivo` y lo mueve al historial. Transición inválida o sin motivo → 409 (docs/08 §4, docs/09 §52). |
-| `POST` | `/assessments/{id}/reevaluate` | Crea nueva evaluación heredando fuentes; si la anterior tiene documentos, pide U1 de nuevo (y exige `confirm_live_ai` si hay clave real). |
+| `POST` | `/assessments/{id}/reevaluate` | Crea nueva evaluación heredando fuentes; si la anterior tiene documentos, pide U1 de nuevo (y exige `confirm_live_ai` si hay clave real). `reextraer=true` ignora los resultados de IA guardados y los reemplaza (docs/09 §105). |
 | `GET` | `/assessments/{id}/compare/{other_id}` | Por criterio: estado, puntaje, `direccion` del cambio y la explicación de antes y de después. Además el puntaje global, si ambas usan la misma metodología y alcance, y los hallazgos que ya no aparecen o son nuevos (docs/09 §67). |
 | `GET` | `/methodology` | Catálogo vigente: `methodology_version`, `nucleo_csf_version`, `cobertura_implementacion` (metadato del producto, docs/01 §7), `criterios` y `tipos_evidencia`. |
 | `GET` | `/health` | Liveness/readiness. |
@@ -278,7 +279,7 @@ backend/
 │   ├── methodology/         # loader + validación de los YAML
 │   ├── adapters/            # terraform/, ansible/, documents/
 │   ├── evaluation/          # engine, aggregation, tier, contradictions, rules/
-│   ├── ai/                  # client, cache, parallel, extraction, adjustment, plan_generation, golden_eval, prompts/
+│   ├── ai/                  # client, store, cache, voting, parallel, extraction, adjustment, plan_generation, golden_eval, prompts/
 │   ├── recommendations/     # findings (brecha/contradicción/limitación), plans
 │   ├── surveillance/        # eventos y patrones (pipeline de logs, ver §3.1)
 │   ├── ops/                 # motor operativo: disparadores, incidentes, planes de incidente (doc 08)
