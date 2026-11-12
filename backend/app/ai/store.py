@@ -37,7 +37,7 @@ from app.ai.calllog import current_context, log_call
 from app.core.db import build_session_factory
 from app.models.tables import AIResult
 
-FORMATO = 2
+FORMATO = 3
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session, sessionmaker

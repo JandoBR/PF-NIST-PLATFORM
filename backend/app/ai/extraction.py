@@ -236,6 +236,20 @@ _CAMPOS_CANTIDAD: dict[str, tuple[str, ...]] = {
 }
 
 
+def _dato_util(valor: object) -> bool:
+    """Un campo cuenta como declarado solo si trae algo.
+
+    `None`, una lista vacia o un texto en blanco no dicen que practica falta (docs/09 §108)."""
+
+    if valor is None:
+        return False
+    if isinstance(valor, str):
+        return bool(valor.strip())
+    if isinstance(valor, (list, dict, tuple, set)):
+        return bool(valor)
+    return True
+
+
 def _identifica_la_practica(tipo: str, contenido: dict) -> bool:
     """Una negacion o un plan tiene que decir que practica niega o planifica (docs/09 §108).
 
@@ -246,7 +260,8 @@ def _identifica_la_practica(tipo: str, contenido: dict) -> bool:
 
     if tipo in _NEGACION_IDENTIFICADA_POR_TIPO:
         return True
-    if not any(not str(campo).startswith("_") for campo in contenido):
+    declarados = (valor for campo, valor in contenido.items() if not str(campo).startswith("_"))
+    if not any(_dato_util(valor) for valor in declarados):
         return False
     if tipo == "process_defined":
         proceso = str(contenido.get("proceso") or "").strip().lower()
@@ -605,6 +620,11 @@ def extract_claims(
             range(n),
         )
         claims = voting.vote([claims for _, claims in runs])
+        # El voto puede dejar una afirmacion sin los campos que no alcanzaron mayoria. Se
+        # revalida con las mismas reglas que una respuesta guardada, para que el resultado en
+        # vivo y el replayed sean el mismo objeto (docs/09 §108).
+        raw_votado = voting.claims_to_raw(claims)
+        claims = _claims_from_raw(raw_votado, **parse)
 
     if store is not None and n > 1:
         if sum(1 for raw, _ in runs if raw is not None) >= voting.umbral(n):
@@ -612,7 +632,7 @@ def extract_claims(
                 "U1",
                 PROMPT_VERSION,
                 input_sha256,
-                voting.claims_to_raw(claims),
+                raw_votado,
                 voting.run_summary(runs),
             )
     return claims

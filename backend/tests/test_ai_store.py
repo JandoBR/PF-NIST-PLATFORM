@@ -457,3 +457,39 @@ def test_store_format_is_part_of_the_params_hash():
         assert client.params_hash != antes
     finally:
         store.FORMATO = original
+
+
+def test_voted_claim_is_revalidated_so_live_and_replay_match(monkeypatch):
+    """El voto puede vaciar el contenido de una negacion: en vivo y en replay debe caer igual.
+
+    Cada corrida niega un inventario con un campo distinto, asi que ningun campo alcanza mayoria y
+    el voto deja `contenido` vacio. Una negacion que no identifica la practica se descarta, tambien
+    cuando la produce el voto (docs/09 §108)."""
+
+    monkeypatch.setenv("U1_VOTES", "3")
+    respuestas = [
+        {
+            "afirmaciones": [
+                _claim(tipo="data_inventory", contenido={"activos": None}, estado="inexistente")
+            ]
+        },
+        {
+            "afirmaciones": [
+                _claim(tipo="data_inventory", contenido={"tipos_datos": []}, estado="inexistente")
+            ]
+        },
+        {"afirmaciones": [{"tipo": "data_inventory", "encontrado": False}]},
+    ]
+
+    class _Client:
+        def __init__(self):
+            self.indice = 0
+
+        def complete_json(self, system_prompt, user_prompt):
+            respuesta = respuestas[self.indice % len(respuestas)]
+            self.indice += 1
+            return respuesta
+
+    claims = _extraer(_Client(), tipos=["data_inventory"])
+
+    assert not [c for c in claims if c.value["encontrado"]]
