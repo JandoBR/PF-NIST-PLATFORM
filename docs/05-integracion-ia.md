@@ -69,6 +69,16 @@ preservación de evidencia va con `analisis incidentes`; las lecciones aprendida
 contención y erradicación, con `contencion`. El voto agrupa por `(tipo, proceso)` (docs/05 §2.4), así
 que las tres afirmaciones se conservan por separado.
 
+**`policy_review` es la revisión de la política, no la de cualquier cosa (prompt v8, docs/09 §115).**
+El prompt no definía el tipo y el modelo etiquetaba como `policy_review` cualquier revisión
+periódica: en el escenario `good`, la revisión semestral del inventario de proveedores competía con
+la revisión anual de la política y la contradicción de frecuencia bajaba CRI-GV-01 de 100 a 75.
+`extract_v8` (copia de v7) limita `policy_review` a la revisión periódica del documento de política
+de seguridad —frecuencia y última revisión—, manda la revisión del desempeño o de la estrategia a
+`process_defined` con proceso `revision` y no emite las demás revisiones (inventario, registro de
+riesgos, certificaciones, presupuesto o personal, comité, accesos) como `policy_review`. El esquema
+de respuesta y los campos no cambian.
+
 ### 2.2 Contrato de salida (se valida estrictamente)
 
 ```json
@@ -130,19 +140,27 @@ votación) en paralelo, acotadas por el mismo semáforo de `app/ai/parallel.py`.
 la validación normal (E3 confianza y E8 cita literal) antes de votar:
 
 - las afirmaciones se agrupan por `tipo`; `process_defined` se agrupa además por `proceso`, para que
-  una afirmación de “mejora” que el modelo fusiona con “respuesta” en una corrida no pierda su grupo;
+  una afirmación de “mejora” que el modelo fusiona con “respuesta” en una corrida no pierda su grupo,
+  y `policy_exists` por la política que nombra (mismo criterio que `_common.politica_faceta`, con
+  emparejamiento tolerante entre corridas): dos políticas del mismo chunk no comparten grupo, así que
+  su `nombre`, su `aprobada_por` y su `estado_declarado` no se votan entre sí. Una afirmación sin
+  nombre solo se une a la política nombrada si en el chunk hay exactamente una;
 - un grupo sobrevive si al menos 2 corridas produjeron una afirmación **usable** para él (con N
   configurable, mayoría estricta: `N//2 + 1`, mínimo 2);
-- campo por campo se vota según cómo lo consume la regla (`voting._CAMPOS_POR_TIPO`, docs/09 §113):
+- campo por campo se vota según cómo lo consume la regla (`voting._CAMPOS_POR_TIPO`, docs/09 §113,
+  §114):
   - **cerrado** (booleanos, enums como `proceso`, `frecuencia` o `estado_declarado`, fechas ISO y
-    cantidades ya normalizadas como `retencion`, `tolerancia`, `plazos` y `criterios_activacion`):
-    igualdad exacta; `null` y ausente son el mismo estado, así que sin mayoría el campo no va;
+    cantidades que alguna regla parsea o compara como `retencion`): igualdad exacta; `null` y
+    ausente son el mismo estado, así que sin mayoría el campo no va;
   - **presencia** (texto libre que la regla solo mira como verdad: `pasos`, `responsables`,
     `objetivos_riesgo`, `nombre`, `aprobada_por`, `clasificacion`, `criterios`, `niveles`, `mision`,
-    ...): sobrevive si está en la mayoría estricta de las corridas del grupo, aunque cada una lo
-    redacte con otras palabras; el valor guardado es el **medoide** (el texto con mayor similitud
-    media al resto: Jaccard por tokens sin tildes y `difflib`), con empates por confianza, texto y
-    corrida. El `nombre` que sobrevive sigue identificando la política para la faceta de §109;
+    `tolerancia`, `plazos`, `criterios_activacion`, ...): sobrevive si está en la mayoría estricta de
+    las corridas del grupo, aunque cada una lo redacte con otras palabras; el valor guardado es el
+    **medoide** (el texto con mayor similitud media al resto: Jaccard por tokens sin tildes y
+    `difflib`), con empates por confianza, texto y corrida. Un valor idéntico presente en la mayoría
+    exacta manda sobre el parecido. `tolerancia`, `plazos` y `criterios_activacion` se normalizan en
+    la extracción (`numbers.py`), pero ninguna regla lee la cifra: solo pregunta si están. El
+    `nombre` que sobrevive sigue identificando la política para la faceta de §109;
   - **lista** (`activos`, `tipos_datos`, `destinatarios`, `partes_interesadas`,
     `requisitos_legales`, `servicios_criticos`, `dependencias`): los elementos se emparejan entre
     corridas con similitud tolerante (Jaccard de tokens ≥ 0,6 o un texto contenido en el otro) y
@@ -157,7 +175,9 @@ la validación normal (E3 confianza y E8 cita literal) antes de votar:
   orden en que llegaron, así que el mismo conjunto de corridas vota lo mismo en cualquier orden;
 - `estado_declarado` se vota aparte como campo cerrado (`vigente|inexistente|planificado`), no
   dentro de `contenido`: es lo que convierte una afirmación en negación o en plan, y tiene que
-  sobrevivir al store;
+  sobrevivir al store. Si las corridas no se ponen de acuerdo y ningún estado tiene mayoría, no se
+  elige el favorable: la afirmación queda visible con una limitación (`LIMITACION_ESTADO_DUDOSO`) y
+  no cuenta para puntuar;
 - la cita y el locator salen de la corrida de mayor confianza que apoya la afirmación, y la
   confianza es la mediana de esas corridas. Los empates se rompen por confianza y luego por índice
   de corrida, siempre igual.
@@ -397,7 +417,7 @@ Usuario (json):
 - Salida por plan con esquema fijo (ver §4.1).
 - Prohibido proponer acciones que ejecuten cambios: los pasos son sugerencias para un humano.
 
-Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v7.txt`,
+Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v8.txt`,
 `adjust_v1.txt`, `plan_v1.txt`). Cambiar un prompt cambia `prompt_version` y se registra en los ajustes.
 
 ## 7. Seguridad
@@ -431,9 +451,11 @@ evaluación sigue), y `None` (degradado) nunca se guarda. En U1, un miss con `U1
 tres corridas y guarda una sola respuesta votada (con el resumen de las crudas en `meta`); si solo
 una corrida respondió, no hay mayoría y no se guarda, para reintentar en la próxima evaluación.
 `reextraer=true` (POST de evaluación o reevaluación, botón «Re-extraer con IA») ignora las lecturas
-y reemplaza la respuesta guardada. `params_hash` incluye `store.FORMATO`; sube a **4** porque el
-voto por presencia y medoide cambia lo que se persiste para texto libre y listas (docs/09 §113), así
-que un resultado de FORMATO 3 se reextrae en vez de reutilizarse. La CLI/local, sin sesión de BD,
+y reemplaza la respuesta guardada. `params_hash` incluye `store.FORMATO`; sube a **5** porque el
+voto agrupa cada `policy_exists` por la política que nombra (antes dos políticas del mismo chunk se
+fusionaban y solo sobrevivía una) y trata `tolerancia`, `plazos` y `criterios_activacion` como texto
+libre (antes se perdían al parafrasearse); un resultado de FORMATO 4 se reextrae en vez de
+reutilizarse (docs/09 §113, §114). La CLI/local, sin sesión de BD,
 mantiene la cache en disco para U2/U3 y para U1 con `U1_VOTES=1`; con votación las tres corridas
 tienen que llegar al modelo (por eso no hay una entrada votada en disco).
 
@@ -462,7 +484,7 @@ cuatro cosas, por documento, por categoría y en total:
 Lo adicional que la IA afirme y el texto soporte **no es un error**: los documentos se toman como
 correctos y solo se informa para revisión humana. La evaluación real cuesta dinero y se lanza con
 `python -m app.main eval-ai --confirm-live-ai` (pasa por el guard de IA viva, usa `U1_VOTES=3` y
-el prompt `extract_v7`). Los tests usan un cliente oráculo que responde con la propia anotación:
+el prompt `extract_v8`). Los tests usan un cliente oráculo que responde con la propia anotación:
 no hay llamadas reales en la suite.
 
 **Composición del golden set.** 21 documentos en 15 categorías, 59 afirmaciones esperadas, 14

@@ -4232,3 +4232,187 @@ el mismo chunk) sigue eligiendo una sola al agrupar, y eso puede perder el `nomb
 (fuente de los 7 casos "espurios", iguales antes y después); y la estabilidad de texto exacto baja
 porque ahora se conservan paráfrasis válidas que antes se descartaban, aunque las decisiones de
 presencia son más estables.
+
+## 114. El voto todavía perdía campos y mezclaba políticas; una negación aportaba datos y un fallo dejaba evidencia a medias
+
+**Síntoma.** Cuatro problemas distintos, todos del mismo tipo: el motor podía perder una negación o
+un dato, y una contradicción no llegaba a todos los criterios que la leen.
+
+1. `voting._CAMPOS_POR_TIPO` seguía votando como cerrados `risk_tolerance.tolerancia`,
+   `process_defined.criterios_activacion` y `notification_list.plazos`. Ninguna regla lee la cifra
+   (`GV-03:68`, `RC-01:68,79`, `RS-03:48` solo preguntan si el campo trae algo), pero dos
+   redacciones distintas entre corridas borraban el campo: `RC-01` se quedaba en 75 y `RS-03` en 75
+   con el documento declarando los plazos.
+2. `_group_key` solo separaba facetas para `process_defined`. Dos `policy_exists` del mismo chunk
+   sobre políticas distintas se fundían en un grupo y solo sobrevivía una, votando `nombre`,
+   `aprobada_por` y `estado_declarado` entre políticas diferentes: se podía perder la negación de
+   una y acreditar la otra.
+3. `contradictions._documents_disagree` y `_backup_vs_policy` tomaban cualquier `encontrado=true`,
+   incluidos `planificado` e `inexistente`, como si declararan el hecho de hoy.
+4. `_common.found` excluía los planes pero no las negaciones: una `inexistente` con
+   `encontrado=true` aportaba sus campos a `merged_content`/`merged_bool`, y en el caso "el mismo
+   documento afirma y niega" (§101) el puntaje subía con los datos de la negación. Aparte de eso,
+   `run_pending_assessment` marcaba `fallida` sin `rollback` (evidencia y resultados parciales
+   persistidos, y `PendingRollbackError` en el commit) y un mensaje no-JSON en la cola tumbaba el
+   loop del worker.
+
+**Cambio.**
+
+- `voting`: `tolerancia`, `criterios_activacion` y `plazos` pasan a **presencia**. Un campo solo se
+  relaja si ninguna regla parsea ni compara su valor; `retencion` (PR-02), `frecuencia`
+  (contradicciones y GV-01/GV-04), `ultima_revision`, los booleanos, los enums y `estado_declarado`
+  siguen cerrados. Cuando un valor idéntico aparece en la mayoría exacta, el voto guarda ese valor y
+  no el medoide, así que las corridas que coinciden no cambian (`_votar_presencia`).
+- `voting._claves_de_grupo` agrupa `policy_exists` por la política que nombra, con
+  `_common.politica_faceta` (la misma normalización que puntúa) y el emparejamiento tolerante de las
+  listas sobre el nombre normalizado. Sin nombre, la afirmación se une a la única política nombrada
+  del chunk o es su propio grupo. `estado_declarado` se sigue votando exacto; si no hay mayoría y
+  las corridas declaran estados distintos, no se elige el favorable: la afirmación queda visible con
+  `LIMITACION_ESTADO_DUDOSO` y `doc_claims` la excluye de puntuar.
+- `contradictions`: `_documents_disagree` y `_backup_vs_policy` solo comparan afirmaciones vigentes
+  (`es_vigente`). La negación contra una vigente sigue siendo `_absence_disagreement`, que ahora
+  cita su lado con `_common.mejor_declarada` (sin depender de `found`). La frecuencia de
+  `policy_review` sigue atribuida solo a `CRI-GV-01`, que es quien la lee. Se probó atribuirla
+  también a `CRI-GV-04` y se descartó: GV-04 no usa la frecuencia (su tramo de 50 solo acredita
+  que la revisión se menciona) y, al quedar marcado como contradicho, `cap_contradicted` le topaba
+  el puntaje aunque lo hubiera ganado con un `process_defined` de revisión. En el escenario
+  conforme lo bajó de 100 a 52 y el Tier de 4 a 2. `_CRITERIOS_POR_TIPO["policy_review"]` sí nombra
+  a GV-01 y GV-04 para la contradicción de **existencia** (un documento niega la revisión y otro la
+  declara), porque ese hecho lo leen los dos.
+- `_common.found` devuelve solo afirmaciones **vigentes** (`es_vigente`). `aplicar_estado_declarado`
+  y `contradictions` leen las negaciones por su cuenta (`_declaraciones`, `by_type`,
+  `mejor_declarada`), así que la ausencia explícita sigue dando 0 con su cita.
+  Una negación conserva una sola cosa: su `false` explícito cuando el **mismo documento** también
+  declara la práctica vigente (`_solo_negados`). Sigue compitiendo con la afirmación y, si es la más
+  confiable, gana, como fija §101; sin eso, sacar la negación de `found` subía el puntaje de un
+  documento que se contradice (GV-02 pasaba de 75 a 100 con "no se han asignado recursos" como
+  afirmación más confiable). Sus demás campos no cuentan.
+- `run_pending_assessment` hace `rollback` antes de marcar la evaluación `fallida` (y la recarga si
+  el rollback la expiró); `workers/core.py` hace `rollback` antes de `mark_failed` y no deja que un
+  fallo al marcar el job tumbe el loop. `queue.dequeue_blocking` descarta con un aviso un mensaje
+  que no es JSON.
+- `store.FORMATO` sube a **5**: cambia lo que se persiste para `policy_exists` y para esos tres
+  campos.
+
+**Medición (mismas corridas crudas, antes/después).** Sobre las 108 corridas reales de §113 (6 por
+chunk de los 18 chunks de `frontend/public/demo/{good,mid,gaps}` más los dos documentos viejos de
+`mid`), 20 triplas por chunk (semilla fija) y el módulo de `HEAD` frente al nuevo; puntajes con
+`engine.evaluate_all`:
+
+| Métrica | Antes (HEAD) | Después |
+|---|---|---|
+| Supervivencia de los campos de texto libre declarados | 96,8 % (1104/1140) | **99,6 % (1135/1140)** |
+| Supervivencia cuando ≥ 2 de las 3 corridas traían el campo | 97,3 % | **100 %** |
+| Campos de presencia que solo traía 1 de 3 corridas y sobrevivieron | 12/108 (11,1 %) | 12/108 (11,1 %) |
+| `notification_list.plazos` presente | 0 % | **100 %** |
+| `process_defined.recuperacion.criterios_activacion` presente | 45,0 % | **100 %** |
+
+| Escenario · criterio | Antes | Después |
+|---|---|---|
+| `good` · RC-01 | 86,2 ± 12,4 (75/100) | **100,0 ± 0,0** |
+| `good` · RS-03 | 75,0 ± 0,0 | **100,0 ± 0,0** |
+| `mid-old` · GV-03 | 71,2 ± 8,9 (50/75) | **75,0 ± 0,0** |
+
+GV-01, GV-03 (`good`/`mid`/`gaps`), GV-04, RC-01 (`mid`/`gaps`) y RS-03 (`mid`/`gaps`) no cambian.
+Los tres aumentos son legítimos: `good/continuidad.md` declara "el procedimiento se activa cuando el
+sitio principal permanece caido mas de dos horas" (`criterios_activacion`), `good/respuesta-incidentes.md`
+declara que "los clientes afectados se notifican dentro de las 72 horas" (`plazos`) y
+`mid-old/riesgos_old.md` declara "la tolerancia aceptada es de hasta un dia de interrupcion al mes"
+(`tolerancia`). En `gaps` ningún criterio sube y la negación de `manual-operaciones.md` ("No existe un
+programa de concienciación") sigue en `PR-07 = no_implementado, 0`, citada pero sin acreditar. Ese
+conjunto de corridas no tiene ninguna corrida con dos `policy_exists`, así que la separación por
+política se cubre con pruebas unitarias, no con esta medición.
+
+**Pruebas.** `tests/test_ai_voting.py`: campos parafraseados que sobreviven, mayoría exacta,
+dos políticas en el mismo chunk (nombre y estado separados), misma política con otras palabras, sin
+nombre con una o dos políticas nombradas, y estado sin mayoría que queda con limitación.
+`tests/test_contradictions.py`: un plan con otra retención no contradice, la negación sigue siendo
+`_absence_disagreement`, la frecuencia contradicha se reporta en GV-01 y no marca a GV-04.
+`tests/test_declared_state.py`: una negación del mismo documento no aporta sus campos (antes 100,
+ahora 75). `tests/test_assessment_service.py`: un fallo tras escribir filas no deja evidencia,
+resultados ni planes. `tests/test_workers_core.py` y `tests/test_queue.py`: el worker no muere si
+falla el marcado del job ni con un mensaje corrupto. Suite completa: **1081 passed, 2 skipped**;
+`ruff check` y `ruff format --check` limpios.
+
+**Límites.** El emparejamiento de nombres de política es el mismo de las listas (tokens y contención,
+Jaccard ≥ 0,6): dos nombres sin ningún token en común siguen siendo políticas distintas, igual que
+para las facetas de §109. Una corrida que declara dos políticas con nombres casi idénticos las une.
+El estado dudoso se descarta entero: no se intenta reconstruir con la cita, que es texto libre.
+`_backup_vs_policy` y `_documents_disagree` solo miran afirmaciones vigentes, pero
+`_database_exposure_vs_policy` no se tocó en esta entrada.
+
+## 115. `policy_review` se llevaba cualquier revisión periódica y contradecía la frecuencia de la política
+
+**Síntoma.** En el escenario `good` el modelo emitía un `policy_review` con frecuencia `semestral`
+desde `gobierno-y-proveedores.md` («la revisión del inventario [de proveedores] es semestral»),
+mientras `politica-seguridad.md` declaraba `anual` para la política. El prompt no definía
+`policy_review`, así que el modelo etiquetaba con ese tipo cualquier revisión periódica. Como
+`contradictions._documents_disagree` compara la frecuencia entre documentos distintos y excluye
+ambas afirmaciones de CRI-GV-01, el criterio bajaba de 100 a 75 aunque la política sí se revisa
+anualmente.
+
+**Cambio.** `prompts/extract_v8.txt` (copia de v7; v7 queda intacto) agrega, después del ejemplo de
+`process_defined`, el párrafo:
+
+> El tipo policy_review es solo la revision periodica del documento de politica de seguridad de la
+> informacion: con que frecuencia se revisa la politica y cuando fue su ultima revision. Revisar otra
+> cosa no es policy_review: la revision del inventario de proveedores, del registro de riesgos, de las
+> certificaciones de proveedores, del presupuesto o del personal, del desempeno del comite o de los
+> accesos no produce policy_review. Si esa revision es del desempeno o de la estrategia, va en
+> process_defined con proceso "revision"; cualquier otra no se emite como policy_review.
+>
+> Ejemplo: "la revision del inventario de proveedores es semestral" no produce policy_review; "esta
+> politica se revisa con una frecuencia anual" si produce policy_review con frecuencia "anual".
+
+`PROMPT_VERSION` sube a `extract_v8`. No cambian el esquema de respuesta, `_CONTENT_FIELDS`, ni
+`criteria.yml`; docs/05 §2.1 documenta el tipo. Las pruebas que fijaban la versión se actualizan.
+
+**Medición (llamadas reales, `deepseek-flash`).** Los 16 chunks de
+`frontend/public/demo/{good,mid,gaps}` con el chunker y el cliente de producción, `U1_VOTES=1` y
+`store` saltado, 3 corridas por chunk; control v7 con las mismas 3 corridas solo en los dos
+documentos de `good` que se contradecían. Total: 48 llamadas v8 + 6 de control, más las 66 del
+golden (120 en total). `policy_review` cuenta solo con `encontrado=true`:
+
+| Documento | v7 (control, 3 corridas) | v8 (3 corridas) |
+|---|---|---|
+| `good/politica-seguridad.md` | 3/3, `anual` 2026-03-10 | 3/3, `anual` 2026-03-10 |
+| `good/gobierno-y-proveedores.md` | 1/3, `semestral` (confianza 0,55) | **0/3** |
+| `mid/politica-seguridad.md` | — | 3/3, `anual` 2026-02-01 |
+| `mid/gobierno-y-proveedores.md` | — | 0/3 |
+| `gaps/politica-seguridad.md` | — | 3/3, `anual` 2025-03-01 |
+| `gaps/riesgos-y-respaldos.md` | — | 0/3 |
+| Otros 10 documentos | — | 0/3 |
+
+Con la evidencia v8 de cada réplica, `contradictions.detect` no encuentra ninguna contradicción en
+los tres escenarios y las tres réplicas: `good` queda GV-01=100 y GV-04=100; `mid`, 100/50; `gaps`,
+75/50. El 75 de `gaps` es la revisión de 2025-03-01 fuera del año declarado, no una contradicción.
+
+**Golden set (22 chunks, `U1_VOTES=3`, 66 llamadas).** Recall **95 % (56/59)**, precisión **100 %
+(95/95)** y citas **99,7 % (289/290)**; la única cita no localizable es la de `role_assigned` que une
+dos secciones con `[...]` en `gestion-de-riesgos.md`, el mismo modo de fallo de la línea base
+(docs/05 §8: 85 %, 100 %, 96 %). El aumento de recall no es atribuible a este cambio con la
+evidencia disponible: la línea base es de `extract_v6` y desde entonces cambiaron el voto de campos
+y de políticas (§113, §114).
+
+**Regresión.** Contra las 6 corridas v7 por chunk de `/tmp/opencode/vote2` (mismo corpus), la tasa de
+corridas que emiten cada tipo baja en `policy_exists` (32 %→27 %), `data_inventory` (25 %→19 %),
+`process_defined` (52 %→48 %) y `role_assigned` (67 %→60 %); el resto queda igual o sube. La bajada
+apreciable por chunk es `good/gobierno-y-proveedores.md`: `process_defined` en 2/3 corridas v8 frente
+a 6/6 v7 (una corrida v8 no emitió ninguno), con `recuperacion` 1/3, `respuesta` 2/3 y `riesgos`
+2/3; también `process_defined/revision` en `good/gestion-de-riesgos.md` (1/3 frente a 5/6) y
+`role_assigned` en `mid/respuesta-incidentes.md` (1/3 frente a 6/6). El párrafo añadido no toca
+`process_defined` y las otras dos corridas v8 sí lo emiten: se atribuye a la varianza conocida del
+modelo (§105) y al tamaño (3 corridas frente a 6), no a una regla nueva.
+
+**Pruebas.** `tests/test_ai_extraction.py` fija `extract_v8` y el párrafo de `policy_review`;
+`tests/test_op12_op14_ai_hardening.py` registra la versión en reproducibilidad. Focalizadas:
+extracción, golden, adaptador, store, GV-01 y contradicciones (146 pruebas). Suite completa:
+**1081 passed, 2 skipped**; `ruff check` y `ruff format --check` limpios.
+
+**Límites.** El caso medido queda corregido, pero la definición no es absoluta: en el golden, v8
+emitió `policy_review` adicional (no esperado ni prohibido, no puntúa) para la revisión anual del
+plan de continuidad en `very-long-continuity.md` y de la SoA en `soa-iso27001.md`. El control v7 solo
+reprodujo el `semestral` en 1 de 3 corridas y con confianza 0,55 (no usable): el fallo original
+depende de la varianza y con `U1_VOTES=3` una mayoría puede superar el umbral de 0,6. La comparación
+de regresión usa 3 corridas v8 frente a 6 v7 y no distingue una pérdida real de una corrida que el
+modelo decidió no emitir.

@@ -86,10 +86,17 @@ estas medidas no tienen superficie real aquí.
 | AMP-08 | `CRI-GV-05` en el cruce de privacidad (`PRIVACY_CRITERIA`) | `GV.OC-03` nombra explícitamente los requisitos de privacidad, pero eso es **Govern-P** del PF 1.0, y el alcance declarado del cruce (docs/00 §6, docs/03 §7) son Identify-P, Protect-P y los eventos. Añadirlo ensancha un límite de alcance que el informe también enuncia, así que es una decisión de alcance y no un detalle de UI. | docs/09 §73 |
 | AMP-11 | Votación de U2/U3 y retención/limpieza de `ai_results` | U1 ya vota 3 corridas en un miss; U2 (ajuste, una llamada por criterio) y U3 (planes) siguen siendo una sola llamada, y votarlas triplicaría el costo de ~75 % de las llamadas para ganar precisión sobre una salida que J1–J7 ya acotan. `ai_results` crece sin TTL ni purga: es barato a esta escala, pero un despliegue largo necesita una política de retención (por antigüedad o por organización) y un job de limpieza. | docs/05 §7/§8, docs/09 §105 |
 
-**Deuda medida del golden set:** la corrida real quedó en recall 85 % (50/59) frente al mínimo de
-90 % y en citas localizables 96 % (docs/05 §8). Cerrar esa brecha es trabajo futuro: más votos o un
-prompt mejor antes de ampliar el golden set, porque con 59 afirmaciones una no cubierta pesa casi
-2 pp.
+**Deuda medida del golden set:** con `extract_v7` la corrida real quedó en recall 85 % (50/59) y en
+citas localizables 96 %; con `extract_v8` y el voto por presencia quedó en recall 95 % (56/59),
+precisión 100 % y citas 99,7 % (docs/05 §8, docs/09 §115). Las tres afirmaciones no cubiertas siguen
+siendo trabajo futuro: con 59 afirmaciones una pesa casi 2 pp.
+
+**Límite conocido, sin resolver (docs/09 §114):** un mismo documento que afirma una práctica como
+vigente y la niega en otro fragmento (misma faceta) sigue acreditando la afirmación más confiable
+(§101). Solo se anota la contradicción de booleanos; la de existencia entre documentos distintos sí
+excluye a ambos lados. Se dejó así porque un documento puede negar un aspecto concreto de una
+práctica que sí tiene, y anular la práctica entera castigaría documentos legítimos; hacerlo visible
+con un hallazgo es la mejora natural.
 
 ### Subcategorías que el mapeo no podía declarar: cerrado
 

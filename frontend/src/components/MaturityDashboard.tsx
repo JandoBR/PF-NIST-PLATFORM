@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Gauge,
   Target,
@@ -49,6 +49,14 @@ const FILTERS: { key: Estado | 'all'; label: string }[] = [
   { key: 'error', label: 'Error' },
 ];
 
+/** Búsqueda del filtro: sin acentos ni mayúsculas ("politica" encuentra "Política"). */
+function normalizeSearch(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
 export function MaturityDashboard({ assessment, criteria, onReevaluated }: DashboardProps) {
   const [estadoFilter, setEstadoFilter] = useState<Estado | 'all'>('all');
   const [funcFilter, setFuncFilter] = useState<string>('all');
@@ -98,13 +106,18 @@ export function MaturityDashboard({ assessment, criteria, onReevaluated }: Dashb
       if (estadoFilter !== 'all' && c.estado !== estadoFilter) return false;
       if (funcFilter !== 'all' && !c.criterion_id.includes(`-${funcFilter}-`)) return false;
       if (query) {
-        const q = query.toLowerCase();
-        if (!c.criterion_id.toLowerCase().includes(q) && !c.explanation.toLowerCase().includes(q))
+        const q = normalizeSearch(query);
+        const title = criterionTitles[c.criterion_id] ?? '';
+        if (
+          !normalizeSearch(c.criterion_id).includes(q) &&
+          !normalizeSearch(c.explanation).includes(q) &&
+          !normalizeSearch(title).includes(q)
+        )
           return false;
       }
       return true;
     });
-  }, [criteria, estadoFilter, funcFilter, query]);
+  }, [criteria, estadoFilter, funcFilter, query, criterionTitles]);
 
   const tier = assessment.tier;
   const eventos = assessment.reproducibility?.eventos;
@@ -537,7 +550,32 @@ function TierCard({
   const techo = tier.techo ?? null;
   const rango = piso != null && techo != null && techo > piso;
   const sinEvidencia = tier.faltan_para_techo ?? [];
-  const nombre = piso != null ? TIER_LABELS[piso - 1]?.split(' · ')[1] ?? tier.nombre ?? '' : '';
+  const nombre =
+    piso != null ? (TIER_LABELS[piso - 1]?.split(' · ')[1] ?? '') : '';
+  const tooltipId = useId();
+  const cardRef = useRef<HTMLDivElement>(null);
+  //: En pantalla táctil no hay hover: un toque abre el detalle y otro (o un toque fuera, o Escape)
+  //: lo cierra. El hover/focus de escritorio sigue igual, por CSS.
+  const [detalleAbierto, setDetalleAbierto] = useState(false);
+
+  useEffect(() => {
+    if (!detalleAbierto) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!cardRef.current?.contains(event.target as Node)) {
+        setDetalleAbierto(false);
+        cardRef.current?.blur();
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDetalleAbierto(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [detalleAbierto]);
 
   let linea = tier.justificacion;
   if (piso != null) {
@@ -551,24 +589,18 @@ function TierCard({
     }
   }
 
-  const resumen = [
-    piso != null ? `Nivel ${piso} (${nombre}) ${tier.provisional ? 'provisional' : 'confirmado'}` : 'Tier no estimable',
-    rango ? `techo posible Nivel ${techo}` : null,
-    sinEvidencia.length > 0
-      ? `falta evidencia en ${sinEvidencia.map((id) => `${_shortId(id)} (${titles[id] ?? id})`).join(', ')}`
-      : null,
-    tier.siguiente_nivel
-      ? `${tier.siguiente_nivel.cumplidos} de ${tier.siguiente_nivel.total} requisitos del Nivel ${tier.siguiente_nivel.nivel}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-
   return (
     <div
+      ref={cardRef}
       className={`card card-hover group relative p-5 outline-none hover:z-30 focus-within:z-30 focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${className}`}
       tabIndex={0}
-      aria-label={resumen}
+      aria-describedby={tooltipId}
+      onClick={(event) => {
+        // Al cerrar con un toque hay que soltar el foco: si no, `focus-within` mantendría visible
+        // el detalle y el toque no parecería cerrarlo.
+        if (detalleAbierto) event.currentTarget.blur();
+        setDetalleAbierto(!detalleAbierto);
+      }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -613,8 +645,9 @@ function TierCard({
       </div>
 
       <div
+        id={tooltipId}
         role="tooltip"
-        className="pointer-events-none absolute left-0 right-0 top-full z-20 mt-2 hidden rounded-xl border border-white/10 bg-ink-900 p-4 text-xs text-slate-300 shadow-xl group-hover:block group-focus-within:block"
+        className={`pointer-events-none absolute left-0 right-0 top-full z-20 mt-2 ${detalleAbierto ? 'block' : 'hidden'} rounded-xl border border-white/10 bg-ink-900 p-4 text-xs text-slate-300 shadow-xl group-hover:block group-focus-within:block`}
       >
         <p className="font-semibold text-white">
           {piso != null ? `Nivel ${piso} · ${nombre}` : 'Tier no estimable'}
@@ -659,13 +692,11 @@ function SummaryCard({
   label: string;
   value: string;
   sub: string;
-  accent: 'cyan' | 'indigo' | 'amber' | 'emerald';
+  accent: 'cyan' | 'indigo';
 }) {
   const colors = {
     cyan: 'text-cyan-300 bg-cyan-500/10 ring-cyan-500/20',
     indigo: 'text-indigo-300 bg-indigo-500/10 ring-indigo-500/20',
-    amber: 'text-amber-300 bg-amber-500/10 ring-amber-500/20',
-    emerald: 'text-emerald-300 bg-emerald-500/10 ring-emerald-500/20',
   };
   return (
     <div className="card card-hover p-5">

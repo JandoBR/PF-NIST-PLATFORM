@@ -55,15 +55,44 @@ def _orden(claim: EvidenceInstance) -> tuple:
 
 
 def found(claims: list[EvidenceInstance]) -> list[EvidenceInstance]:
-    """Las afirmaciones `encontrado=true` que declaran la practica **vigente**.
+    """Las afirmaciones que declaran la practica **vigente** hoy.
 
-    Un plan declarado ("se implementara en 2027") tambien trae `encontrado=true`, pero no acredita
-    la practica de hoy: una regla no puede sumarlo como si ya estuviera en marcha (docs/09 §106).
-    Sigue disponible para `aplicar_estado_declarado`, que lo convierte en 0 citandolo."""
+    `encontrado=true` solo dice que el texto habla de la practica: un plan ("se implementara en
+    2027") y una negacion ("no existe") tambien lo traen y no la acreditan. Una negacion que la
+    extraccion rellena con campos no puede aportarlos a `merged_content`/`merged_bool`, o el mismo
+    documento que afirma y niega sumaria los datos de la negacion (docs/09 §106, §114). Ambas
+    siguen disponibles para `aplicar_estado_declarado` y para `contradictions`, que leen las
+    afirmaciones por su cuenta.
 
-    return sorted(
-        (c for c in claims if c.value.get("encontrado") and not es_plan_declarado(c)),
-        key=_orden,
+    Lo unico que una negacion conserva es su `false` explicito cuando el mismo documento tambien
+    declara la practica vigente: sigue compitiendo con la afirmacion y, si es la mas confiable,
+    gana (docs/09 §101). Sin eso, sacar la negacion subiria el puntaje de un documento que se
+    contradice."""
+
+    vigentes = [c for c in claims if es_vigente(c)]
+    documentos = {c.subject_ref for c in vigentes}
+    negaciones = [
+        reducida
+        for c in claims
+        if es_ausencia_declarada(c) and c.subject_ref in documentos
+        if (reducida := _solo_negados(c)) is not None
+    ]
+    return sorted([*vigentes, *negaciones], key=_orden)
+
+
+def _solo_negados(claim: EvidenceInstance) -> EvidenceInstance | None:
+    """La negacion reducida a sus booleanos `false` y a los campos que fijan su faceta; `None` si
+    no niega ningun booleano."""
+
+    contenido = claim.value.get("contenido") or {}
+    negados = {campo: valor for campo, valor in contenido.items() if valor is False}
+    if not negados:
+        return None
+    faceta_campos = {
+        campo: contenido[campo] for campo in ("proceso", "nombre") if campo in contenido
+    }
+    return claim.model_copy(
+        update={"value": {**claim.value, "contenido": {**faceta_campos, **negados}}}
     )
 
 
@@ -406,7 +435,8 @@ def merged_content(
     §101). `contradicciones_booleanas` devuelve esos casos para que el motor los haga visibles.
 
     Devuelve el contenido agregado y las afirmaciones que aportaron algun campo, para citarlas
-    todas. Sin afirmaciones `encontrado=true` el contenido queda vacio.
+    todas. Sin afirmaciones vigentes el contenido queda vacio; las negaciones y los planes no
+    aportan campos (docs/09 §114).
     """
 
     encontradas = found(claims)
@@ -473,7 +503,9 @@ def contradicciones_booleanas(
 
 
 def best_found(claims: list[EvidenceInstance]) -> EvidenceInstance | None:
-    """La afirmacion `encontrado=true` con mayor confianza, o `None` si ninguna declara el hecho.
+    """La afirmacion vigente con mayor confianza, o `None` si ninguna declara el hecho.
+
+    Una negacion o un plan no compiten: no acreditan la practica de hoy (`found`).
 
     En empate decide el documento y despues el contenido, no el orden de la lista: el motor es
     deterministico (docs/00 §7) y dos corridas con la misma evidencia deben citar lo mismo.
@@ -481,6 +513,18 @@ def best_found(claims: list[EvidenceInstance]) -> EvidenceInstance | None:
 
     encontradas = found(claims)
     return encontradas[0] if encontradas else None
+
+
+def mejor_declarada(claims: list[EvidenceInstance]) -> EvidenceInstance | None:
+    """La afirmacion `encontrado=true` usable mas confiable, sin mirar `estado_declarado`.
+
+    `found` excluye negaciones y planes porque no acreditan la practica; una contradiccion necesita
+    citar el lado que niega, asi que lo elige con esto (docs/09 §114)."""
+
+    declaradas = sorted(
+        (c for c in claims if c.value.get("encontrado") and c.limitations is None), key=_orden
+    )
+    return declaradas[0] if declaradas else None
 
 
 def pattern_moment(pattern: EvidenceInstance | None, clave: str) -> datetime | None:

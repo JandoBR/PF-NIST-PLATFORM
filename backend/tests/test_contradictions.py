@@ -8,7 +8,7 @@ import pytest
 from app.ai.client import FakeAIClient
 from app.core import assessment_service as svc
 from app.evaluation import engine
-from app.evaluation.contradictions import Contradiction, cap_contradicted
+from app.evaluation.contradictions import Contradiction, cap_contradicted, detect
 from app.evaluation.schemas import CriterionResult, Estado
 from app.methodology.loader import load_methodology
 from app.recommendations.contradictions import detect_contradictions
@@ -42,7 +42,14 @@ def _backup(retencion: int, ref: str = "aws_db_instance.db", scope: str = SCOPE)
     )
 
 
-def _claim(tipo: str, contenido: dict, doc: str = "politica", scope: str = SCOPE, **extra):
+def _claim(
+    tipo: str,
+    contenido: dict,
+    doc: str = "politica",
+    scope: str = SCOPE,
+    estado: str = "vigente",
+    **extra,
+):
     return EvidenceInstance(
         type_id="doc.claim",
         type_version=1,
@@ -54,6 +61,7 @@ def _claim(tipo: str, contenido: dict, doc: str = "politica", scope: str = SCOPE
             "contenido": contenido,
             "encontrado": True,
             "confianza": 0.9,
+            "estado_declarado": estado,
         },
         source_id="t",
         locator=Locator(file=f"{doc}.md"),
@@ -166,12 +174,53 @@ def test_same_document_repeating_a_value_or_agreeing_documents_do_not_contradict
     assert detect_contradictions(agree) == []
 
 
-def test_review_frequency_disagreement_is_reported_on_gv01():
+def test_review_frequency_disagreement_is_reported_on_the_criterion_that_reads_it():
+    """GV-01 compara la frecuencia con la ultima revision; GV-04 no la lee (docs/09 §114)."""
+
     a = _claim("policy_review", {"frecuencia": "anual"}, doc="politica")
     b = _claim("policy_review", {"frecuencia": "Trimestral"}, doc="manual")
-    (f,) = detect_contradictions([a, b])
-    assert f.criterion_id == "CRI-GV-01"
-    assert "anual" in f.detalle and "trimestral" in f.detalle
+    findings = detect_contradictions([a, b])
+    assert sorted(f.criterion_id for f in findings) == ["CRI-GV-01"]
+    for f in findings:
+        assert "anual" in f.detalle and "trimestral" in f.detalle
+
+
+def test_a_plan_with_another_retention_is_not_a_contradiction():
+    """Un plan con otro valor no contradice la politica en vigor: se registraria como si ambas
+    afirmaran el hecho de hoy (docs/09 §114)."""
+
+    vigente = _claim("backup_policy", {"respaldo": True, "retencion": "7 dias"}, doc="politica")
+    plan = _claim(
+        "backup_policy",
+        {"respaldo": True, "retencion": "30 dias"},
+        doc="plan",
+        estado="planificado",
+    )
+    negacion = _claim(
+        "backup_policy",
+        {"respaldo": True, "retencion": "90 dias"},
+        doc="negacion",
+        estado="inexistente",
+    )
+
+    assert detect_contradictions([vigente, plan]) == []
+    ausencias = detect_contradictions([vigente, negacion])
+    assert ausencias
+    for ausencia in ausencias:
+        assert "no existe" in ausencia.detalle
+        assert "retencion" not in ausencia.detalle
+
+
+def test_a_vigente_vs_inexistente_disagreement_is_still_an_absence_contradiction():
+    vigente = _claim("backup_policy", {"respaldo": True, "retencion": "7 dias"}, doc="politica")
+    negacion = _claim("backup_policy", {"respaldo": True}, doc="manual", estado="inexistente")
+
+    findings = detect_contradictions([vigente, negacion])
+
+    assert {f.criterion_id for f in findings} == {"CRI-PR-02", "CRI-RC-01", "CRI-RC-02"}
+    for f in findings:
+        assert "no existe" in f.detalle
+        assert set(f.evidence_ids) == {vigente.id, negacion.id}
 
 
 # -- integracion con hallazgos y planes -------------------------------------------------------
@@ -489,11 +538,19 @@ def test_contradiction_only_excludes_the_claim_for_its_own_criterion(methodology
     assert (rc01.estado, rc01.final_score) == (Estado.EVALUADO, 50)
 
 
-def test_disagreeing_review_frequencies_do_not_silence_gv04(methodology):
+def test_disagreeing_review_frequencies_belong_to_gv01_only(methodology):
+    """La frecuencia contradicha pertenece a GV-01, que es quien la lee. GV-04 no la usa: su 50
+    solo acredita que la revision se menciona, y marcarlo como contradicho le topaba un puntaje
+    ganado con un proceso de revision (docs/09 §114)."""
+
     reciente = (date.today() - timedelta(days=30)).isoformat()
     revisiones = [
         _claim("policy_review", {"frecuencia": f, "ultima_revision": reciente}, doc=doc)
         for f, doc in (("anual", "politica"), ("trimestral", "manual"))
     ]
+    hallazgos = [c for c in detect(revisiones) if "frecuencias" in c.titulo]
+    assert [c.criterion_id for c in hallazgos] == ["CRI-GV-01"]
+
     gv04 = _score(methodology, revisiones, "CRI-GV-04")
-    assert (gv04.estado, gv04.final_score) == (Estado.EVALUADO, 50)
+    assert gv04.final_score == 50
+    assert "Contradiccion" not in gv04.explanation

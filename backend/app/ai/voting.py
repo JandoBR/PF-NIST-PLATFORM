@@ -18,16 +18,23 @@ docs/09 §113):
   entre corridas con similitud tolerante y cada uno sobrevive en la mayoria.
 - **lista_dict**: lista de objetos; se emparejan por su clave (`roles` por `rol`, `criticidad` por
   `activo`) y cada subcampo se resuelve con las reglas de arriba.
-- **cerrado**: booleanos, enums, fechas y cantidades normalizadas (`retencion`, `tolerancia`,
-  `plazos`, `criterios_activacion`): igualdad exacta como antes.
+- **cerrado**: booleanos, enums, fechas y cantidades que alguna regla parsea o compara
+  (`retencion`, `frecuencia`, `ultima_revision`): igualdad exacta como antes.
+
+Un campo solo es presencia si ninguna regla parsea ni compara su valor, solo pregunta si esta:
+`tolerancia`, `plazos` y `criterios_activacion` se normalizan en la extraccion (`numbers.py`), pero
+ninguna regla lee la cifra, asi que votarlos exactos solo perdia el campo cuando dos corridas lo
+redactaban distinto (docs/09 §114).
 
 `null` y ausente son el mismo estado. `estado_declarado` se vota aparte como campo cerrado
-(`vigente|inexistente|planificado`), y `process_defined` se agrupa por (tipo, proceso) para no
-perder la afirmacion de "mejora" cuando el modelo la fusiona con la de "respuesta". Las corridas se
-ordenan por el contenido de sus afirmaciones, no por el orden en que llegaron, para que un mismo
-conjunto de corridas vote lo mismo en cualquier orden. `claims_to_raw` conserva todos los campos de
-la afirmacion, para que un replay desde el store reconstruya exactamente la misma evidencia
-(docs/09 §108).
+(`vigente|inexistente|planificado`); si las corridas no se ponen de acuerdo sobre el estado, la
+afirmacion queda visible con una limitacion y no cuenta. `process_defined` se agrupa por (tipo,
+proceso) y `policy_exists` por la politica que nombra, para no perder la afirmacion de "mejora"
+cuando el modelo la fusiona con la de "respuesta" ni mezclar dos politicas distintas. Las
+corridas se ordenan por el contenido de sus afirmaciones, no por el orden en que llegaron, para que
+un mismo conjunto de corridas vote lo mismo en cualquier orden. `claims_to_raw` conserva todos los
+campos de la afirmacion, para que un replay desde el store reconstruya exactamente la misma
+evidencia (docs/09 §108).
 """
 
 from __future__ import annotations
@@ -40,6 +47,7 @@ import unicodedata
 from statistics import median
 from typing import Any
 
+from app.evaluation.rules._common import POLITICA_GENERICA, politica_faceta
 from app.schemas.evidence import EvidenceInstance
 
 DEFAULT_VOTES = 3
@@ -48,6 +56,14 @@ _MISSING = object()
 #: Estados que declara el documento (docs/09 §106). Es un campo cerrado: un valor fuera de la
 #: lista no vota y, sin mayoria, se queda el de la afirmacion de mayor confianza.
 _ESTADOS_DECLARADOS = ("vigente", "inexistente", "planificado")
+
+#: Limitacion que deja el voto cuando las corridas declaran estados distintos sobre la misma
+#: practica y ninguno tiene mayoria: no se elige el favorable y la afirmacion no cuenta (docs/09
+#: §114). Sigue visible en la evidencia, como la de una corrida con confianza baja.
+LIMITACION_ESTADO_DUDOSO = (
+    "Las corridas de extraccion no coinciden sobre el estado declarado; la afirmacion queda"
+    " visible pero no cuenta para puntuar."
+)
 
 #: Clases de campo de `contenido` (docs/05 §2.5).
 PRESENCIA = "presencia"
@@ -80,7 +96,7 @@ _CAMPOS_POR_TIPO: dict[str, dict[str, Any]] = {
     },
     "risk_tolerance": {
         "objetivos_riesgo": PRESENCIA,
-        "tolerancia": CERRADO,
+        "tolerancia": PRESENCIA,
         "responsable": PRESENCIA,
         "integracion_empresarial": CERRADO,
         "opciones_respuesta": CERRADO,
@@ -102,7 +118,7 @@ _CAMPOS_POR_TIPO: dict[str, dict[str, Any]] = {
         "proceso": CERRADO,
         "pasos": PRESENCIA,
         "responsables": PRESENCIA,
-        "criterios_activacion": CERRADO,
+        "criterios_activacion": PRESENCIA,
         "criterios_declaracion": CERRADO,
         "registro_riesgos": CERRADO,
         "priorizacion": CERRADO,
@@ -121,7 +137,7 @@ _CAMPOS_POR_TIPO: dict[str, dict[str, Any]] = {
     "notification_list": {
         "destinatarios": LISTA,
         "criterios": PRESENCIA,
-        "plazos": CERRADO,
+        "plazos": PRESENCIA,
     },
     "escalation_path": {"niveles": PRESENCIA, "criterios": PRESENCIA},
     "org_context": {
@@ -283,6 +299,69 @@ def _group_key(claim: EvidenceInstance) -> tuple[str, Any]:
     return tipo, None
 
 
+def _etiqueta_de_politica(claims: list[EvidenceInstance]) -> dict[str, str]:
+    """Politica a la que pertenece cada `policy_exists`, emparejando nombres entre corridas.
+
+    La normalizacion del nombre es la misma que usa `_common.politica_faceta` al puntuar (minusculas
+    sin tildes y sin el prefijo "politica de"); el emparejamiento entre corridas reusa la similitud
+    tolerante de las listas. Una afirmacion sin nombre solo se une a la politica nombrada cuando en
+    el chunk hay exactamente una: con dos o mas no se sabe a cual se refiere y es su propio grupo
+    (docs/09 §114).
+    """
+
+    nombres = sorted(
+        {nombre for claim in claims if (nombre := politica_faceta(claim)) != POLITICA_GENERICA}
+    )
+    padre = {nombre: nombre for nombre in nombres}
+
+    def raiz(nombre: str) -> str:
+        while padre[nombre] != nombre:
+            padre[nombre] = padre[padre[nombre]]
+            nombre = padre[nombre]
+        return nombre
+
+    for indice, nombre in enumerate(nombres):
+        for otro in nombres[indice + 1 :]:
+            if _parecido(nombre, otro):
+                padre[raiz(otro)] = raiz(nombre)
+
+    componentes: dict[str, list[str]] = {}
+    for nombre in nombres:
+        componentes.setdefault(raiz(nombre), []).append(nombre)
+
+    etiquetas = {
+        miembro: min(componente) for componente in componentes.values() for miembro in componente
+    }
+    etiquetas[POLITICA_GENERICA] = (
+        min(etiquetas.values()) if len(componentes) == 1 else POLITICA_GENERICA
+    )
+    return etiquetas
+
+
+def _claves_de_grupo(claims: list[EvidenceInstance]) -> dict[str, tuple[str, Any]]:
+    """Llave de grupo de cada afirmacion dentro de un chunk.
+
+    Ademas del tipo, `process_defined` se separa por proceso y `policy_exists` por la politica que
+    nombra: dos politicas distintas del mismo chunk no comparten grupo, asi que su `nombre`, su
+    `aprobada_por` y su `estado_declarado` no se votan entre si y no se pierde una negacion
+    (docs/09 §108, §109, §114)."""
+
+    politicas = _etiqueta_de_politica(
+        [
+            claim
+            for claim in claims
+            if str((claim.value or {}).get("tipo_afirmacion") or "?") == "policy_exists"
+        ]
+    )
+    claves: dict[str, tuple[str, Any]] = {}
+    for claim in claims:
+        tipo, segundo = _group_key(claim)
+        if tipo == "policy_exists":
+            segundo = politicas.get(politica_faceta(claim), POLITICA_GENERICA)
+        claves[claim.id] = (tipo, segundo)
+    return claves
+
+
 def _confianza(claim: EvidenceInstance) -> float:
     try:
         return float((claim.value or {}).get("confianza") or 0.0)
@@ -359,11 +438,21 @@ def _votar_escalar(entradas: list[tuple[int, float, Any]], threshold: int) -> tu
 
 
 def _votar_presencia(entradas: list[tuple[int, float, Any]], threshold: int) -> tuple[bool, Any]:
-    """Texto libre: sobrevive si esta en la mayoria; se guarda el medoide de los que lo traen."""
+    """Texto libre: sobrevive si esta en la mayoria; se guarda el medoide de los que lo traen.
+
+    Cuando un mismo valor aparece identico (tras normalizar) en la mayoria de las corridas, se
+    guarda ese valor: las corridas que coinciden no cambian de resultado y la mayoria exacta manda
+    sobre el parecido (docs/09 §114)."""
 
     apoyan = [(rank, conf, valor) for rank, conf, valor in entradas if _presente(valor)]
     if len({rank for rank, _, _ in apoyan}) < threshold:
         return False, None
+    por_valor: dict[Any, list[tuple[int, float, Any]]] = {}
+    for entrada in apoyan:
+        por_valor.setdefault(_norm(entrada[2]), []).append(entrada)
+    for grupo in por_valor.values():
+        if len({rank for rank, _, _ in grupo}) >= threshold:
+            return True, _representante(grupo)
     return True, _medoide(apoyan)
 
 
@@ -540,7 +629,11 @@ def _votar_contenido(
 
 
 def _votar_grupo(claims: list[tuple[int, EvidenceInstance]], threshold: int) -> EvidenceInstance:
-    """Combina una afirmacion por corrida (misma clave de grupo)."""
+    """Combina una afirmacion por corrida (misma clave de grupo).
+
+    `estado_declarado` se vota exacto; sin mayoria y con estados distintos no se elige el favorable:
+    la afirmacion queda visible con `LIMITACION_ESTADO_DUDOSO` y no acredita ni niega nada
+    (docs/09 §114)."""
 
     base = min(claims, key=lambda item: item[0])[1]
     seleccionada = _mejor(claims)[1]
@@ -560,6 +653,9 @@ def _votar_grupo(claims: list[tuple[int, EvidenceInstance]], threshold: int) -> 
         [(idx, _confianza(c), _estado(c)) for idx, c in claims], threshold
     )
     if not hay_mayoria_estado:
+        declarados = {declarado for _, c in claims if (declarado := _estado(c)) is not None}
+        if len(declarados) > 1:
+            return _mejor(claims)[1].model_copy(update={"limitations": LIMITACION_ESTADO_DUDOSO})
         estado = _estado(seleccionada)
     valor = {
         **(base.value or {}),
@@ -590,12 +686,13 @@ def vote(runs: list[list[EvidenceInstance]]) -> list[EvidenceInstance]:
 
     threshold = umbral(len(runs))
     ordenadas = sorted(runs, key=_run_key)
+    claves = _claves_de_grupo([claim for claims in ordenadas for claim in claims])
     usables: dict[tuple[str, Any], dict[int, EvidenceInstance]] = {}
     todas: dict[tuple[str, Any], dict[int, EvidenceInstance]] = {}
 
     for run_idx, claims in enumerate(ordenadas):
         for claim in sorted(claims, key=_claim_key):
-            key = _group_key(claim)
+            key = claves[claim.id]
             actual = todas.setdefault(key, {}).get(run_idx)
             if actual is None or _confianza(claim) > _confianza(actual):
                 todas[key][run_idx] = claim

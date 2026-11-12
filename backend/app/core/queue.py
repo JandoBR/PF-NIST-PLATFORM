@@ -90,7 +90,10 @@ def dequeue_blocking(client: redis.Redis, queue: str, timeout: int = 5) -> dict[
     reporta como `TimeoutError` en vez de como un `None` normal (visto en real en
     `worker-core`/`worker-logs` contra el Redis de docker-compose). Para el worker, ambas cosas
     significan exactamente lo mismo: "no llego nada en este ciclo, seguir esperando" -- por eso
-    se tratan igual aqui en vez de dejar que tumbe el loop."""
+    se tratan igual aqui en vez de dejar que tumbe el loop.
+
+    Un mensaje que no es JSON se descarta con un aviso en el log: un elemento corrupto en la cola
+    no puede tumbar al worker (docs/09 §114)."""
 
     try:
         item = client.blpop([queue], timeout=timeout)
@@ -99,7 +102,11 @@ def dequeue_blocking(client: redis.Redis, queue: str, timeout: int = 5) -> dict[
     if item is None:
         return None
     _, raw = item
-    return json.loads(raw)
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        logger.warning("Mensaje corrupto en %s (no es JSON); se descarta.", queue)
+        return None
 
 
 def heartbeat_key(queue: str, worker_id: str) -> str:

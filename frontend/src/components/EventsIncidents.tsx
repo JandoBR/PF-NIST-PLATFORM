@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity,
   ShieldAlert,
@@ -23,6 +23,7 @@ import {
   clearOrgEvents,
   getIncidentPlans,
   ingestEvents,
+  isAbortError,
   listOrgIncidents,
   pollJob,
   updateIncident,
@@ -51,6 +52,11 @@ export function EventsIncidents({ orgId, orgNombre, onIngested }: Props) {
   const [selected, setSelected] = useState<IncidentOut | null>(null);
   const [tab, setTab] = useState<Tab>('activos');
 
+  //: Corta el sondeo del job si se desmonta la pestaña: el job sigue en el backend y se recupera
+  //: por Actividad, pero la UI deja de consultar durante 15 minutos.
+  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   const refresh = useCallback(async () => {
     if (!orgId) return [] as IncidentOut[];
     setLoading(true);
@@ -77,6 +83,9 @@ export function EventsIncidents({ orgId, orgNombre, onIngested }: Props) {
     setError(null);
     setLastIngest(null);
     setJobEstado(null);
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       if (fresh) {
         await clearOrgEvents(orgId);
@@ -87,7 +96,10 @@ export function EventsIncidents({ orgId, orgNombre, onIngested }: Props) {
       // hay que sondear el job, y luego refrescar la lista -- ya no hay un payload sincronico
       // con "nuevos vs actualizados": lo informa `job.resultado` (FN-03).
       const accepted = await ingestEvents(orgId, file);
-      const job = await pollJob(accepted.job_id, { onTick: (j) => setJobEstado(j.estado) });
+      const job = await pollJob(accepted.job_id, {
+        signal: controller.signal,
+        onTick: (j) => setJobEstado(j.estado),
+      });
 
       if (job.estado === 'fallido') {
         setError(job.error ?? 'La ingesta de eventos falló en el worker, sin más detalle.');
@@ -105,9 +117,21 @@ export function EventsIncidents({ orgId, orgNombre, onIngested }: Props) {
       );
       onIngested?.();
     } catch (err) {
+      if (isAbortError(err)) return;
       setError(err instanceof ApiError ? err.detail : err instanceof Error ? err.message : 'Error desconocido.');
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setIngesting(false);
+    }
+  }
+
+  // Un log de ejemplo que no se puede descargar (fetch) no debe dejar la promesa del onClick sin
+  // manejar: el error va a la misma zona de error que los de la ingesta.
+  async function handleDemoLog(log: (typeof DEMO_EVENT_LOGS)[number]) {
+    try {
+      await handleIngest(await fetchAsFile(log.file), log.label, true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cargar el log de ejemplo.');
     }
   }
 
@@ -149,7 +173,7 @@ export function EventsIncidents({ orgId, orgNombre, onIngested }: Props) {
                 key={log.id}
                 title={log.description}
                 disabled={ingesting}
-                onClick={async () => handleIngest(await fetchAsFile(log.file), log.label, true)}
+                onClick={() => void handleDemoLog(log)}
                 className="btn-ghost border border-white/[0.06] text-xs"
               >
                 {ingesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}

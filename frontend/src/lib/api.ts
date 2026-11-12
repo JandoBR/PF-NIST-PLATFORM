@@ -264,11 +264,12 @@ const TERMINAL_JOB_STATES: JobOut['estado'][] = ['completado', 'fallido'];
 
 export class JobTimeoutError extends Error {}
 
+/** `true` si el error es un `AbortError` (p. ej. lanzado por `AbortSignal.abort()`). */
 export function isAbortError(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError';
 }
 
-/** `true` si el error es un `AbortError` (p. ej. lanzado por `AbortSignal.abort()`). */
+/** Espera `ms`; rechaza con `AbortError` si la señal se aborta mientras espera. */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {

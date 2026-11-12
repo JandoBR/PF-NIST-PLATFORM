@@ -175,11 +175,15 @@ cuando ambas hablan del mismo recurso, propiedad y alcance.**
 | Política dice “hay responsable de incidentes”; Terraform no aporta nada | Se acepta la evidencia documental. | Sin contradicción; el criterio de proceso usa `doc.claim`. |
 | Terraform tiene expresión no resuelta | No contradice al documento; es limitación. | Criterio → `evidencia_insuficiente` para ese recurso. |
 | Fuentes de entornos o momentos distintos | No se comparan ni contradicen. | Requieren mismo `scope` y ventana compatible. |
-| Dos documentos se contradicen | Se registran ambos; el criterio decide con su regla (usualmente gana la fuente más reciente o específica). | Hallazgo de contradicción documental. |
+| Dos documentos se contradicen | Se registran ambos; el criterio decide con su regla (usualmente gana la fuente más reciente o específica). Solo compiten afirmaciones **vigentes**: un plan con otro valor no contradice a la política en vigor. | Hallazgo de contradicción documental; ninguno de los dos cuenta para ese criterio. |
 | Un documento dice que no existe la práctica y otro la declara vigente | Se registran ambos lados; ninguno cuenta para el criterio afectado. | Hallazgo de contradicción documental (docs/09 §106). |
 
 Las contradicciones se registran como **hallazgos** con ambos lados citados (evidencia + locator).
 No penalizan doble: el hallazgo referencia el criterio afectado una sola vez.
+
+Una frecuencia de revisión de la política contradicha se atribuye a GV-01, que es quien la compara
+con la última revisión. GV-04 no lee la frecuencia: su tramo de 50 solo acredita que la revisión se
+menciona, y ese hecho no está en disputa (docs/09 §114).
 
 **Efecto en el puntaje:** una afirmación documental que afirma un **hecho** que otra fuente desmiente
 (“hay respaldos” con retención 0, “la base no es pública” siendo pública, dos documentos con valores

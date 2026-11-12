@@ -515,3 +515,175 @@ def test_every_field_that_the_prompt_declares_has_a_voting_class():
     from app.ai.voting import _CAMPOS_POR_TIPO
 
     assert set(_CONTENT_FIELDS) <= set(_CAMPOS_POR_TIPO)
+
+
+# -- campos que las reglas solo miran como verdad (docs/09 §114) -------------------------------
+
+
+def test_paraphrased_tolerancia_plazos_and_activation_criteria_survive():
+    """Las tres se normalizan en la extraccion, pero ninguna regla lee la cifra: solo pregunta si
+    estan, asi que un cambio de redaccion no puede borrarlas."""
+
+    casos = [
+        ("risk_tolerance", "tolerancia", "apetito bajo en produccion"),
+        ("notification_list", "plazos", "notificar en 24 horas"),
+        ("process_defined", "criterios_activacion", "caida del sitio principal"),
+    ]
+    for tipo, campo, texto in casos:
+        claims = vote(
+            [
+                [_claim(tipo=tipo, contenido={campo: texto})],
+                [_claim(tipo=tipo, contenido={campo: f"{texto} y dependencias"})],
+                [_claim(tipo=tipo, contenido={campo: "no aplica"})],
+            ]
+        )
+        assert claims[0].value["contenido"].get(campo), (tipo, campo)
+
+
+def test_an_exact_majority_of_a_presence_field_is_the_stored_value():
+    claims = vote(
+        [
+            [_claim(tipo="risk_tolerance", contenido={"tolerancia": "cuatro horas"})],
+            [_claim(tipo="risk_tolerance", contenido={"tolerancia": "cuatro horas"})],
+            [_claim(tipo="risk_tolerance", contenido={"tolerancia": "4 horas al dia"})],
+        ]
+    )
+
+    (claim,) = claims
+    assert claim.value["contenido"]["tolerancia"] == "cuatro horas"
+
+
+# -- dos politicas en el mismo chunk (docs/09 §114) --------------------------------------------
+
+
+def test_two_policies_in_the_same_chunk_are_voted_separately():
+    def run(estado_proveedores: str) -> list[EvidenceInstance]:
+        return [
+            _claim(
+                contenido={
+                    "nombre": "Politica de seguridad de la informacion",
+                    "aprobada_por": "Comite",
+                }
+            ),
+            _claim(
+                contenido={"nombre": "Politica de proveedores", "aprobada_por": "Compras"},
+                estado=estado_proveedores,
+            ),
+        ]
+
+    claims = vote([run("vigente"), run("inexistente"), run("inexistente")])
+
+    assert len(claims) == 2
+    proveedores = next(c for c in claims if "proveedores" in c.value["contenido"]["nombre"])
+    seguridad = next(c for c in claims if "seguridad" in c.value["contenido"]["nombre"])
+    assert proveedores.value["estado_declarado"] == "inexistente"
+    assert proveedores.value["contenido"]["aprobada_por"] == "Compras"
+    assert seguridad.value["estado_declarado"] == "vigente"
+    assert seguridad.value["contenido"]["aprobada_por"] == "Comite"
+
+
+def test_the_same_policy_named_with_other_words_is_one_group():
+    claims = vote(
+        [
+            [
+                _claim(
+                    contenido={
+                        "nombre": "Politica de seguridad de la informacion",
+                        "aprobada_por": "Comite",
+                    }
+                )
+            ],
+            [
+                _claim(
+                    contenido={
+                        "nombre": "seguridad de la informacion",
+                        "aprobada_por": "Comite de direccion",
+                    }
+                )
+            ],
+            [
+                _claim(
+                    contenido={
+                        "nombre": "Politica de Seguridad de la Informacion",
+                        "aprobada_por": "Comite",
+                    }
+                )
+            ],
+        ]
+    )
+
+    (claim,) = claims
+    assert "seguridad de la informacion" in claim.value["contenido"]["nombre"].casefold()
+    assert claim.value["contenido"]["aprobada_por"] == "Comite"
+
+
+def test_an_unnamed_policy_joins_the_only_named_cluster_or_stays_alone():
+    from app.ai.voting import POLITICA_GENERICA, _etiqueta_de_politica
+
+    una = [
+        _claim(contenido={"nombre": "Politica de seguridad de la informacion"}),
+        _claim(contenido={}),
+    ]
+    assert _etiqueta_de_politica(una)[POLITICA_GENERICA] == "seguridad de la informacion"
+
+    dos = [
+        *_claims_de_dos_politicas(),
+        _claim(contenido={}),
+    ]
+    assert _etiqueta_de_politica(dos)[POLITICA_GENERICA] == POLITICA_GENERICA
+
+
+def _claims_de_dos_politicas() -> list[EvidenceInstance]:
+    return [
+        _claim(contenido={"nombre": "Politica de seguridad de la informacion"}),
+        _claim(contenido={"nombre": "Politica de proveedores"}),
+    ]
+
+
+def test_an_unnamed_policy_in_a_chunk_with_two_policies_is_its_own_group():
+    claims = vote(
+        [
+            [*_claims_de_dos_politicas(), _claim(contenido={})],
+            [*_claims_de_dos_politicas(), _claim(contenido={})],
+            [*_claims_de_dos_politicas(), _claim(contenido={})],
+        ]
+    )
+
+    nombres = [c.value["contenido"].get("nombre") for c in claims]
+    assert sorted(nombre for nombre in nombres if nombre) == [
+        "Politica de proveedores",
+        "Politica de seguridad de la informacion",
+    ]
+    assert nombres.count(None) == 1
+
+
+# -- estados que no coinciden entre corridas (docs/05 §2.5, docs/09 §114) ---------------------
+
+
+def test_a_majority_state_still_wins():
+    claims = vote(
+        [
+            [_claim(contenido={"nombre": "Politica"}, estado="inexistente")],
+            [_claim(contenido={"nombre": "Politica"}, estado="vigente")],
+            [_claim(contenido={"nombre": "Politica"}, estado="inexistente")],
+        ]
+    )
+
+    (claim,) = claims
+    assert claim.value["estado_declarado"] == "inexistente"
+    assert claim.limitations is None
+
+
+def test_runs_that_disagree_on_the_state_do_not_pick_the_favourable_one():
+    from app.ai.voting import LIMITACION_ESTADO_DUDOSO
+
+    claims = vote(
+        [
+            [_claim(contenido={"nombre": "Politica"}, estado="vigente")],
+            [_claim(contenido={"nombre": "Politica"}, estado="inexistente")],
+            [_claim(contenido={"nombre": "Politica"}, estado="planificado")],
+        ]
+    )
+
+    (claim,) = claims
+    assert claim.limitations == LIMITACION_ESTADO_DUDOSO

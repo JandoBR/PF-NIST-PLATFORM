@@ -3,7 +3,9 @@
 Deterministas y sin IA: comparan dos lados *ya extraidos como evidencia* sobre la misma propiedad.
 
 - **Tecnico vs documental** -- prevalece la observacion tecnica (D7).
-- **Documental vs documental** -- dos documentos distintos declaran valores diferentes.
+- **Documental vs documental** -- dos documentos distintos declaran valores diferentes (solo
+  afirmaciones vigentes: un plan no contradice la politica en vigor, y la negacion contra una
+  vigente la trata `_absence_disagreement`, docs/09 §114).
 
 Solo se comparan evidencias del mismo `scope` (docs/02 §5: entornos distintos no se contradicen).
 Un hallazgo por criterio y por clase de contradiccion, nunca uno por recurso.
@@ -34,9 +36,11 @@ from app.evaluation.rules._common import (
     by_type,
     doc_claims,
     es_ausencia_declarada,
+    es_vigente,
     estado_declarado,
     faceta,
     facetas_compatibles,
+    mejor_declarada,
     proceso_faceta,
 )
 from app.evaluation.rules.pr02_backup import retencion_politica_dias
@@ -45,6 +49,7 @@ from app.schemas.evidence import EvidenceInstance
 
 _PR02 = "CRI-PR-02"
 _GV01 = "CRI-GV-01"
+_GV04 = "CRI-GV-04"
 _PR05 = "CRI-PR-05"
 
 #: Criterios que leen cada tipo de afirmacion. `detect` es global y un hallazgo pertenece a un
@@ -52,7 +57,7 @@ _PR05 = "CRI-PR-05"
 #: sabria a que puntaje afecta (docs/09 §106).
 _CRITERIOS_POR_TIPO: dict[str, tuple[str, ...]] = {
     "policy_exists": ("CRI-GV-01",),
-    "policy_review": ("CRI-GV-04",),
+    "policy_review": ("CRI-GV-01", "CRI-GV-04"),
     "role_assigned": ("CRI-GV-02",),
     "risk_tolerance": ("CRI-GV-03",),
     "backup_policy": ("CRI-PR-02", "CRI-RC-01", "CRI-RC-02"),
@@ -118,7 +123,7 @@ def _finding(
 
 
 def _backup_vs_policy(evidence: list[EvidenceInstance]) -> list[Contradiction]:
-    politicas = [c for c in doc_claims(evidence, "backup_policy") if c.value.get("encontrado")]
+    politicas = [c for c in doc_claims(evidence, "backup_policy") if es_vigente(c)]
     configs = [
         e
         for e in by_type(evidence, "tf.backup.config")
@@ -207,13 +212,17 @@ def _documents_disagree(
     evidence: list[EvidenceInstance],
     tipo: str,
     valor: Callable[[EvidenceInstance], object],
-    criterion_id: str,
+    criterion_ids: tuple[str, ...],
     titulo: str,
     campo: str,
 ) -> list[Contradiction]:
-    """Dos documentos distintos del mismo `scope` con valores diferentes para la misma propiedad."""
+    """Dos documentos distintos del mismo `scope` con valores diferentes para la misma propiedad.
 
-    claims = [c for c in doc_claims(evidence, tipo) if c.value.get("encontrado")]
+    Solo compiten las afirmaciones **vigentes**: un plan con otro valor no contradice a la politica
+    en vigor, y la negacion contra una afirmacion vigente ya la trata `_absence_disagreement`
+    (docs/09 §106, §114)."""
+
+    claims = [c for c in doc_claims(evidence, tipo) if es_vigente(c)]
     por_valor: dict[tuple[str, object], list[EvidenceInstance]] = {}
     for claim in claims:
         v = valor(claim)
@@ -231,7 +240,7 @@ def _documents_disagree(
         lados = [best_found(cs) for _, cs in sorted(valores.items(), key=lambda kv: str(kv[0]))]
         lados = [c for c in lados if c is not None]
         detalle = "; ".join(f"{c.subject_ref} declara {campo}={valor(c)}" for c in lados)
-        findings.append(
+        findings.extend(
             _finding(
                 criterion_id,
                 titulo,
@@ -240,6 +249,7 @@ def _documents_disagree(
                 [c.id for c in lados],
                 [c.id for cs in valores.values() for c in cs],
             )
+            for criterion_id in criterion_ids
         )
     return findings
 
@@ -283,7 +293,8 @@ def _absence_disagreement(evidence: list[EvidenceInstance]) -> list[Contradictio
             continue
         ausencias = _unique_claims(ausencia for ausencia, _ in pares)
         vigentes = _unique_claims(vigente for _, vigente in pares)
-        lados = [lado for lado in (best_found(ausencias), best_found(vigentes)) if lado is not None]
+        candidatos = (mejor_declarada(ausencias), best_found(vigentes))
+        lados = [lado for lado in candidatos if lado is not None]
         criterios = sorted(
             {criterio for claim in ausencias + vigentes for criterio in _criterios_de(claim)}
         )
@@ -340,7 +351,7 @@ def detect(evidence: list[EvidenceInstance]) -> list[Contradiction]:
             evidence,
             "backup_policy",
             retencion_politica_dias,
-            _PR02,
+            (_PR02,),
             "Dos documentos declaran retenciones de backup distintas",
             "retencion (dias)",
         ),
@@ -348,7 +359,7 @@ def detect(evidence: list[EvidenceInstance]) -> list[Contradiction]:
             evidence,
             "policy_review",
             _frecuencia,
-            _GV01,
+            (_GV01,),
             "Dos documentos declaran frecuencias de revision distintas",
             "frecuencia",
         ),

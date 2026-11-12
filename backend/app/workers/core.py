@@ -58,7 +58,8 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
 
     No relanza la excepcion -- un job que revienta no debe tumbar el loop del worker, que sigue
     atendiendo el resto de la cola (docs/04 regla C4: degradar sin tumbar lecturas, aplicado
-    aqui al propio worker)."""
+    aqui al propio worker). Antes de marcar el job fallido se hace `rollback`: una sesion que ya no
+    admite transacciones no puede commitear y tumbaba el loop (docs/09 §114)."""
 
     job = job_service.get_job(session, message["job_id"])
     if job is None:
@@ -125,7 +126,11 @@ def process_message(session: Session, methodology: Methodology, message: dict[st
         job_service.mark_done(session, job)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Job %s (assessment %s) fallo", job.id, message.get("assessment_id"))
-        job_service.mark_failed(session, job, str(exc))
+        session.rollback()
+        try:
+            job_service.mark_failed(session, job, str(exc))
+        except Exception:  # noqa: BLE001
+            logger.exception("No se pudo marcar el job %s como fallido", job.id)
 
 
 def reap_stale_jobs(

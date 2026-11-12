@@ -171,6 +171,71 @@ def test_the_central_helper_applies_the_negation_to_every_doc_claim_rule(
     assert "El documento" in resultado.explanation
 
 
+def test_a_negation_in_the_same_document_does_not_contribute_its_fields(methodology):
+    """Un documento que afirma la practica en un fragmento y la niega en otro no puede sumar los
+    campos de la negacion: `merged_content` los agregaba y la negacion, con mas datos, subia el
+    puntaje aunque §101 deja el valor de la afirmacion mas confiable (docs/09 §114)."""
+
+    vigente = _claim(
+        "process_defined",
+        {"proceso": "recuperacion", "pasos": "restaurar el backup y verificar"},
+        doc="mismo-documento",
+        cita="El procedimiento de recuperacion describe los pasos de restauracion",
+    )
+    negacion = _claim(
+        "process_defined",
+        {
+            "proceso": "recuperacion",
+            "pasos": "restaurar el backup",
+            "criterios_activacion": "caida mayor a cuatro horas",
+            "responsables": "equipo de infraestructura",
+        },
+        estado="inexistente",
+        doc="mismo-documento",
+        cita="No existe un procedimiento documentado de recuperacion",
+    )
+
+    resultado = _evaluate(methodology, [vigente, negacion], "CRI-RC-01")
+
+    assert resultado.final_score == 75
+    assert resultado.evidence_ids == [vigente.id]
+
+
+def test_a_more_reliable_negation_in_the_same_document_still_denies_a_boolean(methodology):
+    """Excluir la negacion de `found` no puede subir el puntaje de un documento que se contradice:
+    su `false` explicito sigue compitiendo con la afirmacion vigente y, si es la mas confiable,
+    gana (docs/09 §101, §114)."""
+
+    contenido = {
+        "roles": [
+            {
+                "rol": "CISO",
+                "responsable": "Ana",
+                "responsabilidades": "seguridad",
+                "autoridad": "aprueba excepciones",
+            }
+        ],
+        "recursos_asignados": True,
+        "practicas_rh": True,
+    }
+    solo = _claim("role_assigned", contenido, doc="mismo-documento", confianza=0.8)
+    vigente = _claim("role_assigned", contenido, doc="mismo-documento", confianza=0.8)
+    negacion = _claim(
+        "role_assigned",
+        {"recursos_asignados": False},
+        estado="inexistente",
+        doc="mismo-documento",
+        confianza=0.95,
+        cita="No se han asignado recursos al area de seguridad",
+    )
+
+    sin_negacion = _evaluate(methodology, [solo], "CRI-GV-02")
+    con_negacion = _evaluate(methodology, [vigente, negacion], "CRI-GV-02")
+
+    assert con_negacion.final_score < sin_negacion.final_score
+    assert "se contradice" in con_negacion.explanation
+
+
 # -- plan declarado: no acredita la practica de hoy --------------------------------------------
 
 

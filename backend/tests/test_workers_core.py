@@ -76,6 +76,34 @@ def test_process_message_marks_job_and_assessment_failed_on_bad_path(db_session,
     assert job.error
 
 
+def test_process_message_does_not_die_when_marking_the_job_failed(
+    db_session, methodology, monkeypatch
+):
+    """Un fallo de BD al marcar el job fallido tampoco puede tumbar el loop del worker: el job
+    queda para el reaper en vez de matar el proceso (docs/09 §114)."""
+
+    assessment = svc.create_pending_assessment(
+        db_session, methodology, org_name="Empresa Worker Marca Rota", scope="entorno:produccion"
+    )
+    job = job_service.create_job(db_session, "assessment_run", assessment_id=assessment.id)
+
+    def rompe(*args, **kwargs):
+        raise RuntimeError("BD caida al marcar")
+
+    monkeypatch.setattr(job_service, "mark_failed", rompe)
+
+    worker_core.process_message(
+        db_session,
+        methodology,
+        {
+            "job_id": job.id,
+            "assessment_id": assessment.id,
+            "terraform_path": "/no/existe/esta/ruta",
+            "ai_requested": False,
+        },
+    )
+
+
 def test_process_message_runs_a_job_reaped_as_lost_in_queue(db_session, methodology):
     """El reaper lo fallo justo antes de que el worker sacara el mensaje: se ejecuta igual (y la
     evaluacion ligada vuelve de `fallida` a completarse), en vez de perder el trabajo."""

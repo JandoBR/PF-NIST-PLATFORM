@@ -44,7 +44,9 @@ from app.schemas.evidence import EvidenceInstance, Locator, Modality, Segmento
 #: v7: `process_defined` lleva una afirmacion por proceso distinto en vez de fusionar en una sola
 #: (docs/09 §111). El modelo metia el analisis posterior y la mejora en la afirmacion de
 #: "respuesta" y CRI-RS-02 no encontraba proceso de analisis.
-PROMPT_VERSION = "extract_v7"
+#: v8: `policy_review` es solo la revision periodica de la politica de seguridad; la revision del
+#: inventario de proveedores y otras revisiones no se emiten con ese tipo (docs/09 §115).
+PROMPT_VERSION = "extract_v8"
 
 #: Limitacion de una afirmacion cuya cita no aparece en el texto analizado (E8).
 CITA_NO_LOCALIZABLE = "cita no localizable en el texto analizado: no cuenta para puntuar"

@@ -182,6 +182,33 @@ def test_run_assessment_marks_failure_without_losing_the_row(db_session, methodo
     assert failed.error is not None
 
 
+def test_a_failure_after_writing_rows_leaves_no_partial_evidence(
+    db_session, methodology, monkeypatch
+):
+    """El fallo ocurre despues de agregar fuentes, evidencia y resultados a la sesion: sin el
+    rollback previo se persistian a medias y el commit de `fallida` relanzaba
+    `PendingRollbackError` (docs/09 §114)."""
+
+    def rompe(session, methodology, assessment_id, **kwargs):
+        raise RuntimeError("fallo inyectado tras escribir la evidencia")
+
+    monkeypatch.setattr(svc, "generate_plans", rompe)
+
+    with pytest.raises(RuntimeError, match="fallo inyectado"):
+        svc.run_assessment(
+            db_session,
+            methodology,
+            org_name="Empresa Fallo Parcial",
+            scope="entorno:produccion",
+            terraform_path=FIXTURES / "gaps",
+        )
+
+    fallida = db_session.query(Assessment).filter_by(estado="fallida").one()
+    assert fallida.error == "fallo inyectado tras escribir la evidencia"
+    for row in (Source, EvidenceRow, CriterionResultRow, PlanRow):
+        assert db_session.query(row).filter_by(assessment_id=fallida.id).count() == 0
+
+
 def test_reevaluate_rereads_the_same_path_and_picks_up_fixes(db_session, methodology, tmp_path):
     workdir = tmp_path / "infra"
     shutil.copytree(FIXTURES / "gaps", workdir)

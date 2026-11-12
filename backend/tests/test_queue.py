@@ -41,6 +41,22 @@ def test_dequeue_times_out_on_empty_queue(redis_client):
     assert dequeue_blocking(redis_client, queue, timeout=1) is None
 
 
+def test_a_corrupt_message_is_discarded_without_killing_the_worker(fake_redis, caplog):
+    """Un elemento que no es JSON no puede tumbar el loop del worker: se avisa y se sigue con el
+    siguiente mensaje de la cola (docs/09 §114)."""
+
+    import json
+
+    from app.core.queue import QUEUE_CORE
+
+    fake_redis.rpush(QUEUE_CORE, "{esto no es json")
+    fake_redis.rpush(QUEUE_CORE, json.dumps({"job_id": "siguiente"}))
+
+    assert dequeue_blocking(fake_redis, QUEUE_CORE, timeout=1) is None
+    assert "corrupto" in caplog.text
+    assert dequeue_blocking(fake_redis, QUEUE_CORE, timeout=1) == {"job_id": "siguiente"}
+
+
 # -- schema_version del mensaje (OP-13) ---------------------------------------------------------
 
 

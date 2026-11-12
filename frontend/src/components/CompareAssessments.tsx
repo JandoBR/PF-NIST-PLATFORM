@@ -10,6 +10,7 @@ import {
   EyeOff,
   Loader2,
   AlertTriangle,
+  RefreshCw,
   Minus,
   PackagePlus,
   PackageMinus,
@@ -137,6 +138,9 @@ const DIRECTION_ORDER: ComparisonDirection[] = [
 
 export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
   const [assessments, setAssessments] = useState<AssessmentDetail[] | null>(null);
+  const [loadingAssessments, setLoadingAssessments] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [idA, setIdA] = useState('');
   const [idB, setIdB] = useState('');
   const [comparison, setComparison] = useState<ComparisonOut | null>(null);
@@ -147,6 +151,8 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
 
   useEffect(() => {
     let active = true;
+    setLoadingAssessments(true);
+    setLoadError(null);
     listAssessments()
       .then((all) => {
         if (!active) return;
@@ -164,11 +170,18 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
           setIdA(before.id);
         }
       })
-      .catch((err) => active && setError(err instanceof Error ? err.message : 'Error desconocido.'));
+      .catch((err) => {
+        if (!active) return;
+        setAssessments(null);
+        setLoadError(err instanceof Error ? err.message : 'Error desconocido.');
+      })
+      .finally(() => {
+        if (active) setLoadingAssessments(false);
+      });
     return () => {
       active = false;
     };
-  }, [orgId, currentAssessmentId]);
+  }, [orgId, currentAssessmentId, reloadToken]);
 
   // La comparación se recalcula sola al cambiar cualquiera de las dos evaluaciones.
   useEffect(() => {
@@ -247,10 +260,27 @@ export function CompareAssessments({ orgId, currentAssessmentId }: Props) {
       .sort((a, b) => order(a) - order(b) || a.criterion_id.localeCompare(b.criterion_id));
   }, [currentComparison, showUnchanged]);
 
-  if (assessments === null) {
+  if (loadingAssessments) {
     return (
       <div className="card flex items-center justify-center px-6 py-16 text-sm text-slate-500">
         <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cargando evaluaciones…
+      </div>
+    );
+  }
+
+  if (loadError || assessments === null) {
+    return (
+      <div className="card flex flex-col items-center justify-center px-6 py-16 text-center">
+        <AlertTriangle className="mb-3 h-8 w-8 text-rose-400/80" />
+        <p className="max-w-md text-sm text-rose-300">
+          {loadError ?? 'No se pudieron cargar las evaluaciones.'}
+        </p>
+        <button
+          onClick={() => setReloadToken((value) => value + 1)}
+          className="btn-ghost mt-4 border border-white/[0.06] text-xs"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Reintentar
+        </button>
       </div>
     );
   }

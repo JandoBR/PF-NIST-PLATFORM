@@ -504,7 +504,11 @@ def run_pending_assessment(
     CLI, implementado en terminos de esta misma funcion para no duplicar el pipeline.
 
     `event_ingest_ids` limita la evidencia operativa a esas ingestas; `None` significa todas las
-    del org+scope (docs/08 §3, docs/09 §102)."""
+    del org+scope (docs/08 §3, docs/09 §102).
+
+    Si algo falla, se descarta la transaccion completa (evidencia, resultados y planes) y la
+    evaluacion queda `fallida` con el error; antes la evidencia parcial se persistia y el commit
+    del estado fallido podia relanzar `PendingRollbackError` (docs/09 §114)."""
 
     assessment = session.get(Assessment, assessment_id)
     if assessment is None:
@@ -564,8 +568,11 @@ def run_pending_assessment(
         assessment.estado = "completada"
         session.commit()
     except Exception as exc:
-        assessment.estado = "fallida"
-        assessment.error = str(exc)
+        session.rollback()
+        fallida = session.get(Assessment, assessment_id)
+        if fallida is not None:
+            fallida.estado = "fallida"
+            fallida.error = str(exc)
         session.commit()
         raise
 

@@ -18,6 +18,5 @@ infraestructura.
 
 ## Contencion
 
-Cuando se detecta un incidente, el equipo de guardia aplica las medidas de contencion que considere
-necesarias segun el caso. Todavia no hay un procedimiento escrito de erradicacion ni una lista de
-pasos acordada.
+No existe un procedimiento escrito de contencion ni de erradicacion, ni una lista de pasos
+acordada: cuando se detecta un incidente, el equipo de guardia decide las medidas segun el caso.
