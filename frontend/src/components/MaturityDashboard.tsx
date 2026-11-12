@@ -566,7 +566,7 @@ function TierCard({
 
   return (
     <div
-      className={`card card-hover group relative p-5 outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${className}`}
+      className={`card card-hover group relative p-5 outline-none hover:z-30 focus-within:z-30 focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${className}`}
       tabIndex={0}
       aria-label={resumen}
     >
