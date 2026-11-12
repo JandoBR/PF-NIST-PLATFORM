@@ -361,6 +361,31 @@ def test_id03_proceso_sin_registro_es_50():
     assert id03_risk_assessment.evaluate(evidence).final_score == 50
 
 
+def test_id03_registro_impactos_y_probabilidades_sin_pasos_es_75():
+    """El prompt pide `pasos` como texto libre y el modelo suele omitirlo: antes el proceso caia a
+    25 ("descrita de forma generica") aunque sus facetas lo documentaran, y el escenario good
+    bajaba de Tier 4 a Tier 1 (docs/09 §109)."""
+
+    evidence = [
+        _claim(
+            "process_defined",
+            {
+                "proceso": "riesgos",
+                "impactos": True,
+                "priorizacion": True,
+                "probabilidades": True,
+                "registro_riesgos": True,
+                "responsables": "CISO",
+            },
+        )
+    ]
+
+    resultado = id03_risk_assessment.evaluate(evidence)
+
+    assert resultado.final_score == 75
+    assert "sin pasos detallados" in resultado.explanation
+
+
 def test_id03_proceso_de_riesgos_generico_es_25():
     evidence = [_claim("process_defined", {"proceso": "riesgos", "registro_riesgos": True})]
     assert id03_risk_assessment.evaluate(evidence).final_score == 25

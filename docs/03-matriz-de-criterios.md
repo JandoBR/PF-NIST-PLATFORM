@@ -72,6 +72,7 @@ Resumen de cobertura del catálogo:
   - 50: existe en borrador o sin aprobación identificada.
   - 25: mención informal de “políticas” sin documento concreto.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
+  - Una política se identifica por el **nombre** que declara `policy_exists`. La negación o el plan de otra política con nombre distinto (p. ej. “gestión del riesgo de proveedores”) no pone en 0 el criterio ni contradice a la política de seguridad de la información: se ignora y puntúa la vigente. Una negación sin nombre habla de “una política” en general y sí contradice a cualquiera nombrada (docs/09 §109).
   - Sin documentos analizados → `evidencia_insuficiente`.
 - **Recomendación:** formalizar/aprobar la política; definir ciclo de revisión (anual sugerido) y registrar la última revisión.
 
@@ -159,9 +160,10 @@ Resumen de cobertura del catálogo:
 - **Evidencias:** `doc.claim(tipo=process_defined)`
 - **Regla:**
   - 100: proceso documentado con pasos, registro/priorización **y** los impactos o probabilidades de cada riesgo registrados (`impactos`/`probabilidades`). Esto último es lo que sostiene `ID.RA-04`.
-  - 75: proceso con registro y priorización, pero sin impactos ni probabilidades.
-  - 50: proceso definido sin registro ni priorización de riesgos (evidencia `ID.RA-01` y nada más).
-  - 25: evaluación descrita de forma genérica, sin pasos concretos.
+  - 75: registro y priorización **más** impactos o probabilidades, sin `pasos` en el texto extraído: las facetas del proceso ya lo documentan y la falta de un campo de texto libre no prueba que el proceso sea genérico (docs/01 §3, docs/09 §109).
+  - 75: pasos, registro y priorización, pero sin impactos ni probabilidades (falta `ID.RA-04`).
+  - 50: proceso definido con pasos, sin registro ni priorización de riesgos (evidencia `ID.RA-01` y nada más).
+  - 25: evaluación descrita de forma genérica, sin pasos ni facetas que documenten el proceso.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
 - **Recomendación:** establecer una evaluación de riesgos repetible con registro y priorización.
 

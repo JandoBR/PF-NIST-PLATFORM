@@ -16,7 +16,13 @@ se abarata a la vez, que es la combinacion que no se puede defender (docs/09 §7
 
 from __future__ import annotations
 
-from app.evaluation.rules._common import best_found, by_type, doc_claims, noting_unresolved
+from app.evaluation.rules._common import (
+    best_found,
+    by_type,
+    doc_claims,
+    es_vigente,
+    noting_unresolved,
+)
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
@@ -30,7 +36,9 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
     (docs/03 §3): solo se cita como contexto cuando hay cifrado deshabilitado."""
 
     resultado = _evaluate_technical(evidence)
-    politica = best_found(doc_claims(evidence, "policy_exists"))
+    politica = best_found(
+        [claim for claim in doc_claims(evidence, "policy_exists") if es_vigente(claim)]
+    )
     if politica is None or resultado.final_score not in (0, 25):
         return resultado
     return resultado.model_copy(

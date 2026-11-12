@@ -3,18 +3,23 @@
 Primer criterio puramente documental: solo usa `doc.claim`. Sin evidencia tecnica que pueda
 contradecirlo (D7 no aplica aqui), la decision se basa enteramente en lo que la extraccion de
 IA pudo citar.
+
+Solo acredita politicas **vigentes**: una negacion o un plan no sostienen el criterio (docs/09
+§106). Y una negacion de otra politica nombrada -- "no existe una politica de gestion del riesgo de
+proveedores" -- no habla de la politica de ciberseguridad que evalua este criterio, asi que no lo
+pone en 0 (docs/09 §109).
 """
 
 from __future__ import annotations
 
 from datetime import date
 
-from app.evaluation.rules._common import by_type, silencio_documental
+from app.evaluation.rules._common import by_type, es_vigente, silencio_documental
 from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-GV-01"
-CRITERION_VERSION = 1
+CRITERION_VERSION = 2
 
 _FRECUENCIA_DIAS = {
     "mensual": 31,
@@ -61,7 +66,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             " la existencia de una politica de ciberseguridad.",
         )
 
-    encontradas = [c for c in exists_claims if c.value["encontrado"]]
+    encontradas = [c for c in exists_claims if es_vigente(c)]
     if not encontradas:
         return silencio_documental(
             CRITERION_ID,

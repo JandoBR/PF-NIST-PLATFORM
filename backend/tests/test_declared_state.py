@@ -511,3 +511,100 @@ def test_mid_run_1_inventory_and_process_criteria_are_not_left_without_evidence(
 
     assert resultado.estado == Estado.EVALUADO
     assert resultado.final_score is not None
+
+
+# -- faceta de la politica: negar la de proveedores no niega la de seguridad (docs/09 §109) -----
+
+TEXTO_POLITICA_PROVEEDORES = (
+    "No existe por ahora un programa ni una politica de gestion del riesgo de proveedores"
+)
+TEXTO_POLITICA_SEGURIDAD = (
+    "La presente Politica de Seguridad de la Informacion fue aprobada por la Direccion General el"
+    " 15 de marzo de 2025 y aplica a todos los sistemas y empleados de la organizacion."
+)
+
+
+def _mid_run_1_policy_claims() -> list[EvidenceInstance]:
+    """Las dos `policy_exists` de `e_mid_1.json` que dejaban GV-01 en `evidencia_insuficiente`."""
+
+    return [
+        _claim(
+            "policy_exists",
+            {"nombre": "politica de gestion del riesgo de proveedores"},
+            estado="inexistente",
+            doc="gobierno-y-proveedores",
+            cita=TEXTO_POLITICA_PROVEEDORES,
+            confianza=0.8,
+        ),
+        _claim(
+            "policy_exists",
+            {
+                "nombre": "Politica de Seguridad de la Informacion",
+                "aprobada_por": "Direccion General",
+            },
+            doc="politica-seguridad",
+            cita=TEXTO_POLITICA_SEGURIDAD,
+            confianza=0.95,
+        ),
+    ]
+
+
+def test_a_denied_supplier_policy_does_not_sink_the_security_policy_criterion(methodology):
+    proveedores, seguridad = _mid_run_1_policy_claims()
+
+    assert [c for c in detect([proveedores, seguridad]) if c.criterion_id == "CRI-GV-01"] == []
+
+    resultado = _evaluate(methodology, [proveedores, seguridad], "CRI-GV-01")
+
+    assert resultado.estado == Estado.EVALUADO
+    assert resultado.final_score == 75
+    assert seguridad.id in resultado.evidence_ids
+
+
+def test_a_denied_policy_with_the_same_name_in_another_document_is_still_a_contradiction(
+    methodology,
+):
+    _, seguridad = _mid_run_1_policy_claims()
+    negacion = seguridad.model_copy(
+        update={
+            "subject_ref": "doc:diagnostico",
+            "locator": Locator(file="diagnostico.md"),
+            "value": {**seguridad.value, "estado_declarado": "inexistente"},
+        }
+    )
+
+    contradicciones = [c for c in detect([negacion, seguridad]) if c.criterion_id == "CRI-GV-01"]
+    assert len(contradicciones) == 1
+    assert set(contradicciones[0].excluded_claim_ids) == {negacion.id, seguridad.id}
+
+    resultado = _evaluate(methodology, [negacion, seguridad], "CRI-GV-01")
+    assert resultado.estado == Estado.EVIDENCIA_INSUFICIENTE
+
+
+def test_a_bare_denial_of_the_policy_still_scores_zero(methodology):
+    """Sin nombre, la negacion habla de "una politica" en general: no hay politica que acreditar."""
+
+    negacion = _claim(
+        "policy_exists",
+        {},
+        estado="inexistente",
+        doc="diagnostico",
+        cita="No existe una politica de seguridad",
+    )
+
+    resultado = _evaluate(methodology, [negacion], "CRI-GV-01")
+
+    assert resultado.estado == Estado.NO_IMPLEMENTADO
+    assert resultado.final_score == 0
+
+
+def test_a_bare_denial_contradicts_any_named_policy(methodology):
+    """Una negacion sin nombre dice que no hay politica alguna: contradice a la nombrada."""
+
+    _, seguridad = _mid_run_1_policy_claims()
+    negacion = _claim("policy_exists", {}, estado="inexistente", doc="diagnostico")
+
+    assert len([c for c in detect([negacion, seguridad]) if c.criterion_id == "CRI-GV-01"]) == 1
+
+    resultado = _evaluate(methodology, [negacion, seguridad], "CRI-GV-01")
+    assert resultado.estado == Estado.EVIDENCIA_INSUFICIENTE

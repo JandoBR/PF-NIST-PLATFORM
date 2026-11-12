@@ -3926,3 +3926,69 @@ y la negación vacía de `data_inventory`; se conserva la negación vacía que e
 otro documento sigue siendo contradicción visible; los cuatro criterios de `mid` con los valores
 reales de la corrida 1). Suite completa: **1036 passed, 2 skipped**; `ruff check` y
 `ruff format --check` limpios.
+
+## 109. La política de proveedores ausente hundía la política de seguridad, y un proceso de riesgos sin `pasos` caía al mínimo
+
+**Síntoma.** Al verificar que los replays del store reproducen la corrida en vivo de los escenarios
+demo (`a_mid`/`a_good` frente a `*_1`/`*_2`) aparecieron dos diferencias de puntaje que no venían
+del replay, sino de las reglas:
+
+- `mid` bajaba de **Tier 2** a **Tier 1** por `CRI-GV-01 con evidencia insuficiente`, aunque
+  `politica-seguridad.md` declara una política aprobada por la Dirección General.
+- `good` bajaba de **Tier 3** a **Tier 1** porque `CRI-ID-03` quedaba por debajo del mínimo de 50
+  del Tier 4, aunque el proceso de riesgos declaraba registro, priorización, impactos y
+  probabilidades.
+
+**Causa.**
+
+1. `contradictions._absence_disagreement` agrupaba por `(scope, tipo_afirmacion)` y, desde §108, por
+   la faceta de `process_defined`; `policy_exists` seguía teniendo una sola faceta. En `mid`,
+   `gobierno-y-proveedores.md` emite `policy_exists {nombre: "politica de gestion del riesgo de
+   proveedores"}` con `estado_declarado: inexistente` y `politica-seguridad.md` emite `policy_exists
+   {nombre: "Politica de Seguridad de la Informacion"}` vigente. Son dos prácticas distintas —negar
+   que exista una política de proveedores no dice nada de la política de seguridad—, pero la
+   contradicción documento-vs-documento excluía **ambas** afirmaciones para GV-01 y el criterio
+   quedaba sin evidencia. `gv01_policy` tampoco distinguía: elegía la afirmación de mayor confianza
+   entre vigentes y negaciones, y `aplicar_estado_declarado` aplicaba cualquier negación del tipo.
+2. `id03_risk_assessment` exigía `contenido.pasos` para todo tramo por encima de 25. `pasos` es
+   texto libre que el prompt pide y el modelo omite a menudo: en `good` la afirmación real trae
+   `registro_riesgos`, `priorizacion`, `impactos` y `probabilidades`, pero no `pasos`, y la regla
+   respondía "descrita de forma genérica, sin pasos concretos". Que un campo opcional no venga no
+   es evidencia de que el proceso sea genérico (docs/01 §3).
+
+**Cambio.**
+
+- `_common.faceta` da a `policy_exists` la faceta de la política que nombra, normalizada
+  (minúsculas, sin tildes y sin el prefijo "política de"); una afirmación sin nombre es genérica
+  (`*`), habla de "una política" cualquiera y sí contradice a una nombrada. `facetas_compatibles`
+  decide la comparación y la usan tanto `contradictions._absence_disagreement` (que ahora agrupa
+  por scope y tipo y empareja cada negación con las vigentes de faceta compatible) como
+  `_common.aplicar_estado_declarado`.
+- `gv01_policy` solo acredita afirmaciones **vigentes** (`_common.es_vigente`): una negación o un
+  plan de otra política no elige el tramo ni se cita. Si no hay ninguna vigente, la negación citada
+  sigue llevando el criterio a 0 por `aplicar_estado_declarado`, y una negación sin nombre sigue
+  contradiciendo a la nombrada. `pr01_encryption`, el otro consumidor de `policy_exists` (solo
+  como contexto), también filtra a vigentes para no citar una negación como "política documentada".
+- `id03_risk_assessment` pasa a cinco anclas: 100 con `pasos` + registro/priorización +
+  impactos/probabilidades; 75 con registro/priorización + impactos/probabilidades aunque falte
+  `pasos`; 75 con `pasos` + registro/priorización pero sin impactos/probabilidades (falta
+  `ID.RA-04`); 50 solo con `pasos`; 25 sin nada de lo anterior.
+
+`docs/03` actualiza las fichas de GV-01 y ID-03, `docs/01 §3` recuerda que la negación se compara
+por la política que nombra, y `criteria.yml` sube a **v27** (GV-01 v2, ID-03 v3). Sin cambios de
+prompt ni de adaptador: `PROMPT_VERSION` y `ADAPTER_VERSION` quedan igual.
+
+**Evidencia.**
+
+| Escenario | Replay antes | Con el arreglo |
+|---|---|---|
+| `mid` `CRI-GV-01` | `evidencia_insuficiente` (la negación de la política de proveedores contradecía la de seguridad) | `evaluado` 75, cita `politica-seguridad.md`; Tier 2 |
+| `good` `CRI-ID-03` | por debajo de 50 por falta de `pasos` (Tier 4 exige ≥ 50) | 75, con el registro, la priorización y los impactos/probabilidades declarados |
+
+**Verificación.** `tests/test_declared_state.py` (los dos `policy_exists` reales de `e_mid_1.json`
+no contradicen y GV-01 se evalúa; la misma política negada en otro documento sigue siendo
+contradicción visible; una negación sin nombre sigue llevando el criterio a 0 y contradiciendo a la
+nombrada), `tests/test_cr01_mvp_criteria.py` (las cinco anclas de ID-03, incluida
+registro + impactos + probabilidades sin `pasos` = 75), `tests/test_contradictions.py` y
+`tests/test_gv01_policy_rule.py`. Suite completa: **1043 passed, 2 skipped**; `ruff check` y
+`ruff format --check` limpios.

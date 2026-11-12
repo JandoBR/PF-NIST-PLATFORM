@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -104,6 +105,16 @@ def es_plan_declarado(claim: EvidenceInstance) -> bool:
     )
 
 
+def es_vigente(claim: EvidenceInstance) -> bool:
+    """La afirmacion declara la practica vigente hoy: ni ausencia declarada ni plan futuro."""
+
+    return (
+        bool(claim.value.get("encontrado"))
+        and claim.limitations is None
+        and estado_declarado(claim) == ESTADO_VIGENTE
+    )
+
+
 #: Proceso declarado (`process_defined.contenido.proceso`) -> faceta canonica. `process_defined`
 #: sirve a criterios distintos segun el proceso, asi que negar "otro" no niega la practica de
 #: respuesta ni la de riesgos (docs/09 §108).
@@ -136,16 +147,57 @@ def proceso_faceta(claim: EvidenceInstance) -> str | None:
     return None
 
 
+#: Faceta de una `policy_exists` que no nombra ninguna politica: la afirmacion habla de "una
+#: politica" en general y contradice a cualquiera que se nombre (docs/09 §109).
+POLITICA_GENERICA = "*"
+
+
+def _texto_normalizado(texto: str) -> str:
+    plano = unicodedata.normalize("NFKD", texto)
+    sin_tildes = "".join(c for c in plano if not unicodedata.combining(c))
+    return " ".join(sin_tildes.casefold().split())
+
+
+def politica_faceta(claim: EvidenceInstance) -> str:
+    """La politica que nombra una `policy_exists`, normalizada; `POLITICA_GENERICA` si no nombra
+    ninguna.
+
+    Dos documentos que niegan y afirman politicas distintas -- la de proveedores y la de seguridad
+    de la informacion -- no son la misma practica: sin separarlas, la negacion de una ponia el
+    criterio de la otra en `evidencia_insuficiente` (docs/09 §109)."""
+
+    nombre = _texto_normalizado(str((claim.value.get("contenido") or {}).get("nombre") or ""))
+    for prefijo in ("politica de ", "politica del ", "politica ", "policy of ", "policy "):
+        if nombre.startswith(prefijo):
+            nombre = nombre.removeprefix(prefijo)
+            break
+    return _texto_normalizado(nombre) or POLITICA_GENERICA
+
+
 def faceta(claim: EvidenceInstance) -> tuple[str, ...]:
     """Que practica declara la afirmacion, para no mezclar facetas de un mismo tipo.
 
     Un `process_defined` de respuesta y uno de recuperacion son practicas distintas aunque
-    compartan el tipo; el resto de tipos declara una sola faceta (docs/09 §108)."""
+    compartan el tipo, igual que dos `policy_exists` que nombran politicas distintas; el resto de
+    tipos declara una sola faceta (docs/09 §108, §109)."""
 
     tipo = str(claim.value.get("tipo_afirmacion"))
     if tipo == "process_defined":
         return (tipo, proceso_faceta(claim) or "")
+    if tipo == "policy_exists":
+        return (tipo, politica_faceta(claim))
     return (tipo,)
+
+
+def facetas_compatibles(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
+    """Las dos afirmaciones describen la misma practica.
+
+    Una `policy_exists` sin nombre habla de cualquier politica, asi que contradice a una nombrada;
+    dos politicas con nombres distintos son practicas distintas (docs/09 §109)."""
+
+    if a == b:
+        return True
+    return a[0] == b[0] == "policy_exists" and POLITICA_GENERICA in (a[1], b[1])
 
 
 def _declaraciones(claims: list[EvidenceInstance], tipo: str) -> list[EvidenceInstance]:
@@ -189,7 +241,8 @@ def aplicar_estado_declarado(
 
     Solo cuentan las declaraciones de la **misma faceta** que el criterio cito: `RS-01` lee el
     `process_defined` de respuesta y la negacion de "recuperacion" pertenece a `RC-01`, no a el
-    (docs/09 §108)."""
+    (docs/09 §108). Lo mismo con `policy_exists`: la negacion de la politica de proveedores no
+    habla de la politica de seguridad de la informacion (docs/09 §109)."""
 
     if (
         resultado.estado in (Estado.ERROR, Estado.NO_APLICABLE)
@@ -206,7 +259,11 @@ def aplicar_estado_declarado(
 
     for tipo in sorted({str(c.value.get("tipo_afirmacion")) for c in citadas}):
         facetas = {faceta(c) for c in citadas if str(c.value.get("tipo_afirmacion")) == tipo}
-        declaraciones = [c for c in _declaraciones(todas, tipo) if faceta(c) in facetas]
+        declaraciones = [
+            c
+            for c in _declaraciones(todas, tipo)
+            if any(facetas_compatibles(faceta(c), f) for f in facetas)
+        ]
         negadas = [c for c in declaraciones if estado_declarado(c) == ESTADO_INEXISTENTE]
         planes = [c for c in declaraciones if estado_declarado(c) == ESTADO_PLANIFICADO]
         if not negadas and not planes:

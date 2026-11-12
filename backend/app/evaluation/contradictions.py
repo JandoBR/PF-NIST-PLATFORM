@@ -29,12 +29,14 @@ from collections.abc import Callable, Iterable
 from pydantic import BaseModel
 
 from app.evaluation.rules._common import (
+    POLITICA_GENERICA,
     best_found,
     by_type,
     doc_claims,
     es_ausencia_declarada,
     estado_declarado,
     faceta,
+    facetas_compatibles,
     proceso_faceta,
 )
 from app.evaluation.rules.pr02_backup import retencion_politica_dias
@@ -247,40 +249,50 @@ def _absence_disagreement(evidence: list[EvidenceInstance]) -> list[Contradictio
 
     Se compara por **faceta**, no solo por tipo: una negacion del proceso de recuperacion no
     contradice el proceso de respuesta de otro documento, y antes excluia sus afirmaciones del
-    criterio equivocado (docs/09 §108). Es el caso de borde de `aplicar_estado_declarado`: la
-    ausencia no se impone sobre otro documento. Se registran ambos lados y, como en cualquier
-    documento-vs-documento, ninguno cuenta para puntuar el criterio afectado; sin exclusion, la
-    regla acreditaria la version vigente y la negacion quedaria invisible."""
+    criterio equivocado (docs/09 §108). Una `policy_exists` se compara por la politica que nombra:
+    negar la politica de proveedores no contradice la politica de seguridad de la informacion, que
+    es la que evalua GV-01 (docs/09 §109); una negacion sin nombre sigue hablando de cualquier
+    politica. Es el caso de borde de `aplicar_estado_declarado`: la ausencia no se impone sobre
+    otro documento. Se registran ambos lados y, como en cualquier documento-vs-documento, ninguno
+    cuenta para puntuar el criterio afectado; sin exclusion, la regla acreditaria la version
+    vigente y la negacion quedaria invisible."""
 
     claims = [
         c
         for c in by_type(evidence, "doc.claim")
         if c.value.get("encontrado") and c.limitations is None
     ]
-    grupos: dict[tuple[str, tuple[str, ...]], list[EvidenceInstance]] = {}
+    grupos: dict[tuple[str, str], list[EvidenceInstance]] = {}
     for claim in claims:
-        clave = (claim.scope, faceta(claim))
+        clave = (claim.scope, str(claim.value.get("tipo_afirmacion")))
         grupos.setdefault(clave, []).append(claim)
 
     findings: list[Contradiction] = []
     for clave, grupo in sorted(grupos.items()):
-        tipo = str(grupo[0].value.get("tipo_afirmacion"))
-        ausencias = [c for c in grupo if es_ausencia_declarada(c)]
-        vigentes = [c for c in grupo if estado_declarado(c) == "vigente"]
-        if not ausencias or not vigentes:
+        tipo = clave[1]
+        pares = [
+            (ausencia, vigente)
+            for ausencia in grupo
+            if es_ausencia_declarada(ausencia)
+            for vigente in grupo
+            if estado_declarado(vigente) == "vigente"
+            and ausencia.subject_ref != vigente.subject_ref
+            and facetas_compatibles(faceta(ausencia), faceta(vigente))
+        ]
+        if not pares:
             continue
-        documentos = {c.subject_ref for c in grupo}
-        if len(documentos) < 2:
-            continue
+        ausencias = _unique_claims(ausencia for ausencia, _ in pares)
+        vigentes = _unique_claims(vigente for _, vigente in pares)
         lados = [lado for lado in (best_found(ausencias), best_found(vigentes)) if lado is not None]
-        if len({c.subject_ref for c in lados}) < 2:
-            continue
         criterios = sorted(
             {criterio for claim in ausencias + vigentes for criterio in _criterios_de(claim)}
         )
         if not criterios:
             continue
-        practica = tipo if len(clave[1]) == 1 or not clave[1][1] else f"{tipo} ({clave[1][1]})"
+        facetas = sorted(
+            {nombre for claim in ausencias + vigentes if (nombre := _faceta_nombre(claim))}
+        )
+        practica = tipo if len(facetas) != 1 else f"{tipo} ({facetas[0]})"
         detalle = (
             f"{' y '.join(sorted({c.subject_ref for c in ausencias}))} declara que {practica} no"
             f" existe; {' y '.join(sorted({c.subject_ref for c in vigentes}))} lo declara vigente."
@@ -294,7 +306,7 @@ def _absence_disagreement(evidence: list[EvidenceInstance]) -> list[Contradictio
                     "media",
                     detalle,
                     [c.id for c in lados],
-                    [c.id for c in grupo],
+                    [c.id for c in ausencias + vigentes],
                 )
             )
     return findings
@@ -307,6 +319,16 @@ def _frecuencia(claim: EvidenceInstance) -> str | None:
 
 def _unique(ids: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(ids))
+
+
+def _faceta_nombre(claim: EvidenceInstance) -> str:
+    clave = faceta(claim)
+    nombre = clave[1] if len(clave) > 1 else ""
+    return "" if nombre == POLITICA_GENERICA else nombre
+
+
+def _unique_claims(claims: Iterable[EvidenceInstance]) -> list[EvidenceInstance]:
+    return sorted({claim.id: claim for claim in claims}.values(), key=lambda c: c.id)
 
 
 def detect(evidence: list[EvidenceInstance]) -> list[Contradiction]:

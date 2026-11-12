@@ -5,8 +5,11 @@ riesgos de otros procesos (p. ej. recuperacion, CRI-RC-01) que comparten el mism
 afirmacion.
 
 Cinco anclas en vez de tres, porque el criterio cubre cinco subcategorias y antes no las
-distinguia: `impactos`/`probabilidades` son `ID.RA-04` y solo con ellas se llega al 100. Un proceso
-con pasos pero sin registro ni priorizacion evidencia `ID.RA-01` y nada mas, asi que baja a 50
+distinguia: `impactos`/`probabilidades` son `ID.RA-04` y solo con ellas se llega al 100. Las
+facetas del proceso (`registro_riesgos`, `priorizacion`, `impactos`, `probabilidades`) ya
+documentan el proceso aunque el documento no enumere `pasos`: el prompt los pide como texto libre y
+el modelo suele omitirlos, y una ausencia en el texto extraido no es evidencia de que el proceso sea
+generico (docs/01 §3). Un proceso solo con pasos evidencia `ID.RA-01` y nada mas, asi que baja a 50
 (antes daba 75).
 """
 
@@ -23,7 +26,7 @@ from app.evaluation.schemas import CriterionResult, Estado
 from app.schemas.evidence import EvidenceInstance
 
 CRITERION_ID = "CRI-ID-03"
-CRITERION_VERSION = 2
+CRITERION_VERSION = 3
 
 
 def _es_de_riesgos(claim: EvidenceInstance) -> bool:
@@ -83,6 +86,15 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             100,
             "Proceso de evaluacion de riesgos documentado, con registro, priorizacion y los"
             " impactos/probabilidades de cada riesgo.",
+            ids,
+        )
+    if registrados and cuantificados:
+        return result(
+            CRITERION_ID,
+            Estado.EVALUADO,
+            75,
+            "Proceso de evaluacion de riesgos documentado con registro, priorizacion e impactos/"
+            "probabilidades de cada riesgo, sin pasos detallados en el documento.",
             ids,
         )
     if contenido.get("pasos") and registrados:
