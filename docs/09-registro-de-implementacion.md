@@ -4140,3 +4140,95 @@ vuelta JSON. `tests/test_api_assessments.py` comprueba los campos en la respuest
 pipeline regenerados (solo los campos nuevos del Tier). Verificación focalizada: 75 pruebas
 backend, `ruff check`/`ruff format --check` limpios, y en copia temporal del frontend `typecheck`,
 `lint` y `build` sin errores.
+
+## 113. El voto perdía todo el texto libre: ahora vota la presencia, el medoide y las listas por parecido
+
+**Síntoma.** `CRI-RC-01` no subía de 75 aunque el procedimiento narrara sus pasos, `CRI-ID-03` se
+quedaba en 25 en `mid` por falta de `pasos`, y `GV-02` perdía la lista de roles escrita en prosa
+(§110, §111). No era la extracción: era el voto. Cada campo se comparaba por igualdad exacta tras
+`casefold`: dos corridas que describían los mismos pasos con otras palabras no coincidían y el campo
+se borraba. Las reglas, en cambio, preguntan solo si el campo trae algo (`contenido.get("pasos")`).
+
+**Cambio.** `voting.py` clasifica cada campo de `contenido` por cómo lo consume la regla
+(`_CAMPOS_POR_TIPO`, una sola tabla junto al voto; un campo nuevo sin entrada se compara exacto y
+`tests/test_ai_voting.py` comprueba que no se separe de `extraction._CONTENT_FIELDS`):
+
+- **cerrado**: booleanos, enums (`proceso`, `frecuencia`, `estado_declarado`), fechas ISO y las
+  cantidades que `numbers.py` ya normalizó (`retencion`, `tolerancia`, `plazos`,
+  `criterios_activacion`). Igualdad exacta como antes.
+- **presencia**: texto libre que la regla solo mira como verdad (`pasos`, `responsables`,
+  `objetivos_riesgo`, `nombre`, `aprobada_por`, `clasificacion`, `criterios`, `niveles`, `mision`,
+  `descripcion`, `responsable`). Sobrevive si está en la mayoría estricta de las corridas del grupo,
+  redactado como sea; se guarda el **medoide** (mayor similitud media al resto, Jaccard de tokens
+  sin tildes + `difflib`; empates por confianza, texto y corrida).
+- **lista**: `activos`, `tipos_datos`, `destinatarios`, `partes_interesadas`, `requisitos_legales`,
+  `servicios_criticos`, `dependencias`. Los elementos se emparejan con Jaccard ≥ 0,6 o contención de
+  tokens, y sobreviven en la mayoría de las corridas.
+- **lista de objetos**: `roles` por `rol` (Jaccard 0,5) y `criticidad` por `activo`; componentes
+  conexas para no partir la lista cuando una corrida usa el nombre completo y otra el acrónimo, y
+  cada subcampo se resuelve como presencia o cerrado.
+
+Las corridas se ordenan por el contenido de sus afirmaciones (valor, locutor, id) antes de votar, no
+por el orden en que llegaron: el mismo conjunto de corridas produce el mismo resultado en cualquier
+orden, y con ello también la cita, el locator y el orden de las listas. El agrupamiento sigue siendo
+`(tipo, proceso)` para `process_defined`; `estado_declarado` y el resto de los invariantes (§108) no
+cambian. `store.FORMATO` sube a **4**: lo guardado por el voto viejo se reextrae en vez de
+reutilizarse.
+
+**Medición (mismas corridas crudas, antes/después).** Con el cliente y el prompt de producción
+(`extract_v7`, razonamiento activo) se recolectaron **6 corridas por chunk** de los 18 chunks de
+`frontend/public/demo/{good,mid,gaps}/documents` más los dos documentos de `mid` anteriores a §111
+(`riesgos-e-inventario.md` y `roles.md` de `a643a21`, cuando la lista de roles y los pasos estaban en
+prosa): 108 llamadas reales. Sobre esas mismas corridas se formaron 20 triplas aleatorias por chunk
+(semilla fija, 360 triplas) y se votó con el módulo de `HEAD` y con el nuevo.
+
+| Métrica | Voto anterior | Voto nuevo |
+|---|---|---|
+| Supervivencia de los campos de texto libre declarados en el documento | 83,1 % (881/1060) | **99,5 % (1055/1060)** |
+| Supervivencia cuando ≥ 2 de las 3 corridas traían el campo | 83,5 % | **100 %** |
+| Campos de presencia que solo traía 1 de 3 corridas y sobrevivieron | 7/73 (9,6 %) | 7/73 (9,6 %) |
+| … excluyendo grupos ambiguos (una corrida con dos `policy_exists` del mismo tipo) | 0/39 | 0/39 |
+| Estabilidad: triplas idénticas al resultado modal (texto exacto) | 53,9 % | 45,3 % |
+| Estabilidad: mismas decisiones de presencia | 60,0 % | **67,2 %** |
+
+Por campo, la supervivencia pasó de 5 % a 100 % en `process_defined.respuesta.pasos`, de 11,7 % a
+100 % en `process_defined.riesgos.pasos`, de 15 % a 100 % en los pasos de análisis, contención y
+mejora, de 66,7 % a 100 % en `role_assigned.roles` y de 95 % a 100 % en `escalation_path.niveles`.
+`risk_tolerance.responsable` se queda en 91,7 % porque el modelo solo lo escribió en 1 de las 6
+corridas: es disponibilidad, no voto.
+
+**Reglas afectadas sobre la evidencia votada** (20 sesiones por escenario, media ± desviación típica
+del puntaje base; sin logs, solo afirmaciones documentales):
+
+| Escenario · criterio | Voto anterior | Voto nuevo |
+|---|---|---|
+| `mid-old` · GV-02 | 25,0 ± 0,0 | **75,0 ± 0,0** |
+| `mid-old` · ID-03 | 26,2 ± 5,4 (25/50) | **50,0 ± 0,0** |
+| `mid` · ID-03 | 75,0 ± 0,0 | **100,0 ± 0,0** |
+| `good` · ID-03 | 88,8 ± 12,4 (75/100) | **100,0 ± 0,0** |
+| `good` · RC-01 | 80,0 ± 17,0 (50/75/100) | **86,2 ± 12,4** (75/100) |
+| `good` · RS-01 | 50,0 ± 0,0 | 56,2 ± 10,8 (50/75) |
+| `good` · RS-04 | 56,2 ± 10,8 (50/75) | **75,0 ± 0,0** |
+| `mid` · RS-04 | 50,0 ± 0,0 | 66,2 ± 11,9 (50/75) |
+| `gaps` · GV-02 | 45,0 ± 10,0 (25/50) | **50,0 ± 0,0** |
+
+El 75 de `mid`/ID-03 en §111 era un artefacto del voto: el proceso declara `pasos` además de
+registro, priorización, impactos y probabilidades, así que la regla da 100. No se tocaron documentos,
+criterios ni reglas para compensarlo; el cambio de puntaje es el que corresponde a la evidencia que
+el documento ya declaraba.
+
+**Pruebas.** `tests/test_ai_voting.py` gana casos por clase: parcelas de texto libre con la misma
+idea y distintas palabras que sobreviven, una que solo trae 1 de 3 y no sobrevive, mayoría del grupo,
+medoide determinista y orden-independiente (incluida cita y orden de lista), listas con sinónimos,
+lista de 1 corrida descartada, roles emparejados por nombre con autoridad en 2 de 3, criticidad por
+activo, cantidades exactas y una cantidad en palabras que no se empareja porque la normalización es
+de la extracción, y la tabla de clases cubre todos los tipos de `_CONTENT_FIELDS`. Verificación
+focalizada: 28 pruebas de voto, más extracción, store y cache. Suite completa: **1066 passed,
+2 skipped**; `ruff check` y `ruff format --check` limpios.
+
+**Límites.** Dos redacciones sin ningún token en común siguen sin emparejarse (no se inventa
+similitud semántica); una corrida que emite dos afirmaciones del mismo tipo (dos `policy_exists` en
+el mismo chunk) sigue eligiendo una sola al agrupar, y eso puede perder el `nombre` de la otra
+(fuente de los 7 casos "espurios", iguales antes y después); y la estabilidad de texto exacto baja
+porque ahora se conservan paráfrasis válidas que antes se descartaban, aunque las decisiones de
+presencia son más estables.

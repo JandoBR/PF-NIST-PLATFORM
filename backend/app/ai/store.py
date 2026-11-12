@@ -17,6 +17,8 @@ Asi la misma evidencia con UUIDs distintos (otra evaluacion, otro contenedor) es
 
 `FORMATO` entra en `params_hash`: subirla invalida lo guardado cuando cambia la forma de lo que
 se persiste (docs/09 §108, donde una fila vieja se reprodujo sin `estado_declarado`).
+FORMATO 4: el voto por presencia y medoide cambia lo que se guarda para los campos de texto libre
+y de lista (docs/09 §113); un resultado de FORMATO 3 tiene que reextraerse en vez de reutilizarse.
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ from app.ai.calllog import current_context, log_call
 from app.core.db import build_session_factory
 from app.models.tables import AIResult
 
-FORMATO = 3
+FORMATO = 4
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session, sessionmaker
