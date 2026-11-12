@@ -65,7 +65,7 @@
 # v27: la faceta de `policy_exists` es la politica que nombra: negar la de proveedores no pone en 0
 #      ni contradice el criterio de la politica de seguridad. ID-03 documenta el proceso por sus
 #      facetas aunque el modelo omita `pasos` (docs/09 §109).
-version: 27
+version: 28
 criterios:
   - id: CRI-GV-01
     version: 2
@@ -496,7 +496,7 @@ criterios:
       tipos_afirmacion: [process_defined]
 
   - id: CRI-RC-01
-    version: 1
+    version: 2
     titulo: "Procedimiento de recuperacion definido y ejecutable"
     tipo: proceso
     funcion: RC

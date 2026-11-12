@@ -75,12 +75,15 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             "Procedimiento de recuperacion con pasos, responsables y criterios de activacion.",
             ids,
         )
-    if contenido.get("pasos"):
+    if contenido.get("pasos") or (
+        contenido.get("criterios_activacion") and contenido.get("responsables")
+    ):
         return result(
             CRITERION_ID,
             Estado.EVALUADO,
             75,
-            "Procedimiento de recuperacion definido, sin criterios de activacion.",
+            "Procedimiento de recuperacion definido (responsables y criterios de activacion),"
+            " sin pasos narrados o incompleto.",
             ids,
         )
     return result(

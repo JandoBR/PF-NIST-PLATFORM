@@ -480,6 +480,25 @@ def test_rc01_los_criterios_de_activacion_pueden_venir_en_otro_fragmento():
     assert set(result.evidence_ids) == {procedimiento.id, activacion.id}
 
 
+def test_rc01_responsables_y_activacion_sin_pasos_es_75():
+    evidence = [
+        _claim(
+            "process_defined",
+            {
+                "proceso": "recuperacion",
+                "responsables": "Jefe de Infraestructura",
+                "criterios_activacion": "sitio principal caido mas de 2 horas",
+            },
+        )
+    ]
+    assert rc01_recovery_procedure.evaluate(evidence).final_score == 75
+
+
+def test_rc01_mencion_generica_sigue_siendo_50():
+    evidence = [_claim("process_defined", {"proceso": "recuperacion"})]
+    assert rc01_recovery_procedure.evaluate(evidence).final_score == 50
+
+
 def test_rc01_solo_backup_policy_es_50():
     evidence = [_claim("backup_policy", {"respaldo": True, "verificacion_integridad": True})]
     assert rc01_recovery_procedure.evaluate(evidence).final_score == 50

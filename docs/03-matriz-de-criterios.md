@@ -464,8 +464,9 @@ Resumen de cobertura del catálogo:
 - **Evidencias:** `doc.claim(tipo=process_defined)`, `doc.claim(tipo=backup_policy)`
 - **Regla:**
   - 100: procedimiento de recuperación con pasos, responsables y criterios de activación.
-  - 75: procedimiento con pasos, sin criterios de activación o sin responsables.
-  - 50: recuperación mencionada de forma genérica (sin pasos), o solo una política de backups sin procedimiento de recuperación.
+  - 75: procedimiento definido con responsables y criterios de activación aunque no narre los pasos, o con pasos y sin uno de los otros dos.
+  - 50: recuperación mencionada de forma genérica (sin pasos, sin responsables ni criterios de activación), o solo una política de backups sin procedimiento de recuperación.
+  - La falta de `pasos` (texto libre) no basta para bajar a 50: si el documento declara responsables y criterios de activación, el procedimiento está definido (docs/09 §110).
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
   - Un documento que declara que **no existe un procedimiento de recuperación** (`estado_declarado: inexistente`) da evidencia explícita de ausencia: 0, aunque una política de backups se mencione aparte (docs/09 §106).
   - Sin afirmaciones de proceso ni de backups → `evidencia_insuficiente`.

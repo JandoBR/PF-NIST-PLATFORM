@@ -3992,3 +3992,19 @@ nombrada), `tests/test_cr01_mvp_criteria.py` (las cinco anclas de ID-03, incluid
 registro + impactos + probabilidades sin `pasos` = 75), `tests/test_contradictions.py` y
 `tests/test_gv01_policy_rule.py`. Suite completa: **1043 passed, 2 skipped**; `ruff check` y
 `ruff format --check` limpios.
+## 110. CRI-RC-01 bajaba a 50 por un campo de texto libre que el modelo no siempre escribe
+
+La verificación en vivo contra el almacén destapó que `CRI-RC-01` exigía `contenido.pasos` para
+subir de 50, igual que `CRI-ID-03` antes de §109. El escenario conforme declara el proceso de
+recuperación con responsable y criterio de activación —«si el sitio principal permanece caído más
+de dos horas»— y aun así caía a «recuperación mencionada de forma genérica», que además no era
+cierto. La ausencia de un campo de texto libre no es evidencia de que el procedimiento no exista
+(docs/01: el silencio no es ausencia).
+
+- 100: pasos, responsables y criterios de activación.
+- **75: responsables y criterios de activación aunque no narre los pasos**, o pasos sin uno de los
+  otros dos.
+- 50: mención genérica sin ninguno de los tres, o solo política de backups.
+
+`criteria.yml` sube a v28 y `CRI-RC-01` a v2; docs/03 recoge los anclas. Dos pruebas nuevas: el
+caso real (responsable + activación, sin pasos → 75) y la mención genérica (→ 50).
