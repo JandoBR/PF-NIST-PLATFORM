@@ -2,14 +2,20 @@
 
 ## Responsables
 
-El Oficial de Seguridad de la Informacion (CISO) es Marta Quintero. Es responsable del programa de
-seguridad y tiene autoridad para detener despliegues que incumplan la politica.
+- Rol: Oficial de Seguridad de la Informacion (CISO)
+- Responsable: Marta Quintero
+- Responsabilidades: programa de seguridad
+- Autoridad: detener despliegues que incumplan la politica
 
-El Jefe de Infraestructura, Luis Paredes, es responsable de la configuracion segura de los servidores
-y bases de datos, y tiene autoridad para aplicar cambios de emergencia.
+- Rol: Jefe de Infraestructura
+- Responsable: Luis Paredes
+- Responsabilidades: configuracion segura de servidores y bases de datos
+- Autoridad: aplicar cambios de emergencia
 
-La Gerente de Operaciones, Ana Rojas, es la duena de los activos de la plataforma de pagos y aprueba
-los cambios que la afectan.
+- Rol: Gerente de Operaciones
+- Responsable: Ana Rojas
+- Responsabilidades: activos de la plataforma de pagos y aprobacion de cambios
+- Autoridad: aprobar los cambios que afectan a la plataforma
 
 ## Recursos
 

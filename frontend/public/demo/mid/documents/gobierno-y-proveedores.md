@@ -10,9 +10,9 @@ dependencias externas de la operacion; el equipo de arquitectura lo tiene como p
 
 ## Proveedores
 
-Se trabaja con varios proveedores externos de nube y monitoreo. No existe por ahora un programa ni
-una politica de gestion del riesgo de proveedores: cada area contrata segun su necesidad y los
-contratos no incluyen requisitos de ciberseguridad.
+Se trabaja con varios proveedores externos de nube y monitoreo. No existe por ahora un programa de
+gestion del riesgo de proveedores: cada area contrata segun su necesidad y los contratos no incluyen
+requisitos de ciberseguridad.
 
 ## Concienciacion
 

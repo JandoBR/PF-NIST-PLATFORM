@@ -41,7 +41,10 @@ from app.schemas.evidence import EvidenceInstance, Locator, Modality, Segmento
 #: tecnologicos de ambas secciones (docs/09 §103).
 #: v6: cada afirmacion declara `estado_declarado` (vigente|inexistente|planificado) y se pide
 #: normalizar las cantidades escritas con palabras (docs/09 §106).
-PROMPT_VERSION = "extract_v6"
+#: v7: `process_defined` lleva una afirmacion por proceso distinto en vez de fusionar en una sola
+#: (docs/09 §111). El modelo metia el analisis posterior y la mejora en la afirmacion de
+#: "respuesta" y CRI-RS-02 no encontraba proceso de analisis.
+PROMPT_VERSION = "extract_v7"
 
 #: Limitacion de una afirmacion cuya cita no aparece en el texto analizado (E8).
 CITA_NO_LOCALIZABLE = "cita no localizable en el texto analizado: no cuenta para puntuar"

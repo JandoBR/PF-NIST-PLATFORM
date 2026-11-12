@@ -128,6 +128,31 @@ def test_process_defined_is_clustered_by_proceso_not_just_tipo():
     assert por_proceso["mejora"].value["contenido"]["planes_actualizados"] is True
 
 
+def test_three_processes_survive_even_when_every_run_emits_all_of_them():
+    """El prompt v7 pide una afirmacion por proceso (docs/09 §111): respuesta, analisis y mejora
+    se votan por separado y cada uno conserva sus propios campos, sin fusionarse ni perderse."""
+
+    respuesta = {"proceso": "respuesta", "pasos": "triaje y escalamiento"}
+    analisis = {"proceso": "analisis incidentes", "pasos": "causa raiz y evidencia"}
+    mejora = {"proceso": "mejora", "metricas": True, "ajustes": True}
+    claims = vote(
+        [
+            [
+                _claim(tipo="process_defined", contenido=respuesta),
+                _claim(tipo="process_defined", contenido=analisis),
+                _claim(tipo="process_defined", contenido=mejora),
+            ]
+            for _ in range(3)
+        ]
+    )
+
+    por_proceso = {c.value["contenido"]["proceso"]: c.value["contenido"] for c in claims}
+    assert set(por_proceso) == {"respuesta", "analisis incidentes", "mejora"}
+    assert por_proceso["respuesta"] == respuesta
+    assert por_proceso["analisis incidentes"] == analisis
+    assert por_proceso["mejora"] == mejora
+
+
 def test_citation_and_locator_come_from_the_highest_confidence_run():
     locators = [Locator(file="d.md", section=f"S{indice}") for indice in range(1, 4)]
     claims = vote(

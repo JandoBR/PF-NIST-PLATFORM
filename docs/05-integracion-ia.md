@@ -58,6 +58,17 @@ cantidades a dígitos con su unidad (“noventa días” → “90 días”) sin
 `YYYY-MM-DD`. El extractor descarta una afirmación cuyo estado no reconoce y, al no venir el campo
 (afirmación anterior a v6), lo lee como `vigente`.
 
+**`process_defined` separado por proceso (prompt v7, docs/09 §111).** El prompt v6 pedía reunir en
+una sola afirmación de cada tipo lo que declararan varias secciones; aplicado a `process_defined`,
+el modelo fusionaba el análisis posterior al incidente y la mejora continua dentro de la afirmación
+de `respuesta` (con `ajustes`, `metricas`, `planes_actualizados`), y CRI-RS-02 no encontraba ningún
+proceso de análisis. `extract_v7` mantiene la regla para los demás tipos y, para `process_defined`,
+pide una afirmación por cada proceso distinto: `riesgos`, `respuesta`, `recuperacion`, `revision`,
+`analisis incidentes`, `contencion`, `mejora` u `otro`. Una sección de análisis de causa raíz y
+preservación de evidencia va con `analisis incidentes`; las lecciones aprendidas, con `mejora`; la
+contención y erradicación, con `contencion`. El voto agrupa por `(tipo, proceso)` (docs/05 §2.4), así
+que las tres afirmaciones se conservan por separado.
+
 ### 2.2 Contrato de salida (se valida estrictamente)
 
 ```json
@@ -367,7 +378,7 @@ Usuario (json):
 - Salida por plan con esquema fijo (ver §4.1).
 - Prohibido proponer acciones que ejecuten cambios: los pasos son sugerencias para un humano.
 
-Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v6.txt`,
+Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v7.txt`,
 `adjust_v1.txt`, `plan_v1.txt`). Cambiar un prompt cambia `prompt_version` y se registra en los ajustes.
 
 ## 7. Seguridad
@@ -430,7 +441,7 @@ cuatro cosas, por documento, por categoría y en total:
 Lo adicional que la IA afirme y el texto soporte **no es un error**: los documentos se toman como
 correctos y solo se informa para revisión humana. La evaluación real cuesta dinero y se lanza con
 `python -m app.main eval-ai --confirm-live-ai` (pasa por el guard de IA viva, usa `U1_VOTES=3` y
-el prompt `extract_v6`). Los tests usan un cliente oráculo que responde con la propia anotación:
+el prompt `extract_v7`). Los tests usan un cliente oráculo que responde con la propia anotación:
 no hay llamadas reales en la suite.
 
 **Composición del golden set.** 21 documentos en 15 categorías, 59 afirmaciones esperadas, 14
@@ -458,7 +469,8 @@ si la IA la declara **vigente**: negar o planificar la misma práctica es el com
 esperado.
 
 **Línea base real (DeepSeek `deepseek-flash`, `extract_v6`, votación de 3, 22 chunks / 66
-llamadas).**
+llamadas).** La tabla se midió antes de `extract_v7`; ese cambio solo separa `process_defined` por
+proceso y no altera el resto de tipos (docs/09 §111).
 
 | Categoría | Recall | Precisión |
 |---|---|---|

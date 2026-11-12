@@ -9,10 +9,10 @@ Cuando un riesgo se identifica, el responsable de seguridad decide si se mitiga,
 traslada al proveedor. Todavia no hay un metodo unico de calculo ni lineas de comunicacion del
 riesgo definidas por escrito.
 
-## Proceso de evaluacion de riesgos
+## Registro y evaluacion de riesgos
 
-Una vez al ano el responsable de seguridad identifica las amenazas principales con cada area, estima
-su impacto y acuerda las medidas a tomar.
+El registro de riesgos recoge cada riesgo identificado con el activo afectado, el impacto estimado y
+la probabilidad estimada. El responsable de seguridad mantiene el registro y la priorizacion al dia.
 
 ## Inventario de activos
 

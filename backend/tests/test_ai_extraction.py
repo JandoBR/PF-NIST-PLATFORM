@@ -407,16 +407,20 @@ def test_a_grouped_pdf_chunk_keeps_the_page_of_the_citation():
     assert claim.locator.page == 4
 
 
-def test_prompt_v6_asks_for_each_type_independently_and_the_declared_state():
+def test_prompt_v7_asks_for_each_type_independently_and_the_declared_state():
     """Un chunk agrupado trae varias secciones: la extraccion de un tipo no depende de los demas
-    (docs/09 §103), y una negacion o un plan no se confunde con la practica vigente (§106)."""
+    (docs/09 §103), y una negacion o un plan no se confunde con la practica vigente (§106).
+    `process_defined` es la excepcion: una afirmacion por proceso, sin fusionarlos (§111)."""
 
-    assert PROMPT_VERSION == "extract_v6"
+    assert PROMPT_VERSION == "extract_v7"
     assert "cada tipo solicitado de forma independiente" in _SYSTEM_PROMPT
     assert "varias secciones" in _SYSTEM_PROMPT
     assert "estado_declarado" in _SYSTEM_PROMPT
     assert "inexistente" in _SYSTEM_PROMPT and "planificado" in _SYSTEM_PROMPT
     assert "noventa dias" in _SYSTEM_PROMPT and "90 dias" in _SYSTEM_PROMPT
+    assert "afirmacion por cada proceso distinto" in _SYSTEM_PROMPT
+    assert 'proceso "analisis incidentes"' in _SYSTEM_PROMPT
+    assert '"mejora"' in _SYSTEM_PROMPT
 
 
 def test_data_inventory_fields_include_technology_assets():

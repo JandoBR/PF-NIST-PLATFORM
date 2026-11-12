@@ -2,8 +2,12 @@
 
 ## Responsables
 
-El responsable de seguridad de la informacion es Carlos Mendez. Se encarga del programa de seguridad
-y de coordinar la respuesta a incidentes.
+- Rol: responsable de seguridad de la informacion
+- Responsable: Carlos Mendez
+- Responsabilidades: programa de seguridad y respuesta a incidentes
+- Autoridad: detener despliegues que incumplan la politica y ordenar la contencion
 
-La responsable de infraestructura es Paula Rios. Se encarga de la configuracion de los servidores y
-de las bases de datos.
+- Rol: responsable de infraestructura
+- Responsable: Paula Rios
+- Responsabilidades: configuracion de servidores y bases de datos
+- Autoridad: aplicar cambios de emergencia en produccion
