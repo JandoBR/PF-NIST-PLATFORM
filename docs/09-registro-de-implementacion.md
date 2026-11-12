@@ -4008,3 +4008,135 @@ cierto. La ausencia de un campo de texto libre no es evidencia de que el procedi
 
 `criteria.yml` sube a v28 y `CRI-RC-01` a v2; docs/03 recoge los anclas. Dos pruebas nuevas: el
 caso real (responsable + activación, sin pasos → 75) y la mención genérica (→ 50).
+
+## 111. `process_defined` fusionaba análisis y mejora en "respuesta", y el escenario `mid` no pasaba de Tier 1
+
+**Síntoma A (Tier del escenario conforme).** El escenario `good` quedaba en Tier 3 provisional aunque
+todos los indicadores de Tier 4 se cumplían salvo `CRI-RS-02`, que daba `evidencia_insuficiente`. La
+evaluación guardada (`e_good_1.json`) mostraba una sola afirmación `process_defined` para
+`respuesta-incidentes.md`, con `proceso: respuesta` y los campos del análisis posterior y de la
+mejora (`ajustes`, `metricas`, `planes_actualizados`, `criterios_recuperacion`). Tras agrupar las
+secciones en un chunk (docs/09 §101), el prompt v6 pedía reunir en una afirmación de cada tipo lo
+que declararan varias secciones; aplicado a `process_defined`, el modelo fusionaba el análisis de
+causa raíz y la mejora continua dentro de la respuesta. `CRI-RS-02` busca un proceso de
+análisis/causa/incidente/evidencia/forense y no encontraba ninguno, así que Tier 4 (exige
+`CRI-RS-02 ≥ 75`) era inalcanzable.
+
+**Causa A.** Era un problema de extracción, no de voto: `voting._group_key` ya agrupa
+`process_defined` por `(tipo, proceso)` desde §108 y conserva grupos distintos. El prompt era el que
+inducía la fusión.
+
+**Cambio A.** `prompts/extract_v7.txt` (copia de v6, que queda intacto) mantiene la regla para los
+demás tipos y, para `process_defined`, pide **una afirmación por cada proceso distinto**
+(`riesgos`, `respuesta`, `recuperacion`, `revision`, `analisis incidentes`, `contencion`, `mejora`,
+`otro`), sin mezclar campos de procesos diferentes, con el ejemplo de respuesta + análisis + mejora.
+Una sección de causa raíz y preservación de evidencia va con `analisis incidentes`; las lecciones
+aprendidas, con `mejora`; contención y erradicación, con `contencion`. `PROMPT_VERSION` sube a
+`extract_v7`; el esquema almacenado no cambia (la clave del store ya incluye `prompt_version`), así
+que `store.py` no se toca. El vocabulario de `_CONTENT_FIELDS["process_defined"]` ya ofrecía
+`analisis incidentes` y no necesitó cambios. `docs/05 §2.1` documenta el prompt nuevo y §6 la
+versión. Se añade una prueba de voto con tres corridas que emiten `respuesta` + `analisis incidentes`
++ `mejora`: los tres grupos sobreviven y conservan sus propios campos.
+
+**Evidencia A (llamadas reales, U1 con votación de 3 por corrida).**
+
+| Documento | v6 (3 corridas) | v7 (3 corridas) |
+|---|---|---|
+| `good/respuesta-incidentes.md` | 2/3 emitieron proceso de análisis; en la tercera todo quedó en `respuesta` y `CRI-RS-02` fue `evidencia_insuficiente` | 3/3 emitieron `analisis incidentes`; `CRI-RS-02` = 75 en las tres |
+| `good/gestion-de-riesgos.md` | — | 2/2 con `riesgos` y `revision` |
+| `good/continuidad.md` | — | 2/2 con `recuperacion` |
+
+No aparecieron campos ni citas fuera del texto: el análisis de v7 cita «análisis de causa raíz y se
+preservan los registros y la evidencia...» y la contención sus tres pasos literales.
+
+**Síntoma B (escenario `mid`).** `mid` daba Tier 1 con `CRI-GV-02 = 29` y `CRI-ID-03 = 29` (base 25
+en ambos): roles nombrados pero sin autoridad y un proceso de riesgos descrito de forma genérica.
+Tier 2 exige `CRI-GV-01`, `CRI-GV-02` y `CRI-ID-03` ≥ 50.
+
+**Cambio B (solo documentos demo; criterios y reglas intactos).**
+
+- `mid/roles.md`: los dos responsables pasan a una lista de campos (`Rol`, `Responsable`,
+  `Responsabilidades`, `Autoridad`) con la autoridad explícita; la autoridad de la responsable de
+  infraestructura se repite en `continuidad.md`. `CRI-GV-02` = 75 (nivel 3, sin
+  `recursos_asignados` ni `practicas_rh`, que siguen siendo la brecha deliberada).
+- `mid/riesgos-e-inventario.md`: el registro de riesgos declara, por riesgo, activo, impacto
+  estimado y probabilidad estimada, y la priorización al día. `CRI-ID-03` = 75 por
+  registro/priorización + impactos/probabilidades (ancla de §109), sin cuantificar con una escala
+  común. Se intentó primero un proceso con `pasos` y sin impactos/probabilidades, pero `pasos` es
+  texto libre y el voto de 3 no reunió la misma cadena en 2 corridas: `CRI-ID-03` se quedaba en 25.
+  Las facetas booleanas sí votan de forma estable, así que el documento declara la cuantificación y
+  deja la brecha en el método único (GV-03) y en el ciclo de revisión (GV-04).
+- Se mantienen las brechas: sin programa de proveedores (`GV-06` = 0), procedimiento de incidentes
+  parcial (`RS-02` insuficiente), inventario incompleto (`ID-04` < 75) y sin proceso de revisión
+  (`GV-04` = 50).
+- El registro trimestral y la revisión anual de la política producían una `process_defined` de
+  `revision` que subía `GV-04` a 75 y el escenario a Tier 3. Se reformuló la vigencia de la política
+  («se actualiza cada año») y se quitó la revisión del registro de riesgos para que `GV-04` quede en
+  el tramo de `policy_review` (50), que es la brecha buscada.
+- `good/roles-y-responsabilidades.md`: con votación de 3, la lista de roles en prosa se perdía (cada
+  corrida parafraseaba los `dict` y ningún elemento alcanzaba mayoría), `GV-02` caía a 25 y `good`
+  quedaba en Tier 1 pese a 92,33 de global. Se reescribió en el mismo formato de campos, con el mismo
+  contenido (tres roles con autoridad, recursos y prácticas de RH); `GV-02` = 100 y `good` llega a
+  Tier 4.
+
+**Evidencia B (evaluación completa, `U1_VOTES=3`, U2 activo, prompt v7).**
+
+| Escenario | Global | Tier | GV-02 | ID-03 | GV-04 | Otros |
+|---|---|---|---|---|---|---|
+| `mid` antes (`a_mid_1`) | 62,32 | 1 | 29 | 29 | 50 | GV-01 100, GV-03 75 |
+| `mid` corrida 1 | 64,23 | **2** (no provisional) | **75** | **75** | 52 | GV-01 100, GV-03 75 |
+| `mid` corrida 2 | 67,89 | **2** (no provisional) | **75** | **78** | 50 | GV-01 100, GV-03 74 |
+| `good` | 94,02 | **4** (no provisional) | 100 | 100 | 100 | RS-02 100 |
+| `gaps` | 33,55 | 1 (provisional) | 50 | insuficiente | 48 | el más bajo |
+
+**Verificación.** `tests/test_ai_extraction.py` (prompt v7 y vocabulario), `tests/test_ai_voting.py`
+(los tres procesos sobreviven) y `tests/test_op12_op14_ai_hardening.py` (versión registrada);
+pruebas dirigidas: **77 passed**. Suite completa: **1046 passed, 2 skipped**; `ruff check` y
+`ruff format --check` limpios.
+
+## 112. El Tier pasa a ser un rango: piso confirmado y techo posible
+
+El Tier contestaba una sola pregunta («¿cuánto se cumple?») y perdía la otra: cuánto de lo que
+falta es una falla real y cuánto es solo falta de evidencia. Con un indicador de Tier 3 en
+`evidencia_insuficiente`, el piso ya no sube —correcto, un desconocido no se asume cumplido— pero
+el informe no podía decir si el siguiente nivel era alcanzable o estaba bloqueado. Ahora la
+estimación es un rango explícito y no inventa: el piso es la regla T1 de siempre y el techo es
+hasta dónde se llegaría si los requisitos desconocidos se resolvieran.
+
+- **Piso (`tier`)**: sin cambios. El mayor nivel cuyos requisitos se cumplen, con la regla T3 para
+  «no estimable» intacta.
+- **Techo (`techo`)**: mayor nivel en el que ningún requisito de los niveles hasta ese nivel falló
+  de verdad (`evaluado`/`no_implementado` por debajo del umbral, o `no_aplicable`). Un requisito en
+  `evidencia_insuficiente`/`error`, o sin resultado, no corta el techo. Si el piso no es estimable,
+  `techo` es `None`; siempre `techo >= tier`; `techo == tier` significa que no hay incógnitas que
+  puedan elevarlo.
+- **`faltan_para_techo`**: ids de los criterios desconocidos hasta el techo que impiden
+  confirmarlo. `faltantes` conserva su semántica (qué bloquea el nivel siguiente).
+- **`siguiente_nivel`**: `{nivel, cumplidos, total}` con los requisitos cumplidos del primer nivel
+  por encima del piso; `None` en Tier 4 o cuando no es estimable.
+- **`justificacion`**: cuando hay upside, «Tier 3 (Repeatable) confirmado; hasta Tier 4 si
+  CRI-RS-02 llegara a 75 (sin evidencia suficiente).»; cuando una falla real corta el techo, dice
+  qué falló. Sin cambios si el piso es exacto y no es provisional. `provisional` no cambia.
+
+**Persistencia y API.** El estimado se deriva al consultar (`tier_estimates` no es tabla
+persistida), así que no hay migración: los campos nuevos son opcionales con default en
+`TierEstimate` y una respuesta vieja sin ellos sigue cargando (`techo = None`). El informe PDF
+muestra el rango en la misma línea del Tier; comparaciones y re-evaluaciones lo reciben sin cambios.
+
+**UI.** En `MaturityDashboard` las dos tarjetas de Tier («Tier Estimado» y «Confiabilidad del
+Tier») pasan a una sola tarjeta de dos columnas: valor «Nivel 3 → hasta 4» cuando aplica, una
+pista de cuatro pasos (piso sólido, techo con borde punteado, resto atenuado) y una línea corta
+(«Repeatable · falta evidencia: RS-02» o la falla del nivel siguiente). El detalle —nivel
+confirmado, techo, criterios con su título del catálogo y «x de y requisitos del Nivel N+1»— vive
+en un popover que aparece con hover o foco de teclado. Sin `techo`, se pinta solo el piso como
+antes.
+
+**Reglas y verificación.** `docs/01 §8.3` añade T7 (definición de piso/techo y que un desconocido
+nunca se asume) y `docs/04` actualiza las columnas del estimado. Pruebas nuevas en
+`tests/test_aggregation.py`: techo igual al piso con todo cumplido; un desconocido en T4 (piso 3,
+techo 4, `CRI-RS-02`); una falla real en T2 con desconocidos en T3 (piso y techo 1); un desconocido
+solo en T2 (piso 1 provisional, techo 4); no estimable; estimado viejo sin los campos nuevos; ida y
+vuelta JSON. `tests/test_api_assessments.py` comprueba los campos en la respuesta. Goldens de
+pipeline regenerados (solo los campos nuevos del Tier). Verificación focalizada: 75 pruebas
+backend, `ruff check`/`ruff format --check` limpios, y en copia temporal del frontend `typecheck`,
+`lint` y `build` sin errores.

@@ -177,7 +177,11 @@ def _tier_text(detail: AssessmentDetail) -> str:
         return "No estimable"
     label = _TIER_LABELS[tier.tier - 1] if 1 <= tier.tier <= len(_TIER_LABELS) else tier.nombre
     suffix = " (provisional)" if tier.provisional else ""
-    return f"Nivel {tier.tier} - {label}{suffix}"
+    texto = f"Nivel {tier.tier} - {label}{suffix}"
+    if tier.techo is not None and tier.techo > tier.tier:
+        techo_label = _TIER_LABELS[tier.techo - 1] if 1 <= tier.techo <= len(_TIER_LABELS) else ""
+        texto += f" · hasta Nivel {tier.techo} - {techo_label}".rstrip(" -")
+    return texto
 
 
 def build_executive_report(

@@ -359,6 +359,7 @@
   },
   "tier": {
     "estimable": false,
+    "faltan_para_techo": [],
     "faltantes": [
       "CRI-GV-01 con evidencia insuficiente",
       "CRI-GV-02 con evidencia insuficiente",
@@ -367,6 +368,8 @@
     "justificacion": "No estimable: ningun criterio indicador de Tier 2 tiene evidencia suficiente para puntuar (T3).",
     "nombre": null,
     "provisional": false,
+    "siguiente_nivel": null,
+    "techo": null,
     "tier": null
   }
 }

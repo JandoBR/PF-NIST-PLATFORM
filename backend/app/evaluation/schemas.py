@@ -52,8 +52,16 @@ class Aggregate(BaseModel):
     provisional: bool = False
 
 
+class SiguienteNivel(BaseModel):
+    """Avance hacia el primer nivel por encima del piso del Tier (docs/01 §8.3, T7)."""
+
+    nivel: int
+    cumplidos: int
+    total: int
+
+
 class TierEstimate(BaseModel):
-    """Estimacion de Tier organizacional (docs/01 §8)."""
+    """Estimacion de Tier organizacional (docs/01 §8): piso confirmado y techo posible."""
 
     tier: int | None
     nombre: str | None
@@ -61,3 +69,9 @@ class TierEstimate(BaseModel):
     estimable: bool
     justificacion: str
     faltantes: list[str] = []
+    #: Mayor nivel alcanzable si los requisitos desconocidos se cumplieran (T7). `None` en
+    #: estimaciones viejas o cuando el Tier no es estimable; la UI muestra solo el piso.
+    techo: int | None = None
+    #: Criterios desconocidos (sin evidencia suficiente) que impiden confirmar el techo.
+    faltan_para_techo: list[str] = []
+    siguiente_nivel: SiguienteNivel | None = None

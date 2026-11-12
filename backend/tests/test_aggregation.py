@@ -180,6 +180,126 @@ def test_tier_marked_provisional_when_indicator_has_insufficient_evidence():
     assert estimate.provisional is True
 
 
+def _tier_results(overrides: dict[str, tuple[Estado, float | None]] | None = None):
+    """Resultados que cumplen todos los requisitos de Tier de la metodologia real."""
+
+    overrides = overrides or {}
+    scores = {
+        "CRI-GV-01": 75,
+        "CRI-GV-02": 50,
+        "CRI-ID-03": 50,
+        "CRI-GV-03": 75,
+        "CRI-GV-04": 100,
+        "CRI-DE-01": 75,
+        "CRI-RS-01": 75,
+        "CRI-RC-01": 75,
+        "CRI-RC-02": 75,
+        "CRI-RS-02": 75,
+        "CRI-RC-03": 75,
+        "CRI-ID-04": 75,
+        "CRI-ID-05": 75,
+    }
+    return [
+        _result(criterion_id, *overrides.get(criterion_id, (Estado.EVALUADO, score)))
+        for criterion_id, score in scores.items()
+    ]
+
+
+def test_tier_ceiling_equals_floor_when_every_level_is_met(methodology):
+    estimate = tier.estimate_tier(methodology.settings.tier, _tier_results())
+
+    assert estimate.tier == 4 and estimate.techo == 4
+    assert estimate.faltan_para_techo == []
+    assert estimate.siguiente_nivel is None
+    assert estimate.justificacion.startswith("Tier 4 (Adaptive): mayor nivel cuyos requisitos")
+
+
+def test_tier_ceiling_reaches_t4_when_only_rs02_lacks_evidence(methodology):
+    results = _tier_results({"CRI-RS-02": (Estado.EVIDENCIA_INSUFICIENTE, None)})
+    estimate = tier.estimate_tier(methodology.settings.tier, results)
+
+    assert estimate.tier == 3 and estimate.techo == 4
+    assert estimate.provisional is True
+    assert estimate.faltan_para_techo == ["CRI-RS-02"]
+    assert estimate.siguiente_nivel is not None
+    assert (estimate.siguiente_nivel.nivel, estimate.siguiente_nivel.cumplidos) == (4, 4)
+    assert estimate.siguiente_nivel.total == 5
+    assert "hasta Tier 4 si CRI-RS-02 llegara a 75" in estimate.justificacion
+
+
+def test_tier_ceiling_stops_at_a_real_failure_even_with_later_unknowns(methodology):
+    results = _tier_results(
+        {
+            "CRI-GV-01": (Estado.NO_IMPLEMENTADO, 0),
+            "CRI-GV-02": (Estado.EVIDENCIA_INSUFICIENTE, None),
+            "CRI-GV-03": (Estado.EVIDENCIA_INSUFICIENTE, None),
+            "CRI-ID-03": (Estado.EVALUADO, 60),
+        }
+    )
+    estimate = tier.estimate_tier(methodology.settings.tier, results)
+
+    assert estimate.tier == 1 and estimate.techo == 1
+    assert estimate.faltan_para_techo == []
+    assert estimate.siguiente_nivel is not None
+    assert (estimate.siguiente_nivel.nivel, estimate.siguiente_nivel.cumplidos) == (2, 1)
+    assert "CRI-GV-01" in estimate.justificacion and "no es alcanzable" in estimate.justificacion
+
+
+def test_tier_ceiling_reaches_t4_with_unknown_t2_only(methodology):
+    results = _tier_results({"CRI-GV-02": (Estado.EVIDENCIA_INSUFICIENTE, None)})
+    estimate = tier.estimate_tier(methodology.settings.tier, results)
+
+    assert estimate.tier == 1 and estimate.provisional is True
+    assert estimate.techo == 4
+    assert estimate.faltan_para_techo == ["CRI-GV-02"]
+    assert "hasta Tier 4 si CRI-GV-02 llegara a 50" in estimate.justificacion
+
+
+def test_tier_ceiling_is_none_when_not_estimable(methodology):
+    results = [
+        _result("CRI-GV-01", Estado.EVIDENCIA_INSUFICIENTE),
+        _result("CRI-GV-02", Estado.ERROR),
+        _result("CRI-ID-03", Estado.EVIDENCIA_INSUFICIENTE),
+    ]
+    estimate = tier.estimate_tier(methodology.settings.tier, results)
+
+    assert estimate.estimable is False
+    assert estimate.techo is None
+    assert estimate.faltan_para_techo == []
+    assert estimate.siguiente_nivel is None
+
+
+def test_old_tier_estimate_without_range_fields_still_loads():
+    from app.evaluation.schemas import TierEstimate
+
+    estimate = TierEstimate.model_validate(
+        {
+            "tier": 2,
+            "nombre": "Risk Informed",
+            "provisional": False,
+            "estimable": True,
+            "justificacion": "Tier 2 (Risk Informed): mayor nivel cuyos requisitos se cumplen.",
+            "faltantes": ["CRI-GV-03 con evidencia insuficiente"],
+        }
+    )
+
+    assert estimate.techo is None
+    assert estimate.faltan_para_techo == []
+    assert estimate.siguiente_nivel is None
+
+
+def test_tier_estimate_survives_a_json_round_trip(methodology):
+    from app.evaluation.schemas import TierEstimate
+
+    original = tier.estimate_tier(
+        methodology.settings.tier,
+        _tier_results({"CRI-RS-02": (Estado.EVIDENCIA_INSUFICIENTE, None)}),
+    )
+    restored = TierEstimate.model_validate_json(original.model_dump_json())
+
+    assert restored == original
+
+
 def test_low_coverage_marks_score_provisional(methodology):
     # 1 de 3 criterios con evidencia suficiente en PR -> cobertura 33% < umbral (50%).
     results = [

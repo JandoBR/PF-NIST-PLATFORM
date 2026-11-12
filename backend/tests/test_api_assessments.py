@@ -95,6 +95,10 @@ def test_worker_completes_the_job_and_the_assessment(
     # evidencia para puntuar, asi que el Tier es "no estimable" (T3), no "Partial".
     assert body["tier"]["tier"] is None
     assert body["tier"]["estimable"] is False
+    # Rango (T7): sin Tier no hay techo; una estimacion vieja sin estos campos tambien carga.
+    assert body["tier"]["techo"] is None
+    assert body["tier"]["faltan_para_techo"] == []
+    assert body["tier"]["siguiente_nivel"] is None
 
 
 def test_get_assessment_and_sub_resources(api_client, db_session, methodology, fake_redis):

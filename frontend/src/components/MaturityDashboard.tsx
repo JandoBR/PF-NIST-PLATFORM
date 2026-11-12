@@ -19,6 +19,7 @@ import type {
   CriterionResult,
   Estado,
   ImplementationCoverage,
+  TierEstimate,
 } from '@/lib/types';
 import { DownloadPdfButton } from '@/components/DownloadPdfButton';
 import { FUNCTION_NAMES, FUNCTION_ORDER, TIER_LABELS } from '@/lib/types';
@@ -60,6 +61,8 @@ export function MaturityDashboard({ assessment, criteria, onReevaluated }: Dashb
   // Si falla, la seccion no se pinta: es metadato y nunca debe tumbar la matriz.
   const [coverage, setCoverage] = useState<ImplementationCoverage | null>(null);
   const [currentCatalog, setCurrentCatalog] = useState<{ version: string; total: number } | null>(null);
+  // Titulos del catalogo para el detalle del Tier (evita mostrar solo el id del criterio).
+  const [criterionTitles, setCriterionTitles] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let vigente = true;
@@ -68,6 +71,7 @@ export function MaturityDashboard({ assessment, criteria, onReevaluated }: Dashb
         if (!vigente) return;
         setCoverage(m.cobertura_implementacion);
         setCurrentCatalog({ version: m.methodology_version, total: m.criterios.length });
+        setCriterionTitles(Object.fromEntries(m.criterios.map((c) => [c.id, c.titulo])));
       })
       .catch(() => undefined);
     return () => {
@@ -223,20 +227,7 @@ export function MaturityDashboard({ assessment, criteria, onReevaluated }: Dashb
           }
           sub="Criterios con evidencia suficiente"
         />
-        <SummaryCard
-          icon={<ShieldQuestion className="h-5 w-5" />}
-          accent="emerald"
-          label="Tier Estimado"
-          value={tier.tier != null ? `Nivel ${tier.tier}` : 'No estimable'}
-          sub={tier.tier != null ? TIER_LABELS[tier.tier - 1] : tier.justificacion}
-        />
-        <SummaryCard
-          icon={<Info className="h-5 w-5" />}
-          accent="amber"
-          label="Confiabilidad del Tier"
-          value={tier.provisional ? 'Provisional' : tier.estimable ? 'Confirmado' : 'N/D'}
-          sub={tier.faltantes.length > 0 ? `Falta: ${tier.faltantes.join(', ')}` : tier.justificacion}
-        />
+        <TierCard tier={tier} titles={criterionTitles} className="sm:col-span-2 lg:col-span-2" />
       </div>
 
       {/* Matriz de funciones */}
@@ -515,6 +506,144 @@ function PrivacyStat({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-white/[0.06] bg-ink-900/40 px-3 py-1.5 text-center">
       <p className="text-sm font-bold text-white">{value}</p>
       <p className="text-[11px] text-slate-500">{label}</p>
+    </div>
+  );
+}
+
+const TIER_STEPS = [1, 2, 3, 4];
+
+function _shortId(id: string): string {
+  return id.replace(/^CRI-/, '');
+}
+
+function _falloLegible(faltante: string): string {
+  return faltante
+    .replace(/^CRI-/, '')
+    .replace(/ = .*\(< ([\d.]+)\)$/, ' por debajo de $1')
+    .replace(/ con evidencia insuficiente$/, ' sin evidencia')
+    .replace(/ no_aplicable$/, ' no aplicable');
+}
+
+function TierCard({
+  tier,
+  titles,
+  className = '',
+}: {
+  tier: TierEstimate;
+  titles: Record<string, string>;
+  className?: string;
+}) {
+  const piso = tier.tier;
+  const techo = tier.techo ?? null;
+  const rango = piso != null && techo != null && techo > piso;
+  const sinEvidencia = tier.faltan_para_techo ?? [];
+  const nombre = piso != null ? TIER_LABELS[piso - 1]?.split(' · ')[1] ?? tier.nombre ?? '' : '';
+
+  let linea = tier.justificacion;
+  if (piso != null) {
+    if (sinEvidencia.length > 0) {
+      const ids = sinEvidencia.slice(0, 2).map(_shortId).join(', ');
+      linea = `${nombre} · falta evidencia: ${ids}${sinEvidencia.length > 2 ? ` +${sinEvidencia.length - 2}` : ''}`;
+    } else if (tier.faltantes.length > 0) {
+      linea = `${nombre} · ${_falloLegible(tier.faltantes[0])}`;
+    } else {
+      linea = tier.provisional ? `${nombre} · provisional` : nombre;
+    }
+  }
+
+  const resumen = [
+    piso != null ? `Nivel ${piso} (${nombre}) ${tier.provisional ? 'provisional' : 'confirmado'}` : 'Tier no estimable',
+    rango ? `techo posible Nivel ${techo}` : null,
+    sinEvidencia.length > 0
+      ? `falta evidencia en ${sinEvidencia.map((id) => `${_shortId(id)} (${titles[id] ?? id})`).join(', ')}`
+      : null,
+    tier.siguiente_nivel
+      ? `${tier.siguiente_nivel.cumplidos} de ${tier.siguiente_nivel.total} requisitos del Nivel ${tier.siguiente_nivel.nivel}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <div
+      className={`card card-hover group relative p-5 outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${className}`}
+      tabIndex={0}
+      aria-label={resumen}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-slate-500">Tier estimado</p>
+          <p className="mt-1.5 flex min-w-0 items-baseline gap-2">
+            <span className="text-2xl font-bold tracking-tight text-white">
+              {piso != null ? `Nivel ${piso}` : 'No estimable'}
+            </span>
+            {rango && (
+              <span className="truncate text-xs font-medium text-emerald-300/70">→ hasta {techo}</span>
+            )}
+          </p>
+          <div className="mt-3 flex gap-1.5" aria-hidden="true">
+            {TIER_STEPS.map((nivel) => {
+              const paso =
+                piso != null && nivel <= piso
+                  ? 'bg-emerald-400'
+                  : piso != null && techo != null && nivel <= techo
+                    ? 'border border-dashed border-emerald-400/60 bg-emerald-400/10'
+                    : 'bg-white/10';
+              const numero =
+                piso != null && nivel <= piso
+                  ? 'text-emerald-300'
+                  : piso != null && techo != null && nivel <= techo
+                    ? 'text-emerald-300/60'
+                    : 'text-slate-600';
+              return (
+                <div key={nivel} className="min-w-0 flex-1">
+                  <div className={`h-1.5 rounded-full ${paso}`} />
+                  <p className={`mt-1 text-[10px] font-semibold ${numero}`}>T{nivel}</p>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 truncate text-xs text-slate-500" title={linea}>
+            {linea}
+          </p>
+        </div>
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20">
+          <ShieldQuestion className="h-5 w-5" />
+        </div>
+      </div>
+
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute left-0 right-0 top-full z-20 mt-2 hidden rounded-xl border border-white/10 bg-ink-900 p-4 text-xs text-slate-300 shadow-xl group-hover:block group-focus-within:block"
+      >
+        <p className="font-semibold text-white">
+          {piso != null ? `Nivel ${piso} · ${nombre}` : 'Tier no estimable'}
+          {piso != null && (tier.provisional ? ' · provisional' : ' · confirmado')}
+        </p>
+        {rango && (
+          <p className="mt-1 text-emerald-300/80">
+            Hasta Nivel {techo} si se resuelven los requisitos sin evidencia suficiente.
+          </p>
+        )}
+        {sinEvidencia.length > 0 && (
+          <ul className="mt-2 space-y-1 text-slate-400">
+            {sinEvidencia.map((id) => (
+              <li key={id} className="truncate">
+                <span className="font-medium text-slate-300">{_shortId(id)}</span>
+                {' · '}
+                {titles[id] ?? id}
+              </li>
+            ))}
+          </ul>
+        )}
+        {tier.siguiente_nivel && (
+          <p className="mt-2 text-slate-400">
+            {tier.siguiente_nivel.cumplidos} de {tier.siguiente_nivel.total} requisitos del Nivel{' '}
+            {tier.siguiente_nivel.nivel}
+          </p>
+        )}
+        <p className="mt-2 text-slate-500">{tier.justificacion}</p>
+      </div>
     </div>
   );
 }

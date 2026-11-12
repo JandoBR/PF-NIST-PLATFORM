@@ -32,6 +32,12 @@ export interface Aggregate {
   provisional?: boolean;
 }
 
+export interface SiguienteNivel {
+  nivel: number;
+  cumplidos: number;
+  total: number;
+}
+
 export interface TierEstimate {
   tier: number | null;
   nombre: string | null;
@@ -39,6 +45,12 @@ export interface TierEstimate {
   estimable: boolean;
   justificacion: string;
   faltantes: string[];
+  /** Mayor nivel alcanzable si se resuelven los requisitos sin evidencia suficiente. */
+  techo?: number | null;
+  /** Criterios desconocidos que impiden confirmar el techo. */
+  faltan_para_techo?: string[];
+  /** Avance en el primer nivel por encima del piso. */
+  siguiente_nivel?: SiguienteNivel | null;
 }
 
 export interface Finding {

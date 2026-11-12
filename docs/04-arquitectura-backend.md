@@ -136,7 +136,7 @@ porque toca el modelo de evidencias.
 | `criterion_results` | `id`, `assessment_id`, `criterion_id`, `criterion_version`, `estado`, `base_score`, `final_score`, `explanation`, `evidence_ids[]`, `degradado bool` |
 | `ai_adjustments` | `id`, `assessment_id`, `criterion_id`, `modelo`, `prompt_version`, `propuesta`, `justificacion`, `evidence_refs[]`, `clamped`, `aplicado bool`, `degradado bool`, `creado_en` |
 | `score_aggregates` | `id`, `assessment_id`, `nivel` (`subcategoria`\|`categoria`\|`funcion`\|`global`), `ref`, `score`, `base_score`, `cobertura`, `conteo_estados jsonb` |
-| `tier_estimates` | `id`, `assessment_id`, `tier`, `provisional bool`, `justificacion`, `faltantes jsonb` |
+| `tier_estimates` | `id`, `assessment_id`, `tier` (piso), `techo?`, `provisional bool`, `justificacion`, `faltantes jsonb`, `faltan_para_techo jsonb`, `siguiente_nivel jsonb` |
 | `findings` | `id`, `assessment_id`, `criterion_id`, `tipo` (`brecha`\|`contradiccion`\|`limitacion`), `titulo`, `detalle`, `severidad`, `evidence_ids[]` |
 | `plans` | `id`, `incident_id?`, `assessment_id?`, `criterion_id`, `origen` (`criterio`\|`evento`), `titulo`, `prioridad`, `objetivo`, `pasos jsonb`, `verificacion`, `dependencias jsonb`, `estado` (`pendiente`\|`en_progreso`\|`hecho`, **seguimiento, no puntaje** — docs/05 §4.4), `generado_por`, `diagnostico_observable?`, `hipotesis jsonb`, `comprobaciones_seguras jsonb`, `advertencia?`, `creado_en` |
 | `events` | `id`, `org_id`, `scope`, `event_id`, `event_time`, `tipo`, `recurso`, `actor`, `detalle jsonb`, `source_id`, `ingest_id?` (ingesta que lo guardó; `NULL` en los anteriores, docs/09 §102), `creado_en` |
@@ -215,7 +215,7 @@ tiempos y el heartbeat se configuran con `JOB_STALE_TIMEOUT_SECONDS`,
 | `GET` | `/auth/me` | Usuario de la sesión actual. |
 | `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). Un `context` que no sea un objeto JSON da 422 antes de crear nada. `event_ingest_ids` (array JSON, opcional) limita las ingestas de eventos consumidas: omitido = todas las del org+scope, `[]` = ninguna; una ingesta ajena a la organización da 400 (docs/09 §102). `reextraer=true` ignora los resultados de IA guardados y los reemplaza (docs/09 §105). |
 | `GET` | `/assessments` | Lista de evaluaciones de la organización (cada una con su resumen/Tier). |
-| `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
+| `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier (piso y techo). |
 | `GET` | `/jobs` | Historial de jobs de la organización, del más reciente al más antiguo. Filtros `estado`, `tipo` y `limit` (1–200, por defecto 50). Marca `fallido` los jobs activos que se quedaron colgados (sin heartbeat vivo) antes de listar (docs/09 §45). |
 | `POST` | `/jobs/{job_id}/retry` | Reencola un job `fallido` con las mismas entradas (202, devuelve el job nuevo). 409 si no está fallido, no tiene entradas guardadas, faltan los archivos o la evaluación ya se reintentó; si usaba IA real, exige `confirm_live_ai` otra vez (docs/09 §46). |
 | `GET` | `/jobs/{job_id}` | Estado y progreso de cualquier trabajo (`assessment_run`/`event_ingest`). Si quedó colgado sin worker vivo (heartbeat), se marca `fallido` antes de responder. |

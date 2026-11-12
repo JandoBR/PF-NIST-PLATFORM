@@ -212,6 +212,8 @@ evaluación, y es la única que marca un puntaje como provisional. No se mezclan
 - Es una estimación propia basada en indicadores del catálogo, inspirada en las descripciones de NIST
   (SP 1302), no una traducción oficial de puntajes.
 - Puede ser `provisional` si faltan indicadores esenciales.
+- Se reporta como **rango**: un piso confirmado y un techo posible hasta donde llegaría si se
+  resolvieran los requisitos sin evidencia suficiente (T7).
 
 ### 8.2 Indicadores por Tier (inicial)
 
@@ -235,6 +237,7 @@ evaluación, y es la única que marca un puntaje como provisional. No se mezclan
 | T4 | Los umbrales son parámetros de metodología versionada; se recalibran con datos, no con opiniones. |
 | T5 | El informe muestra qué falta para alcanzar el siguiente Tier (ruta de mejora). |
 | T6 | Los umbrales se comparan contra el puntaje **final** `S` (con el ajuste de IA, si lo hubo), no contra el base: el sistema es tan determinista como se puede sin descartar el matiz que aporta la IA. Como los puntajes base caen en las anclas, en la práctica un ajuste puede hacer perder un umbral (75 → 74) pero no ganarlo. |
+| T7 | El Tier se reporta como rango: **piso** (T1, el mayor nivel cuyos requisitos se cumplen) y **techo** (el mayor nivel en el que ningún requisito de los niveles hasta ese nivel falló de verdad). Un requisito desconocido (`evidencia_insuficiente`/`error`) nunca se asume cumplido para el piso, pero tampoco cuenta como falla para el techo: este dice hasta dónde se llegaría si se resolviera. Una falla real (`evaluado`/`no_implementado` con puntaje bajo el umbral, o `no_aplicable`) corta el techo. `techo = piso` significa que no hay incógnitas que puedan elevarlo; `faltan_para_techo` lista los criterios desconocidos que lo limitan. |
 
 ### 8.4 Niveles por función (opcional, no NIST)
 
