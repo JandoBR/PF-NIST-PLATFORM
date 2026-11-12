@@ -40,7 +40,7 @@
 ## Stack
 
 - **Backend:** Python 3.12 + FastAPI + SQLAlchemy + PostgreSQL.
-- **Mensajería / caché:** Redis (colas de trabajos reales vía `worker-core`/`worker-logs`; caché de extracción IA aparte, en disco).
+- **Mensajería:** Redis (colas de trabajos reales vía `worker-core`/`worker-logs` y heartbeat de workers); los resultados de IA se guardan en la tabla `ai_results` (docs/05 §7).
 - **Análisis:** parsers HCL (`python-hcl2`), parsing YAML de Ansible (`PyYAML`), validación con Pydantic.
 - **IA:** API de DeepSeek (compatible con SDK de OpenAI), salida JSON validada.
 - **Informes:** PDF con `reportlab`.
@@ -51,7 +51,7 @@
 
 Prototipo completo para su alcance declarado:
 
-- **Evaluación:** núcleo determinista con los 31 criterios del catálogo (`criteria.yml` v24, doc 03),
+- **Evaluación:** núcleo determinista con los 31 criterios del catálogo (`criteria.yml` v25, doc 03),
   adaptadores de Terraform, Ansible y documentos, agregación por función, cobertura de evidencia y Tier
   estimado (doc 01).
 - **IA (U1/U2/U3):** extracción documental con cita, ajuste contextual acotado y redacción de planes;
@@ -61,6 +61,10 @@ Prototipo completo para su alcance declarado:
   de respuesta (docs 06/08).
 - **Plataforma:** API REST con login y aislamiento por organización (doc 10), workers sobre Redis con
   historial y reintento de trabajos, informes en PDF, y despliegue completo con Docker Compose.
+- **Trazabilidad y determinismo:** cada evaluación consume las ingestas de eventos elegidas al crearla
+  (docs/09 §102); "Re-extraer con IA" ignora los resultados guardados y los reemplaza (§105); U1 vota
+  mayoría de 3 corridas sobre el store persistente `ai_results`, así que la misma entrada da el mismo
+  resultado; y los workers publican heartbeat para no dar por perdido un job que sigue vivo (§104).
 - **Frontend:** los paneles de Resumen de Madurez, Recomendaciones, Eventos e Incidentes y Comparar, más la
   vista de Actividad, todos sobre la API real.
 

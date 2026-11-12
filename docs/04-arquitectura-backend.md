@@ -3,8 +3,8 @@
 ## 1. Vista General
 
 Monolito modular en Python, desplegable en contenedores. Los análisis largos y el pipeline de eventos
-corren como trabajos en segundo plano; la cola/stream y la caché usan Redis, y el estado persistente
-vive en PostgreSQL.
+corren como trabajos en segundo plano; Redis es la cola de trabajos (con heartbeat de los workers),
+los resultados de IA viven en la tabla `ai_results` y el estado persistente en PostgreSQL.
 
 ```text
                     ┌──────────────────────────────────────────────────┐
@@ -213,7 +213,7 @@ tiempos y el heartbeat se configuran con `JOB_STALE_TIMEOUT_SECONDS`,
 |---|---|---|
 | `POST` | `/auth/login` | Login (usuario/contraseña) → token + usuario. Público. |
 | `GET` | `/auth/me` | Usuario de la sesión actual. |
-| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). Un `context` que no sea un objeto JSON da 422 antes de crear nada. `event_ingest_ids` (array JSON, opcional) limita las ingestas de eventos consumidas: omitido = todas las del org+scope, `[]` = ninguna; una ingesta ajena a la organización da 400 (docs/09 §102). |
+| `POST` | `/assessments` | Crea evaluación (contexto de la organización del usuario), sube archivos y encola el pipeline. Devuelve `job_id` (202). Un `context` que no sea un objeto JSON da 422 antes de crear nada. `event_ingest_ids` (array JSON, opcional) limita las ingestas de eventos consumidas: omitido = todas las del org+scope, `[]` = ninguna; una ingesta ajena a la organización da 400 (docs/09 §102). `reextraer=true` ignora los resultados de IA guardados y los reemplaza (docs/09 §105). |
 | `GET` | `/assessments` | Lista de evaluaciones de la organización (cada una con su resumen/Tier). |
 | `GET` | `/assessments/{id}` | Resumen: estado, puntaje global, cobertura, Tier. |
 | `GET` | `/jobs` | Historial de jobs de la organización, del más reciente al más antiguo. Filtros `estado`, `tipo` y `limit` (1–200, por defecto 50). Marca `fallido` los jobs activos que se quedaron colgados (sin heartbeat vivo) antes de listar (docs/09 §45). |
@@ -254,7 +254,7 @@ Convenciones:
 
 ## 7. Estructura de Carpetas
 
-Estructura real del código (revisada el 2026-10-25):
+Estructura real del código (revisada el 2026-11-11):
 
 ```text
 backend/
@@ -279,7 +279,7 @@ backend/
 │   ├── methodology/         # loader + validación de los YAML
 │   ├── adapters/            # terraform/, ansible/, documents/
 │   ├── evaluation/          # engine, aggregation, tier, contradictions, rules/
-│   ├── ai/                  # client, store, cache, voting, parallel, extraction, adjustment, plan_generation, golden_eval, prompts/
+│   ├── ai/                  # client, store, cache, voting, parallel, extraction, adjustment, plan_generation, golden_eval, numbers, prompts/
 │   ├── recommendations/     # findings (brecha/contradicción/limitación), plans
 │   ├── surveillance/        # eventos y patrones (pipeline de logs, ver §3.1)
 │   ├── ops/                 # motor operativo: disparadores, incidentes, planes de incidente (doc 08)
@@ -304,7 +304,7 @@ En la raíz del proyecto: `deploy/docker-compose.yml` y `deploy/.env.example` (v
 `methodology/criteria.yml` (extracto):
 
 ```yaml
-version: 24
+version: 25
 criterios:
   - id: CRI-PR-01
     version: 2
@@ -380,7 +380,7 @@ Reglas:
 
 | Tema | Decisión para el prototipo |
 |---|---|
-| Cola dedicada | Sí, Redis para la cola de trabajos (la caché de extracción IA es en disco); sin Celery (workers propios). |
+| Cola dedicada | Sí, Redis para la cola de trabajos; los resultados de IA viven en `ai_results` (docs/05 §7, docs/09 §105); sin Celery (workers propios). |
 | Orquestación | Docker + docker-compose; sin Kubernetes en el prototipo. |
 | Motor operativo (incidentes/planes) | Sí, mínimo: consumidor `ops` con disparadores determinísticos (doc 08). |
 | Base vectorial | No; recuperación por IDs y búsqueda textual sobre el catálogo NIST. |
@@ -406,13 +406,15 @@ prototipo (cola de trabajos) sin añadir complejidad de orquestación.
 | `worker-core` | `docker/Dockerfile.worker` | Evaluación, adaptadores, IA. | db, redis |
 | `worker-logs` | `docker/Dockerfile.worker` | Pipeline de logs (job `event_ingest`) y motor `ops`. | db, redis |
 | `migrate` | `docker/Dockerfile.api` | Job de una sola ejecución: `alembic upgrade head`. | db |
-| `frontend` | `docker/Dockerfile.frontend` | React/Vite servido por Nginx. | api |
+| `frontend` | `frontend/Dockerfile` | React/Vite compilado, servido por `serve` en 5173. | api |
 
 Notas:
 
 - `worker-logs` es el contenedor que se extrae/escala primero si el volumen crece (§3.1, P7).
 - Sin autoscaling en el prototipo: se puede escalar a mano con `--scale worker-logs=N`.
-- Persistencia con volúmenes nombrados para `db` y `redis`; healthchecks y `depends_on` con condición.
+- Persistencia con volúmenes nombrados para `db`, `redis` y `backend_data`; healthchecks y `depends_on` con condición.
+- `backend_data:/app/backend/.data` va montado en `api`, `worker-core` y `worker-logs`: sin eso el worker no encuentra lo que subió la API (docs/09 §16).
+- La configuración de la app (`DEEPSEEK_*`, `AI_MAX_CONCURRENCY`, `CORS_ORIGINS`, `JOB_*`) sale de `deploy/.env` vía `env_file`; `DATABASE_URL`/`REDIS_URL` siguen en `environment` porque apuntan a nombres de servicio de compose (docs/09 §17).
 
 ### 11.2 `deploy/docker-compose.yml` (referencia)
 
@@ -420,73 +422,128 @@ Notas:
 services:
   db:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pf}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pf}
       POSTGRES_DB: ${POSTGRES_DB:-pf}
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-pf}"]
       interval: 5s
+      timeout: 5s
       retries: 10
 
   redis:
     image: redis:7
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
-    volumes: ["redisdata:/data"]
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
+      timeout: 5s
       retries: 10
 
   migrate:
-    build: { context: .., dockerfile: backend/docker/Dockerfile.api }
+    build:
+      context: ..
+      dockerfile: backend/docker/Dockerfile.api
     command: ["alembic", "upgrade", "head"]
-    environment: { DATABASE_URL: "postgresql+psycopg://pf:pf@db:5432/pf" }
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pf}:${POSTGRES_PASSWORD:-pf}@db:5432/${POSTGRES_DB:-pf}
     depends_on:
-      db: { condition: service_healthy }
+      db:
+        condition: service_healthy
 
   api:
-    build: { context: .., dockerfile: backend/docker/Dockerfile.api }
-    environment:
-      DATABASE_URL: "postgresql+psycopg://pf:pf@db:5432/pf"
-      REDIS_URL: "redis://redis:6379/0"
-      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"
-    ports: ["8000:8000"]
+    build:
+      context: ..
+      dockerfile: backend/docker/Dockerfile.api
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment: &backend_env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pf}:${POSTGRES_PASSWORD:-pf}@db:5432/${POSTGRES_DB:-pf}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - backend_data:/app/backend/.data
+    ports:
+      - "8000:8000"
     depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
-      migrate: { condition: service_completed_successfully }
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker-core:
-    build: { context: .., dockerfile: backend/docker/Dockerfile.worker }
+    build:
+      context: ..
+      dockerfile: backend/docker/Dockerfile.worker
     command: ["python", "-m", "app.workers.core"]
-    environment: &worker_env
-      DATABASE_URL: "postgresql+psycopg://pf:pf@db:5432/pf"
-      REDIS_URL: "redis://redis:6379/0"
-      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment: *backend_env
+    volumes:
+      - backend_data:/app/backend/.data
     depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker-logs:
-    build: { context: .., dockerfile: backend/docker/Dockerfile.worker }
+    build:
+      context: ..
+      dockerfile: backend/docker/Dockerfile.worker
     command: ["python", "-m", "app.workers.logs"]
-    environment: *worker_env
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment: *backend_env
+    volumes:
+      - backend_data:/app/backend/.data
     depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   frontend:
-    build: { context: .., dockerfile: backend/docker/Dockerfile.frontend }
-    ports: ["5173:80"]
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
     depends_on:
-      api: { condition: service_started }
+      - api
 
 volumes:
   pgdata:
   redisdata:
+  backend_data:
 ```
+
+`DEEPSEEK_API_KEY` y el resto de la config de IA salen de `deploy/.env` por `env_file`, **no** por
+`${VAR}` en `environment:`: con interpolación, una variable exportada en el shell gana sobre el `.env`
+(fue un bug real, docs/09 §17). `VITE_API_BASE_URL` sí se interpola porque es un *build arg* que se
+hornea en el bundle del frontend y debe ser alcanzable desde el navegador (`localhost:8000`, nunca
+`http://api:8000`).
 
 ### 11.3 Reglas de despliegue
 

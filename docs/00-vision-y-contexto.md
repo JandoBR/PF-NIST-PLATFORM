@@ -57,7 +57,7 @@ Una plataforma que:
 | D10 | Logs simulados con tiempo de evento, no de reproducción | Permite evaluar ventanas temporales de forma reproducible. |
 | D11 | Monolito modular en Python | Velocidad de desarrollo para 5 semanas; sin microservicios. |
 | D12 | Nodo operativo de primera clase sobre el mismo stream de eventos | Separa asesoría en vivo (incidentes/planes) de la evaluación de madurez. |
-| D13 | Redis para la cola de eventos y trabajos (la caché de extracción IA es en disco) | Simplifica el desacoplamiento sin añadir mucha complejidad. |
+| D13 | Redis para la cola de eventos y trabajos; los resultados de IA viven en `ai_results` (docs/05 §7) | Simplifica el desacoplamiento sin añadir mucha complejidad. |
 | D14 | Despliegue con Docker + docker-compose | Todo el prototipo es reproducible con `docker compose up`. |
 | D15 | Multitenancy con login: varias organizaciones por despliegue, aisladas por usuario | El cliente ve solo su organización; las cuentas las crea el proveedor (seed). Ver doc 10. |
 

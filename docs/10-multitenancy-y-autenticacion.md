@@ -57,13 +57,16 @@ Nueva tabla `users` (una organización tiene N usuarios):
 | `GET /assessments` | Devuelve solo las evaluaciones de la organización del usuario. |
 | `GET /assessments/{id}` y sub-recursos | 404 si el assessment no es de su organización. |
 | `POST /assessments/{id}/reevaluate`, `POST /assessments/{id}/plans`, `GET /assessments/{id}/compare/{other_id}` | Igual: 404 si no es suyo. |
-| `POST /orgs/{org_id}/events`, `GET /orgs/{org_id}/incidents` | 404 si `org_id` ≠ la del usuario. |
+| `POST /orgs/{org_id}/events`, `GET /orgs/{org_id}/incidents`, `GET /orgs/{org_id}/event-ingests` | 404 si `org_id` ≠ la del usuario. |
 | `GET /incidents/{id}`, `/incidents/{id}/plans` | 404 si el incidente no es de su organización. |
 | `GET /jobs/{id}` | 404 si el job no pertenece a su organización. |
 | `GET/POST /orgs` | Se restringe: `GET /orgs` devuelve solo su organización. `POST /orgs` deja de estar disponible para el cliente (la creación la hace el seed/CLI). |
 | `GET /methodology`, `GET /health` | Públicos (catálogo y salud, sin datos de cliente). |
 
 Se responde **404, no 403**, para no revelar la existencia de recursos de otras organizaciones.
+
+Los resultados de IA (`ai_results`) se guardan por organización y nunca se reutilizan entre
+organizaciones: `org_id` es parte de la clave del store (docs/05 §7, docs/09 §105).
 
 ## 5. Cuentas precreadas (seed)
 

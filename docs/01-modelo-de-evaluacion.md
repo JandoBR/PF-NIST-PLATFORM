@@ -286,6 +286,9 @@ Una evaluación registra:
   `assessments.reproducibility["methodology"]`.
 - Versiones de tipos de evidencia usadas.
 - Versión de adaptadores/parsers.
+- Ventanas de eventos consumidas (`reproducibility.eventos`): `todas`, `ingest_ids`, `archivos`,
+  `conteo`, rango `desde`/`hasta` y `sha256`; con eso se sabe qué ingestas entraron y cuáles se
+  excluyeron al crear la evaluación (docs/09 §102).
 - Modelo y versión de prompt de IA (para ajustes y extracción).
 - Uso del store de IA: hits/misses por paso (U1/U2/U3), número de votos de U1 y `params_hash` del
   modelo; con eso se explica si una corrida reutilizó resultados y si cambió algún parámetro del

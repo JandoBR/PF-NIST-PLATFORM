@@ -129,7 +129,7 @@ Con el refresco automático (FN-05), reevaluar "porque sí" no aporta (mismo inp
 
 ## C. Cobertura de criterios y Tier (P0)
 
-El catálogo implementa **31 de 31** criterios de docs/03 (`criteria.yml` v24). Cobertura por función:
+El catálogo implementa **31 de 31** criterios de docs/03 (`criteria.yml` v25). Cobertura por función:
 GV 6/6 · ID 6/6 · PR 9/9 · DE 3/3 · RS 4/4 · RC 3/3.
 - **Cobertura del marco (AMP-04):** **81 de 106 subcategorías (76,4 %), 22 de 22 categorías y 10
   completas**, calculada por el sistema (`GET /methodology`) y visible en el dashboard
@@ -255,7 +255,7 @@ demostrable.
    ~~la decisión de CR-07~~ (hecha, docs/09 §57).
 
 > **Estado:** de las secciones A–H no queda nada pendiente; lo señalado en la revisión del 2026-10-04 está en §I. Solo FN-04 sigue marcado `[~]` y está obsoleto (el botón
-> "Reevaluar" se eliminó, UI-10). Lo hecho está en docs/09 §23–§57; el trabajo que se decidió dejar fuera, en docs/12.
+> "Reevaluar" se eliminó, UI-10). Lo hecho está en docs/09 §23–§107; el trabajo que se decidió dejar fuera, en docs/12.
 > **Fuera de alcance del prototipo:** ver **docs/12** (no es deuda).
 
 ## I. Revisión de bugs y lógica (2026-10-04)
@@ -272,7 +272,9 @@ Quedó señalado y **sin hacer**:
 - [ ] `valor_schema`, `modalidad_permitida` y `requiere_locator` de `evidence_types.yml` no se validan.
 - [ ] El scope no se puede elegir en la UI (fijo en `entorno:produccion`).
 - [ ] Sin tests de frontend ni CI.
-- [ ] `pollJob` agota a los 180 s y sugiere revisar los workers aunque el job siga corriendo (corridas con IA).
+- [x] `pollJob` agotaba a los 180 s y culpaba a los workers aunque el job siguiera corriendo (corridas con
+  IA) — ahora espera hasta 15 min y remite a la pestaña Actividad; el sondeo de la evaluación activa
+  corta a los 20 min.
 - [ ] Los puntajes documentales de los tres paquetes de ejemplo no se han confirmado con una corrida real con IA.
 
 Decidido y **dejado como está**: `GV-01` elige la afirmación por confianza (conservador); el Tier usa el puntaje

@@ -193,10 +193,10 @@ necesita — la IA es aumento opcional (U1/U2), no requisito; y (2) no debe gast
 usuario lo pida. La IA, cuando se usa, solo ve datos estructurados del criterio/disparador (nunca las
 líneas de log) y solo para redactar el plan (docs/05 §4).
 
-**La reevaluación automática hereda los orígenes de eventos de la evaluación anterior** (docs/09 §98).
+**La reevaluación automática hereda las ingestas de eventos de la evaluación anterior** (docs/09 §102).
 Si esa evaluación usó una lista explícita, el refresco usa la misma lista: un log excluido no entra por
 la puerta de atrás. Si usó todos (`todas: true` en `reproducibility.eventos`), sigue usando todos y una
-ingesta de un origen nuevo cuenta. Una evaluación anterior a esta función no tiene la marca y también
+ingesta nueva cuenta. Una evaluación anterior a esta función no tiene la marca y también
 usa todos.
 
 **El refresco es selectivo (docs/06 §6, FN-06):** reusa evidencia, resultados y planes de los

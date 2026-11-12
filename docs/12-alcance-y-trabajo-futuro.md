@@ -29,7 +29,7 @@ job separados; a esta escala no aporta.
 | OP-06 | Cooldown / rate-limit real de incidentes (O4) | Idempotencia por `correlation_key` evita duplicados; el spam solo aparece en un stream continuo. | `ops/incidents.py` |
 | API-01 | `POST /sources` + `/run` separados | El flujo es de un solo disparo desde la UI; las subidas ya quedan persistentes. | docs/09 §12/§16 |
 | API-02 | `GET /assessments/{id}/scores` explícito | Redundante: los puntajes ya se pliegan en `GET /assessments/{id}` y ningún consumidor lo pide. | docs/04 §6 |
-| OP-16 | Reintento automático de jobs huérfanos | `fail_if_stale` solo los marca `fallido`; reintentar automáticamente abre la puerta a duplicados y no hace falta en local. | docs/09 §20 |
+| OP-16 | Reintento automático de jobs huérfanos | Promovido en parte (docs/09 §104): el worker re-ejecuta un job dado por perdido en la cola; no se reintenta el de un worker muerto. | docs/09 §104 |
 | API-04 (parte) | Paginación por cursor y filtros en listados | Volúmenes mínimos y uso local. (`problem+json` y `methodology_version` siguen en docs/11.) | docs/04 §6 |
 | TS-04 | Cobertura extra: handlers de la CLI, `test_methodology_loader`, ingesta con solape parcial | No protege ningún comportamiento crítico. | docs/09 §13/§25 |
 | DEP-01 | Despliegue real (nginx + dominio, `VITE_API_BASE_URL`, `CORS_ORIGINS`) | El prototipo corre solo en local con Compose. | docs/09 §19 |
@@ -84,6 +84,12 @@ estas medidas no tienen superficie real aquí.
 | AMP-09 | Validar `valor_schema` de verdad | `evidence_types.yml` declara un `valor_schema` por tipo y `methodology/schemas.py` lo tipa como `dict`, pero **nunca se ejecuta**: no hay jsonschema y nada valida `EvidenceInstance.value` contra él. `modalidad_permitida` y `requiere_locator` tampoco se hacen cumplir. Con los **seis tipos nuevos** de la Oleada C el contrato de evidencia es hoy documentación, no garantía: un adaptador que emitiera una clave mal escrita no fallaría al arrancar, fallaría en una regla con un `KeyError` o, peor, con un `.get()` que devuelve `None` y baja un puntaje en silencio. Coste: una dependencia de jsonschema, validar en `loader.py` al cargar y en los adaptadores al emitir (o solo en los tests, que ya sería la mitad del valor). | docs/02, docs/09 §90-§94 |
 | AMP-10 | Topología de red como señal (`aws_vpc`/`subnet`/`route_table`) para `ID.AM-03` | Alcanzable y del mismo tipo que lo que hizo la Oleada C, pero es otra familia de recursos y otra forma de evidencia (una representación de flujos, no un atributo por recurso). Se dejó fuera para no estirar la oleada. | docs/09 §90 |
 | AMP-08 | `CRI-GV-05` en el cruce de privacidad (`PRIVACY_CRITERIA`) | `GV.OC-03` nombra explícitamente los requisitos de privacidad, pero eso es **Govern-P** del PF 1.0, y el alcance declarado del cruce (docs/00 §6, docs/03 §7) son Identify-P, Protect-P y los eventos. Añadirlo ensancha un límite de alcance que el informe también enuncia, así que es una decisión de alcance y no un detalle de UI. | docs/09 §73 |
+| AMP-11 | Votación de U2/U3 y retención/limpieza de `ai_results` | U1 ya vota 3 corridas en un miss; U2 (ajuste, una llamada por criterio) y U3 (planes) siguen siendo una sola llamada, y votarlas triplicaría el costo de ~75 % de las llamadas para ganar precisión sobre una salida que J1–J7 ya acotan. `ai_results` crece sin TTL ni purga: es barato a esta escala, pero un despliegue largo necesita una política de retención (por antigüedad o por organización) y un job de limpieza. | docs/05 §7/§8, docs/09 §105 |
+
+**Deuda medida del golden set:** la corrida real quedó en recall 85 % (50/59) frente al mínimo de
+90 % y en citas localizables 96 % (docs/05 §8). Cerrar esa brecha es trabajo futuro: más votos o un
+prompt mejor antes de ampliar el golden set, porque con 59 afirmaciones una no cubierta pesa casi
+2 pp.
 
 ### Subcategorías que el mapeo no podía declarar: cerrado
 

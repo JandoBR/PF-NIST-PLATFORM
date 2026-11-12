@@ -97,7 +97,7 @@ cantidades a dígitos con su unidad (“noventa días” → “90 días”) sin
 | E5 | Campos de tipo fecha/rol se validan contra formatos esperados; valores absurdos se descartan. Las cantidades escritas con palabras se normalizan a dígitos con su unidad en los campos de cantidad (retención, tolerancia, plazos, criterios de activación) y la frecuencia se reconoce desde una cantidad (“cada tres meses” → `trimestral`). |
 | E6 | Un chunk sin afirmaciones no genera evidencia; el documento completo se marca como analizado. |
 | E7 | Los prompts son **fijos por versión** (`prompt_version`); el modelo no los modifica. |
-| E8 | La cita de una afirmación encontrada **debe aparecer en el texto enviado** (sin distinguir mayúsculas, acentos, espacios ni puntuación/markdown; `app/ai/quotes.py`, la misma comparación que usa el golden set). Si no aparece, la afirmación se guarda con la limitación "cita no localizable" y no cuenta para ningún criterio; se informa como hallazgo `limitacion`. La cita se guarda en la evidencia (`doc.claim@2`). |
+| E8 | La cita de una afirmación encontrada **debe aparecer en el texto enviado** (sin distinguir mayúsculas, acentos, espacios ni puntuación/markdown; `app/ai/quotes.py`, la misma comparación que usa el golden set). Si no aparece, la afirmación se guarda con la limitación "cita no localizable" y no cuenta para ningún criterio; se informa como hallazgo `limitacion`. La cita se guarda en la evidencia (`doc.claim@3`). |
 | E9 | Cada afirmación `encontrado=true` declara `estado_declarado`: `vigente`, `inexistente` (negación explícita) o `planificado` (futuro). El motor convierte las dos últimas en `no_implementado` (0) citando el documento; un valor no reconocido descarta la afirmación y una afirmación sin el campo se lee como `vigente` (docs/01 §3, docs/09 §106). |
 
 ### 2.4 Por qué las reglas no las genera la IA
@@ -361,7 +361,7 @@ Usuario (json):
 - Salida por plan con esquema fijo (ver §4.1).
 - Prohibido proponer acciones que ejecuten cambios: los pasos son sugerencias para un humano.
 
-Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v2.txt`,
+Versión de prompts: carpeta `app/ai/prompts/` con archivos versionados (`extract_v6.txt`,
 `adjust_v1.txt`, `plan_v1.txt`). Cambiar un prompt cambia `prompt_version` y se registra en los ajustes.
 
 ## 7. Seguridad

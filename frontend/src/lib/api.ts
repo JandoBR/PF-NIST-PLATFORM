@@ -287,18 +287,20 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+export const JOB_POLL_TIMEOUT_MS = 15 * 60_000;
+
 /** Sondea `GET /jobs/{id}` hasta que el job termine (completado o fallido). `onTick` se llama
  * en cada lectura, incluida la final, para que la UI pueda mostrar progreso en vivo.
  *
- * Tiene **timeout** (por defecto 180 s) y acepta un `AbortSignal`: sin esto, un job que nunca
- * llega a estado terminal (p. ej. el stack sin `worker-core`, que lo deja `pendiente`) colgaba al
- * cliente para siempre. Lanza `JobTimeoutError` al agotarse el tiempo. */
+ * Tiene **timeout** (por defecto `JOB_POLL_TIMEOUT_MS`) y acepta un `AbortSignal`: sin esto, un job
+ * que nunca llega a estado terminal (p. ej. el stack sin `worker-core`, que lo deja `pendiente`)
+ * colgaba al cliente para siempre. Lanza `JobTimeoutError` al agotarse el tiempo. */
 export async function pollJob(
   jobId: string,
   opts: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal; onTick?: (job: JobOut) => void } = {}
 ): Promise<JobOut> {
   const intervalMs = opts.intervalMs ?? 800;
-  const timeoutMs = opts.timeoutMs ?? 180_000;
+  const timeoutMs = opts.timeoutMs ?? JOB_POLL_TIMEOUT_MS;
   const startedAt = Date.now();
   while (true) {
     if (opts.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -307,8 +309,9 @@ export async function pollJob(
     if (TERMINAL_JOB_STATES.includes(job.estado)) return job;
     if (Date.now() - startedAt > timeoutMs) {
       throw new JobTimeoutError(
-        `El job ${jobId} sigue en "${job.estado}" tras ${Math.round(timeoutMs / 1000)}s. ` +
-          'Revisa que worker-core/worker-logs estén corriendo, o vuelve a intentarlo.'
+        `El job ${jobId} sigue en "${job.estado}" tras ${Math.round(timeoutMs / 60_000)} min. ` +
+          'Puede seguir en cola o procesándose: consulta la pestaña Actividad para ver su estado, ' +
+          'o vuelve a intentarlo más tarde.'
       );
     }
     await sleep(intervalMs, opts.signal);

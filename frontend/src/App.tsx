@@ -46,7 +46,7 @@ const ACTIVE_KEY = 'pf.activeAssessmentId';
 //: Estados no terminales de una evaluación y cada cuánto se consulta la activa mientras dura.
 const IN_PROGRESS = ['pendiente', 'en_progreso'];
 const ACTIVE_POLL_MS = 3000;
-const ACTIVE_POLL_TIMEOUT_MS = 10 * 60_000;
+const ACTIVE_POLL_TIMEOUT_MS = 20 * 60_000;
 
 function formatWhen(iso: string): string {
   return formatDbDate(iso, 'es', {
@@ -235,7 +235,7 @@ function App() {
       if (Date.now() - startedAt > ACTIVE_POLL_TIMEOUT_MS) {
         window.clearInterval(timer);
         setPollNotice(
-          'La evaluación sigue en cola o procesándose tras 10 minutos y se dejó de consultar. Revisa la pestaña Actividad para ver el estado del job.'
+          'La evaluación sigue en cola o procesándose tras 20 minutos y se dejó de consultar. Revisa la pestaña Actividad para ver el estado del job.'
         );
         return;
       }
