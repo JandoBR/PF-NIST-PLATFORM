@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 
+from app.ai.numbers import normalizar_cantidades
 from app.ai.quotes import normalize
 from app.evaluation.rules._common import (
     best_found_with,
@@ -36,11 +37,12 @@ _UNIDADES_DIAS = (
 
 
 def retencion_politica_dias(claim: EvidenceInstance) -> int | None:
-    """Dias de `contenido.retencion` (texto libre: "7 dias", "7d", "2 semanas", "1 mes", "1 año").
-    Meses y años son aproximados (30 y 365 dias)."""
+    """Dias de `contenido.retencion` (texto libre: "7 dias", "7d", "2 semanas", "noventa dias").
+    Meses y años son aproximados (30 y 365 dias). Las cantidades escritas con palabras se
+    normalizan antes de leer el numero (docs/09 §106)."""
 
     contenido = claim.value.get("contenido") or {}
-    texto = normalize(str(contenido.get("retencion") or ""))
+    texto = normalize(normalizar_cantidades(str(contenido.get("retencion") or "")))
     coincidencia = _RETENCION_RE.search(texto)
     if coincidencia is None:
         return None

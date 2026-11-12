@@ -44,7 +44,8 @@ def _superado_por_verificacion(
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    verificacion = best_found_with(doc_claims(evidence, "backup_policy"), "verificacion_integridad")
+    politicas = doc_claims(evidence, "backup_policy")
+    verificacion = best_found_with(politicas, "verificacion_integridad")
     doc_verifica = verificacion is not None and _verificacion_documentada(verificacion)
 
     ventana = by_type(evidence, "log.window")
@@ -63,6 +64,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVIDENCIA_INSUFICIENTE,
             None,
             "Sin ventana de observacion completa ni politica que exija verificacion.",
+            [c.id for c in politicas],
         )
 
     ejercicio = latest_pattern(evidence, "restore_exercise_run")

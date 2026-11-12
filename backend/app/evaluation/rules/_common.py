@@ -54,9 +54,161 @@ def _orden(claim: EvidenceInstance) -> tuple:
 
 
 def found(claims: list[EvidenceInstance]) -> list[EvidenceInstance]:
-    """Las afirmaciones `encontrado=true`, de mas a menos confiable y con desempate estable."""
+    """Las afirmaciones `encontrado=true` que declaran la practica **vigente**.
 
-    return sorted((c for c in claims if c.value.get("encontrado")), key=_orden)
+    Un plan declarado ("se implementara en 2027") tambien trae `encontrado=true`, pero no acredita
+    la practica de hoy: una regla no puede sumarlo como si ya estuviera en marcha (docs/09 §106).
+    Sigue disponible para `aplicar_estado_declarado`, que lo convierte en 0 citandolo."""
+
+    return sorted(
+        (c for c in claims if c.value.get("encontrado") and not es_plan_declarado(c)),
+        key=_orden,
+    )
+
+
+#: Lo que el documento declara sobre la practica (`doc.claim@3`, docs/09 §106).
+ESTADO_VIGENTE = "vigente"
+ESTADO_INEXISTENTE = "inexistente"
+ESTADO_PLANIFICADO = "planificado"
+_ESTADOS_DECLARADOS = (ESTADO_VIGENTE, ESTADO_INEXISTENTE, ESTADO_PLANIFICADO)
+
+
+def estado_declarado(claim: EvidenceInstance) -> str:
+    """Estado que la afirmacion declara sobre la practica.
+
+    Una afirmacion guardada antes de `doc.claim@3` no trae el campo: se lee como vigente, que es lo
+    que significaba entonces. `extraction` descarta un valor que no reconoce, asi que un valor
+    invalido solo puede venir de evidencia manipulada y tampoco se interpreta como ausencia."""
+
+    valor = claim.value.get("estado_declarado")
+    return valor if valor in _ESTADOS_DECLARADOS else ESTADO_VIGENTE
+
+
+def es_ausencia_declarada(claim: EvidenceInstance) -> bool:
+    """El documento niega explicitamente la practica ("no hay responsable de seguridad")."""
+
+    return (
+        bool(claim.value.get("encontrado"))
+        and claim.limitations is None
+        and estado_declarado(claim) == ESTADO_INEXISTENTE
+    )
+
+
+def es_plan_declarado(claim: EvidenceInstance) -> bool:
+    """El documento declara la practica como futura o pendiente ("se implementara en 2027")."""
+
+    return (
+        bool(claim.value.get("encontrado"))
+        and claim.limitations is None
+        and estado_declarado(claim) == ESTADO_PLANIFICADO
+    )
+
+
+def _declaraciones(claims: list[EvidenceInstance], tipo: str) -> list[EvidenceInstance]:
+    return [
+        c
+        for c in claims
+        if c.value.get("tipo_afirmacion") == tipo
+        and c.value.get("encontrado")
+        and c.limitations is None
+    ]
+
+
+def _cita(claim: EvidenceInstance) -> str:
+    cita = str(claim.value.get("cita") or "").strip()
+    return f" «{cita}»" if cita else ""
+
+
+def aplicar_estado_declarado(
+    resultado: CriterionResult, evidence: list[EvidenceInstance]
+) -> CriterionResult:
+    """Convierte una negacion o un plan explicito del documento en el resultado que corresponde.
+
+    Una afirmacion `encontrado=true` describia la practica aunque el texto dijera "no existe": la
+    regla la sumaba como si estuviera vigente. Aca, una vez calculada la regla, se mira el estado
+    de las afirmaciones que la regla cito (docs/09 §106):
+
+    - `inexistente`: el documento da evidencia explicita de ausencia, asi que el criterio es
+      `no_implementado` con 0 y la explicacion cita el documento (`docs/01 §3`). No es silencio
+      documental: el documento habla, y dice que la practica no esta.
+    - `planificado`: el documento declara que la practica llegara despues. Tampoco se acredita
+      (`no_implementado`, 0): un plan es informacion explicita de que hoy no esta en marcha.
+      `found` lo excluye de la suma de contenido, asi que un plan nunca aporta campos por si solo.
+
+    Vale si el criterio se apoyo en esa afirmacion y ningun otro documento la declara vigente. Si
+    otro documento la afirma, no se elige ganador: la contradiccion documento-vs-documento ya
+    excluye ambas afirmaciones para ese criterio (`evaluation/contradictions.py`, docs/02 §5), y
+    aca se deja la nota visible por si la exclusion no llego a aplicarse. Una regla que no pudo
+    acreditar nada (`evidencia_insuficiente`) tambien pasa a 0: con una negacion o un plan delante,
+    el documento no calla, dice que la practica no esta. El motor lo aplica a todas las reglas,
+    igual que `marcar_sin_respuesta` y `marcar_contradicciones`."""
+
+    if (
+        resultado.estado in (Estado.ERROR, Estado.NO_APLICABLE)
+        or not resultado.evidence_ids
+        or AVISO_SIN_RESPUESTA in resultado.explanation
+    ):
+        return resultado
+
+    todas = by_type(evidence, "doc.claim")
+    por_id = {c.id: c for c in todas}
+    citadas = [por_id[i] for i in resultado.evidence_ids if i in por_id]
+    if not citadas:
+        return resultado
+
+    for tipo in sorted({str(c.value.get("tipo_afirmacion")) for c in citadas}):
+        declaraciones = _declaraciones(todas, tipo)
+        negadas = [c for c in declaraciones if estado_declarado(c) == ESTADO_INEXISTENTE]
+        planes = [c for c in declaraciones if estado_declarado(c) == ESTADO_PLANIFICADO]
+        if not negadas and not planes:
+            continue
+        elegida = sorted(negadas or planes, key=_orden)[0]
+        mismo_scope = [c for c in declaraciones if c.scope == elegida.scope]
+        vigentes = [c for c in mismo_scope if estado_declarado(c) == ESTADO_VIGENTE]
+        if vigentes:
+            otro = next(
+                (v for v in vigentes if v.subject_ref != elegida.subject_ref),
+                None,
+            )
+            if otro is not None:
+                if not negadas:
+                    continue  # otro documento declara la practica planificada como vigente
+                detalle = ", ".join(
+                    _archivo(c)
+                    for c in sorted(negadas + planes, key=_orden)
+                    if c.scope == elegida.scope
+                )
+                return resultado.model_copy(
+                    update={
+                        "explanation": (
+                            f"{resultado.explanation} Contradiccion documental: {detalle} declara"
+                            f" que no existe y {_archivo(otro)} lo declara vigente; no se elige un"
+                            " ganador."
+                        )
+                    }
+                )
+            if resultado.estado != Estado.EVIDENCIA_INSUFICIENTE:
+                continue  # el mismo documento tambien lo afirma: vale la mas confiable (§101)
+
+        if estado_declarado(elegida) == ESTADO_INEXISTENTE:
+            explicacion = (
+                f"El documento {_archivo(elegida)} declara que no existe: {_cita(elegida)}."
+                " Es evidencia explicita de ausencia, no silencio documental."
+            )
+        else:
+            explicacion = (
+                f"El documento {_archivo(elegida)} declara la practica como planificada, no"
+                f" vigente: {_cita(elegida)}. Un plan declarado no acredita la practica hoy."
+            )
+        return result(
+            str(resultado.criterion_id),
+            Estado.EVALUADO,
+            0,
+            explicacion,
+            [elegida.id],
+        )
+
+    return resultado
 
 
 @dataclass(frozen=True)

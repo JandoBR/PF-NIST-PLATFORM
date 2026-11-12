@@ -18,6 +18,9 @@ class ExtractedClaim(BaseModel):
     cita: Cita | None = None
     #: 0.0-1.0. Un `NaN`/`Infinity` que `json.loads` acepta no es una confianza utilizable.
     confianza: float = Field(default=0.0, ge=0.0, le=1.0)
+    #: v6 (docs/09 §106): vigente | inexistente | planificado. `None` en una respuesta anterior a
+    #: v6 se lee como vigente; `extraction` descarta el valor que no reconoce.
+    estado_declarado: str | None = None
 
 
 class ExtractionResponse(BaseModel):

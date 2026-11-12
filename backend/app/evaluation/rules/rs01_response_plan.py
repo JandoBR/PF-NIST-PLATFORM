@@ -56,7 +56,8 @@ def _escalamiento_posterior(
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    planes = found([c for c in doc_claims(evidence, "process_defined") if _es_de_respuesta(c)])
+    candidatos = [c for c in doc_claims(evidence, "process_defined") if _es_de_respuesta(c)]
+    planes = found(candidatos)
     contenido, aportantes = merged_content(planes)
     escalation = best_found(doc_claims(evidence, "escalation_path"))
     escalado = latest_pattern(evidence, "escalation_done")
@@ -91,6 +92,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVIDENCIA_INSUFICIENTE,
             None,
             "Sin plan de respuesta documentado ni evidencia operativa suficiente.",
+            [c.id for c in candidatos],
         )
 
     completo = bool(

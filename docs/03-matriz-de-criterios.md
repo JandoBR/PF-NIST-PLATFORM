@@ -23,6 +23,8 @@ Reglas transversales:
   (docs/09 §60). Un 0 exige evidencia explícita de ausencia, que en la práctica solo da la configuración
   técnica (p. ej. cifrado `disabled`) o un escenario de eventos (una falla observada).
 - Una afirmación cuya cita no aparece en el documento no cuenta para ningún criterio (docs/05 §2.3 E8).
+- **Negación explícita y plan declarado (`doc.claim@3`):** una afirmación `encontrado=true` trae `estado_declarado`. Si es `inexistente` (“no hay responsable de seguridad”, “no existe procedimiento de respuesta”), el documento da evidencia explícita de ausencia: el criterio es `no_implementado` con 0 y la explicación cita el documento. Si es `planificado` (“se implementará en 2027”), la práctica no está en marcha y tampoco se acredita (0). Lo aplica el motor a todas las reglas documentales; no hace falta que cada regla lo repita (docs/09 §106). Si otro documento distinto la declara vigente, se registran ambos y ninguno cuenta para ese criterio (docs/02 §5).
+- Las cantidades escritas con palabras se normalizan a dígitos con su unidad antes de puntuar (“noventa días” → “90 días”, “setenta y dos horas” → “72 horas”), tanto al extraer como en la regla que lee el número (docs/09 §106).
 - **Afirmaciones fragmentadas:** un documento largo se parte en fragmentos y cada fragmento produce
   su propio `doc.claim`. Cuando un criterio mide varias facetas del mismo tipo de afirmación (GV-02,
   GV-03, GV-04, GV-05, GV-06, ID-03, ID-04, ID-05, PR-07, RC-01, RS-01 y RS-03), la regla agrega los
@@ -82,6 +84,7 @@ Resumen de cobertura del catálogo:
   - 50: roles definidos sin autoridad explícita.
   - 25: roles genéricos (“el área de TI”) o sin un responsable nombrado.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
+  - Un documento que declara que **no hay responsable designado** (`estado_declarado: inexistente`) sí es evidencia explícita de ausencia: 0 (`no_implementado`), citando el documento (docs/09 §106).
 - **Recomendación:** designar responsable de seguridad y dueños de activos con autoridad explícita, asignarles recursos acordes a la estrategia de riesgo e incorporar la ciberseguridad a las prácticas de personal.
 
 ### CRI-GV-03 — Estrategia de gestión del riesgo
@@ -242,7 +245,7 @@ Resumen de cobertura del catálogo:
   - 50: backups habilitados con retención < política. La política sigue contando (fija el requisito) y además se informa como hallazgo de contradicción (docs/09 §64).
   - 25: alguna base con retención en 0 y otras con backups.
   - 0: ninguna base resuelta tiene backups (retención en 0 en todas).
-  - La retención de la política se lee con unidades (días, semanas, meses ≈ 30 días, años ≈ 365).
+  - La retención de la política se lee con unidades (días, semanas, meses ≈ 30 días, años ≈ 365) y con cantidades escritas con palabras (“noventa días” → 90 días, docs/09 §106).
   - `unknown` → insuficiente.
 - **Recomendación:** alinear retención de backups con la política y asegurar su cifrado.
 
@@ -462,6 +465,7 @@ Resumen de cobertura del catálogo:
   - 75: procedimiento con pasos, sin criterios de activación o sin responsables.
   - 50: recuperación mencionada de forma genérica (sin pasos), o solo una política de backups sin procedimiento de recuperación.
   - Los documentos analizados no lo declaran (o lo marcan como no encontrado) → `evidencia_insuficiente`, **no 0**: el silencio de un documento no prueba que la práctica falte. Se informa como hallazgo `limitacion` (docs/09 §60).
+  - Un documento que declara que **no existe un procedimiento de recuperación** (`estado_declarado: inexistente`) da evidencia explícita de ausencia: 0, aunque una política de backups se mencione aparte (docs/09 §106).
   - Sin afirmaciones de proceso ni de backups → `evidencia_insuficiente`.
 - **Recomendación:** documentar el procedimiento de recuperación con responsables y criterios de inicio.
 

@@ -28,7 +28,13 @@ from collections.abc import Callable, Iterable
 
 from pydantic import BaseModel
 
-from app.evaluation.rules._common import best_found, by_type, doc_claims
+from app.evaluation.rules._common import (
+    best_found,
+    by_type,
+    doc_claims,
+    es_ausencia_declarada,
+    estado_declarado,
+)
 from app.evaluation.rules.pr02_backup import retencion_politica_dias
 from app.evaluation.schemas import CriterionResult
 from app.schemas.evidence import EvidenceInstance
@@ -36,6 +42,45 @@ from app.schemas.evidence import EvidenceInstance
 _PR02 = "CRI-PR-02"
 _GV01 = "CRI-GV-01"
 _PR05 = "CRI-PR-05"
+
+#: Criterios que leen cada tipo de afirmacion. `detect` es global y un hallazgo pertenece a un
+#: criterio: sin este mapa una contradiccion documento-vs-documento sobre "existe/no existe" no
+#: sabria a que puntaje afecta (docs/09 §106).
+_CRITERIOS_POR_TIPO: dict[str, tuple[str, ...]] = {
+    "policy_exists": ("CRI-GV-01",),
+    "policy_review": ("CRI-GV-04",),
+    "role_assigned": ("CRI-GV-02",),
+    "risk_tolerance": ("CRI-GV-03",),
+    "backup_policy": ("CRI-PR-02", "CRI-RC-01", "CRI-RC-02"),
+    "notification_list": ("CRI-DE-03", "CRI-RC-03", "CRI-RS-03"),
+    "escalation_path": ("CRI-RS-01",),
+    "org_context": ("CRI-GV-05",),
+    "supplier_program": ("CRI-GV-06",),
+    "training_program": ("CRI-PR-07",),
+    "exposure_policy": ("CRI-PR-05",),
+    "data_inventory": ("CRI-ID-01", "CRI-ID-02", "CRI-ID-04"),
+}
+
+#: `process_defined` sirve a varios criterios segun el `proceso` que declara el documento.
+_CRITERIOS_POR_PROCESO: tuple[tuple[str, str], ...] = (
+    ("respuesta", "CRI-RS-01"),
+    ("recuperacion", "CRI-RC-01"),
+    ("riesgos", "CRI-ID-03"),
+    ("analisis", "CRI-RS-02"),
+    ("contencion", "CRI-RS-04"),
+    ("mejora", "CRI-ID-05"),
+    ("revision", "CRI-GV-04"),
+)
+
+
+def _criterios_de(claim: EvidenceInstance) -> tuple[str, ...]:
+    """Criterios a los que afecta una afirmacion de ese tipo (y proceso, si aplica)."""
+
+    tipo = str(claim.value.get("tipo_afirmacion"))
+    if tipo == "process_defined":
+        proceso = str((claim.value.get("contenido") or {}).get("proceso", "")).lower()
+        return tuple(criterio for palabra, criterio in _CRITERIOS_POR_PROCESO if palabra in proceso)
+    return _CRITERIOS_POR_TIPO.get(tipo, ())
 
 
 class Contradiction(BaseModel):
@@ -194,6 +239,61 @@ def _documents_disagree(
     return findings
 
 
+def _absence_disagreement(evidence: list[EvidenceInstance]) -> list[Contradiction]:
+    """Un documento niega la practica y otro la declara vigente (docs/02 §5, docs/09 §106).
+
+    Es el caso de borde de `aplicar_estado_declarado`: la ausencia no se impone sobre otro
+    documento. Se registran ambos lados y, como en cualquier documento-vs-documento, ninguno cuenta
+    para puntuar el criterio afectado; sin exclusion, la regla acreditaria la version vigente y la
+    negacion quedaria invisible."""
+
+    claims = [
+        c
+        for c in by_type(evidence, "doc.claim")
+        if c.value.get("encontrado") and c.limitations is None
+    ]
+    grupos: dict[tuple[str, str], list[EvidenceInstance]] = {}
+    for claim in claims:
+        clave = (claim.scope, str(claim.value.get("tipo_afirmacion")))
+        grupos.setdefault(clave, []).append(claim)
+
+    findings: list[Contradiction] = []
+    for clave, grupo in sorted(grupos.items()):
+        tipo = clave[1]
+        ausencias = [c for c in grupo if es_ausencia_declarada(c)]
+        vigentes = [c for c in grupo if estado_declarado(c) == "vigente"]
+        if not ausencias or not vigentes:
+            continue
+        documentos = {c.subject_ref for c in grupo}
+        if len(documentos) < 2:
+            continue
+        lados = [lado for lado in (best_found(ausencias), best_found(vigentes)) if lado is not None]
+        if len({c.subject_ref for c in lados}) < 2:
+            continue
+        criterios = sorted(
+            {criterio for claim in ausencias + vigentes for criterio in _criterios_de(claim)}
+        )
+        if not criterios:
+            continue
+        detalle = (
+            f"{' y '.join(sorted({c.subject_ref for c in ausencias}))} declara que {tipo} no"
+            f" existe; {' y '.join(sorted({c.subject_ref for c in vigentes}))} lo declara vigente."
+            " Se registran ambos; ninguno cuenta para el puntaje."
+        )
+        for criterio in criterios:
+            findings.append(
+                _finding(
+                    criterio,
+                    "Dos documentos contradicen la existencia de la practica",
+                    "media",
+                    detalle,
+                    [c.id for c in lados],
+                    [c.id for c in grupo],
+                )
+            )
+    return findings
+
+
 def _frecuencia(claim: EvidenceInstance) -> str | None:
     valor = (claim.value.get("contenido") or {}).get("frecuencia")
     return str(valor).lower() if valor else None
@@ -207,6 +307,7 @@ def detect(evidence: list[EvidenceInstance]) -> list[Contradiction]:
     return [
         *_backup_vs_policy(evidence),
         *_database_exposure_vs_policy(evidence),
+        *_absence_disagreement(evidence),
         *_documents_disagree(
             evidence,
             "backup_policy",

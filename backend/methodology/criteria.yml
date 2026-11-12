@@ -56,7 +56,10 @@
 #      del 100 baja: con todo cifrado en reposo pero sin observacion del canal, 75 (docs/09 §93).
 # v24: Oleada C (5/5) - CRI-PR-04 pasa a cubrir tambien PR.PS-02 (mantenimiento de software) con
 #      `an.package.state`, y su 100 exige una tarea que actualice versiones (docs/09 §94).
-version: 24
+# v25: toda regla documental lee `estado_declarado` (doc.claim@3): una negacion explicita o un plan
+#      declarado no acreditan la practica. Es central (engine/_common), no cambia el tramo de cada
+#      regla (docs/09 §106).
+version: 25
 criterios:
   - id: CRI-GV-01
     version: 1

@@ -14,7 +14,9 @@
 #     (docs/09 §93).
 # v10: an.package.state: que hace una tarea de Ansible con los paquetes, para PR.PS-02
 #      (docs/09 §94).
-version: 10
+# v11: doc.claim@3 declara `estado_declarado` (vigente/inexistente/planificado), para que una
+#      negacion o un plan del documento no se lean como practica vigente (docs/09 §106).
+version: 11
 tipos:
   - id: tf.resource.present
     version: 1
@@ -297,6 +299,30 @@ tipos:
     publicado: "2026-10-02"
     notas: >
       v2 agrega `cita`. v1 queda para reproducir evaluaciones anteriores.
+
+  - id: doc.claim
+    version: 3
+    descripcion: >
+      Afirmacion estructurada extraida por IA de un documento, con su cita textual y el estado que
+      el documento declara sobre la practica: vigente, inexistente (negacion explicita) o
+      planificado (futuro). Una ausencia o un plan declarado no acredita la practica (docs/09 §106).
+    valor_schema:
+      type: object
+      required: [tipo_afirmacion, encontrado, confianza]
+      properties:
+        tipo_afirmacion: { type: string }
+        contenido: { type: object }
+        encontrado: { type: boolean }
+        confianza: { type: number }
+        cita: { type: [string, "null"] }
+        estado_declarado: { enum: [vigente, inexistente, planificado, "null"] }
+    modalidad_permitida: [documental]
+    requiere_locator: true
+    estado: published
+    publicado: "2026-11-11"
+    notas: >
+      v3 agrega `estado_declarado` (obligatorio con `encontrado=true`; ausente en v2 se lee como
+      vigente). v1 y v2 quedan para reproducir evaluaciones anteriores.
 
   - id: doc.source.info
     version: 1

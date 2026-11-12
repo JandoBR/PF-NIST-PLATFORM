@@ -105,7 +105,7 @@ Alcance inicial: módulos `lineinfile`, `copy`, `template` (solo rutas), `file`,
 
 | ID | value (resumen) | Uso principal |
 |---|---|---|
-| `doc.claim` | `{ tipo_afirmacion, contenido, encontrado, confianza, cita }` | Afirmación estructurada extraída por IA. **v2** guarda la cita textual; si la cita no aparece en el texto analizado, la afirmación se guarda con una limitación y no cuenta para puntuar (docs/05 E8). v1 queda para evaluaciones anteriores. |
+| `doc.claim` | `{ tipo_afirmacion, contenido, encontrado, confianza, cita, estado_declarado }` | Afirmación estructurada extraída por IA. **v2** guarda la cita textual; si la cita no aparece en el texto analizado, la afirmación se guarda con una limitación y no cuenta para puntuar (docs/05 E8). **v3** agrega `estado_declarado` (`vigente` \| `inexistente` \| `planificado`): una negación explícita o un plan no acreditan la práctica (docs/09 §106). v1 y v2 quedan para evaluaciones anteriores. |
 | `doc.source.info` | `{ titulo, archivo, secciones, analizadas, omitidas, sin_respuesta }` | Marca de documento analizado (E6): cuántas secciones tenía y cuántas contestó la IA. No se emite si la IA no contestó ninguna. Se muestra en el informe. (`version_documento`/`fecha` no se extraen: el texto del documento no los garantiza.) |
 
 Tipos de afirmación (`tipo_afirmacion`) usados por los criterios:
@@ -128,6 +128,7 @@ Reglas de extracción:
 
 - Cada afirmación exige **fragmento textual y localización** (página/sección). Sin cita → se descarta.
 - `encontrado: false` es válido: significa “el documento no lo declara”, no “no existe”.
+- `estado_declarado` (`v3`, obligatorio con `encontrado: true`) distingue la práctica **vigente** de su **negación explícita** (`inexistente`: “no hay responsable”, “no existe procedimiento”) y del **plan futuro** (`planificado`: “se implementará en 2027”). En los dos últimos casos `cita.fragmento` es la frase literal que lo niega o lo planifica. Una afirmación sin el campo (anterior a v3) se lee como `vigente`; un valor que no se reconoce se descarta al extraer y no se interpreta como ausencia. El motor convierte una ausencia declarada en `no_implementado` (0) y un plan en 0 sin acreditar (docs/01 §3, docs/09 §106).
 - La confianza baja (`< umbral`) se marca como limitación y no se usa como evidencia suficiente.
 - No se piden ni se persisten credenciales, claves ni datos personales: el modelo solo extrae los campos declarados. La **redacción de secretos antes de enviar** está pendiente para uso real (docs/12 SEC-07).
 
@@ -175,6 +176,7 @@ cuando ambas hablan del mismo recurso, propiedad y alcance.**
 | Terraform tiene expresión no resuelta | No contradice al documento; es limitación. | Criterio → `evidencia_insuficiente` para ese recurso. |
 | Fuentes de entornos o momentos distintos | No se comparan ni contradicen. | Requieren mismo `scope` y ventana compatible. |
 | Dos documentos se contradicen | Se registran ambos; el criterio decide con su regla (usualmente gana la fuente más reciente o específica). | Hallazgo de contradicción documental. |
+| Un documento dice que no existe la práctica y otro la declara vigente | Se registran ambos lados; ninguno cuenta para el criterio afectado. | Hallazgo de contradicción documental (docs/09 §106). |
 
 Las contradicciones se registran como **hallazgos** con ambos lados citados (evidencia + locator).
 No penalizan doble: el hallazgo referencia el criterio afectado una sola vez.

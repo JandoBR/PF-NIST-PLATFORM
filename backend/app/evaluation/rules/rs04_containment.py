@@ -36,7 +36,8 @@ def _es_de_contencion(claim: EvidenceInstance) -> bool:
 
 
 def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
-    plan = best_found([c for c in doc_claims(evidence, "process_defined") if _es_de_contencion(c)])
+    candidatos = [c for c in doc_claims(evidence, "process_defined") if _es_de_contencion(c)]
+    plan = best_found(candidatos)
     con_pasos = plan is not None and bool((plan.value.get("contenido") or {}).get("pasos"))
 
     contenido = latest_pattern(evidence, "containment_done")
@@ -67,6 +68,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVIDENCIA_INSUFICIENTE,
             None,
             "Sin ventana de observacion completa ni procedimiento de contencion documentado.",
+            [c.id for c in candidatos],
         )
 
     ids = [e.id for e in (ventana[0], plan, contenido) if e is not None]

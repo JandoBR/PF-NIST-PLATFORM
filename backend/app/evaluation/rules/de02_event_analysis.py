@@ -72,6 +72,7 @@ def evaluate(evidence: list[EvidenceInstance]) -> CriterionResult:
             Estado.EVIDENCIA_INSUFICIENTE,
             None,
             "Sin ventana de observacion completa ni criterios de declaracion documentados.",
+            [c.id for c in doc],
         )
 
     alerta = latest_pattern(evidence, "alert_raised")
