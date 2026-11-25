@@ -4416,3 +4416,24 @@ reprodujo el `semestral` en 1 de 3 corridas y con confianza 0,55 (no usable): el
 depende de la varianza y con `U1_VOTES=3` una mayoría puede superar el umbral de 0,6. La comparación
 de regresión usa 3 corridas v8 frente a 6 v7 y no distingue una pérdida real de una corrida que el
 modelo decidió no emitir.
+
+## 116. Recomendaciones en subpestañas y sin botones de IA
+
+**Síntoma.** En la pestaña Recomendaciones, las tarjetas de contradicciones y de limitaciones se
+apilaban encima de la lista de recomendaciones y la empujaban hacia abajo; además la UI ofrecía dos
+botones de IA que no se querían exponer: «Re-extraer con IA» (Dashboard) y «Regenerar con IA» /
+«Generar plan con IA» (Recomendaciones).
+
+**Cambio.** Solo frontend. `RecommendationEngine.tsx` muestra tres subpestañas con contador
+(Recomendaciones, Contradicciones, Limitaciones) y renderiza solo la activa; una subpestaña sin
+elementos muestra un mensaje. Se quitan los dos botones, con su estado, su manejo de errores y los
+imports sin uso (`MaturityDashboard.tsx`, `App.tsx`). El nombre de la pestaña principal sigue siendo
+«Recomendaciones». Los planes siguen saliendo de la plantilla determinista al completar la evaluación
+(§25).
+
+**No cambia.** El backend: `reextraer=true` (§105) y `POST /assessments/{id}/plans` siguen en la API
+y `reevaluateAssessment` / `createPlans` siguen en `lib/api.ts`, sin uso desde la UI. Quien quiera
+forzar una extracción nueva debe llamar a la API.
+
+**Pruebas.** `npm run typecheck`, `npm run lint` y `npm run build` limpios. El frontend no tiene
+pruebas automáticas; la interfaz no se probó en un navegador al escribir esta entrada.

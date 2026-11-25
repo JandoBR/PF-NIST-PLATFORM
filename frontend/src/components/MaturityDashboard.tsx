@@ -10,11 +10,9 @@ import {
   Lock,
   Library,
   AlertTriangle,
-  RefreshCw,
 } from 'lucide-react';
-import { downloadExecutiveReport, getMethodology, reevaluateAssessment } from '@/lib/api';
+import { downloadExecutiveReport, getMethodology } from '@/lib/api';
 import type {
-  AssessmentAccepted,
   AssessmentDetail,
   CriterionResult,
   Estado,
@@ -36,8 +34,6 @@ type TableMode = 'criteria' | 'privacy';
 interface DashboardProps {
   assessment: AssessmentDetail;
   criteria: CriterionResult[];
-  /** Se llama al aceptar (202) una reevaluación con IA: la nueva evaluación pasa a ser la activa. */
-  onReevaluated?: (accepted: AssessmentAccepted) => void;
 }
 
 const FILTERS: { key: Estado | 'all'; label: string }[] = [
@@ -57,13 +53,11 @@ function normalizeSearch(value: string): string {
     .toLowerCase();
 }
 
-export function MaturityDashboard({ assessment, criteria, onReevaluated }: DashboardProps) {
+export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
   const [estadoFilter, setEstadoFilter] = useState<Estado | 'all'>('all');
   const [funcFilter, setFuncFilter] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [tableMode, setTableMode] = useState<TableMode>('criteria');
-  const [reextrayendo, setReextrayendo] = useState(false);
-  const [reextraerError, setReextraerError] = useState<string | null>(null);
   // Cobertura DEL CATALOGO (AMP-04): metadato del producto, constante para esta version de
   // metodologia, asi que se pide una sola vez y no depende de la evaluacion que se este viendo.
   // Si falla, la seccion no se pinta: es metadato y nunca debe tumbar la matriz.
@@ -125,23 +119,6 @@ export function MaturityDashboard({ assessment, criteria, onReevaluated }: Dashb
     (archivo) => archivo ?? 'eventos anteriores (sin ingesta registrada)'
   );
   const ai = assessment.reproducibility?.ai;
-  const tieneDocumentos = Boolean(assessment.reproducibility?.adapters?.documents);
-  const enCurso = assessment.estado === 'pendiente' || assessment.estado === 'en_progreso';
-
-  async function handleReextraer() {
-    if (!onReevaluated || reextrayendo || enCurso) return;
-    setReextrayendo(true);
-    setReextraerError(null);
-    try {
-      onReevaluated(await reevaluateAssessment(assessment.id, { reextraer: true }));
-    } catch (err) {
-      setReextraerError(
-        err instanceof Error ? err.message : 'No se pudo iniciar la re-extracción.'
-      );
-    } finally {
-      setReextrayendo(false);
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -179,17 +156,6 @@ export function MaturityDashboard({ assessment, criteria, onReevaluated }: Dashb
           )}
         </p>
         <div className="flex flex-shrink-0 items-center gap-2">
-          {tieneDocumentos && onReevaluated && (
-            <button
-              onClick={() => void handleReextraer()}
-              disabled={enCurso || reextrayendo}
-              className="btn-ghost border border-white/10 px-3 py-2 text-xs"
-              title="Vuelve a llamar a la IA sobre los mismos documentos, ignorando los resultados guardados (U1 con voto por mayoría de 3). Útil si cambió el prompt o sospechas una extracción vieja."
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${reextrayendo ? 'animate-spin' : ''}`} />
-              {reextrayendo ? 'Re-encolando…' : 'Re-extraer con IA'}
-            </button>
-          )}
           <DownloadPdfButton
             label="Informe PDF"
             onDownload={() => downloadExecutiveReport(assessment.id)}
@@ -198,13 +164,6 @@ export function MaturityDashboard({ assessment, criteria, onReevaluated }: Dashb
           />
         </div>
       </div>
-
-      {reextraerError && (
-        <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/[0.07] p-3.5 text-xs text-rose-200">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-          <p className="leading-relaxed">{reextraerError}</p>
-        </div>
-      )}
 
       {assessment.estado === 'fallida' && (
         <div className="flex items-start gap-2.5 rounded-lg border border-rose-500/30 bg-rose-500/[0.07] p-3.5 text-xs text-rose-200">

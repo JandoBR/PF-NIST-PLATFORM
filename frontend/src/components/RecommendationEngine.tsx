@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
   Brain,
-  Sparkles,
   ListChecks,
   AlertTriangle,
   Loader2,
@@ -11,7 +10,7 @@ import {
   ChevronRight,
   Info,
 } from 'lucide-react';
-import { createPlans, updatePlanEstado } from '@/lib/api';
+import { updatePlanEstado } from '@/lib/api';
 import type { Finding, Plan, PlanEstado } from '@/lib/types';
 import { PLAN_ESTADOS, PLAN_ESTADO_META, SEVERITY_META } from '@/lib/ui';
 
@@ -25,6 +24,22 @@ interface Props {
 }
 
 const SEVERITY_ORDER: Finding['severidad'][] = ['alta', 'media', 'baja'];
+
+type SubTab = 'recomendaciones' | 'contradicciones' | 'limitaciones';
+
+const SUB_TABS: { key: SubTab; label: string; chip: string }[] = [
+  { key: 'recomendaciones', label: 'Recomendaciones', chip: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' },
+  { key: 'contradicciones', label: 'Contradicciones', chip: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
+  { key: 'limitaciones', label: 'Limitaciones', chip: 'border-sky-500/30 bg-sky-500/10 text-sky-300' },
+];
+
+function EmptyTab({ text }: { text: string }) {
+  return (
+    <div className="card flex flex-col items-center justify-center px-6 py-12 text-center text-xs text-slate-500">
+      {text}
+    </div>
+  );
+}
 
 export function RecommendationEngine({
   assessmentId,
@@ -41,22 +56,9 @@ export function RecommendationEngine({
   );
   const limitations = useMemo(() => allFindings.filter((f) => f.tipo === 'limitacion'), [allFindings]);
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [generating, setGenerating] = useState(false);
+  const [subTab, setSubTab] = useState<SubTab>('recomendaciones');
   const [savingPlan, setSavingPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  async function handleGenerate() {
-    setGenerating(true);
-    setError(null);
-    try {
-      const updated = await createPlans(assessmentId);
-      onPlansUpdated(updated);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido.');
-    } finally {
-      setGenerating(false);
-    }
-  }
 
   async function setEstado(plan: Plan, estado: PlanEstado) {
     setSavingPlan(plan.id);
@@ -71,7 +73,6 @@ export function RecommendationEngine({
     }
   }
 
-  const hasPlans = plans.length > 0;
   const done = plans.filter((p) => p.estado === 'hecho').length;
 
   const orderedFindings = useMemo(
@@ -89,8 +90,6 @@ export function RecommendationEngine({
 
   return (
     <div className="space-y-6">
-      {contradictions.length > 0 && <ContradictionsCard items={contradictions} />}
-      {limitations.length > 0 && <LimitationsCard items={limitations} />}
       <div className="card p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -107,26 +106,35 @@ export function RecommendationEngine({
           </div>
         </div>
 
-        {findings.length > 0 && (
-          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/[0.06] pt-4">
-            <button
-              onClick={() => handleGenerate()}
-              disabled={generating}
-              className="btn-ghost border border-cyan-500/20 text-xs text-cyan-300 hover:text-cyan-200"
-              title="Recalcula el plan con la capa de IA (requiere DEEPSEEK_API_KEY configurada)."
-            >
-              {generating ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              {hasPlans ? 'Regenerar con IA' : 'Generar plan con IA'}
-            </button>
-            <span className="text-xs text-slate-600">
-              El plan se genera automáticamente desde la plantilla determinista; con IA se recalcula.
-            </span>
-          </div>
-        )}
+        <div className="mt-4 flex flex-wrap items-center gap-1 border-t border-white/[0.06] pt-4" role="tablist">
+          {SUB_TABS.map((t) => {
+            const count =
+              t.key === 'recomendaciones'
+                ? findings.length
+                : t.key === 'contradicciones'
+                  ? contradictions.length
+                  : limitations.length;
+            const active = subTab === t.key;
+            return (
+              <button
+                key={t.key}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setSubTab(t.key)}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  active
+                    ? 'bg-white/[0.08] text-white'
+                    : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'
+                }`}
+              >
+                {t.label}
+                <span className={`chip border text-[10px] ${count > 0 ? t.chip : 'border-white/10 text-slate-600'}`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
         {error && (
           <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3.5 text-xs text-amber-200">
@@ -139,6 +147,21 @@ export function RecommendationEngine({
         )}
       </div>
 
+      {subTab === 'contradicciones' &&
+        (contradictions.length > 0 ? (
+          <ContradictionsCard items={contradictions} />
+        ) : (
+          <EmptyTab text="No se detectaron contradicciones entre las fuentes." />
+        ))}
+
+      {subTab === 'limitaciones' &&
+        (limitations.length > 0 ? (
+          <LimitationsCard items={limitations} />
+        ) : (
+          <EmptyTab text="El análisis no registró limitaciones." />
+        ))}
+
+      {subTab === 'recomendaciones' && (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex items-center gap-1.5 text-xs text-slate-500">
@@ -169,6 +192,7 @@ export function RecommendationEngine({
           onSetEstado={setEstado}
         />
       </div>
+      )}
     </div>
   );
 }

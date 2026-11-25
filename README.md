@@ -62,7 +62,7 @@ Prototipo completo para su alcance declarado:
 - **Plataforma:** API REST con login y aislamiento por organización (doc 10), workers sobre Redis con
   historial y reintento de trabajos, informes en PDF, y despliegue completo con Docker Compose.
 - **Trazabilidad y determinismo:** cada evaluación consume las ingestas de eventos elegidas al crearla
-  (docs/09 §102); "Re-extraer con IA" ignora los resultados guardados y los reemplaza (§105); U1 vota
+  (docs/09 §102); `reextraer=true` en la API ignora los resultados guardados y los reemplaza (§105); U1 vota
   mayoría de 3 corridas sobre el store persistente `ai_results`, así que la misma entrada da el mismo
   resultado; y los workers publican heartbeat para no dar por perdido un job que sigue vivo (§104).
 - **Frontend:** los paneles de Resumen de Madurez, Recomendaciones, Eventos e Incidentes y Comparar, más la

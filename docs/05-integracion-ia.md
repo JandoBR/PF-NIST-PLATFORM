@@ -450,7 +450,7 @@ completa y el segundo conserva la primera respuesta. Un fallo de BD al leer se t
 evaluación sigue), y `None` (degradado) nunca se guarda. En U1, un miss con `U1_VOTES=3` ejecuta las
 tres corridas y guarda una sola respuesta votada (con el resumen de las crudas en `meta`); si solo
 una corrida respondió, no hay mayoría y no se guarda, para reintentar en la próxima evaluación.
-`reextraer=true` (POST de evaluación o reevaluación, botón «Re-extraer con IA») ignora las lecturas
+`reextraer=true` (POST de evaluación o reevaluación; la UI ya no ofrece botón, docs/09 §116) ignora las lecturas
 y reemplaza la respuesta guardada. `params_hash` incluye `store.FORMATO`; sube a **5** porque el
 voto agrupa cada `policy_exists` por la política que nombra (antes dos políticas del mismo chunk se
 fusionaban y solo sobrevivía una) y trata `tolerancia`, `plazos` y `criterios_activacion` como texto

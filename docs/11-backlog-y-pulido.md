@@ -35,6 +35,7 @@ y explicar qué hace. Criterio: que ningún botón exista sin efecto perceptible
   (`run_pending_assessment`, docs/09 §25); se quitó el botón manual. En Recomendaciones solo queda
   "Regenerar con IA" (explícito, sujeto al guard de costo). Provisional: a futuro se generará
   directamente con IA y se eliminará la plantilla.
+  Posterior (docs/09 §116): "Regenerar con IA" también se quitó de la UI.
 
 ### [x] UI-03 · Toggles de IA momentáneos (P1)
 Los checkboxes de IA (U1/U2) son **por corrida**: existen para no gastar tokens, no son una
