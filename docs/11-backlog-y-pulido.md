@@ -269,6 +269,7 @@ Quedó señalado y **sin hacer**:
 
 - [ ] La UI y el informe ejecutivo muestran solo el **número** de evidencias de un criterio; el archivo, las
   líneas y la cita verificada se guardan pero no se ven (`getEvidence` no se usa en el frontend).
+  **La UI ya lo muestra** (docs/09 §118, «Ver evidencia» por criterio); el informe PDF sigue sin hacerlo.
 - [ ] Un incidente no reacciona a hechos posteriores (ver docs/08 §4): las transiciones son manuales.
 - [ ] `valor_schema`, `modalidad_permitida` y `requiere_locator` de `evidence_types.yml` no se validan.
 - [ ] El scope no se puede elegir en la UI (fijo en `entorno:produccion`).
@@ -280,3 +281,30 @@ Quedó señalado y **sin hacer**:
 
 Decidido y **dejado como está**: `GV-01` elige la afirmación por confianza (conservador); el Tier usa el puntaje
 final con ajuste de IA (docs/01 §8.3 T6); validar la extracción afirmación por afirmación (sin casos reales).
+
+## J. Revisión de la evidencia por criterio y del silencio documental (2026-11-26)
+
+Revisión de código de docs/09 §118–§119 antes del push. Sin bloqueantes; quedó **sin hacer**:
+
+- [ ] **Alias de evidencia atados a una función privada.** `load_criterion_evidence`
+  (`app/core/assessment_service.py`) recalcula `e1`, `e2`... en cada lectura con
+  `app.ai.adjustment._canonical_evidence`, que no está versionada. Si cambia su orden (tipo + hash de
+  valor y limitaciones) o `sha256_json`, las explicaciones guardadas apuntan a otra evidencia sin
+  aviso, y el test actual no lo detecta porque calcula lo esperado con la misma función. Hacerla
+  pública (p. ej. `app/ai/canonical.py`), anotar que no se cambia sin migrar explicaciones y añadir
+  un test con alias → tipo/archivo fijos sobre un fixture. Es la de más valor.
+- [ ] **Una fila de evidencia que falte desplaza los alias.** `_canonical_evidence` descarta ids ausentes
+  y renumera desde 1, y la UI muestra el conteo de `evidence_ids`. Hoy no pasa (las filas no se
+  borran); numerar por posición en `evidence_ids` o devolver 409.
+- [ ] **Consulta del endpoint.** Cada despliegue carga todos los criterios y toda la evidencia de la
+  evaluación; filtrar el `CriterionResultRow` y la evidencia por `id.in_(...)`. Irrelevante con 31
+  criterios.
+- [ ] **Registro de la acción de §119.** «aporta… vuelve a evaluar» y luego la recomendación en
+  infinitivo («si no existe, clasificar…»); valorar «si no existe: <recomendacion>». Renombrar
+  `que_hacer_si_calla` con `_` como el resto de helpers de `limitations.py`.
+- [ ] **`EvidenceList`.** Sin «Reintentar» tras un error de carga (hay que cerrar y abrir); el valor
+  completo solo está en un `title` (no accesible por teclado), falta `aria-controls`; el fallback de
+  `MODALITY_META` es código muerto; solo se recorta la ruta `/uploads/<id>/`, cualquier otra ruta
+  absoluta en `locator.file` se mostraría tal cual.
+- [ ] Test de 404 entre organizaciones para la ruta nueva (el helper común ya está cubierto en otros
+  tests).
