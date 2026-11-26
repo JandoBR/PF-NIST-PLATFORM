@@ -268,7 +268,7 @@ function FindingsList({
                   ) : (
                     <p className="text-xs text-slate-500">
                       Este hallazgo no tiene plan: la evaluación es anterior a la generación automática.
-                      Genera los planes con el botón de arriba.
+                      Crea una evaluación nueva para generarlos.
                     </p>
                   )}
                 </div>
