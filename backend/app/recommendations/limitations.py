@@ -87,6 +87,18 @@ def _documentos_analizados(evidence: list[EvidenceInstance]) -> list[str]:
     ]
 
 
+def que_hacer_si_calla(criterio, tipos: str) -> str:
+    """Accion para un criterio en silencio documental (docs/09 §119): sin saber si la practica
+    existe, se ofrecen los dos caminos. La segunda parte es la `recomendacion` del criterio."""
+
+    recomendacion = criterio.recomendacion.strip().rstrip(".")
+    recomendacion = recomendacion[:1].lower() + recomendacion[1:]
+    return (
+        f"Que hacer: si existe, aporta el documento que lo declare ({tipos}) y vuelve a evaluar;"
+        f" si no existe, {recomendacion}."
+    )
+
+
 def _es_documental(criterio) -> bool:
     return bool(criterio.evidencias) and all(
         ev.startswith("doc.claim") for ev in criterio.evidencias
@@ -145,7 +157,8 @@ def detect_document_silence(
                 detalle=(
                     f"Se analizaron {len(documentos)} documento(s) ({', '.join(documentos)}) y"
                     f" ninguno declara lo que «{criterio.titulo}» necesita ({tipos}). No se toma"
-                    " como un 0: puede que el documento correspondiente no se haya aportado."
+                    " como un 0: puede que el documento correspondiente no se haya aportado. "
+                    + que_hacer_si_calla(criterio, tipos)
                 ),
                 evidence_ids=list(result.evidence_ids),
             )

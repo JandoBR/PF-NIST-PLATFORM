@@ -4504,3 +4504,32 @@ Suite completa: **1084 passed, 2 skipped**.
 **Límites.** Los valores largos se recortan a 160 caracteres (el texto completo queda en el tooltip) y
 los objetos anidados, como el `contenido` de un `doc.claim`, se muestran como JSON. La pestaña de
 eventos sigue mostrando el estado actual de la organización.
+
+## 119. El silencio documental dice qué hacer
+
+**Síntoma.** Un criterio en `evidencia_insuficiente` porque ningún documento analizado lo declara no
+genera brecha ni plan (`findings.py`: sin puntaje no hay base para un hallazgo), solo la limitación
+«Ningún documento analizado lo declara» (§60). El usuario veía el aviso sin una acción: no se sabe si
+la práctica falta o si el documento no se aportó.
+
+**Cambio.** El detalle de esa limitación añade los dos caminos:
+`Que hacer: si existe, aporta el documento que lo declare (<tipos>) y vuelve a evaluar; si no existe,
+<recomendacion del criterio>.` La segunda parte reutiliza `recomendacion` de `criteria.yml`, la misma
+plantilla de los planes de brecha (`plan_generation._template_fallback`). Las 31 recomendaciones
+empiezan con un verbo en infinitivo, así que encajan tras «si no existe,»
+(`limitations.que_hacer_si_calla`).
+
+**No cambia.** Sigue sin generar un plan ni contar en el progreso de planes: es texto en la limitación,
+sin estado de seguimiento. No cambia el puntaje, `criteria.yml`, el esquema de BD, la API ni el
+frontend (la subpestaña Limitaciones ya muestra el detalle). La limitación «La IA no respondió para
+parte de los documentos» no lleva la acción: ahí lo que falta es la lectura, no el documento.
+
+**Pruebas.** `test_documents_that_say_nothing_give_insufficient_plus_a_limitation` comprueba los dos
+caminos y que la recomendación es la del criterio; `test_conservative_documents.py` y
+`test_silence_sin_respuesta.py`: 9 passed. Suite completa: **1084 passed, 2 skipped**. `ruff check` y
+`ruff format --check` limpios. Probado en Chromium sobre la evaluación demo: la subpestaña
+Limitaciones muestra la acción en CRI-ID-02 (los hallazgos se derivan al leerlos, así que también
+aparece en evaluaciones anteriores).
+
+**Límites.** Un plan con estado para estos criterios (origen propio, herencia por criterio y origen,
+contadores y PDF separados) se dejó para más adelante.

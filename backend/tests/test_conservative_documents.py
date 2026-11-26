@@ -92,6 +92,12 @@ def test_documents_that_say_nothing_give_insufficient_plus_a_limitation(methodol
     assert "CRI-GV-02" in por_criterio
     assert "politica.md" in por_criterio["CRI-GV-02"].detalle
     assert "No se toma como un 0" in por_criterio["CRI-GV-02"].detalle
+    # Docs/09 §119: la limitacion dice que hacer en los dos casos, con la recomendacion del
+    # criterio para cuando la practica no existe.
+    detalle = por_criterio["CRI-GV-02"].detalle
+    assert "Que hacer: si existe, aporta el documento que lo declare (role_assigned)" in detalle
+    recomendacion = methodology.criterios["CRI-GV-02"].recomendacion.rstrip(".")
+    assert f"si no existe, {recomendacion[:1].lower()}{recomendacion[1:]}." in detalle
     # RC-03 necesita eventos: su insuficiencia no es silencio de los documentos.
     assert "CRI-RC-03" not in por_criterio
 
