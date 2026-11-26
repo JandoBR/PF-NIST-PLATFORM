@@ -12,6 +12,7 @@ export interface DemoBundle {
   terraform?: string[];
   ansible?: string[];
   documents?: string[];
+  eventLog?: string;
 }
 
 export const DEMO_BUNDLES: DemoBundle[] = [
@@ -32,6 +33,7 @@ export const DEMO_BUNDLES: DemoBundle[] = [
       '/demo/gaps/documents/roles.md',
       '/demo/gaps/documents/riesgos-y-respaldos.md',
     ],
+    eventLog: '/demo/events/incidentes-demo.jsonl',
   },
   {
     id: 'mid',
@@ -53,6 +55,7 @@ export const DEMO_BUNDLES: DemoBundle[] = [
       '/demo/mid/documents/continuidad.md',
       '/demo/mid/documents/respuesta-incidentes.md',
     ],
+    eventLog: '/demo/events/respuesta-parcial-demo.jsonl',
   },
   {
     id: 'good',
@@ -73,6 +76,7 @@ export const DEMO_BUNDLES: DemoBundle[] = [
       '/demo/good/documents/respuesta-incidentes.md',
       '/demo/good/documents/continuidad.md',
     ],
+    eventLog: '/demo/events/flujo-correcto-demo.jsonl',
   },
 ];
 

@@ -4437,3 +4437,33 @@ forzar una extracción nueva debe llamar a la API.
 
 **Pruebas.** `npm run typecheck`, `npm run lint` y `npm run build` limpios. El frontend no tiene
 pruebas automáticas; la interfaz no se probó en un navegador al escribir esta entrada.
+
+## 117. Cada bundle de ejemplo trae su log, y el refresco automático ya no lee ingestas ajenas
+
+**Síntoma.** Con la base vacía los bundles de ejemplo se evaluaban sin eventos, y al ingerir logs de
+varios escenarios `log_patterns` quedaba mezclada: `restore_exercise_run` aparecía `ok` aunque
+`incidentes-demo` trae una restauración fallida. Además, la reevaluación automática tras una ingesta
+creaba evaluaciones idénticas o vacías.
+
+**Causa.** (1) La ingesta recalcula los patrones sobre todos los eventos guardados del org+scope y
+reescribe la tabla; los tres logs son del mismo día y con los mismos sistemas, así que los escenarios
+se pisan. (2) `maybe_enqueue_maturity_refresh` encolaba el refresco aunque la evaluación anterior
+tuviera una selección explícita de ingestas que no incluía la nueva (§102): el refresco heredaba la
+selección y no veía el log recién ingerido, o heredaba ingestas ya borradas.
+
+**Cambio.**
+
+- `DEMO_BUNDLES` declara su log (`eventLog`: `gaps` → `incidentes-demo`, `mid` →
+  `respuesta-parcial-demo`, `good` → `flujo-correcto-demo`). `ContextSelector` borra los eventos,
+  ingesta ese log y evalúa solo con esa ingesta, como los botones de Amenazas. Se quita la sección
+  «Eventos operativos» del diálogo; con archivos propios no se manda lista y el backend lee las
+  ingestas de la organización.
+- `refresh.maybe_enqueue_maturity_refresh` recibe `ingest_id` y no encola si la evaluación anterior
+  tiene una selección explícita que no lo incluye. `workers/logs.py` lo pasa.
+- `App.handleIngested`: tras una ingesta, si aparece una evaluación nueva (la reevaluación
+  automática), pasa a ser la activa y se vuelve al panel.
+
+**Pruebas.** `test_auto_refresh_is_skipped_when_the_selection_excludes_the_new_ingest`; con
+`test_assessment_event_sources.py`, `test_workers_logs.py` y los tests de refresco: 146 passed.
+`ruff check` y `ruff format --check` limpios; la suite completa no se corrió. El build de Vite pasa;
+`typecheck` no se corrió y la interfaz no se probó en un navegador al escribir esta entrada.

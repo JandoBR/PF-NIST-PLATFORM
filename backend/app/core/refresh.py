@@ -50,6 +50,7 @@ def maybe_enqueue_maturity_refresh(
     org_id: str,
     scope: str,
     nuevos_patrones: int,
+    ingest_id: str | None = None,
 ) -> Assessment | None:
     """Refresco automatico de madurez al ingerir eventos (docs/06 §6, docs/08 §8): si la ingesta
     agrego suficientes `log.pattern` nuevos para ese scope, encola una reevaluacion de la ultima
@@ -83,6 +84,10 @@ def maybe_enqueue_maturity_refresh(
     )
     if previous is None:
         return None
+
+    seleccion = event_ingest_selection(previous)
+    if ingest_id is not None and seleccion is not None and ingest_id not in seleccion:
+        return None  # la evaluacion anterior lee otras ingestas: refrescarla no veria la nueva
 
     assessment, _ = enqueue_surveillance_refresh(session, methodology, redis_client, previous.id)
     return assessment

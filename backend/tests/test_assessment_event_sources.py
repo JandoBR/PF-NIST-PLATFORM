@@ -286,6 +286,33 @@ def test_auto_refresh_inherits_the_explicit_ingest_selection(db_session, methodo
     assert job.payload["event_ingest_ids"] == [ingesta_b.ingest_id]
 
 
+def test_auto_refresh_is_skipped_when_the_selection_excludes_the_new_ingest(
+    db_session, methodology, fake_redis
+):
+    from app.core import refresh
+
+    ingesta_a = _ingest(db_session, methodology, "Empresa Fuentes", LOG_A)
+    svc.run_assessment(
+        db_session,
+        methodology,
+        org_name="Empresa Fuentes",
+        scope=SCOPE,
+        event_ingest_ids=[ingesta_a.ingest_id],
+    )
+    ingesta_b = _ingest(db_session, methodology, "Empresa Fuentes", LOG_B)
+    kwargs = {"org_id": ingesta_a.org_id, "scope": SCOPE, "nuevos_patrones": 99}
+
+    omitida = refresh.maybe_enqueue_maturity_refresh(
+        db_session, methodology, fake_redis, ingest_id=ingesta_b.ingest_id, **kwargs
+    )
+    propia = refresh.maybe_enqueue_maturity_refresh(
+        db_session, methodology, fake_redis, ingest_id=ingesta_a.ingest_id, **kwargs
+    )
+
+    assert omitida is None
+    assert propia is not None
+
+
 def test_clearing_the_operational_data_also_removes_the_ingests(db_session, methodology):
     ingesta = _ingest(db_session, methodology, "Empresa Limpia", LOG_B)
 

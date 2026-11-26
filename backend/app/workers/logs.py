@@ -58,6 +58,7 @@ def _maybe_refresh_maturity(
                 org_id=result.org_id,
                 scope=scope,
                 nuevos_patrones=nuevos,
+                ingest_id=result.ingest_id,
             )
         except Exception:  # noqa: BLE001
             logger.exception("Refresco de madurez fallo (org %s, scope %s)", result.org_id, scope)

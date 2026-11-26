@@ -8,22 +8,20 @@ import {
   Sparkles,
   ArrowRight,
   AlertTriangle,
-  RefreshCw,
-  Radar,
-  Check,
 } from 'lucide-react';
 import { DEMO_BUNDLES, fetchAsFile } from '@/data/demo';
-import { formatDbDate } from '@/lib/datetime';
 import {
   JobTimeoutError,
+  clearOrgEvents,
   createAssessment,
   getAssessment,
   getMethodology,
+  ingestEvents,
   isAbortError,
   listEventIngests,
   pollJob,
 } from '@/lib/api';
-import type { AssessmentAccepted, AssessmentDetail, EventIngestOut, JobEstado } from '@/lib/types';
+import type { AssessmentAccepted, AssessmentDetail, JobEstado } from '@/lib/types';
 
 interface ContextSelectorProps {
   open: boolean;
@@ -40,28 +38,12 @@ type Mode = 'demo' | 'custom';
 /** Scope por defecto del formulario: las ingestas de eventos se piden para ese mismo entorno. */
 const ASSESSMENT_SCOPE = 'entorno:produccion';
 
-const RANGE_OPTIONS: Intl.DateTimeFormatOptions = {
-  day: '2-digit',
-  month: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-};
-
-function rangeLabel(desde: string | null, hasta: string | null): string {
-  if (!desde || !hasta) return 'sin rango';
-  return `${formatDbDate(desde, 'es', RANGE_OPTIONS)} — ${formatDbDate(hasta, 'es', RANGE_OPTIONS)}`;
-}
-
 export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }: ContextSelectorProps) {
   const [mode, setMode] = useState<Mode>('demo');
   const [bundleId, setBundleId] = useState(DEMO_BUNDLES[0].id);
   const [terraformFiles, setTerraformFiles] = useState<File[]>([]);
   const [ansibleFiles, setAnsibleFiles] = useState<File[]>([]);
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
-  const [eventIngests, setEventIngests] = useState<EventIngestOut[]>([]);
-  const [selectedIngests, setSelectedIngests] = useState<string[]>([]);
-  const [ingestsError, setIngestsError] = useState<string | null>(null);
-  const [ingestsReloadToken, setIngestsReloadToken] = useState(0);
 
   const [submitting, setSubmitting] = useState(false);
   const [jobEstado, setJobEstado] = useState<JobEstado | null>(null);
@@ -95,59 +77,48 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
     };
   }, [open]);
 
-  // Ingestas de eventos de la organización: se listan todas seleccionadas por defecto, y el
-  // usuario puede excluir alguna (docs/09 §102). Si no hay ingestas, la sección no se pinta.
-  // Si la lista falla no se puede asumir "sin ingestas": sin la lista explícita el backend lee
-  // todas las de la organización, así que se bloquea el envío hasta reintentar.
-  useEffect(() => {
-    if (!open) return;
-    let vigente = true;
-    setIngestsError(null);
-    listEventIngests(orgId, ASSESSMENT_SCOPE)
-      .then((ingests) => {
-        if (!vigente) return;
-        setEventIngests(ingests);
-        setSelectedIngests(ingests.map((i) => i.ingest_id));
-      })
-      .catch((err) => {
-        if (!vigente) return;
-        setEventIngests([]);
-        setSelectedIngests([]);
-        setIngestsError(err instanceof Error ? err.message : 'Error desconocido.');
-      });
-    return () => {
-      vigente = false;
-    };
-  }, [open, orgId, ingestsReloadToken]);
-
   if (!open) return null;
 
-  function toggleIngest(ingestId: string) {
-    setSelectedIngests((current) =>
-      current.includes(ingestId)
-        ? current.filter((id) => id !== ingestId)
-        : [...current, ingestId]
-    );
-  }
-
   const hasCustomFiles = terraformFiles.length + ansibleFiles.length + documentFiles.length > 0;
-  const canSubmit = (mode === 'demo' || hasCustomFiles) && !ingestsError;
+  const canSubmit = mode === 'demo' || hasCustomFiles;
 
   async function handleSubmit() {
-    if (ingestsError) return;
     setSubmitting(true);
     setError(null);
     setJobEstado(null);
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    // Cuando hay ingestas se manda la lista explícita (aunque estén todas): así la evaluación no
-    // cambia de alcance si más tarde se ingiere otro log. Sin ingestas se omite (docs/09 §102).
-    const eventIngestIds = eventIngests.length > 0 ? selectedIngests : undefined;
+    // Un bundle de ejemplo se evalúa solo con su propio log (lista explícita de una ingesta); con
+    // archivos propios se omite y el backend lee las ingestas de la organización.
+    let eventIngestIds: string[] | undefined;
     try {
       let input;
       if (mode === 'demo') {
         const bundle = DEMO_BUNDLES.find((b) => b.id === bundleId) ?? DEMO_BUNDLES[0];
+        if (bundle.eventLog) {
+          // El bundle trae su propio log: se ingesta si aún no está y se suma a la evaluación.
+          const logFile = await fetchAsFile(bundle.eventLog);
+          // Cada bundle es un escenario distinto del mismo día: se parte de cero, como los logs de
+          // ejemplo de Amenazas, para que los patrones e incidentes no mezclen escenarios.
+          await clearOrgEvents(orgId);
+          let own: Awaited<ReturnType<typeof listEventIngests>>[number] | undefined;
+          {
+            const accepted = await ingestEvents(orgId, logFile);
+            const ingestJob = await pollJob(accepted.job_id, {
+              signal: controller.signal,
+              onTick: (j) => setJobEstado(j.estado),
+            });
+            if (ingestJob.estado === 'fallido') {
+              setError(ingestJob.error ?? 'La ingesta del log del bundle falló en el worker.');
+              return;
+            }
+            own = (await listEventIngests(orgId, ASSESSMENT_SCOPE)).find(
+              (i) => i.archivo === logFile.name
+            );
+          }
+          if (own) eventIngestIds = [own.ingest_id];
+        }
         const [tf, ans, docs] = await Promise.all([
           Promise.all((bundle.terraform ?? []).map(fetchAsFile)),
           Promise.all((bundle.ansible ?? []).map(fetchAsFile)),
@@ -304,84 +275,6 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
               </div>
             )}
 
-
-            {(eventIngests.length > 0 || ingestsError) && (
-              <div className="mt-5 rounded-xl border border-white/[0.06] bg-ink-900/30 p-4">
-                <div className="mb-1 flex items-center gap-2">
-                  <Radar className="h-4 w-4 text-cyan-400" />
-                  <h3 className="text-sm font-medium text-slate-200">Eventos operativos</h3>
-                </div>
-                <p className="mb-3 text-xs leading-relaxed text-slate-500">
-                  La evaluación solo leerá los eventos de las ingestas seleccionadas. Si no eliges
-                  ninguna, evaluará sin evidencia operativa.
-                </p>
-                {ingestsError && (
-                  <div className="rounded-lg border border-rose-500/30 bg-rose-500/[0.07] px-3 py-2.5 text-xs text-rose-200">
-                    <p className="flex items-start gap-1.5 leading-relaxed">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                      <span>
-                        No se pudieron cargar las ingestas de eventos ({ingestsError}). Sin esta
-                        lista no se sabe qué eventos leer, así que no se puede evaluar todavía.
-                      </span>
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setIngestsReloadToken((value) => value + 1)}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-rose-500/30 px-2.5 py-1 text-xs font-medium text-rose-200 transition-colors hover:bg-rose-500/10"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" /> Reintentar
-                    </button>
-                  </div>
-                )}
-                {!ingestsError && (
-                  <div className="space-y-1.5">
-                    {eventIngests.map((ingesta) => {
-                      const active = selectedIngests.includes(ingesta.ingest_id);
-                      return (
-                        <button
-                          key={ingesta.ingest_id}
-                          type="button"
-                          onClick={() => toggleIngest(ingesta.ingest_id)}
-                          className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
-                            active
-                              ? 'border-cyan-500/40 bg-cyan-500/[0.07]'
-                              : 'border-white/[0.06] bg-ink-900/40 hover:border-white/15'
-                          }`}
-                        >
-                          <span
-                            className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${
-                              active
-                                ? 'border-cyan-400 bg-cyan-500 text-ink-950'
-                                : 'border-white/20 text-transparent'
-                            }`}
-                          >
-                            <Check className="h-3 w-3" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs font-medium text-slate-200">
-                              {ingesta.archivo ?? 'Eventos anteriores (sin ingesta registrada)'}
-                            </span>
-                            <span className="block text-[11px] text-slate-500">
-                              {ingesta.eventos} evento{ingesta.eventos === 1 ? '' : 's'} ·{' '}
-                              {rangeLabel(ingesta.desde, ingesta.hasta)}
-                            </span>
-                            <span className="block truncate text-[11px] text-slate-600">
-                              {ingesta.ingerido_en
-                                ? `Subido ${formatDbDate(ingesta.ingerido_en, 'es', RANGE_OPTIONS)}`
-                                : 'Subida sin fecha'}
-                              {ingesta.fuentes.length > 0
-                                ? ` · ${ingesta.fuentes.join(', ')}`
-                                : ''}
-                            </span>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
             {error && (
               <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.07] p-3.5 text-xs text-amber-200">
                 <div className="mb-1 flex items-center gap-2 font-medium">
@@ -415,12 +308,6 @@ export function ContextSelector({ open, orgId, onClose, onCreated, onAccepted }:
                 {!submitting && <ArrowRight className="h-4 w-4" />}
               </button>
             </div>
-            {ingestsError && (
-              <p className="mt-2 text-right text-[11px] leading-relaxed text-amber-300">
-                Reintenta cargar las ingestas de eventos para poder evaluar: sin esa lista la
-                evaluación podría leer todos los eventos de la organización en lugar de los que elijas.
-              </p>
-            )}
           </div>
         </div>
       </div>

@@ -215,6 +215,19 @@ function App() {
     }
   }
 
+  // Una ingesta con suficientes patrones nuevos encola una reevaluación automática antes de marcar
+  // su job como hecho (docs/08 §8): si aparece una evaluación que no estaba, pasa a ser la activa.
+  async function handleIngested() {
+    const knownIds = new Set(history.map((a) => a.id));
+    const list = await refreshHistory();
+    const created = list.find((a) => !knownIds.has(a.id));
+    if (!created) return;
+    setDetailError(null);
+    setTab('dashboard');
+    activeId.current = created.id;
+    await loadAssessmentDetails(created);
+  }
+
   // Mientras la evaluación activa está en curso (se eligió del historial o se acaba de crear), se
   // consulta hasta que termine y entonces se recarga TODO: puntajes, criterios, hallazgos y
   // planes. Antes solo se pedían los criterios, y el resumen se quedaba con los datos de cuando
@@ -383,7 +396,7 @@ function App() {
           <EventsIncidents
             orgId={user.org_id}
             orgNombre={user.org_nombre}
-            onIngested={() => void refreshHistory()}
+            onIngested={() => void handleIngested()}
           />
         ) : tab === 'jobs' ? (
           // Como los eventos, la actividad en segundo plano es de la organización: se ve sin evaluación.
