@@ -4467,3 +4467,40 @@ selección y no veía el log recién ingerido, o heredaba ingestas ya borradas.
 `test_assessment_event_sources.py`, `test_workers_logs.py` y los tests de refresco: 146 passed.
 `ruff check` y `ruff format --check` limpios; la suite completa no se corrió. El build de Vite pasa;
 `typecheck` no se corrió y la interfaz no se probó en un navegador al escribir esta entrada.
+
+## 118. La evidencia de cada criterio se puede ver, con los alias que cita su explicación
+
+**Síntoma.** La interfaz solo mostraba cuántas evidencias tenía un criterio («Evidencias: N»), nunca
+cuáles. Las explicaciones del ajuste de IA citan `e1`, `e2`..., pero no había forma de saber a qué
+correspondían, y la trazabilidad por archivo y línea que guarda el backend no se veía en ningún sitio.
+Al revisar la pestaña de eventos tras §117 se confirmó además que una evaluación no guarda eventos ni
+incidentes, solo la evidencia derivada (`log.window`, `log.pattern`): la instantánea operativa de una
+evaluación está en su evidencia, no en la pestaña de eventos, que es el estado actual de la
+organización.
+
+**Causa.** Los alias no siguen el orden de `evidence_ids`: U2 ordena la evidencia por tipo y por el
+hash del valor (`adjustment._canonical_evidence`, §105) para que el prompt no dependa de los UUID.
+Reproducir ese orden en el navegador exigiría replicar `canonical_json` y SHA-256.
+
+**Cambio.**
+
+- `GET /assessments/{id}/criteria/{criterion_id}/evidence` (docs/04) devuelve
+  `[{alias, evidence}]` en el orden canónico de U2 (`assessment_service.load_criterion_evidence`,
+  esquema `CriterionEvidenceOut`). 404 si la evaluación no existe o no tiene el criterio. Solo
+  lectura; no cambia el esquema de BD ni lo que emite ningún adaptador.
+- Frontend: `EvidenceList` en el detalle de cada criterio, tanto en la tabla de criterios como en la
+  vista de privacidad. «Ver evidencia (N)» la carga al abrirla y muestra alias, tipo, modalidad,
+  localizador (archivo y líneas, página, sección o id de evento; la ruta de subida se recorta a la del
+  paquete) y los campos del valor, más las limitaciones.
+
+**Pruebas.** `test_criterion_evidence_uses_the_adjustment_aliases` (los alias coinciden con
+`_canonical_evidence`) y `test_criterion_evidence_of_unknown_criterion_is_404`;
+`test_api_assessments.py` y `test_ai_adjustment.py`: 43 passed. `ruff check` y `ruff format --check`
+limpios; `typecheck`, `lint` y `build` del frontend limpios. Probado en Chromium sobre la evaluación
+demo: `doc.claim` (CRI-GV-02, CRI-RC-01), `log.pattern` + `log.window` (CRI-RC-02, la explicación cita
+`e1` y `e2` y coinciden) y `tf.public_access.config` con `terraform/security.tf:14-20` (CRI-PR-05).
+Suite completa: **1084 passed, 2 skipped**.
+
+**Límites.** Los valores largos se recortan a 160 caracteres (el texto completo queda en el tooltip) y
+los objetos anidados, como el `contenido` de un `doc.claim`, se muestran como JSON. La pestaña de
+eventos sigue mostrando el estado actual de la organización.

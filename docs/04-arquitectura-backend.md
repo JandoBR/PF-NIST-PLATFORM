@@ -221,6 +221,7 @@ tiempos y el heartbeat se configuran con `JOB_STALE_TIMEOUT_SECONDS`,
 | `GET` | `/jobs/{job_id}` | Estado y progreso de cualquier trabajo (`assessment_run`/`event_ingest`). Si quedó colgado sin worker vivo (heartbeat), se marca `fallido` antes de responder. |
 | `GET` | `/assessments/{id}/criteria` | Resultados por criterio con explicación y evidencias. |
 | `GET` | `/assessments/{id}/evidence` | Evidencias con procedencia y limitaciones (filtrable). |
+| `GET` | `/assessments/{id}/criteria/{criterion_id}/evidence` | Evidencia de un criterio en orden canónico de U2, con el alias `e1`... que cita su explicación (docs/09 §118). |
 | `GET` | `/assessments/{id}/findings` | Hallazgos. Tipos `brecha`, `contradiccion` (docs/09 §38) y `limitacion` (docs/09 §56). Los hallazgos no se persisten: se derivan al consultar, con la evidencia. |
 | `GET` | `/assessments/{id}/report.pdf` | Informe ejecutivo en PDF (AMP-02): resumen, madurez por función, hallazgos, plan y criterios. 409 si la evaluación no está `completada`. |
 | `GET` | `/assessments/{id}/compare/{other_id}/report.pdf` | Comparación de dos evaluaciones en PDF. |

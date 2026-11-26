@@ -20,6 +20,39 @@ export interface CriterionResult {
   degradado: boolean;
 }
 
+export interface EvidenceLocator {
+  file?: string | null;
+  line_start?: number | null;
+  line_end?: number | null;
+  page?: number | null;
+  section?: string | null;
+  event_id?: string | null;
+}
+
+export type EvidenceModality = 'declarada' | 'documental' | 'operativa' | 'contexto';
+
+export interface EvidenceInstance {
+  id: string;
+  type_id: string;
+  type_version: number;
+  subject_type: string;
+  subject_ref: string;
+  scope: string;
+  value: unknown;
+  source_id: string;
+  locator: EvidenceLocator;
+  observed_at: string;
+  modality: EvidenceModality;
+  limitations: string | null;
+  created_by: string;
+}
+
+/** Evidencia de un criterio con el alias (`e1`...) que cita su explicación (docs/09 §118). */
+export interface CriterionEvidence {
+  alias: string;
+  evidence: EvidenceInstance;
+}
+
 export type Nivel = 'subcategoria' | 'categoria' | 'funcion' | 'global';
 
 export interface Aggregate {

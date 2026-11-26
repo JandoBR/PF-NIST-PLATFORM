@@ -17,6 +17,14 @@ from app.schemas.assessment import (  # noqa: F401  (reexportados para las rutas
     ComparisonDiffOut,
     ComparisonOut,
 )
+from app.schemas.evidence import EvidenceInstance
+
+
+class CriterionEvidenceOut(BaseModel):
+    """Una evidencia de un criterio con el alias (`e1`...) que cita su explicacion."""
+
+    alias: str
+    evidence: EvidenceInstance
 
 
 class OrganizationOut(BaseModel):

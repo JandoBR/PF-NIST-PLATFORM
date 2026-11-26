@@ -752,6 +752,33 @@ def load_evidence(session: Session, assessment_id: str) -> list[EvidenceInstance
     return [row_to_evidence(row) for row in rows]
 
 
+def load_criterion_evidence(
+    session: Session, assessment_id: str, criterion_id: str
+) -> list[tuple[str, EvidenceInstance]] | None:
+    """Evidencia de un criterio con el alias `e1`, `e2`... que ve el ajuste de IA (docs/09 §118).
+
+    El orden es el canonico de U2 (tipo y hash del valor), asi que los alias coinciden con los que
+    cita la explicacion del criterio. `None` si la evaluacion no tiene ese criterio."""
+
+    from app.ai.adjustment import _canonical_evidence
+
+    result = next(
+        (
+            r
+            for r in load_criterion_results(session, assessment_id)
+            if r.criterion_id == criterion_id
+        ),
+        None,
+    )
+    if result is None:
+        return None
+    by_id = {evidence.id: evidence for evidence in load_evidence(session, assessment_id)}
+    return [
+        (f"e{indice}", evidence)
+        for indice, (_, evidence) in enumerate(_canonical_evidence(result, by_id), start=1)
+    ]
+
+
 def generate_plans(
     session: Session,
     methodology: Methodology,

@@ -121,6 +121,44 @@ def test_get_assessment_and_sub_resources(api_client, db_session, methodology, f
     assert any(f["criterion_id"] == "CRI-PR-01" for f in findings)
 
 
+def test_criterion_evidence_uses_the_adjustment_aliases(
+    api_client, db_session, methodology, fake_redis
+):
+    """Los alias `e1`... siguen el orden canonico de U2, el mismo que cita la explicacion."""
+
+    from app.ai.adjustment import _canonical_evidence
+    from app.schemas.evidence import EvidenceInstance
+
+    created = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
+    assessment_id = created["id"]
+    criteria = api_client.get(f"/assessments/{assessment_id}/criteria").json()
+    criterion = next(c for c in criteria if c["criterion_id"] == "CRI-PR-01")
+    assert criterion["evidence_ids"]
+
+    response = api_client.get(f"/assessments/{assessment_id}/criteria/CRI-PR-01/evidence")
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["alias"] for item in body] == [f"e{i}" for i in range(1, len(body) + 1)]
+    assert {item["evidence"]["id"] for item in body} == set(criterion["evidence_ids"])
+
+    from app.evaluation.schemas import CriterionResult
+
+    all_evidence = api_client.get(f"/assessments/{assessment_id}/evidence").json()
+    by_id = {e["id"]: EvidenceInstance.model_validate(e) for e in all_evidence}
+    expected = _canonical_evidence(CriterionResult.model_validate(criterion), by_id)
+    assert [item["evidence"]["id"] for item in body] == [eid for eid, _ in expected]
+
+
+def test_criterion_evidence_of_unknown_criterion_is_404(
+    api_client, db_session, methodology, fake_redis
+):
+    created = _create_and_complete(api_client, db_session, methodology, fake_redis, "gaps")
+    response = api_client.get(f"/assessments/{created['id']}/criteria/CRI-NO-EXISTE/evidence")
+    assert response.status_code == 404
+    response = api_client.get("/assessments/no-existe/criteria/CRI-PR-01/evidence")
+    assert response.status_code == 404
+
+
 def test_list_assessments_includes_created_ones(api_client, db_session, methodology, fake_redis):
     _create_and_complete(api_client, db_session, methodology, fake_redis, "good")
     response = api_client.get("/assessments")

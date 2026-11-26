@@ -20,6 +20,7 @@ import type {
   TierEstimate,
 } from '@/lib/types';
 import { DownloadPdfButton } from '@/components/DownloadPdfButton';
+import { EvidenceList } from '@/components/EvidenceList';
 import { FUNCTION_NAMES, FUNCTION_ORDER, TIER_LABELS } from '@/lib/types';
 import {
   ESTADO_META,
@@ -350,11 +351,13 @@ export function MaturityDashboard({ assessment, criteria }: DashboardProps) {
                 No hay criterios que coincidan con los filtros actuales.
               </div>
             ) : (
-              filtered.map((c) => <CriterionRow key={c.criterion_id} criterion={c} />)
+              filtered.map((c) => (
+                <CriterionRow key={c.criterion_id} criterion={c} assessmentId={assessment.id} />
+              ))
             )}
           </div>
         ) : (
-          <PrivacyView criteria={privacy} />
+          <PrivacyView criteria={privacy} assessmentId={assessment.id} />
         )}
       </div>
     </div>
@@ -387,7 +390,7 @@ function ViewSwitch({ mode, onChange }: { mode: TableMode; onChange: (mode: Tabl
 
 /** Vista alterna de la tabla de criterios: el cruce con privacidad (docs/03 §7). No es un filtro:
  * cambia las columnas para mostrar la relación con el Privacy Framework y la nota de alcance. */
-function PrivacyView({ criteria }: { criteria: CriterionResult[] }) {
+function PrivacyView({ criteria, assessmentId }: { criteria: CriterionResult[]; assessmentId: string }) {
   const [open, setOpen] = useState<string | null>(null);
   const evaluados = criteria.filter((c) => c.estado === 'evaluado').length;
   const scored = criteria.filter((c) => c.final_score != null);
@@ -463,6 +466,12 @@ function PrivacyView({ criteria }: { criteria: CriterionResult[] }) {
                     <span className="font-semibold text-slate-400">Evidencias:</span> {c.evidence_ids.length}
                     {c.degradado && <span className="text-amber-300"> &nbsp;·&nbsp; IA degradada</span>}
                   </p>
+                  <EvidenceList
+                    key={assessmentId}
+                    assessmentId={assessmentId}
+                    criterionId={c.criterion_id}
+                    count={c.evidence_ids.length}
+                  />
                 </div>
               )}
             </div>
@@ -807,7 +816,7 @@ function Chip({
   );
 }
 
-function CriterionRow({ criterion }: { criterion: CriterionResult }) {
+function CriterionRow({ criterion, assessmentId }: { criterion: CriterionResult; assessmentId: string }) {
   const meta = ESTADO_META[criterion.estado];
   const [open, setOpen] = useState(false);
   const score = criterion.final_score;
@@ -865,6 +874,12 @@ function CriterionRow({ criterion }: { criterion: CriterionResult }) {
             {criterion.evidence_ids.length}
           </p>
           <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{criterion.explanation}</p>
+          <EvidenceList
+            key={assessmentId}
+            assessmentId={assessmentId}
+            criterionId={criterion.criterion_id}
+            count={criterion.evidence_ids.length}
+          />
         </div>
       )}
     </div>

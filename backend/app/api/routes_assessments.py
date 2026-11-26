@@ -28,6 +28,7 @@ from app.api.schemas import (
     AssessmentDetail,
     ComparisonDiffOut,
     ComparisonOut,
+    CriterionEvidenceOut,
     PlanUpdate,
 )
 from app.core import assessment_service as svc
@@ -276,6 +277,25 @@ def get_evidence(
 ) -> list[EvidenceInstance]:
     _require_assessment(session, assessment_id, user)
     return svc.load_evidence(session, assessment_id)
+
+
+@router.get(
+    "/assessments/{assessment_id}/criteria/{criterion_id}/evidence",
+    response_model=list[CriterionEvidenceOut],
+)
+def get_criterion_evidence(
+    assessment_id: str,
+    criterion_id: str,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[CriterionEvidenceOut]:
+    _require_assessment(session, assessment_id, user)
+    items = svc.load_criterion_evidence(session, assessment_id, criterion_id)
+    if items is None:
+        raise HTTPException(
+            status_code=404, detail=f"La evaluacion no tiene el criterio {criterion_id!r}."
+        )
+    return [CriterionEvidenceOut(alias=alias, evidence=evidence) for alias, evidence in items]
 
 
 @router.get("/assessments/{assessment_id}/findings", response_model=list[Finding])

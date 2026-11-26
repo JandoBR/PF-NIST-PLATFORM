@@ -2,6 +2,7 @@ import type {
   AssessmentAccepted,
   AssessmentDetail,
   ComparisonOut,
+  CriterionEvidence,
   CriterionResult,
   EventsAccepted,
   EventIngestOut,
@@ -222,6 +223,11 @@ export const getAssessment = (id: string) => request<AssessmentDetail>(`/assessm
 
 export const getCriteria = (id: string) =>
   request<CriterionResult[]>(`/assessments/${id}/criteria`);
+
+export const getCriterionEvidence = (id: string, criterionId: string) =>
+  request<CriterionEvidence[]>(
+    `/assessments/${id}/criteria/${encodeURIComponent(criterionId)}/evidence`
+  );
 
 export const getFindings = (id: string) => request<Finding[]>(`/assessments/${id}/findings`);
 
